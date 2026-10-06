@@ -18,9 +18,49 @@ survey не возвращает, предыдущий MD5 ниже — исто
 SKSE Hooks_NetImmerse.cpp (локальный skse64_2_00_20) посылает
 NiNodeUpdateEvent **после** ActorProcessManager::UpdateEquipment.
 CommonLib SKSE::NiNodeUpdateEvent.reference — заимствованный TESObjectREFR*;
-callback сравнивает игрока и увеличивает atomic revision, указатель не хранит.
+callback сравнивает игрока и отмечает atomic запрос аудита, указатель не хранит.
 TESEquipEvent.actor — NiPointer, событие лишь ускоряет последующий аудит.
-Дополнительных binary hooks на намерение экипировки не добавлено.
+Событие не гарантирует завершение: вызванная функция может поставить задачу
+в очередь. Hook завершённой ветви добавлен ниже; hooks на намерение не нужны.
+
+
+## Завершение изменения3D: повторный аудит07.10.2026
+
+SE/AE/VR instances выбраны последовательно через list_instances/select_instance,
+server_health и minimal survey. Imagebase0x140000000. SE MD5cc3a69467b61093053bb766dd503b229,
+AE MD59f5eb140eb54eb8d3ae613f0f395cb13. VR input_path отличается от IDB path,
+как указано выше; hash survey недоступен. Address mappings сверены с исходными
+таблицами: SE decimalID/hexRVA, AE decimalID/hexVA, VR CSV decimalID/hexRVA.
+
+| Операция | SE1.5.97 ID/RVA | AE1.6.1170 ID/RVA | VR1.4.15 RVA |
+|---|---|---|---|
+| AIProcess::Update3DModel_Impl |38404 /650DF0|39395 /6E3B70|65A140 (CSV ID38404)|
+| Вызов Clear3DFlags после реальной работы |6511F0 (+400)|6E3F72 (+402)|65A540 (+400)|
+| Clear3DFlags |38868 /67E3F0|39909 /711B00|687870 (VariantID RVA)|
+| Чтение flags в начале update |67E430|711B40|6878B0|
+
+Update имеет ABI void(AIProcess* RCX, Actor* RDX). Ветка task-pool вызывает
+постановку задачи (SE5C37D0/AE655960/VR5CBD70) и уходит в эпилог без completion
+callsite. Поэтому hook возврата Update и SKSE NiNode event были бы преждевременны.
+В завершённой ветви сначала выполняются equipment/face/tree update, затем
+world update и shadow update, затем вызов Clear3DFlags. Проверено disasm caller;
+SE pseudocode сверён с инструкциями. AE/VR decompiler отказал, вывод основан на
+disasm, а не на предположительной сигнатуре Hex-Rays.
+
+Clear имеет ABI void(AIProcess* RCX), читает nullable pointer [RCX+8], обнуляет
+**один byte** [middleHigh+311], не выделяет память, return value не используется.
+Одинаковые инструкции подтверждены во всех3IDB. Hooks использует точный
+callsite и проверяет E8/target перед patch; если другой мод его изменил, hook
+не ставится и остаётся bounded audit. Исходный executable не патчился в IDA.
+
+Thunk вызывает оригинал и только atomic RequestAudit. Он не читает actor и
+не удерживает engine pointer; допустим также engine task thread. Уведомления
+любых actor объединяются, main-loop проверяет только игрока не чаще4Гц.
+В тишине остаётся1Гц fallback для сторонних правок. Сериализация/clone в callback
+не выполняются. Владение native объектами не меняется; allocator не требуется.
+Это completion vanilla3D pipeline, не универсальная точка завершения SMP,
+RaceMenu morph queue или GPU-only edits. Новая DLL и этот hook ещё требуют
+игрового подтверждения; статический AE/VR аудит не считается игровым тестом.
 
 RaceMenu/skee64 локальный IActorUpdateManager v2 FlushCallback проверен по
 ActorUpdateManager.cpp: Flush ставит morph/overlay задачи в очередь, затем

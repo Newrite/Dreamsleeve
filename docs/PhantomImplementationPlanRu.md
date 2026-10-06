@@ -5,6 +5,30 @@
 (`23ae14d`). Пользовательское изменение `Plugin/client.toml` сохраняется.
 Прежний план neutral реализации сохранён в истории Git.
 
+## Следующий этап: непрерывная замена и стоимость обновлений
+
+Основание: новые игровые записи `1791317521446`–`1791319299286`, анализ
+`benchmarks/phantom-native-recordings-2026-10-07.md`. Пользователь подтвердил
+визуальный replay SE; обнаружен разрыв свежих поз при смене поколения.
+
+1. [ ] Исследовать новую запись экипировки и завершение native updates в
+   CommonLib/IDA SE/AE/VR. Отделить structural changes, мелкую динамику лица,
+   привязку/видимость и временные эффекты; добавить измеримые причины rebuild.
+2. [ ] Исправить правила обновления модели и покрыть policy regression tests.
+3. [ ] Обеспечить ограниченный переход двух поколений с живыми позами старого
+   asset до готовности нового у получателя. Объединять следующие изменения;
+   context/disconnect/AOI отменяют переход и освобождают ресурсы.
+4. [ ] Измерить бинарные патчи полных NIF на записях. Сохранять native Load и
+   непрозрачность asset на сервере; решение о внедрении принять по измерению.
+5. [ ] Внедрить lossless byte-plane pose packing, синхронный protocol bump,
+   generated code, lifecycle/fragmentation/real-server tests.
+6. [ ] Проверить ordinary/diagnostic builds, обновить измерения/runtime docs,
+   собрать dist и установить diagnostic при закрытой игре с backup/config preserve.
+
+Состояния перехода принадлежат существующим владельцам: Exchange — локальные
+поколения и remote данные; Source/Scene — native bindings; PhantomAgent —
+подписки/готовность получателей. Не вводить вторую систему model readiness в UI.
+
 | Решение | Подсистемы |
 |---|---|
 | Оставить | AOI/Presence, ENet owner и unreliable-fragment policy, chunks/ACK, content hash/cache/storage, session epoch, cancellation, privacy/UI |
@@ -79,3 +103,43 @@ topology проверяется до Clone (включая не попавшие
 - [ ] Игровая приёмка новой DLL SE/AE/VR и сравнение внешности между модпаками.
   Автоматические проверки и полный dist готовы; Windows10 UI adapter блокирует
   автоматизированный игровой прогон. Подробности в PhantomReleaseValidationRu.md.
+
+## Улучшения после игровых записей07.10.2026
+
+- [x] Проанализировать7новых записей; разделить pose drift, FaceGen deformation
+  и настоящую смену состава (Warhammer / magic GlowMesh).
+- [x] Заменить quantized hash на порог относительно принятого asset и coalescing.
+- [x] Проверить completion callsites SE/AE/VR, поставить узкий deferred audit hook.
+- [x] Внедрить lossless byte planes в production pose3; wire23 одновременно.
+- [x] Два ограниченных поколения и атомарная пара поз до Displayed/Settled;
+  retry, устаревшие view/sequence, withdrawal и память. Ограниченное server review.
+- [x] Diagnostic replay всех 7 записей, full builds/tests, одинаковый 512/group25 run.
+- [x] Обновить dist и диагностическую установку при закрытой игре, сохранить configs.
+- [ ] Игровая проверка именно новой DLL/hook/перехода двумя игроками.
+
+Copy/XOR дельта NIF пока только офлайн измерение с побайтовой реконструкцией.
+Её нельзя считать внедрённой сетевой функцией. Текущий production всё ещё
+передаёт полный compressed NIF; сортировка/новый renderer не добавлялись.
+
+
+## Следующие оптимизации, обсуждены, но не внедрены
+
+- Audience-driven live poses: существующий AOI/Selected определяет наличие
+  реального получателя. При нуле получателей останавливать отправку/кодирование
+  живых поз, при появлении — свежий полный снимок. Модель и её поколение остаются
+  отдельно; отдельный spatial index или actor не нужен.
+- Направление камеры: movement rotation сейчас пересылается и интерполируется,
+  но Fireflies применяет только position, а Phantoms использует native transforms.
+  GroundMark heading читается отдельно. Поэтому можно переопределить нынешнее
+  поле как camera orientation с явным переименованием/сменой контракта и не
+  включать чужой camera angle в downstream. Сейчас поле всё ещё actor rotation.
+  Нужен корректный accessor фактической камеры для first/third person и VR.
+- Дешёвый сектор: dot(viewForward, targetPosition-observerPosition), широкий
+  угол и гистерезис. Сначала приоритет/снижение частоты за камерой; кеш модели
+  не выбрасывать. Один actor yaw не годится для свободной камеры третьего лица.
+  Это будущая политика поверх текущих AOI, а не реализованный frustum culling.
+- Death phantom: независимый ограниченный локальный ring buffer поз и нужных
+  поколений NIF. При смерти заморозить запись и загрузить связанный с death mark
+  clip через общий проверяемый model/pose путь. Не зависеть от наличия live
+  audience; удалять модель из ring только после исчезновения ссылок кадров.
+  Число моделей, длительность, память, TTL и права доступа предстоит определить.

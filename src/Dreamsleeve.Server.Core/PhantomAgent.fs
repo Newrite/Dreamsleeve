@@ -17,13 +17,14 @@ module PhantomAgent =
     let private fanout = meter.CreateCounter<int64>("phantom.pose.fanout")
     type private Credit = { mutable At: int64; mutable Available: double }
     type private View = { Authority: uint64; Distance: double }
-    type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64 }
+    type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64; mutable SentGeneration: AppearanceGeneration option; mutable Displayed: AppearanceGeneration option }
     type private Member = {
         Player: PlayerId; mutable Character: uint64; mutable Context: uint64; mutable Located: bool; mutable Active: bool
         mutable Preferences: PhantomPreferences; Views: Dictionary<PlayerId, View>; Selected: Dictionary<PlayerId, Selected>
         mutable ClearedAuthority: uint64; mutable Revision: uint64; mutable HighManifest: PhantomManifest option
         mutable Ready: PhantomManifest option; mutable Latest: struct (PhantomPose * int64) option
-        mutable LastSequence: uint64; mutable NextPublish: int64; mutable PoseCursor: int
+        mutable Previous: AppearanceGeneration option; mutable Settled: AppearanceGeneration option; mutable CommittedAt: int64
+        mutable PreviousSequence: uint64; mutable LastPose: struct (AppearanceGeneration * uint64) option; mutable NextPublish: int64; mutable PoseCursor: int
         ModelCredit: Credit; PoseCredit: Credit; PoseSamples: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
     }
     type private UploadChunk = { Offset: int; Bytes: byte array; mutable Pending: Task<Result<bool, string>> option }
@@ -94,6 +95,8 @@ module PhantomAgent =
         | _ -> ()
     let private clearSource state (memberState: Member) =
         memberState.Ready <- None
+        memberState.Previous <- None; memberState.PreviousSequence <- 0UL
+        memberState.Settled <- None
         memberState.Latest <- None
         let affected = state.Transfers.Values |> Seq.filter (fun item -> item.Source = memberState.Player) |> Seq.map _.Id |> Seq.toArray
         for id in affected do cancel state id false "source changed"
@@ -147,7 +150,7 @@ module PhantomAgent =
                         // the receiver's previous scene until this offer is ready.
                         for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
                             cancel state transfer.Id false "superseded"
-                        let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL }
+                        let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL; SentGeneration = None }
                         observer.Selected[player] <- replacement
                         emit state id (PhantomResponse.Offer(player, replacement.Revision, replacement.Asset))
                     | _ -> ()
@@ -155,7 +158,7 @@ module PhantomAgent =
                 if not (observer.Selected.ContainsKey player) then
                     match source state player with
                     | ValueSome current when current.Ready.IsSome && observer.Views.ContainsKey player ->
-                        let selected = { Revision = nextRevision observer; Asset = current.Ready.Value; Authority = observer.Views[player].Authority; SentSequence = 0UL }
+                        let selected = { Revision = nextRevision observer; Asset = current.Ready.Value; Authority = observer.Views[player].Authority; SentSequence = 0UL; SentGeneration = None; Displayed = None }
                         observer.Selected[player] <- selected
                         let audience =
                             match state.Audiences.TryGetValue player with
@@ -219,10 +222,11 @@ module PhantomAgent =
                 let contextChanged = memberState.Context <> value.MovementContext || (memberState.Located && value.Location.IsNone)
                 if characterChanged then
                     clearSource state memberState
-                    memberState.LastSequence <- 0UL
+                    memberState.LastPose <- None
                 elif contextChanged then
                     memberState.Latest <- None
-                    memberState.LastSequence <- 0UL
+                    memberState.LastPose <- None
+                    memberState.Previous <- None; memberState.PreviousSequence <- 0UL
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Source = memberState.Player) |> Seq.toArray do
                         cancel state transfer.Id false "context changed"
                 memberState.Character <- value.CharacterGeneration
@@ -245,7 +249,7 @@ module PhantomAgent =
                     Located = value.Location.IsSome && value.MovementContext <> 0UL; Active = false
                     Preferences = { Publish = options.Enabled; Receive = options.Enabled; Maximum = options.Maximum; Distance = options.Distance }
                     Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
-                    Ready = None; Latest = None; LastSequence = 0UL; NextPublish = 0L; PoseCursor = 0
+                    Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; NextPublish = 0L; PoseCursor = 0
                     ModelCredit = credit 0L options.PlayerModelBytesPerSecond; PoseCredit = credit 0L options.PoseBytesPerSecond
                     OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = { At = 0L; Available = 2.0 }
                     Commands = credit 0L options.CommandsPerSecond; Outbox = Queue()
@@ -316,6 +320,8 @@ module PhantomAgent =
                 if not memberState.Preferences.Publish || not memberState.Located || context <> memberState.Context
                    || stale then
                     refuse state id memberState.Player manifest.Generation true request 0 "publish admission"
+                elif memberState.Ready |> Option.exists (fun ready -> memberState.Settled <> Some ready.Generation && manifest <> ready) then
+                    refuse state id memberState.Player manifest.Generation true request 1000 "replacement pending"
                 elif at < memberState.NextPublish then
                     refuse state id memberState.Player manifest.Generation true request (int (memberState.NextPublish - at)) "publish cooldown"
                 elif not existingSource && sources + pendingSources >= state.Options.MaxSources then
@@ -327,10 +333,18 @@ module PhantomAgent =
                     // uploads; current poses and downloads remain usable meanwhile.
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Upload && item.Owner = id) |> Seq.toArray do
                         cancel state transfer.Id false "superseded"
+                    memberState.Previous <- memberState.Ready |> Option.map _.Generation
+                    match memberState.LastPose with
+                    | Some struct (generation, sequence) when memberState.Previous = Some generation -> memberState.PreviousSequence <- sequence
+                    | _ -> ()
                     memberState.HighManifest <- Some manifest
                     memberState.NextPublish <- at + int64 state.Options.PublishCooldownMs
                     startTransfer state at id memberState.Player manifest memberState.Character context 0UL true request
                     refresh state
+            | PhantomRequest.Displayed(player, revision, generation) ->
+                match memberState.Selected.TryGetValue player with
+                | true, selected when selected.Revision = revision && selected.Asset.Generation = generation -> selected.Displayed <- Some generation
+                | _ -> deny()
             | PhantomRequest.Download(player, generation, request) ->
                 match memberState.Selected.TryGetValue player, source state player with
                 | (true, selected), ValueSome current when selected.Asset.Generation = generation ->
@@ -381,12 +395,30 @@ module PhantomAgent =
                 memberState.PoseSamples.At <- at
                 if memberState.PoseSamples.Available >= 1.0 && take at state.Options.PoseBytesPerSecond bytes.Length memberState.PoseCredit then
                     memberState.PoseSamples.Available <- memberState.PoseSamples.Available - 1.0
-                    match PhantomCodec.decodePose state.Options bytes, memberState.Ready with
-                    | Ok pose, Some asset when memberState.Located && memberState.Preferences.Publish
-                                               && pose.Generation = asset.Generation && pose.Context = memberState.Context
-                                               && pose.Sequence.Value > memberState.LastSequence ->
-                        memberState.LastSequence <- pose.Sequence.Value
-                        memberState.Latest <- Some(struct (pose, at))
+                    match PhantomCodec.decodePose state.Options bytes with
+                    | Ok pose when memberState.Located && memberState.Preferences.Publish && pose.Context = memberState.Context ->
+                        let pending = if memberState.Previous.IsSome then memberState.HighManifest else None
+                        let known = [memberState.Ready; pending] |> List.exists (Option.exists (fun asset -> asset.Generation = pose.Generation))
+                        // A failed pending upload may fall back to its still-ready model.
+                        // Keep both sequence floors: accepting that fallback must not reopen
+                        // the pending generation to delayed/reordered packets.
+                        let fallback = memberState.Previous = Some pose.Generation &&
+                                       (memberState.Ready |> Option.exists (fun ready -> ready.Generation = pose.Generation))
+                        let advancing = match memberState.LastPose with
+                                        | Some struct (generation, sequence) when generation = pose.Generation -> pose.Sequence.Value > sequence
+                                        | Some struct (generation, _) -> pose.Generation.Value > generation.Value || (fallback && pose.Sequence.Value > memberState.PreviousSequence)
+                                        | None -> true
+                        let validPrevious = pose.Previous |> Option.forall (fun previous ->
+                            memberState.Previous = Some previous.Generation || memberState.Settled = Some pose.Generation)
+                        if known && advancing && validPrevious then
+                            let accepted = if memberState.Previous.IsNone then PhantomPose.withoutPrevious pose else pose
+                            if fallback then memberState.PreviousSequence <- pose.Sequence.Value
+                            match memberState.LastPose with
+                            | Some struct (generation, _) when generation.Value > pose.Generation.Value -> ()
+                            | _ -> memberState.LastPose <- Some(struct (pose.Generation, pose.Sequence.Value))
+                            pose.Previous |> Option.iter (fun previous -> memberState.PreviousSequence <- max memberState.PreviousSequence previous.Sequence.Value)
+                            memberState.Latest <- Some(struct (accepted, at))
+                        else deny()
                     | _ -> deny()
                 else deny()
             elif lane = DeliveryLane.Models then
@@ -415,9 +447,11 @@ module PhantomAgent =
             let ready () =
                 let owner = state.Members[transfer.Owner]
                 if owner.Ready <> Some transfer.Manifest then
-                    owner.LastSequence <- 0UL
-                    owner.Latest <- None
+                    // A pose for the pending generation can already be admitted.
+                    // Commit must not reopen its sequence floor or discard it.
+                    owner.Latest <- owner.Latest |> Option.filter (fun struct (pose, _) -> pose.Generation = transfer.Manifest.Generation)
                 owner.Ready <- Some transfer.Manifest
+                owner.CommittedAt <- at
                 cancel state transfer.Id true ""
             match transfer.Phase with
             | StartingUpload pending when pending.IsCompleted ->
@@ -507,6 +541,22 @@ module PhantomAgent =
         if at - state.LastTick >= int64 state.Options.ReplicationIntervalMs then
             state.LastTick <- at
             refresh state
+            for KeyValue(id, owner) in state.Members do
+                match owner.Ready with
+                | Some ready when owner.Settled <> Some ready.Generation && owner.HighManifest = Some ready ->
+                    let waiting =
+                        match state.Audiences.TryGetValue owner.Player with
+                        | true, audience -> audience |> Seq.exists (fun peer ->
+                            match state.Members[peer].Selected.TryGetValue owner.Player with
+                            | true, selected -> selected.Displayed <> Some ready.Generation
+                            | _ -> false)
+                        | _ -> false
+                    if not waiting || at - owner.CommittedAt >= int64 state.Options.TransferTimeoutMs then
+                        owner.Settled <- Some ready.Generation
+                        owner.Previous <- None; owner.PreviousSequence <- 0UL
+                        owner.Latest <- owner.Latest |> Option.map (fun struct (pose, received) -> struct (PhantomPose.withoutPrevious pose, received))
+                        emit state id (PhantomResponse.Settled(ready.Generation, owner.Context))
+                | _ -> ()
             for KeyValue(id, memberState) in state.Members do flushOutbox state id memberState
             let sources =
                 if state.Options.Enabled then state.Members.Values |> Seq.filter (fun item -> item.Active && item.Latest.IsSome) |> Seq.toArray
@@ -531,7 +581,7 @@ module PhantomAgent =
                         budget <- budget - 1
                         let observer = state.Members[id]
                         match observer.Selected.TryGetValue current.Player with
-                        | true, selected when observer.Active && observer.Outbox.Count = 0 && pose.Sequence.Value > selected.SentSequence ->
+                        | true, selected when observer.Active && observer.Outbox.Count = 0 && (selected.SentGeneration <> Some pose.Generation || pose.Sequence.Value > selected.SentSequence) ->
                             let length = PhantomCodec.posePacketSize current.Player selected.Revision pose
                             refill at state.Options.PoseBytesPerSecond observer.OutgoingPoseCredit
                             refill at state.Options.TotalPoseBytesPerSecond state.OutgoingPoseCredit
@@ -552,6 +602,7 @@ module PhantomAgent =
                                     observer.OutgoingPoseCredit.Available <- observer.OutgoingPoseCredit.Available - double length
                                     state.OutgoingPoseCredit.Available <- state.OutgoingPoseCredit.Available - double length
                                     selected.SentSequence <- pose.Sequence.Value
+                                    selected.SentGeneration <- Some pose.Generation
                                     fanout.Add 1L
                                 | Error _ -> ()
                         | _ -> ()

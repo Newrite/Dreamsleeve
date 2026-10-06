@@ -545,7 +545,7 @@ namespace Dreamsleeve::Client::Diagnostics
 
   void Recorder::Sent(std::span<const std::uint8_t> packet)
   {
-    if (!Active() || packet.size() > P::Limits{}.compressedPoseBytes + 1024) return;
+    if (!Active() || packet.size() > 2ULL * P::Limits{}.compressedPoseBytes + 1024) return;
     Writer w;
     w.Put(Micros());
     w.Data(packet);

@@ -1099,10 +1099,11 @@ private:
     // receivers drop it as the sample they already have.
     Result<void> SendMovement()
     {
-      if (phase != SessionPhase::Ready || !movementReady || !latestMovement || Clock::now() < nextPlayerSample) return {};
+      const auto now = Clock::now();
+      if (phase != SessionPhase::Ready || !movementReady || !latestMovement || now < nextPlayerSample) return {};
       if (movementSequence == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_sequence_exhausted");
-      nextPlayerSample = Clock::now() + std::chrono::milliseconds(config.playerSampleIntervalMs);
-      auto packet      = codec.Encode(
+      Utils::Time::AdvanceSample(nextPlayerSample, now, std::chrono::milliseconds(config.playerSampleIntervalMs));
+      auto packet = codec.Encode(
         Wire::MovementSample{
             contextRevision,
             ++movementSequence,

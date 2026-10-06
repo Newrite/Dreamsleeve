@@ -25,12 +25,12 @@ export namespace Dreamsleeve::Client::Phantom
       std::shared_ptr<const ValidatedAsset> asset;
     };
 
-    Exchange&                                  exchange;
-    std::filesystem::path                      directory;
-    std::mutex                                 mutex;
-    std::condition_variable                    wake;
-    std::deque<AssetJob>                       assets;
-    std::unordered_map<std::uint64_t, PoseJob> poses;
+    Exchange&                                                  exchange;
+    std::filesystem::path                                      directory;
+    std::mutex                                                 mutex;
+    std::condition_variable                                    wake;
+    std::deque<AssetJob>                                       assets;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, PoseJob> poses;
 
     struct Missing
     {
@@ -40,7 +40,8 @@ export namespace Dreamsleeve::Client::Phantom
 
     std::vector<Missing>                 missing;
     std::shared_ptr<const PreparedAsset> local;
-    Generation                           generation;
+    Generation                           generation, previousGeneration;
+    std::shared_ptr<const PreparedAsset> previous;
     std::uint64_t                        localEpoch{}, localRevision{};
     std::optional<std::uint64_t>         cacheBudget;
     std::jthread                         thread;
@@ -189,11 +190,30 @@ export namespace Dreamsleeve::Client::Phantom
         }
         if (localEpoch != work.epoch || localRevision != work.localRevision || !work.settings.publish)
         {
-          local.reset();
-          generation    = {};
+          if (localEpoch != work.epoch || !work.settings.publish)
+            previous.reset();
+          else if (work.previousGeneration == generation)
+          {
+            previous           = local;
+            previousGeneration = generation;
+          }
+          else if (work.generation != previousGeneration && work.previousGeneration != previousGeneration)
+            previous.reset();
+          if (previous && work.generation == previousGeneration)
+          {
+            local      = std::move(previous);
+            generation = previousGeneration;
+            exchange.Prepared(work.epoch, work.localRevision, {generation, local});
+          }
+          else
+          {
+            local.reset();
+            generation = {};
+          }
           localEpoch    = work.epoch;
           localRevision = work.localRevision;
         }
+        if (work.previousGeneration != previousGeneration) previous.reset();
         if (work.capture)
         {
           local.reset();
@@ -236,9 +256,21 @@ export namespace Dreamsleeve::Client::Phantom
                 encoded->size());
 #endif
             if (encoded)
-              exchange.Encoded(
-                work.epoch,
-                {snapshot.generation, snapshot.context, snapshot.sequence, snapshot.sampledAtUs, std::move(*encoded)});
+            {
+              Wire::Pose packet{snapshot.generation, snapshot.context, snapshot.sequence, snapshot.sampledAtUs, std::move(*encoded)};
+              if (
+                previous && work.previousSnapshot && work.previousSnapshot->generation == previousGeneration &&
+                work.previousSnapshot->sampledAtUs == snapshot.sampledAtUs)
+              {
+                auto prior    = *work.previousSnapshot;
+                prior.context = work.context;
+                auto bytes    = WriteSnapshot(prior, previous->asset);
+                if (bytes)
+                  packet.previous = std::make_shared<const Wire::Pose>(
+                    Wire::Pose{prior.generation, prior.context, prior.sequence, prior.sampledAtUs, std::move(*bytes)});
+              }
+              exchange.Encoded(work.epoch, std::move(packet));
+            }
             else
               exchange.Failed("Не удалось подготовить позу фантома: " + encoded.error().field);
           }
@@ -247,8 +279,8 @@ export namespace Dreamsleeve::Client::Phantom
             exchange.Failed("Недостаточно ресурсов для подготовки позы фантома");
           }
         }
-        std::optional<AssetJob>                    asset;
-        std::unordered_map<std::uint64_t, PoseJob> batch;
+        std::optional<AssetJob>                                    asset;
+        std::map<std::pair<std::uint64_t, std::uint64_t>, PoseJob> batch;
         {
           std::lock_guard lock(mutex);
           if (!assets.empty())
@@ -325,8 +357,10 @@ public:
     void Queue(Wire::RemotePose pose, std::shared_ptr<const ValidatedAsset> asset, std::uint64_t arrivalUs)
     {
       std::lock_guard lock(mutex);
-      if (poses.size() >= 16 && !poses.contains(pose.player)) return;
-      poses.insert_or_assign(pose.player, PoseJob{exchange.Epoch(), arrivalUs, std::move(pose), std::move(asset)});
+      pose.sample.previous.reset();  // Each queue slot owns exactly one generation.
+      const auto key = std::pair{pose.player, pose.sample.generation.value};
+      if (poses.size() >= 32 && !poses.contains(key)) return;
+      poses.insert_or_assign(key, PoseJob{exchange.Epoch(), arrivalUs, std::move(pose), std::move(asset)});
       wake.notify_one();
     }
 

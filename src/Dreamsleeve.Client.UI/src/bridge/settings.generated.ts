@@ -171,7 +171,7 @@ export const defaults: Settings = {
   phantomDrawDistance: 4096,
   phantomOpacity: 0.6,
   phantomColor: "#8CCCCC",
-  phantomSampleRate: 20,
+  phantomSampleRate: 10,
   phantomDelayMs: 100,
   phantomExtrapolationMs: 100,
   phantomTimeoutMs: 1000,

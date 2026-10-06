@@ -123,3 +123,112 @@ TEST_CASE("Phantom cadence captures only once per game frame when FPS is below t
     CHECK_FALSE(cadence.Due(start + elapsed, 20));
   }
 }
+
+TEST_CASE("Face animation crossing rounded coordinate bins does not republish the character")
+{
+  C::AppearanceRevision revision({
+      17,
+      {0.03124f, 0, 0}
+  });
+  for (std::uint64_t time = 0; time < 15000000; time += 250000)
+    CHECK(
+      revision.Observe(
+        {
+            17,
+            {time % 500000 ? 0.03126f : 0.11f, 0, 0}
+    },
+        time) == C::AppearanceChange::None);
+}
+
+TEST_CASE("Appearance audit compares accumulated deformation with the accepted asset")
+{
+  C::AppearanceRevision revision({
+      17,
+      {0, 0, 0}
+  });
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0.1f, 0, 0}
+  },
+      250000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0.2f, 0, 0}
+  },
+      500000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0.3f, 0, 0}
+  },
+      750000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0.31f, 0, 0}
+  },
+      1500000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0.31f, 0, 0}
+  },
+      1750000) == C::AppearanceChange::Deformation);
+}
+
+TEST_CASE("Equipment composition settles independently of harmless dynamic drift")
+{
+  C::AppearanceRevision revision({
+      17,
+      {0, 0, 0}
+  });
+  CHECK(
+    revision.Observe(
+      {
+          18,
+          {0.03f, 0, 0}
+  },
+      1000000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          18,
+          {0.04f, 0, 0}
+  },
+      1250000) == C::AppearanceChange::Structure);
+  CHECK(
+    revision.Observe(
+      {
+          17,
+          {0, 0, 0}
+  },
+      1500000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          19,
+          {0, 0, 0}
+  },
+      2000000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          20,
+          {0, 0, 0}
+  },
+      2250000) == C::AppearanceChange::None);
+  CHECK(
+    revision.Observe(
+      {
+          20,
+          {0, 0, 0}
+  },
+      2500000) == C::AppearanceChange::Structure);
+}

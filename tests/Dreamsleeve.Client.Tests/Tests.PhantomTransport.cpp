@@ -95,7 +95,7 @@ TEST_CASE("Phantom ENet fragments deliver only complete unreliable snapshots")
 {
   using namespace std::chrono_literals;
   Hosts                     hosts;
-  std::vector<std::uint8_t> large(64000);
+  std::vector<std::uint8_t> large(220000);
   for (std::size_t i = 0; i < large.size(); ++i)
     large[i] = static_cast<std::uint8_t>(i * 31);
   hosts.Send(large, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);

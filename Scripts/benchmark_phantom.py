@@ -26,7 +26,8 @@ parser.add_argument('--seconds',type=int,default=15)
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--timeout',type=int,default=1800)
 parser.add_argument('--workers',type=int,default=8)
-parser.add_argument('--rate',type=float,default=20.0)
+parser.add_argument('--rate',type=float,default=10.0)
+parser.add_argument('--replication-ms',type=int,default=100)
 parser.add_argument('--actor-values-hz',type=float,default=4.0)
 parser.add_argument('--maximum',type=int,default=4)
 parser.add_argument('--model-file',type=Path)
@@ -39,7 +40,7 @@ parser.add_argument('--server-benchmark',type=Path)
 args = parser.parse_args()
 if not (1 <= args.clients <= 1000 and 1 <= args.seconds <= 300 and 1 <= args.publishers <= args.clients
         and 60 <= args.timeout <= 3600 and 1 <= args.workers <= args.clients and args.clients % args.workers == 0
-        and 0 < args.rate <= 20 and 1 <= args.maximum <= 64 and args.actor_values_hz >= 0):
+        and 0 < args.rate <= 20 and 1 <= args.replication_ms <= 1000 and 1 <= args.maximum <= 64 and args.actor_values_hz >= 0):
     parser.error('Invalid bounded clients/workers/duration/rate/recipients')
 phantom = args.mode in ('cold','warm','steady','overload')
 bench.CLEANUP_SOURCES = 5
@@ -75,6 +76,8 @@ def configuration(clients,port,profile,case):
     config['Phantoms']['Enabled']=phantom
     config['Phantoms']['StoragePath']=str(cache.resolve())
     config['Phantoms']['Maximum']=args.maximum
+    config['Phantoms']['PoseIntervalMs']=max(1,round(1000/args.rate))
+    config['Phantoms']['ReplicationIntervalMs']=args.replication_ms
     if args.mode in ('warm','steady','overload'):
         (cache/(model_hash+'.zst')).write_bytes(model)
     (case/'cache-initial.json').write_text(json.dumps(dict(mode=args.mode,diskBytes=sum(p.stat().st_size for p in cache.iterdir()),preseeded=args.mode in ('warm','steady','overload'),modelSha256=model_hash if phantom else None),indent=2),encoding='utf-8')
@@ -107,10 +110,10 @@ class MeasuredChild(OriginalChild):
 bench.Child=MeasuredChild
 workers.Child=MeasuredChild
 if args.mode=='chat':
-    sys.argv=['benchmark_enet.py','--clients',str(args.clients),'--client-hosts',str(args.clients),'--rates','10','--scenarios','chat','--seconds',str(args.seconds),'--repetitions','1','--profile','minimal','--replication-ms','50','--server-buffer','4194304','--client-buffer','1048576','--timeout',str(args.timeout),'--output',str(args.output)]
+    sys.argv=['benchmark_enet.py','--clients',str(args.clients),'--client-hosts',str(args.clients),'--rates','10','--scenarios','chat','--seconds',str(args.seconds),'--repetitions','1','--profile','minimal','--replication-ms',str(args.replication_ms),'--server-buffer','4194304','--client-buffer','1048576','--timeout',str(args.timeout),'--output',str(args.output)]
     status=bench.main()
 else:
-    sys.argv=['benchmark_enet_workers.py','--clients',str(args.clients),'--hosts',str(args.clients),'--workers',str(args.workers),'--scenario',args.scenario,'--rate',str(args.rate),'--seconds',str(args.seconds),'--warm-positions','--actor-values-hz',str(args.actor_values_hz),'--replication-ms','50','--profile','minimal','--server-buffer','4194304','--client-buffer','1048576','--timeout',str(args.timeout),'--output',str(args.output)]
+    sys.argv=['benchmark_enet_workers.py','--clients',str(args.clients),'--hosts',str(args.clients),'--workers',str(args.workers),'--scenario',args.scenario,'--rate',str(args.rate),'--seconds',str(args.seconds),'--warm-positions','--actor-values-hz',str(args.actor_values_hz),'--replication-ms',str(args.replication_ms),'--profile','minimal','--server-buffer','4194304','--client-buffer','1048576','--timeout',str(args.timeout),'--output',str(args.output)]
     if args.server_overlay: sys.argv += ['--server-overlay',str(args.server_overlay.resolve())]
     if args.server_benchmark: sys.argv += ['--server-benchmark',str(args.server_benchmark.resolve())]
     status=workers.main()

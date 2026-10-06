@@ -582,3 +582,224 @@ TEST_CASE("Phantom ACK pacing permits the final prefix off a chunk boundary")
   }));
   CHECK(std::ranges::none_of(output, [](const auto& p) { return p.has_cancel(); }));
 }
+
+TEST_CASE("Phantom replacement owns two generations and failed preparation restores the old publication")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  CHECK_FALSE(exchange.CanReplace());
+  exchange.Settled({P::Generation{1}, 2});
+  CHECK_FALSE(exchange.CanReplace());
+  exchange.Settled({P::Generation{1}, 1});
+  REQUIRE(exchange.CanReplace());
+  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  auto work = exchange.TakeWork();
+  CHECK(work.previousGeneration == P::Generation{1});
+  CHECK(exchange.Capturing(P::Generation{1}));
+  CHECK_FALSE(exchange.Submit(P::Generation{3}, model->asset));
+  exchange.PreparationFailed(work.epoch, work.localRevision, "test preparation failure");
+  CHECK(exchange.Capturing(P::Generation{1}));
+  CHECK_FALSE(exchange.Capturing(P::Generation{2}));
+  CHECK(exchange.CanReplace());
+  auto restored = exchange.TakeWork();
+  CHECK(restored.generation == P::Generation{1});
+  CHECK_FALSE(restored.previousGeneration);
+  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  exchange.RestartCapture();
+  CHECK_FALSE(exchange.Capturing(P::Generation{1}));
+  CHECK_FALSE(exchange.Capturing(P::Generation{2}));
+  CHECK(exchange.CanReplace());
+  CHECK_FALSE(exchange.TakeOutput().generation);
+  REQUIRE(exchange.Submit(P::Generation{3}, model->asset));
+}
+
+TEST_CASE("Phantom remote replacement retains live previous poses and accounts its memory until display")
+{
+  P::Exchange exchange;
+  exchange.Context(1, true);
+  const auto     model = Model();
+  P::Wire::Offer first{1, 1, Describe(model)};
+  REQUIRE(exchange.Offer(first));
+  exchange.Loaded(exchange.Epoch(), first, std::make_shared<const P::ValidatedAsset>(model.asset), false);
+  const auto before       = exchange.RemainingMemory();
+  auto       second       = first;
+  second.view             = 2;
+  second.asset.generation = {2};
+  REQUIRE(exchange.Offer(second));
+  REQUIRE(exchange.Find(1)->previous);
+  CHECK(exchange.RemainingMemory() < before);
+  const auto occupied = exchange.RemainingMemory();
+  REQUIRE(exchange.SceneMemory(1, occupied));
+  CHECK(exchange.RemainingMemory() == 0);
+  CHECK_FALSE(exchange.SceneMemory(1, occupied + 1));
+  auto wire = Pose(model);
+  auto pose = P::ReadSnapshot(wire.payload, model.asset);
+  REQUIRE(pose);
+  exchange.Pose(exchange.Epoch(), {1, 2, wire}, std::make_shared<const P::Snapshot>(*pose), 50000);
+  CHECK(exchange.Find(1)->previous->playback.At(50000, exchange.Settings()));
+  exchange.Displayed({1, 1, {2}});
+  CHECK(exchange.Find(1)->previous);
+  exchange.Displayed({1, 2, {2}});
+  CHECK_FALSE(exchange.Find(1)->previous);
+  CHECK(exchange.RemainingMemory() > 0);
+  CHECK(exchange.TakeOutput().displayed.size() == 1);
+}
+
+TEST_CASE("Phantom replacement waits for RAM without losing its view or old pose")
+{
+  P::Exchange exchange;
+  exchange.Context(1, true);
+  const auto     model = Model();
+  P::Wire::Offer first{1, 1, Describe(model)};
+  REQUIRE(exchange.Offer(first));
+  exchange.Loaded(exchange.Epoch(), first, std::make_shared<const P::ValidatedAsset>(model.asset), false);
+  REQUIRE(exchange.SceneMemory(1, exchange.RemainingMemory()));
+  auto next              = first;
+  next.view              = 2;
+  next.asset.generation  = {2};
+  next.asset.rawBytes   += 8 * 1024 * 1024;
+  CHECK_FALSE(exchange.Offer(next));
+  const auto waiting = exchange.Find(1);
+  REQUIRE(waiting);
+  REQUIRE(waiting->previous);
+  CHECK(waiting->view == 2);
+  CHECK(waiting->WaitingBudget());
+  CHECK(waiting->State() == P::Representation::Loading);
+  auto wire = Pose(model);
+  auto pose = P::ReadSnapshot(wire.payload, model.asset);
+  REQUIRE(pose);
+  exchange.Pose(exchange.Epoch(), {1, 2, wire}, std::make_shared<const P::Snapshot>(*pose), 50000);
+  CHECK(exchange.Find(1)->previous->playback.At(50000, exchange.Settings()));
+  REQUIRE(exchange.SceneMemory(1, 0));
+  REQUIRE(exchange.Offer(next));
+  CHECK_FALSE(exchange.Find(1)->WaitingBudget());
+  CHECK(exchange.Find(1)->previous);
+}
+
+TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a later appearance")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  exchange.Settled({P::Generation{1}, 1});
+  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  auto work = exchange.TakeWork();
+  exchange.Prepared(work.epoch, work.localRevision, {{2}, model});
+  P::Streaming stream(exchange, {});
+  Policy(stream);
+  const auto packets = Models(stream.Poll());
+  const auto publish = std::ranges::find_if(packets, [](const auto& p) { return p.has_publish(); });
+  REQUIRE(publish != packets.end());
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* c = p.mutable_complete();
+    c->set_request_id(publish->publish().request_id());
+    c->set_player_id(123);
+    c->set_generation(2);
+    c->set_upload(true);
+    c->set_reason("terminal rejection");
+  })));
+  CHECK(exchange.CanReplace());
+  exchange.Settled({P::Generation{2}, 1});  // Delayed settlement cannot promote a rejected candidate.
+  auto packet       = Pose(*model);
+  packet.previous   = std::make_shared<const P::Wire::Pose>(packet);
+  packet.generation = {2};
+  exchange.Encoded(exchange.Epoch(), std::move(packet));
+  const auto at       = Clock::now() + std::chrono::seconds(1);
+  const auto fallback = stream.Poll(at);
+  const auto sent     = std::ranges::find_if(fallback, [](const auto& p) { return p.lane == P::Wire::PosesLane; });
+  REQUIRE(sent != fallback.end());
+  Proto::ClientPosePacket restored;
+  REQUIRE(restored.ParseFromArray(sent->bytes.data(), static_cast<int>(sent->bytes.size())));
+  CHECK(restored.sample().generation() == 1);
+  CHECK_FALSE(restored.has_previous_sample());
+  auto fresh       = Pose(*model);
+  fresh.sequence   = {2};
+  fresh.previous   = std::make_shared<const P::Wire::Pose>(fresh);
+  fresh.generation = {2};
+  exchange.Encoded(exchange.Epoch(), std::move(fresh));
+  for (int ms : {10, 20})
+    CHECK(
+      std::ranges::none_of(stream.Poll(at + std::chrono::milliseconds(ms)), [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
+  CHECK(std::ranges::count_if(stream.Poll(at + std::chrono::milliseconds(110)), [](const auto& p) {
+          return p.lane == P::Wire::PosesLane;
+        }) == 1);
+  REQUIRE(exchange.Submit(P::Generation{3}, model->asset));
+  const auto next = exchange.TakeWork();
+  CHECK(next.previousGeneration == P::Generation{1});
+  CHECK_FALSE(exchange.Capturing(P::Generation{2}));
+  CHECK(exchange.Capturing(P::Generation{1}));
+}
+
+TEST_CASE("Worker retains the old prepared bridge when rollback is immediately superseded")
+{
+  P::Exchange exchange;
+  exchange.Context(1, true);
+  auto       model = Model();
+  P::Worker  worker(exchange, {});
+  const auto prepared = [&](P::Generation generation) {
+    return Until([&] {
+      auto output = exchange.TakeOutput();
+      return output.publication && output.publication->generation == generation;
+    });
+  };
+  REQUIRE(exchange.Submit(P::Generation{1}, model.asset));
+  REQUIRE(prepared({1}));
+  exchange.Settled({P::Generation{1}, 1});
+  REQUIRE(exchange.Submit(P::Generation{2}, model.asset));
+  REQUIRE(prepared({2}));
+  const auto second = exchange.TakeWork();
+  exchange.PreparationFailed(second.epoch, second.localRevision, "rollback before next worker pass");
+  REQUIRE(exchange.Submit(P::Generation{3}, model.asset));
+  REQUIRE(prepared({3}));
+  auto pose = P::ReadSnapshot(Pose(model).payload, model.asset);
+  REQUIRE(pose);
+  auto previous    = std::make_shared<const P::Snapshot>(*pose);
+  pose->generation = {3};
+  exchange.Submit(std::make_shared<const P::Snapshot>(*pose), previous);
+  REQUIRE(Until([&] {
+    auto output = exchange.TakeOutput();
+    return output.pose && output.pose->generation == P::Generation{3} && output.pose->previous &&
+           output.pose->previous->generation == P::Generation{1};
+  }));
+}
+
+TEST_CASE("Preparation rollback resumes the committed model without republishing its older manifest")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  P::Streaming stream(exchange, {});
+  Policy(stream);
+  const auto requests = Models(stream.Poll());
+  const auto publish  = std::ranges::find_if(requests, [](const auto& p) { return p.has_publish(); });
+  REQUIRE(publish != requests.end());
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* t = p.mutable_transfer();
+    t->set_transfer_id(1);
+    t->set_request_id(publish->publish().request_id());
+    t->set_player_id(123);
+    t->set_upload(true);
+    Set(Describe(*model), t->mutable_asset());
+  })));
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* c = p.mutable_complete();
+    c->set_transfer_id(1);
+    c->set_request_id(publish->publish().request_id());
+    c->set_generation(1);
+    c->set_player_id(123);
+    c->set_upload(true);
+    c->set_accepted(true);
+  })));
+  exchange.Settled({P::Generation{1}, 1});
+  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  auto work = exchange.TakeWork();
+  stream.Poll();
+  exchange.PreparationFailed(work.epoch, work.localRevision, "prepare failed");
+  work = exchange.TakeWork();
+  exchange.Prepared(work.epoch, work.localRevision, {{1}, model});
+  exchange.Encoded(exchange.Epoch(), Pose(*model));
+  const auto resumed = stream.Poll(Clock::now() + std::chrono::seconds(1));
+  CHECK(std::ranges::none_of(Models(resumed), [](const auto& p) { return p.has_publish() || p.has_withdraw(); }));
+  CHECK(std::ranges::any_of(resumed, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
+}

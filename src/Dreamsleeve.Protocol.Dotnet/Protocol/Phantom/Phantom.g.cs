@@ -37,55 +37,64 @@ namespace Dreamsleeve.Protocol.Phantom {
             "DRIMCgRkYXRhGAMgASgMIkUKCERvd25sb2FkEhEKCXBsYXllcl9pZBgBIAEo",
             "BBISCgpnZW5lcmF0aW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAQiHQoG",
             "Q2FuY2VsEhMKC3RyYW5zZmVyX2lkGAEgASgEIjQKCFByb2dyZXNzEhMKC3Ry",
-            "YW5zZmVyX2lkGAEgASgEEhMKC25leHRfb2Zmc2V0GAIgASgNIgoKCFdpdGhk",
-            "cmF3ItYDChFDbGllbnRBc3NldFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9u",
-            "GAEgASgNEkAKC3ByZWZlcmVuY2VzGAIgASgLMikuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuUGhhbnRvbS5QcmVmZXJlbmNlc0gAEjgKB3B1Ymxpc2gYAyABKAsy",
-            "JS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlB1Ymxpc2hIABI0CgVj",
-            "aHVuaxgEIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1",
-            "bmtIABI6Cghkb3dubG9hZBgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LlBoYW50b20uRG93bmxvYWRIABI2CgZjYW5jZWwYBiABKAsyJC5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkNhbmNlbEgAEjoKCHdpdGhkcmF3GAcg",
-            "ASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5XaXRoZHJhd0gA",
-            "EjoKCHByb2dyZXNzGAggASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
-            "bnRvbS5Qcm9ncmVzc0gAQgkKB3BheWxvYWQibwoFT2ZmZXISEQoJcGxheWVy",
-            "X2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQSPAoFYXNzZXQYAyAB",
-            "KAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3Jp",
-            "cHRvciKUAQoIVHJhbnNmZXISEwoLdHJhbnNmZXJfaWQYASABKAQSPAoFYXNz",
-            "ZXQYAiABKAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0",
-            "RGVzY3JpcHRvchIRCglwbGF5ZXJfaWQYAyABKAQSDgoGdXBsb2FkGAQgASgI",
-            "EhIKCnJlcXVlc3RfaWQYBSABKAQipAEKCENvbXBsZXRlEhMKC3RyYW5zZmVy",
-            "X2lkGAEgASgEEhAKCGFjY2VwdGVkGAIgASgIEg4KBnJlYXNvbhgDIAEoCRIR",
-            "CglwbGF5ZXJfaWQYBCABKAQSEgoKZ2VuZXJhdGlvbhgFIAEoBBIWCg5yZXRy",
-            "eV9hZnRlcl9tcxgGIAEoDRIOCgZ1cGxvYWQYByABKAgSEgoKcmVxdWVzdF9p",
-            "ZBgIIAEoBCIyCgZSZW1vdmUSEQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdf",
-            "cmV2aXNpb24YAiABKAQi2wIKBlBvbGljeRIPCgdlbmFibGVkGAEgASgIEhcK",
-            "D3Jhd19hc3NldF9ieXRlcxgCIAEoDRIeChZjb21wcmVzc2VkX2Fzc2V0X2J5",
-            "dGVzGAMgASgNEhAKCGNoYW5uZWxzGAQgASgNEhIKCnBvc2VfYnl0ZXMYBiAB",
-            "KA0SHQoVY29tcHJlc3NlZF9wb3NlX2J5dGVzGAcgASgNEhMKC3NhbXBsZV9y",
-            "YXRlGAggASgNEhcKD21heGltdW1fdmlzaWJsZRgJIAEoDRIQCghkaXN0YW5j",
-            "ZRgKIAEoAhIVCg13aW5kb3dfY2h1bmtzGAsgASgNEhwKFGNvbmN1cnJlbnRf",
-            "dHJhbnNmZXJzGAwgASgNEh4KFm1vZGVsX2J5dGVzX3Blcl9zZWNvbmQYDSAB",
-            "KA0SHQoVcG9zZV9ieXRlc19wZXJfc2Vjb25kGA4gASgNSgQIBRAGUghnZW9t",
-            "ZXRyeSLIAwoRU2VydmVyQXNzZXRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lv",
-            "bhgBIAEoDRI0CgVvZmZlchgCIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LlBoYW50b20uT2ZmZXJIABI6Cgh0cmFuc2ZlchgDIAEoCzImLkRyZWFtc2xl",
-            "ZXZlLlByb3RvY29sLlBoYW50b20uVHJhbnNmZXJIABI0CgVjaHVuaxgEIAEo",
-            "CzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1bmtIABI6Cghj",
-            "b21wbGV0ZRgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
-            "Q29tcGxldGVIABI2CgZyZW1vdmUYBiABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5QaGFudG9tLlJlbW92ZUgAEjoKCHByb2dyZXNzGAcgASgLMiYuRHJl",
-            "YW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qcm9ncmVzc0gAEjYKBnBvbGlj",
-            "eRgIIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9saWN5",
-            "SABCCQoHcGF5bG9hZCJ0CgpQb3NlU2FtcGxlEhIKCmdlbmVyYXRpb24YASAB",
-            "KAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBIQCghzZXF1ZW5jZRgDIAEo",
-            "BBIVCg1zYW1wbGVkX2F0X3VzGAQgASgEEg8KB3BheWxvYWQYBSABKAwiZgoQ",
-            "Q2xpZW50UG9zZVBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEjgK",
-            "BnNhbXBsZRgCIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
-            "UG9zZVNhbXBsZSKQAQoQU2VydmVyUG9zZVBhY2tldBIYChBwcm90b2NvbF92",
-            "ZXJzaW9uGAEgASgNEhEKCXBsYXllcl9pZBgCIAEoBBIVCg12aWV3X3Jldmlz",
-            "aW9uGAMgASgEEjgKBnNhbXBsZRgEIAEoCzIoLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLlBoYW50b20uUG9zZVNhbXBsZWIGcHJvdG8z"));
+            "YW5zZmVyX2lkGAEgASgEEhMKC25leHRfb2Zmc2V0GAIgASgNIkkKCURpc3Bs",
+            "YXllZBIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEo",
+            "BBISCgpnZW5lcmF0aW9uGAMgASgEIjcKB1NldHRsZWQSEgoKZ2VuZXJhdGlv",
+            "bhgBIAEoBBIYChBjb250ZXh0X3JldmlzaW9uGAIgASgEIgoKCFdpdGhkcmF3",
+            "IpQEChFDbGllbnRBc3NldFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEg",
+            "ASgNEkAKC3ByZWZlcmVuY2VzGAIgASgLMikuRHJlYW1zbGVldmUuUHJvdG9j",
+            "b2wuUGhhbnRvbS5QcmVmZXJlbmNlc0gAEjgKB3B1Ymxpc2gYAyABKAsyJS5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlB1Ymxpc2hIABI0CgVjaHVu",
+            "axgEIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1bmtI",
+            "ABI6Cghkb3dubG9hZBgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBo",
+            "YW50b20uRG93bmxvYWRIABI2CgZjYW5jZWwYBiABKAsyJC5EcmVhbXNsZWV2",
+            "ZS5Qcm90b2NvbC5QaGFudG9tLkNhbmNlbEgAEjoKCHdpdGhkcmF3GAcgASgL",
+            "MiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5XaXRoZHJhd0gAEjoK",
+            "CHByb2dyZXNzGAggASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
+            "bS5Qcm9ncmVzc0gAEjwKCWRpc3BsYXllZBgJIAEoCzInLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLlBoYW50b20uRGlzcGxheWVkSABCCQoHcGF5bG9hZCJvCgVP",
+            "ZmZlchIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEo",
+            "BBI8CgVhc3NldBgDIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50",
+            "b20uQXNzZXREZXNjcmlwdG9yIpQBCghUcmFuc2ZlchITCgt0cmFuc2Zlcl9p",
+            "ZBgBIAEoBBI8CgVhc3NldBgCIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LlBoYW50b20uQXNzZXREZXNjcmlwdG9yEhEKCXBsYXllcl9pZBgDIAEoBBIO",
+            "CgZ1cGxvYWQYBCABKAgSEgoKcmVxdWVzdF9pZBgFIAEoBCKkAQoIQ29tcGxl",
+            "dGUSEwoLdHJhbnNmZXJfaWQYASABKAQSEAoIYWNjZXB0ZWQYAiABKAgSDgoG",
+            "cmVhc29uGAMgASgJEhEKCXBsYXllcl9pZBgEIAEoBBISCgpnZW5lcmF0aW9u",
+            "GAUgASgEEhYKDnJldHJ5X2FmdGVyX21zGAYgASgNEg4KBnVwbG9hZBgHIAEo",
+            "CBISCgpyZXF1ZXN0X2lkGAggASgEIjIKBlJlbW92ZRIRCglwbGF5ZXJfaWQY",
+            "ASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBCLbAgoGUG9saWN5Eg8KB2Vu",
+            "YWJsZWQYASABKAgSFwoPcmF3X2Fzc2V0X2J5dGVzGAIgASgNEh4KFmNvbXBy",
+            "ZXNzZWRfYXNzZXRfYnl0ZXMYAyABKA0SEAoIY2hhbm5lbHMYBCABKA0SEgoK",
+            "cG9zZV9ieXRlcxgGIAEoDRIdChVjb21wcmVzc2VkX3Bvc2VfYnl0ZXMYByAB",
+            "KA0SEwoLc2FtcGxlX3JhdGUYCCABKA0SFwoPbWF4aW11bV92aXNpYmxlGAkg",
+            "ASgNEhAKCGRpc3RhbmNlGAogASgCEhUKDXdpbmRvd19jaHVua3MYCyABKA0S",
+            "HAoUY29uY3VycmVudF90cmFuc2ZlcnMYDCABKA0SHgoWbW9kZWxfYnl0ZXNf",
+            "cGVyX3NlY29uZBgNIAEoDRIdChVwb3NlX2J5dGVzX3Blcl9zZWNvbmQYDiAB",
+            "KA1KBAgFEAZSCGdlb21ldHJ5IoIEChFTZXJ2ZXJBc3NldFBhY2tldBIYChBw",
+            "cm90b2NvbF92ZXJzaW9uGAEgASgNEjQKBW9mZmVyGAIgASgLMiMuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuUGhhbnRvbS5PZmZlckgAEjoKCHRyYW5zZmVyGAMg",
+            "ASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5UcmFuc2ZlckgA",
+            "EjQKBWNodW5rGAQgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
+            "bS5DaHVua0gAEjoKCGNvbXBsZXRlGAUgASgLMiYuRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuUGhhbnRvbS5Db21wbGV0ZUgAEjYKBnJlbW92ZRgGIAEoCzIkLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUmVtb3ZlSAASOgoIcHJvZ3Jl",
+            "c3MYByABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlByb2dy",
+            "ZXNzSAASNgoGcG9saWN5GAggASgLMiQuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "UGhhbnRvbS5Qb2xpY3lIABI4CgdzZXR0bGVkGAkgASgLMiUuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuUGhhbnRvbS5TZXR0bGVkSABCCQoHcGF5bG9hZCJ0CgpQ",
+            "b3NlU2FtcGxlEhIKCmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZp",
+            "c2lvbhgCIAEoBBIQCghzZXF1ZW5jZRgDIAEoBBIVCg1zYW1wbGVkX2F0X3Vz",
+            "GAQgASgEEg8KB3BheWxvYWQYBSABKAwiqQEKEENsaWVudFBvc2VQYWNrZXQS",
+            "GAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI4CgZzYW1wbGUYAiABKAsyKC5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGUSQQoPcHJl",
+            "dmlvdXNfc2FtcGxlGAMgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
+            "bnRvbS5Qb3NlU2FtcGxlItMBChBTZXJ2ZXJQb3NlUGFja2V0EhgKEHByb3Rv",
+            "Y29sX3ZlcnNpb24YASABKA0SEQoJcGxheWVyX2lkGAIgASgEEhUKDXZpZXdf",
+            "cmV2aXNpb24YAyABKAQSOAoGc2FtcGxlGAQgASgLMiguRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuUGhhbnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBs",
+            "ZRgFIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNh",
+            "bXBsZWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -96,17 +105,19 @@ namespace Dreamsleeve.Protocol.Phantom {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Download), global::Dreamsleeve.Protocol.Phantom.Download.Parser, new[]{ "PlayerId", "Generation", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Cancel), global::Dreamsleeve.Protocol.Phantom.Cancel.Parser, new[]{ "TransferId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Progress), global::Dreamsleeve.Protocol.Phantom.Progress.Parser, new[]{ "TransferId", "NextOffset" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Displayed), global::Dreamsleeve.Protocol.Phantom.Displayed.Parser, new[]{ "PlayerId", "ViewRevision", "Generation" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Settled), global::Dreamsleeve.Protocol.Phantom.Settled.Parser, new[]{ "Generation", "ContextRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Withdraw), global::Dreamsleeve.Protocol.Phantom.Withdraw.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Chunk", "Download", "Cancel", "Withdraw", "Progress" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Chunk", "Download", "Cancel", "Withdraw", "Progress", "Displayed" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Offer), global::Dreamsleeve.Protocol.Phantom.Offer.Parser, new[]{ "PlayerId", "ViewRevision", "Asset" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Transfer), global::Dreamsleeve.Protocol.Phantom.Transfer.Parser, new[]{ "TransferId", "Asset", "PlayerId", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Accepted", "Reason", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Remove), global::Dreamsleeve.Protocol.Phantom.Remove.Parser, new[]{ "PlayerId", "ViewRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "WindowChunks", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy", "Settled" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseSample), global::Dreamsleeve.Protocol.Phantom.PoseSample.Parser, new[]{ "Generation", "ContextRevision", "Sequence", "SampledAtUs", "Payload" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientPosePacket), global::Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser, new[]{ "ProtocolVersion", "Sample" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerPosePacket), global::Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser, new[]{ "ProtocolVersion", "PlayerId", "ViewRevision", "Sample" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientPosePacket), global::Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser, new[]{ "ProtocolVersion", "Sample", "PreviousSample" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerPosePacket), global::Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser, new[]{ "ProtocolVersion", "PlayerId", "ViewRevision", "Sample", "PreviousSample" }, null, null, null, null)
           }));
     }
     #endregion
@@ -2066,6 +2077,519 @@ namespace Dreamsleeve.Protocol.Phantom {
 
   }
 
+  /// <summary>
+  /// Sent only after a native scene has applied its first pose and become visible.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class Displayed : pb::IMessage<Displayed>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<Displayed> _parser = new pb::MessageParser<Displayed>(() => new Displayed());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<Displayed> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[7]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Displayed() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Displayed(Displayed other) : this() {
+      playerId_ = other.playerId_;
+      viewRevision_ = other.viewRevision_;
+      generation_ = other.generation_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Displayed Clone() {
+      return new Displayed(this);
+    }
+
+    /// <summary>Field number for the "player_id" field.</summary>
+    public const int PlayerIdFieldNumber = 1;
+    private ulong playerId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong PlayerId {
+      get { return playerId_; }
+      set {
+        playerId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "view_revision" field.</summary>
+    public const int ViewRevisionFieldNumber = 2;
+    private ulong viewRevision_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong ViewRevision {
+      get { return viewRevision_; }
+      set {
+        viewRevision_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "generation" field.</summary>
+    public const int GenerationFieldNumber = 3;
+    private ulong generation_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Generation {
+      get { return generation_; }
+      set {
+        generation_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as Displayed);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(Displayed other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (PlayerId != other.PlayerId) return false;
+      if (ViewRevision != other.ViewRevision) return false;
+      if (Generation != other.Generation) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
+      if (ViewRevision != 0UL) hash ^= ViewRevision.GetHashCode();
+      if (Generation != 0UL) hash ^= Generation.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(PlayerId);
+      }
+      if (ViewRevision != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(ViewRevision);
+      }
+      if (Generation != 0UL) {
+        output.WriteRawTag(24);
+        output.WriteUInt64(Generation);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(PlayerId);
+      }
+      if (ViewRevision != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(ViewRevision);
+      }
+      if (Generation != 0UL) {
+        output.WriteRawTag(24);
+        output.WriteUInt64(Generation);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (PlayerId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
+      }
+      if (ViewRevision != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ViewRevision);
+      }
+      if (Generation != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Generation);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(Displayed other) {
+      if (other == null) {
+        return;
+      }
+      if (other.PlayerId != 0UL) {
+        PlayerId = other.PlayerId;
+      }
+      if (other.ViewRevision != 0UL) {
+        ViewRevision = other.ViewRevision;
+      }
+      if (other.Generation != 0UL) {
+        Generation = other.Generation;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            ViewRevision = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            Generation = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            ViewRevision = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            Generation = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The publisher may retire its prior bindings and prepare another generation.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class Settled : pb::IMessage<Settled>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<Settled> _parser = new pb::MessageParser<Settled>(() => new Settled());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<Settled> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Settled() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Settled(Settled other) : this() {
+      generation_ = other.generation_;
+      contextRevision_ = other.contextRevision_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Settled Clone() {
+      return new Settled(this);
+    }
+
+    /// <summary>Field number for the "generation" field.</summary>
+    public const int GenerationFieldNumber = 1;
+    private ulong generation_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Generation {
+      get { return generation_; }
+      set {
+        generation_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "context_revision" field.</summary>
+    public const int ContextRevisionFieldNumber = 2;
+    private ulong contextRevision_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong ContextRevision {
+      get { return contextRevision_; }
+      set {
+        contextRevision_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as Settled);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(Settled other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Generation != other.Generation) return false;
+      if (ContextRevision != other.ContextRevision) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Generation != 0UL) hash ^= Generation.GetHashCode();
+      if (ContextRevision != 0UL) hash ^= ContextRevision.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Generation != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Generation);
+      }
+      if (ContextRevision != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(ContextRevision);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Generation != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(Generation);
+      }
+      if (ContextRevision != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(ContextRevision);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Generation != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Generation);
+      }
+      if (ContextRevision != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ContextRevision);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(Settled other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Generation != 0UL) {
+        Generation = other.Generation;
+      }
+      if (other.ContextRevision != 0UL) {
+        ContextRevision = other.ContextRevision;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Generation = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            ContextRevision = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Generation = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            ContextRevision = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Withdraw : pb::IMessage<Withdraw>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -2081,7 +2605,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2242,7 +2766,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2284,6 +2808,9 @@ namespace Dreamsleeve.Protocol.Phantom {
           break;
         case PayloadOneofCase.Progress:
           Progress = other.Progress.Clone();
+          break;
+        case PayloadOneofCase.Displayed:
+          Displayed = other.Displayed.Clone();
           break;
       }
 
@@ -2392,6 +2919,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "displayed" field.</summary>
+    public const int DisplayedFieldNumber = 9;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Phantom.Displayed Displayed {
+      get { return payloadCase_ == PayloadOneofCase.Displayed ? (global::Dreamsleeve.Protocol.Phantom.Displayed) payload_ : null; }
+      set {
+        payload_ = value;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Displayed;
+      }
+    }
+
     private object payload_;
     /// <summary>Enum of possible cases for the "payload" oneof.</summary>
     public enum PayloadOneofCase {
@@ -2403,6 +2942,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       Cancel = 6,
       Withdraw = 7,
       Progress = 8,
+      Displayed = 9,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2441,6 +2981,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (!object.Equals(Cancel, other.Cancel)) return false;
       if (!object.Equals(Withdraw, other.Withdraw)) return false;
       if (!object.Equals(Progress, other.Progress)) return false;
+      if (!object.Equals(Displayed, other.Displayed)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -2457,6 +2998,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Cancel) hash ^= Cancel.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Withdraw) hash ^= Withdraw.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Progress) hash ^= Progress.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.Displayed) hash ^= Displayed.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -2508,6 +3050,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(66);
         output.WriteMessage(Progress);
       }
+      if (payloadCase_ == PayloadOneofCase.Displayed) {
+        output.WriteRawTag(74);
+        output.WriteMessage(Displayed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -2550,6 +3096,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(66);
         output.WriteMessage(Progress);
       }
+      if (payloadCase_ == PayloadOneofCase.Displayed) {
+        output.WriteRawTag(74);
+        output.WriteMessage(Displayed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -2583,6 +3133,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (payloadCase_ == PayloadOneofCase.Progress) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Progress);
+      }
+      if (payloadCase_ == PayloadOneofCase.Displayed) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Displayed);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -2641,6 +3194,12 @@ namespace Dreamsleeve.Protocol.Phantom {
             Progress = new global::Dreamsleeve.Protocol.Phantom.Progress();
           }
           Progress.MergeFrom(other.Progress);
+          break;
+        case PayloadOneofCase.Displayed:
+          if (Displayed == null) {
+            Displayed = new global::Dreamsleeve.Protocol.Phantom.Displayed();
+          }
+          Displayed.MergeFrom(other.Displayed);
           break;
       }
 
@@ -2730,6 +3289,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Progress = subBuilder;
             break;
           }
+          case 74: {
+            global::Dreamsleeve.Protocol.Phantom.Displayed subBuilder = new global::Dreamsleeve.Protocol.Phantom.Displayed();
+            if (payloadCase_ == PayloadOneofCase.Displayed) {
+              subBuilder.MergeFrom(Displayed);
+            }
+            input.ReadMessage(subBuilder);
+            Displayed = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -2816,6 +3384,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Progress = subBuilder;
             break;
           }
+          case 74: {
+            global::Dreamsleeve.Protocol.Phantom.Displayed subBuilder = new global::Dreamsleeve.Protocol.Phantom.Displayed();
+            if (payloadCase_ == PayloadOneofCase.Displayed) {
+              subBuilder.MergeFrom(Displayed);
+            }
+            input.ReadMessage(subBuilder);
+            Displayed = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -2838,7 +3415,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3119,7 +3696,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3474,7 +4051,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3934,7 +4511,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4169,7 +4746,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4811,7 +5388,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4853,6 +5430,9 @@ namespace Dreamsleeve.Protocol.Phantom {
           break;
         case PayloadOneofCase.Policy:
           Policy = other.Policy.Clone();
+          break;
+        case PayloadOneofCase.Settled:
+          Settled = other.Settled.Clone();
           break;
       }
 
@@ -4961,6 +5541,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "settled" field.</summary>
+    public const int SettledFieldNumber = 9;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Phantom.Settled Settled {
+      get { return payloadCase_ == PayloadOneofCase.Settled ? (global::Dreamsleeve.Protocol.Phantom.Settled) payload_ : null; }
+      set {
+        payload_ = value;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Settled;
+      }
+    }
+
     private object payload_;
     /// <summary>Enum of possible cases for the "payload" oneof.</summary>
     public enum PayloadOneofCase {
@@ -4972,6 +5564,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       Remove = 6,
       Progress = 7,
       Policy = 8,
+      Settled = 9,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5010,6 +5603,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (!object.Equals(Remove, other.Remove)) return false;
       if (!object.Equals(Progress, other.Progress)) return false;
       if (!object.Equals(Policy, other.Policy)) return false;
+      if (!object.Equals(Settled, other.Settled)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -5026,6 +5620,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Remove) hash ^= Remove.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Progress) hash ^= Progress.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Policy) hash ^= Policy.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.Settled) hash ^= Settled.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -5077,6 +5672,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(66);
         output.WriteMessage(Policy);
       }
+      if (payloadCase_ == PayloadOneofCase.Settled) {
+        output.WriteRawTag(74);
+        output.WriteMessage(Settled);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5119,6 +5718,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(66);
         output.WriteMessage(Policy);
       }
+      if (payloadCase_ == PayloadOneofCase.Settled) {
+        output.WriteRawTag(74);
+        output.WriteMessage(Settled);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5152,6 +5755,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (payloadCase_ == PayloadOneofCase.Policy) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Policy);
+      }
+      if (payloadCase_ == PayloadOneofCase.Settled) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Settled);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -5210,6 +5816,12 @@ namespace Dreamsleeve.Protocol.Phantom {
             Policy = new global::Dreamsleeve.Protocol.Phantom.Policy();
           }
           Policy.MergeFrom(other.Policy);
+          break;
+        case PayloadOneofCase.Settled:
+          if (Settled == null) {
+            Settled = new global::Dreamsleeve.Protocol.Phantom.Settled();
+          }
+          Settled.MergeFrom(other.Settled);
           break;
       }
 
@@ -5299,6 +5911,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Policy = subBuilder;
             break;
           }
+          case 74: {
+            global::Dreamsleeve.Protocol.Phantom.Settled subBuilder = new global::Dreamsleeve.Protocol.Phantom.Settled();
+            if (payloadCase_ == PayloadOneofCase.Settled) {
+              subBuilder.MergeFrom(Settled);
+            }
+            input.ReadMessage(subBuilder);
+            Settled = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -5385,6 +6006,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Policy = subBuilder;
             break;
           }
+          case 74: {
+            global::Dreamsleeve.Protocol.Phantom.Settled subBuilder = new global::Dreamsleeve.Protocol.Phantom.Settled();
+            if (payloadCase_ == PayloadOneofCase.Settled) {
+              subBuilder.MergeFrom(Settled);
+            }
+            input.ReadMessage(subBuilder);
+            Settled = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -5410,7 +6040,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5741,6 +6371,10 @@ namespace Dreamsleeve.Protocol.Phantom {
 
   }
 
+  /// <summary>
+  /// During replacement, both samples describe the SAME source time/context.
+  /// Each payload is complete and independently decodable against its own NIF.
+  /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ClientPosePacket : pb::IMessage<ClientPosePacket>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5756,7 +6390,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5778,6 +6412,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     public ClientPosePacket(ClientPosePacket other) : this() {
       protocolVersion_ = other.protocolVersion_;
       sample_ = other.sample_ != null ? other.sample_.Clone() : null;
+      previousSample_ = other.previousSample_ != null ? other.previousSample_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -5811,6 +6446,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "previous_sample" field.</summary>
+    public const int PreviousSampleFieldNumber = 3;
+    private global::Dreamsleeve.Protocol.Phantom.PoseSample previousSample_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Phantom.PoseSample PreviousSample {
+      get { return previousSample_; }
+      set {
+        previousSample_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -5828,6 +6475,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (ProtocolVersion != other.ProtocolVersion) return false;
       if (!object.Equals(Sample, other.Sample)) return false;
+      if (!object.Equals(PreviousSample, other.PreviousSample)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -5837,6 +6485,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       int hash = 1;
       if (ProtocolVersion != 0) hash ^= ProtocolVersion.GetHashCode();
       if (sample_ != null) hash ^= Sample.GetHashCode();
+      if (previousSample_ != null) hash ^= PreviousSample.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -5863,6 +6512,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(18);
         output.WriteMessage(Sample);
       }
+      if (previousSample_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(PreviousSample);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5881,6 +6534,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(18);
         output.WriteMessage(Sample);
       }
+      if (previousSample_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(PreviousSample);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5896,6 +6553,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (sample_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Sample);
+      }
+      if (previousSample_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(PreviousSample);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -5917,6 +6577,12 @@ namespace Dreamsleeve.Protocol.Phantom {
           Sample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
         }
         Sample.MergeFrom(other.Sample);
+      }
+      if (other.previousSample_ != null) {
+        if (previousSample_ == null) {
+          PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+        }
+        PreviousSample.MergeFrom(other.PreviousSample);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -5946,6 +6612,13 @@ namespace Dreamsleeve.Protocol.Phantom {
               Sample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
             }
             input.ReadMessage(Sample);
+            break;
+          }
+          case 26: {
+            if (previousSample_ == null) {
+              PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+            }
+            input.ReadMessage(PreviousSample);
             break;
           }
         }
@@ -5978,6 +6651,13 @@ namespace Dreamsleeve.Protocol.Phantom {
             input.ReadMessage(Sample);
             break;
           }
+          case 26: {
+            if (previousSample_ == null) {
+              PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+            }
+            input.ReadMessage(PreviousSample);
+            break;
+          }
         }
       }
     }
@@ -6000,7 +6680,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6024,6 +6704,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       playerId_ = other.playerId_;
       viewRevision_ = other.viewRevision_;
       sample_ = other.sample_ != null ? other.sample_.Clone() : null;
+      previousSample_ = other.previousSample_ != null ? other.previousSample_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -6081,6 +6762,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "previous_sample" field.</summary>
+    public const int PreviousSampleFieldNumber = 5;
+    private global::Dreamsleeve.Protocol.Phantom.PoseSample previousSample_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Phantom.PoseSample PreviousSample {
+      get { return previousSample_; }
+      set {
+        previousSample_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -6100,6 +6793,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (PlayerId != other.PlayerId) return false;
       if (ViewRevision != other.ViewRevision) return false;
       if (!object.Equals(Sample, other.Sample)) return false;
+      if (!object.Equals(PreviousSample, other.PreviousSample)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -6111,6 +6805,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
       if (ViewRevision != 0UL) hash ^= ViewRevision.GetHashCode();
       if (sample_ != null) hash ^= Sample.GetHashCode();
+      if (previousSample_ != null) hash ^= PreviousSample.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -6145,6 +6840,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(34);
         output.WriteMessage(Sample);
       }
+      if (previousSample_ != null) {
+        output.WriteRawTag(42);
+        output.WriteMessage(PreviousSample);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -6171,6 +6870,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(34);
         output.WriteMessage(Sample);
       }
+      if (previousSample_ != null) {
+        output.WriteRawTag(42);
+        output.WriteMessage(PreviousSample);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -6192,6 +6895,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (sample_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Sample);
+      }
+      if (previousSample_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(PreviousSample);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -6219,6 +6925,12 @@ namespace Dreamsleeve.Protocol.Phantom {
           Sample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
         }
         Sample.MergeFrom(other.Sample);
+      }
+      if (other.previousSample_ != null) {
+        if (previousSample_ == null) {
+          PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+        }
+        PreviousSample.MergeFrom(other.PreviousSample);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -6258,6 +6970,13 @@ namespace Dreamsleeve.Protocol.Phantom {
             input.ReadMessage(Sample);
             break;
           }
+          case 42: {
+            if (previousSample_ == null) {
+              PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+            }
+            input.ReadMessage(PreviousSample);
+            break;
+          }
         }
       }
     #endif
@@ -6294,6 +7013,13 @@ namespace Dreamsleeve.Protocol.Phantom {
               Sample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
             }
             input.ReadMessage(Sample);
+            break;
+          }
+          case 42: {
+            if (previousSample_ == null) {
+              PreviousSample = new global::Dreamsleeve.Protocol.Phantom.PoseSample();
+            }
+            input.ReadMessage(PreviousSample);
             break;
           }
         }

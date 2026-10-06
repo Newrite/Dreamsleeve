@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 22
+# Прикладной протокол сессии, версия 23
 
 Схемы разделены по назначению:
 
@@ -24,7 +24,7 @@
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 22. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 23. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -694,7 +694,7 @@ Location=None/ViewRevision=0 не очищает позицию того же п
 
 playerSampleIntervalMs задаёт период повторения последней локальной позы,
 ReplicationIntervalMs — период серверной рассылки актуального состояния. По умолчанию
-оба 50 мс (20 Гц); тики не синхронизированы и автоматически не согласуются. Чат/команды
+оба 100 мс (10 Гц); тики не синхронизированы и автоматически не согласуются. Чат/команды
 обрабатываются независимо. Сохранять все промежуточные samples не требуется.
 
 ### Организация преобразований
@@ -737,9 +737,9 @@ PresenceChanged; pose/token/sequence движения — отдельные rea
 одновременно не поддерживаются.
 
 
-## Фантомы, версия 22
+## Фантомы, версия 23
 
-Модели и позы имеют отдельные оболочки с той же обязательной версией 22.
+Модели и позы имеют отдельные оболочки с той же обязательной версией 23.
 `phantom.proto` отделён от чата и UpdatePlayer; массивы геометрии не идут через
 UI bridge. Максимальный frame модели: compressed 64 МиБ, raw 128 МиБ;
 позы: compressed 128 КиБ, raw 256 КиБ; 4096 узлов нативной сцены.
@@ -757,12 +757,15 @@ Publish/Download получают положительный request_id, кот�
 до назначения передачи; содержит player/generation, upload, request_id и retry.
 Нулевой retry — окончательный отказ; положительный — задержка повтора в мс.
 Chunk — максимум 16384 байт, последовательные offsets и оконные Progress ACK.
-Клиент посылает позы только после принятой целой публикации.
+Первое поколение начинает pose delivery после принятой целой публикации.
+Замена допускает bundled pose после admission Publish, до upload commit.
 
 PoseSample повторяет generation, context_revision, sequence, sampled_at_us;
 сжатый payload содержит эти значения и **полную** таблицу TRS/hidden, world
 spheres всей геометрии. Каналы определяются preorder проверенного NIF: root,
-геометрия и skin roots/bones. Payload60 + channels*23 + bounds*16 байт до Zstd1.
+геометрия и skin roots/bones. Payload60 + channels*23 + bounds*16 байт до Zstd1; pose version3.
+Каналы и bounds переставляются в байтовые плоскости отдельно, заголовок не
+переставляется. Значения квантования и точность не изменены.
 NIF-контейнер: magic uint32, version uint32=2, length uint32, NIF bytes; Zstd3.
 Нет зависимых дельт. Получатель сверяет envelope с декодированным payload и готовым manifest.
 
@@ -779,3 +782,23 @@ sources/subscribers/traffic, хранит compressed bytes и проверяет
 не распаковывая asset. Все параметры и default находятся в `[Phantoms]`.
 Нативный NIF, проверка до NiStream и владельцы состояний:
 [PhantomsRu](../docs/PhantomsRu.md).
+
+### Переход поколений в23
+
+ClientPosePacket.previous_sample=3 и ServerPosePacket.previous_sample=5 —
+optional полный независимый sample предыдущего NIF. Его generation строго
+меньше основного, context_revision и sampled_at_us совпадают, sequence независим.
+Пакет атомарен на границе ENet reassembly; частично полученная пара не применяется.
+Граница server ingress: 2*Limits.PoseBytes+256; значение PoseBytes относится к
+одному сжатому sample, а byte credits — к целой protobuf оболочке.
+
+ClientAssetPacket.displayed=9 подтверждает (player_id, view_revision, generation)
+после успешного Apply+Attach сцены. ServerAssetPacket.settled=9 сообщает
+(generation, context_revision) источнику после подтверждений текущего audience
+или TransferTimeoutMs после commit. Источник держит не более двух поколений;
+новые изменения объединяются до завершения перехода. Сервер сохраняет watermark
+(generation, sequence) отдельно от истекающего Latest, проверяет session/context
+и не разрешает публикацию только на основании исторического HighManifest.
+
+Wire23 не совместим с22; negotiation и сетевого legacy decoder нет. Только
+диагностический reader умеет читать сохранённые DLPDIAG2/protocol22/pose2 записи.

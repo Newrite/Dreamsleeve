@@ -638,6 +638,106 @@ let tests = testList "Phantoms" [
         Expect.equal received.Length 1 "New generation starts at sequence one."
         Expect.equal received[0].Sample.Generation 2UL "No mixed-generation fanout."
 
+    testCase "replacement bundles keep the old generation moving until display acknowledgement" <| fun _ ->
+        let pending = TaskCompletionSource<Result<bool,string>>()
+        let mutable next = result true
+        let state, members, output = setup options { memoryStorage with StartUpload = fun _ -> next } 2
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        next <- pending.Task
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 2UL 1UL 10UL)
+        packet.PreviousSample <- Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 1UL 20UL 10UL).Sample
+        packet.PreviousSample.SampledAtUs <- packet.Sample.SampledAtUs
+        output.Clear()
+        PhantomAgent.receive state 6L (fst members[0]) DeliveryLane.Poses (packet.ToByteArray())
+        PhantomAgent.tick state 6L
+        let sent = output |> Seq.find (fun (_, p) -> p.Lane = DeliveryLane.Poses) |> snd
+        let received = Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom sent.Bytes
+        Expect.equal received.PreviousSample.Generation 1UL "Receiver can decode a live pose against its still-visible scene."
+        let decoded = PhantomCodec.decodePose options (packet.ToByteArray()) |> ok
+        Expect.equal (PhantomCodec.posePacketSize (snd members[0]).Identity.PlayerId received.ViewRevision decoded) sent.Bytes.Length "Bundle budget is exact."
+        pending.SetResult(Ok true)
+        PhantomAgent.tick state 7L
+        let offer = models output |> Array.pick (fun p -> if isNull p.Offer then None else Some p.Offer)
+        Expect.equal offer.Asset.Generation 2UL "Only complete asset gets offered."
+        output.Clear()
+        PhantomAgent.handle state 8L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|3uy|], 10UL, requestId()))
+        PhantomAgent.tick state 8L
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.RetryAfterMs > 0u)) "Third generation waits for display."
+        PhantomAgent.handle state 9L (fst members[1]) (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId, offer.ViewRevision - 1UL, AppearanceGeneration.create 2UL |> ok))
+        PhantomAgent.tick state 9L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Stale view cannot retire the bridge."
+        PhantomAgent.handle state 10L (fst members[1]) (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId, offer.ViewRevision, AppearanceGeneration.create 2UL |> ok))
+        PhantomAgent.tick state 10L
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled) && p.Settled.Generation = 2UL)) "Actual display retires previous pose."
+        output.Clear()
+        packet.Sample.Sequence <- 2UL
+        PhantomAgent.receive state 11L (fst members[0]) DeliveryLane.Poses (packet.ToByteArray())
+        PhantomAgent.tick state 11L
+        let latest = output |> Seq.find (fun (_, p) -> p.Lane = DeliveryLane.Poses) |> snd
+        Expect.isNull (Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom(latest.Bytes).PreviousSample) "Late bridge stripped after settle."
+
+    testCase "rejected replacement falls back to live ready poses without reopening either sequence floor" <| fun _ ->
+        let pending = TaskCompletionSource<Result<bool,string>>()
+        let mutable next = result true
+        let state, members, output = setup options { memoryStorage with StartUpload = fun _ -> next } 2
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        next <- pending.Task
+        let id = fst members[0]
+        PhantomAgent.handle state 5L id (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 2UL 1UL 10UL)
+        packet.PreviousSample <- Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 1UL 20UL 10UL).Sample
+        packet.PreviousSample.SampledAtUs <- packet.Sample.SampledAtUs
+        PhantomAgent.receive state 6L id DeliveryLane.Poses (packet.ToByteArray())
+        PhantomAgent.tick state 6L
+        pending.SetResult(Error "hash mismatch")
+        PhantomAgent.tick state 7L
+        output.Clear()
+        PhantomAgent.receive state 8L id DeliveryLane.Poses (pose 1UL 21UL 10UL)
+        PhantomAgent.tick state 8L
+        let sent = output |> Seq.find (fun (_, p) -> p.Lane = DeliveryLane.Poses) |> snd
+        let restored = Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom sent.Bytes
+        Expect.equal restored.Sample.Generation 1UL "The still-ready native scene keeps moving."
+        Expect.equal restored.Sample.Sequence 21UL "Fallback advances its own sequence."
+        output.Clear()
+        PhantomAgent.receive state 9L id DeliveryLane.Poses (pose 1UL 20UL 10UL)
+        PhantomAgent.tick state 9L
+        PhantomAgent.receive state 10L id DeliveryLane.Poses (packet.ToByteArray())
+        PhantomAgent.tick state 10L
+        Expect.isFalse (output |> Seq.exists (fun (_, p) -> p.Lane = DeliveryLane.Poses)) "Neither old floor nor pending floor reopens."
+
+    testCase "pose timeout and withdrawal preserve admission and sequence watermarks" <| fun _ ->
+        let state, members, _ = setup options memoryStorage 1
+        ready state members[0] (asset 1UL [|1uy|])
+        let id = fst members[0]
+        PhantomAgent.receive state 5L id DeliveryLane.Poses (pose 1UL 20UL 10UL)
+        let expired = 6L + int64 options.PoseTimeoutMs
+        PhantomAgent.tick state expired
+        PhantomAgent.receive state (expired + 1L) id DeliveryLane.Poses (pose 1UL 19UL 10UL)
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "Timeout does not reopen the sequence floor."
+        PhantomAgent.receive state (expired + 2L) id DeliveryLane.Poses (pose 1UL 21UL 10UL)
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 1 "Fresh complete snapshot resumes."
+        PhantomAgent.handle state (expired + 3L) id PhantomRequest.Withdraw
+        PhantomAgent.receive state (expired + 4L) id DeliveryLane.Poses (pose 1UL 22UL 10UL)
+        Expect.equal (PhantomAgent.snapshot state).LatestPoses 0 "Historical manifest cannot authorize post-withdraw poses."
+
+    testCase "bundled pose rejects mismatched source time context and non-previous generation" <| fun _ ->
+        let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 2UL 1UL 10UL)
+        packet.PreviousSample <- packet.Sample.Clone()
+        Expect.isError (PhantomCodec.decodePose options (packet.ToByteArray())) "Same generation is not previous."
+        packet.PreviousSample.Generation <- 1UL
+        packet.PreviousSample.ContextRevision <- 11UL
+        Expect.isError (PhantomCodec.decodePose options (packet.ToByteArray())) "Context mismatch."
+        packet.PreviousSample.ContextRevision <- 10UL
+        packet.PreviousSample.SampledAtUs <- 50001UL
+        Expect.isError (PhantomCodec.decodePose options (packet.ToByteArray())) "Two poses must be simultaneous."
+        packet.PreviousSample.SampledAtUs <- 50000UL
+        Expect.isOk (PhantomCodec.decodePose options (packet.ToByteArray())) "Independent sequences are allowed."
+
     testCase "same-generation warm republish keeps pose sequence floor" <| fun _ ->
         let state, members, _ = setup options memoryStorage 1
         let manifest = asset 1UL [|1uy|]

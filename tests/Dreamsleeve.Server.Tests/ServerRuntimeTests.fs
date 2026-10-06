@@ -337,9 +337,16 @@ let tests = testList "ServerRuntime" [
                                 Preferences = Dreamsleeve.Protocol.Phantom.Preferences(Publish = true, Receive = false))
             fixture.Input.Enqueue(ServerTransportEvent.Received(bob, DeliveryLane.Models, preferences.ToByteArray()))
             do! post fixture.Runtime (tick())
-            let! id, removed = receive fixture.Phantoms
-            equal bob id
-            check (not (isNull removed.Remove)) "Receive off removes the wire subscription."
+            let mutable removed = false
+            let mutable settled = false
+            while not removed || not settled do
+                let! id, packet = receive fixture.Phantoms
+                if id = bob && not (isNull packet.Remove) then removed <- true
+                elif id = alice && not (isNull packet.Settled) then
+                    equal 1UL packet.Settled.Generation
+                    settled <- true
+                else failwith "Unexpected phantom transition response."
+            check removed "Receive off removes the subscription and releases the publisher's display barrier."
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected alice)
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected bob)
             do! post fixture.Runtime (tick())

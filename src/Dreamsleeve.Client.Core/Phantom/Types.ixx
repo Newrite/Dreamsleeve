@@ -18,6 +18,7 @@ export namespace Dreamsleeve::Client::Phantom
   using NodeId                         = Id<struct NodeTag, std::uint32_t>;
   constexpr std::uint32_t NoNode       = std::numeric_limits<std::uint32_t>::max();
   constexpr std::uint32_t AssetVersion = 2;
+  constexpr std::uint32_t PoseVersion  = 3;
   // Leave room for signed receipt/sample offset arithmetic on both ends.
   constexpr std::uint64_t MaximumSampleTime = std::numeric_limits<std::int64_t>::max() / 2;
 
@@ -173,7 +174,7 @@ private:
     std::uint32_t maximum{4};
     float         distance{4096}, opacity{0.6f};
     Vec3          color{0.55f, 0.8f, 1};
-    std::uint32_t sampleRate{20}, delayMs{100}, extrapolationMs{100}, timeoutMs{1000};
+    std::uint32_t sampleRate{10}, delayMs{100}, extrapolationMs{100}, timeoutMs{1000};
     std::uint64_t memoryBytes{512 * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
     std::uint32_t uploadBytesPerSecond{5 * 1024 * 1024}, downloadBytesPerSecond{5 * 1024 * 1024};
     bool          operator==(const ViewSettings&) const = default;

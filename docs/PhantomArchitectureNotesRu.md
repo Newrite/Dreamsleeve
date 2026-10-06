@@ -8,8 +8,23 @@ geometry/skin/material schema. Нативные Capture/Scene больше не 
 буферы самостоятельно. Server больше не имеет geometry cap или поля manifest.
 
 Исправлено: pending Publish сохраняет Ready/Latest; replacement Offer не
-уничтожает текущую сцену; commit нового поколения сбрасывает pose sequence;
+уничтожает текущую сцену; watermark поколения/sequence живёт независимо от истекающего Latest;
 one publisher с ready+pending учитывается один раз в MaxSources.
+
+В23 Exchange владеет текущим/удерживаемым поколениями и разрешением следующей
+публикации; Game держит нативные Source/Scene в соответствии с этим решением.
+Worker сохраняет immutable PreparedAsset; Streaming владеет transfers и квитанцией
+последнего server commit, чтобы rollback не переотправлял старый manifest.
+Server actor владеет Ready, high-watermark manifest, подтверждениями views и
+ограниченным переходом. Обход подтверждений использует существующий Audiences,
+без сканирования всех игроков на каждого источника и без второго spatial index.
+Готовность UI по-прежнему выводится из Exchange/Scene, отдельного lifecycle нет.
+Preparation failure до Publish восстанавливает предыдущую публикацию; ошибка
+нового native Apply/Attach не уничтожает пригодную текущую сцену. Terminal
+upload rejection не блокирует будущие изменения: старый bridge продолжает
+самостоятельные позы, сервер удерживает оба sequence floors. PublicationPhase
+остаётся в Exchange; transport receipt не является отдельной готовностью UI.
+Game выделяет монотонные поколения независимо от отката Source.
 
 Проблема вне игрового объёма: Sandbox изолированного процесса не даёт тесту Credential Manager
 сохранить временный credential; требуется обычный разрешённый запуск теста.

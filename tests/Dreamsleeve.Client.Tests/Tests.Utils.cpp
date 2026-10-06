@@ -109,3 +109,17 @@ TEST_CASE("Backoff doubles the wait after each attempt up to the maximum and sta
 }
 
 TEST_SUITE_END();
+
+TEST_CASE("Sampling grid preserves 10 Hz across late game frames without duplicate catch-up")
+{
+  using namespace std::chrono;
+  using Dreamsleeve::Utils::Time::AdvanceSample;
+  const auto origin = steady_clock::time_point{seconds(100)};
+  auto       next   = steady_clock::time_point{};
+  AdvanceSample(next, origin, milliseconds(100));
+  CHECK(next == origin + milliseconds(100));
+  AdvanceSample(next, origin + milliseconds(116), milliseconds(100));
+  CHECK(next == origin + milliseconds(200));
+  AdvanceSample(next, origin + milliseconds(735), milliseconds(100));
+  CHECK(next == origin + milliseconds(800));
+}

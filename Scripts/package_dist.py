@@ -362,6 +362,7 @@ def main() -> int:
     config.mkdir()
     check_mod_toml()
     shutil.copy2(MOD_TOML, config / "client.toml")
+    shutil.copy2(UI / "ui.example.toml", config / "ui.example.toml")
     shutil.copy2(ESP, client / ESP.name)
     shutil.copy2(CLIENT / "aliases.toml", config / "aliases.toml")
 

@@ -431,6 +431,11 @@ TEST_CASE("Diagnostic replay decodes archived wire bytes and can cancel a full r
   CHECK(Replay(reader).empty());
   REQUIRE(reader.Start(f.root, 0));
   CHECK(Replay(reader).size() == 32);
+  const auto directory = std::filesystem::path(reader.Read().directory);
+  REQUIRE(reader.Start(directory, 1));  // An explicit recording does not select a different scenario.
+  CHECK(Replay(reader).size() == 32);
+  REQUIRE(reader.Start(directory / "capture.phdiag", 1));
+  CHECK(Replay(reader).size() == 32);
 }
 
 TEST_CASE("Diagnostic replay rejects a damaged model before returning a renderable frame")
@@ -468,6 +473,13 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
   // Consume without retaining the entire user's archive in the test process.
   const auto    until  = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::uint64_t frames = 0, last = 0;
+  std::ofstream measurements;
+  const char*   output = std::getenv("DREAMSLEEVE_PHANTOM_REPLAY_MEASUREMENTS");
+  if (output)
+  {
+    measurements.open(std::filesystem::path(output) / "poses.csv");
+    measurements << "generation,sequence,payload,packet,encodeMs,decodeMs\n";
+  }
   while (std::chrono::steady_clock::now() < until)
   {
     if (auto frame = reader.Take())
@@ -475,6 +487,36 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
       REQUIRE(P::CheckSnapshot(*frame->pose, *frame->asset));
       CHECK(frame->pose->sampledAtUs > last);
       last = frame->pose->sampledAtUs;
+      if (output)
+      {
+        const auto start   = std::chrono::steady_clock::now();
+        auto       encoded = P::WriteSnapshot(*frame->pose, *frame->asset, D::CaptureLimits());
+        REQUIRE(encoded);
+        const auto encodedAt = std::chrono::steady_clock::now();
+        auto       decoded   = P::ReadSnapshot(*encoded, *frame->asset, D::CaptureLimits());
+        REQUIRE(decoded);
+        const auto decodedAt = std::chrono::steady_clock::now();
+        for (std::size_t i = 0; i < decoded->channels.size(); ++i)
+        {
+          CHECK(decoded->channels[i].world.position == frame->pose->channels[i].world.position);
+          CHECK(decoded->channels[i].hidden == frame->pose->channels[i].hidden);
+          CHECK(decoded->channels[i].world.scale == frame->pose->channels[i].world.scale);
+          const auto a = decoded->channels[i].world.rotation, b = frame->pose->channels[i].world.rotation;
+          CHECK(std::abs(a.x - b.x) + std::abs(a.y - b.y) + std::abs(a.z - b.z) + std::abs(a.w - b.w) < 0.00013f);
+        }
+        CHECK(decoded->bounds == frame->pose->bounds);
+        const auto& p      = *decoded;
+        auto        packet = P::Wire::Encode(P::Wire::Pose{p.generation, p.context, p.sequence, p.sampledAtUs, *encoded});
+        REQUIRE(packet);
+        measurements << p.generation.value << ',' << p.sequence.value << ',' << encoded->size() << ',' << packet->size() << ','
+                     << std::chrono::duration<double, std::milli>(encodedAt - start).count() << ','
+                     << std::chrono::duration<double, std::milli>(decodedAt - encodedAt).count() << '\n';
+        if (frames < 20)
+        {
+          std::ofstream fixture(std::filesystem::path(output) / ("pose-" + std::to_string(frames) + ".zst"), std::ios::binary);
+          fixture.write(reinterpret_cast<const char*>(encoded->data()), encoded->size());
+        }
+      }
       ++frames;
       continue;
     }
@@ -482,6 +524,7 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
     if (!status.busy && (status.complete || !status.error.empty())) break;
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+  INFO(reader.Read().error);
   CHECK_FALSE(reader.Read().busy);
   CHECK(reader.Read().error.empty());
   CHECK(reader.Read().complete);

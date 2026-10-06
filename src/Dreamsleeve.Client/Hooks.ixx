@@ -11,6 +11,7 @@ import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Game.Input;
 import Dreamsleeve.Game.Phantoms;
 import Dreamsleeve.Game.PhantomNative;
+import Dreamsleeve.Game.PhantomCapture;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -33,6 +34,11 @@ namespace Hooks
     // The input dispatcher PollInputDevices calls: SE 0x140C15E00, AE 0x140CD9E00.
     // VR (0x140C52BC0) has no entry in its database, so VR is only range-checked.
     auto DispatchInput = REL::RelocationID(67355, 68655);
+
+    // Completed synchronous branch of AIProcess::Update3DModel_Impl. The
+    // queued branch does not reach this call; it returns without notification.
+    constexpr auto UpdateActor3D = REL::VariantID(38404, 39395, 0x65A140);
+    constexpr auto Clear3DFlags  = REL::VariantID(38868, 39909, 0x687870);
 
     constexpr auto StreamCtor   = REL::VariantID(68971, 70324, 0xC9EC40);
     constexpr auto StreamDtor   = REL::VariantID(68972, 70325, 0xC9EEA0);
@@ -70,6 +76,36 @@ namespace Hooks
   constexpr std::uint8_t DispatchPrologue[] = {0x48, 0x89, 0x4C, 0x24, 0x40, 0x48, 0x8B, 0xCE};
   constexpr std::uint8_t CallOpcode         = 0xE8;
   constexpr std::size_t  CallSize           = 5;
+
+  struct ModelCompleted
+  {
+    static void Clear(RE::AIProcess* process)
+    {
+      Original(process);
+      // Can be reached on an engine task thread. No actor lookup, ownership,
+      // clone or compression here; notifications coalesce into a bounded audit.
+      Dreamsleeve::Game::PhantomCapture::RequestAudit();
+    }
+
+    static inline REL::Relocation<decltype(Clear)> Original;
+
+    static void Install()
+    {
+      const auto   site = Address::UpdateActor3D.address() + REL::Relocate(0x400, 0x402, 0x400);
+      const auto*  code = reinterpret_cast<const std::uint8_t*>(site);
+      std::int32_t displacement{};
+      std::memcpy(&displacement, code + 1, sizeof(displacement));
+      const auto target = site + CallSize + displacement;
+      // A changed/foreign call site is not evidence of the audited completion.
+      if (code[0] != CallOpcode || target != Address::Clear3DFlags.address())
+      {
+        logger::warn("Phantom completion hook unavailable at {:X}; bounded audit remains active", site);
+        return;
+      }
+      Original = SKSE::GetTrampoline().write_call<5>(site, Clear);
+      logger::info("Phantom completed 3D update hook installed at {:X}", site);
+    }
+  };
 
   bool InstallPhantomNative();
 
@@ -286,6 +322,7 @@ namespace Hooks
       logger::warn("Native phantom disabled for unaudited runtime {}", version.string());
       return false;
     }
+    ModelCompleted::Install();
     phantomThread = std::this_thread::get_id();
     const Dreamsleeve::Game::PhantomNative::Engine engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, Normalize};
     Phantoms::Install(engine);

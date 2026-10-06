@@ -275,7 +275,7 @@ sink), геймпад, VR, `CharEvent`, движение мыши и thumbstick 
 Сбор только при контексте Playing и `PlayerReady()`, при Ready-сессии:
 
 - `CharacterStarted{GetName()}` один раз на контекст и generation, `CharacterRenamed` при изменении имени (RaceSex).
-- Движение: `LocalMovement{PlayerLocation}` каждые `playerSampleIntervalMs` (50 мс),
+- Движение: `LocalMovement{PlayerLocation}` каждые `playerSampleIntervalMs` (100 мс / 10 Гц),
   `LocalLocation` явно при смене пространства и при скачке больше `movement.teleportDistance`.
   Пространство: интерьер → CELL, экстерьер → WRLD; `FormKey = {имя файла-источника в нижнем регистре, GetLocalFormID()}`,
   для динамических форм — `{"runtime", FormID}` (сессионная идентичность, совпадений между клиентами не будет).

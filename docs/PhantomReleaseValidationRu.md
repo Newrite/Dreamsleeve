@@ -1,3 +1,6 @@
+Актуальное продолжение protocol23: [обновления, streaming и проверки](benchmarks/phantom-native-streaming-2026-10-07.md).
+Следующие результаты protocol22 сохраняются как история предыдущего выпуска.
+
 # Native NIF: проверка выпуска 07.10.2026
 
 Ветка `codex/phantom-native-nif`, база полной функции `3b80b8e`, источник
@@ -21,6 +24,11 @@ native объектами на main-loop thread. Hooks содержит runtime 
 
 ## Проверенные данные
 
+- Дополнение после установки диагностической DLL: пользователь воспроизвёл
+  все6новых SE записей и сообщил о хорошем визуальном результате, включая бой
+  с магией. Все1806кадров/24модели также прочитаны production ReplayReader
+  (6успешных запусков по608assertions). Обнаружены частые пересборки FaceGen
+  и временного magic mesh; [анализ и приоритеты](benchmarks/phantom-native-recordings-2026-10-07.md).
 - Diagnostic Client.Tests:388/388,9500assertions,4 opt-in skipped; запуск вне
   sandbox необходим тесту Windows Credential Manager. Первоначальный sandbox
   отказ CredentialStore не является phantom regression.
@@ -42,7 +50,10 @@ native объектами на main-loop thread. Hooks содержит runtime 
 Обычная и диагностическая DLL собраны из финальных исходников после native
 ревью. Диагностическая DLL отдельно: `build/diagnostics/windows/x64/releasedbg`.
 В обеих проверено наличие финальной проверки skinInstance; SHA256/размеры:
-`build/native-nif/final-binaries.json`. Установленная DLL побайтово равна dist.
+`build/native-nif/final-binaries.json`. На момент release-установки DLL побайтово
+равнялась dist. Позже по запросу пользователя в MO2 установлена диагностическая
+DLL; release dist не менялся. Backup перед diagnostic swap:
+`build/native-nif/before-diagnostic-install-20261007-030805`.
 Пакет содержит UI, нужный ESP, Papyrus API и актуальные server examples;
 диагностические архивы/NIF/IDB и сторонние клиентские DLL исключены.
 Проверены совпадение ESP с Plugin и отсутствие diagnostic marker в release DLL.
@@ -77,15 +88,18 @@ Cold8/2publishers:8 полных13 288 628-byte моделей скачаны и
 AE1.6.1170 и VR1.4.15: указатели вRDX/R8, длинаuint32; используются ранее
 проверенные constructors/allocator/registry/bounds adapters.
 [Runtime журнал](PhantomRuntimeRu.md) содержит ID/RVA, layouts и основания.
-Это не игровой тест AE/VR и не визуальная проверка новой SE DLL.
+Это не игровой тест AE/VR. Последующая пользовательская проверка новой SE DLL
+описана выше; её нельзя приписывать автоматической статической проверке.
 
 MO2: `F:\MO2 - Skyrim - VanillaLike`, профиль `Vanilla`, клиент:
 `F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`.
 Фактический SkyrimSE.exe указанного MO2 gamePath имеет версию1.5.97.0.
 Windows10 UI adapter после повторного inventory возвращает `window id out of range`
-для HWND MO2; управление игрой не выполнялось. Остаётся проверить новый capture
-и native replay в игре: лицо/рот/глаза/волосы/броню, оружие рука↔ножны,
-первое/третье лицо, переход наружных CELL, смену экипировки/морфов, load/disconnect.
+для HWND MO2; управление игрой агентом не выполнялось. Пользователь затем
+сам проверил новые capture/replay сценарии: ходьба, спринт, покой, бой,
+камера, бой с магией; визуальных проблем не заметил. Сообщение не является
+подробным чеклистом лица/рта/глаз, переходов наружных CELL, смены
+экипировки/морфов и load/disconnect; эти пункты не объявляются отдельно закрытыми.
 Переносимость внешности после удаления texture dependencies до Save пока
 подтверждена структурно, не между двумя различными модпаками в игре.
 

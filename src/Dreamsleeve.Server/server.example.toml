@@ -175,8 +175,8 @@ MailboxCapacity = 4096
 ControlReserve = 128
 # Control messages the owner may have in flight to the runtime, >= 1.
 MaxControlDeliveries = 512
-# Period of pose replication, milliseconds, >= 1: 50 = 20 Hz.
-ReplicationIntervalMs = 50
+# Movement replication period in ms, >= 1: 100 = 10 Hz; 50 = 20 Hz.
+ReplicationIntervalMs = 100
 # Players within this many world units (same worldspace or interior cell) get each
 # other's poses, >= 0. Clients cannot draw fireflies farther than this.
 VisibilityDistance = 8192
@@ -521,14 +521,17 @@ ChunkBytes = 16384
 WindowChunks = 4
 TransferTimeoutMs = 30000
 PublishCooldownMs = 1000
-PoseIntervalMs = 50
+# Pose capture/admission period in ms: 100 = 10 Hz; 50 = 20 Hz.
+PoseIntervalMs = 100
 PoseTimeoutMs = 1000
-ReplicationIntervalMs = 50
+ReplicationIntervalMs = 100
 # Shared upload/download model budgets, bytes/s: 5 MiB/s total and per player.
 ModelBytesPerSecond = 5242880
 PlayerModelBytesPerSecond = 5242880
 PoseBytesPerSecond = 2097152
-TotalPoseBytesPerSecond = 33554432
+# Shared pose fanout budget: 128 MiB/s. At 512 sources x 4 recipients x 10 Hz
+# the measured native poses need about 77 MiB/s before transport overhead.
+TotalPoseBytesPerSecond = 134217728
 CommandsPerSecond = 128
 MaxPoseFanoutPerTick = 2048
 

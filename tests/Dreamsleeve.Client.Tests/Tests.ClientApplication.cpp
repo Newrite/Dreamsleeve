@@ -57,7 +57,7 @@ TEST_CASE("Configuration path is caller-owned and partial TOML preserves default
   CHECK_FALSE(LoadClientSettings(fixture.path));
   auto defaults = fixture.Load("# defaults\n");
   REQUIRE(defaults);
-  CHECK(defaults->client.playerSampleIntervalMs == 50);
+  CHECK(defaults->client.playerSampleIntervalMs == 100);
   CHECK(defaults->client.network.channelLimit == MinChannels);
   auto previous = fixture.Load("[client.network]\nchannelLimit = 3\n");
   REQUIRE(previous);

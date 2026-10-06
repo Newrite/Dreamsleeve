@@ -123,7 +123,7 @@ def inspect(path: Path, extract: Path | None = None) -> dict:
                 if pos != len(original) or raw_n != 60 + channels * 23 + bounds * 16:
                     raise ValueError("snapshot body has wrong length")
                 raw_header, _ = take(raw, 0, "IIQQQQfffII")
-                if raw_header[:2] != (0x50504C44, asset_version) or raw_header[2:] != pose:
+                if (raw_header[0] != 0x50504C44 or raw_header[1] not in (2, 3)) or raw_header[2:] != pose:
                     raise ValueError("production and oracle snapshot headers differ")
                 root, _ = take(original, channel_start, "ffffffffB")
                 root_delta = math.dist(root[:3], actor[3:6])

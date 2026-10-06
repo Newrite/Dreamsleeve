@@ -62,6 +62,7 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
             let at = now()
             subscriptionSeconds <- subscriptionSeconds + float(peers |> Array.sumBy(fun p -> p.Offers.Count)) * max 0. (at-subscriptionAt)/1000.
             subscriptionAt <- at
+    let displayed = Array.init ids.Length (fun _ -> Dictionary<uint64,uint64>())
     let modelOutbox = Array.init ids.Length (fun _ -> Queue<byte array>())
     let flushModels () =
         for index in 0 .. peers.Length-1 do
@@ -70,6 +71,12 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
             while available && queue.Count > 0 do
                 if send index 3uy PacketDelivery.ReliableBulk (queue.Peek()) then queue.Dequeue() |> ignore
                 else available <- false
+            for KeyValue(source,revision) in displayed[index] |> Seq.toArray do
+                if available then
+                    let packet = ClientAssetPacket(ProtocolVersion=Dreamsleeve.Server.Core.ProtocolCodec.Version,
+                                     Displayed=Displayed(PlayerId=source,ViewRevision=revision,Generation=1UL))
+                    if send index 3uy PacketDelivery.ReliableBulk (packet.ToByteArray()) then displayed[index].Remove source |> ignore
+                    else available <- false
     let asset index (packet: ClientAssetPacket) =
         packet.ProtocolVersion <- Dreamsleeve.Server.Core.ProtocolCodec.Version
         // A reliable request waits behind the bounded transfer window when ENet
@@ -189,6 +196,10 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
                         else
                             peer.Cached <- true; verifiedDownloads <- verifiedDownloads+1
                             downloadTimes.Add(now()-started)
+                            // This opaque transport benchmark simulates display
+                            // after content verification; no game renderer runs.
+                            for KeyValue(source, revision) in peer.Offers do
+                                displayed[index][source] <- revision
                     | _ -> fail "Download accepted before complete verified bytes"
                 else refusal complete.Reason
                 finishDownload peer
@@ -201,9 +212,13 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
             | true, revision when revision = offer.ViewRevision -> ()
             | _ -> peer.Seen.Remove offer.PlayerId |> ignore
             peer.Offers[offer.PlayerId] <- offer.ViewRevision; offers <- offers+1L
+            if peer.Cached then displayed[index][offer.PlayerId] <- offer.ViewRevision
+        | ServerAssetPacket.PayloadOneofCase.Settled ->
+            if packet.Settled.Generation<>1UL || packet.Settled.ContextRevision<>1UL then fail "Unexpected settled generation"
         | ServerAssetPacket.PayloadOneofCase.Remove ->
             integrateSubscriptions()
             peer.Offers.Remove(packet.Remove.PlayerId) |> ignore
+            displayed[index].Remove(packet.Remove.PlayerId) |> ignore
             peer.Seen.Remove(packet.Remove.PlayerId) |> ignore
         | _ -> fail "Unexpected model envelope"
     member _.Pose(index:int,packet:ServerPosePacket,bytes:int) =

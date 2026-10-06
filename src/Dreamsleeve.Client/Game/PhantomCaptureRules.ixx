@@ -1,6 +1,7 @@
 export module Dreamsleeve.Game.PhantomCaptureRules;
 
 import std;
+import Dreamsleeve.Client.Utils;
 
 // Shared by capture lifecycle and remote scene lifetime.
 export namespace Dreamsleeve::Game
@@ -20,6 +21,78 @@ export namespace Dreamsleeve::Game
 export namespace Dreamsleeve::Game::PhantomCapture
 {
 
+  struct AppearanceProbe
+  {
+    std::uint64_t      structure{};
+    std::vector<float> positions;
+  };
+
+  enum class AppearanceChange
+  {
+    None,
+    Structure,
+    Deformation
+  };
+
+  // Compare with the accepted asset, not rounded bins or the preceding tick.
+  // Small face animation must not publish an entire character when it crosses
+  // a quantization boundary. Slow accumulated morphs still exceed this limit.
+  class AppearanceRevision
+  {
+    AppearanceProbe                accepted;
+    std::optional<AppearanceProbe> candidate;
+    std::uint64_t                  since{};
+
+    static bool Near(const AppearanceProbe& a, const AppearanceProbe& b, float tolerance)
+    {
+      if (a.structure != b.structure || a.positions.size() != b.positions.size()) return false;
+      for (std::size_t i = 0; i + 2 < a.positions.size(); i += 3)
+      {
+        float distance = 0;
+        for (unsigned axis = 0; axis < 3; ++axis)
+        {
+          const auto delta  = a.positions[i + axis] - b.positions[i + axis];
+          distance         += delta * delta;
+        }
+        if (!std::isfinite(distance) || distance > tolerance * tolerance) return false;
+      }
+      return true;
+    }
+
+public:
+
+    explicit AppearanceRevision(AppearanceProbe initial) : accepted(std::move(initial)) {}
+
+    bool Pending() const noexcept
+    {
+      return candidate.has_value();
+    }
+
+    AppearanceChange Observe(AppearanceProbe observed, std::uint64_t now)
+    {
+      const auto change = observed.structure != accepted.structure ? AppearanceChange::Structure
+                        : !Near(accepted, observed, 0.25f)         ? AppearanceChange::Deformation
+                                                                   : AppearanceChange::None;
+      if (change == AppearanceChange::None)
+      {
+        candidate.reset();
+        return change;
+      }
+      // Structural updates settle promptly. In-place deformations must settle
+      // for longer, with a tighter tolerance than the publication threshold.
+      if (
+        !candidate || candidate->structure != observed.structure ||
+        (change == AppearanceChange::Deformation && !Near(*candidate, observed, 0.0625f)))
+      {
+        candidate = std::move(observed);
+        since     = now;
+        return AppearanceChange::None;
+      }
+      const auto settle = change == AppearanceChange::Structure ? 250000ULL : 1000000ULL;
+      return now - since >= settle ? change : AppearanceChange::None;
+    }
+  };
+
   // Preserve the sampling grid when a game frame arrives late. Take at most
   // one fresh sample per tick; missed slots never become duplicate poses.
   class Cadence
@@ -37,7 +110,7 @@ public:
         period_ = period;
       }
       if (now < next_) return false;
-      next_ += period_ * ((now - next_) / period_ + 1);
+      Dreamsleeve::Utils::Time::AdvanceSample(next_, now, period_);
       return true;
     }
 

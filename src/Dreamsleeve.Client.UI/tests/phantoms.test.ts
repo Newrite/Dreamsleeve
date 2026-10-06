@@ -227,7 +227,7 @@ describe("phantom settings", () => {
     expect(input(html, "Цвет фантомов")).toContain('value="#ABCDEF"');
     expect(input(html, "Цвет фантомов")).toContain('data-valid="true"');
     expect(html).toContain("<output>4096 игр. ед.</output>");
-    expect(html).toContain("<output>20 Гц</output>");
+    expect(html).toContain("<output>10 Гц</output>");
     expect(html).toContain("<output>100 мс</output>");
     expect(html).toContain("<output>512 МиБ</output>");
     expect(html).toContain("<output>1024 МиБ</output>");

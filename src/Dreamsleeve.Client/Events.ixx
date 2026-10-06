@@ -149,7 +149,7 @@ namespace Events
   {
     RE::BSEventNotifyControl ProcessEvent(const SKSE::NiNodeUpdateEvent* event, RE::BSTEventSource<SKSE::NiNodeUpdateEvent>*) override
     {
-      if (event && IsPlayer(event->reference)) Dreamsleeve::Game::PhantomCapture::AppearanceChanged();
+      if (event && IsPlayer(event->reference)) Dreamsleeve::Game::PhantomCapture::RequestAudit();
       return RE::BSEventNotifyControl::kContinue;
     }
 

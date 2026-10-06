@@ -41,9 +41,9 @@ namespace Dreamsleeve::Client::Diagnostics
       const auto                        bytes = ReadBytes(input, 20);
       Cursor                            r{bytes};
       const std::array<std::uint8_t, 8> magic{'D', 'L', 'P', 'D', 'I', 'A', 'G', '2'};
-      if (
-        !std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2 || r.Get<std::uint32_t>() != Wire::Version ||
-        r.Get<std::uint32_t>() != P::AssetVersion)
+      if (!std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2) throw std::runtime_error("archive.version");
+      const auto protocol = r.Get<std::uint32_t>();
+      if ((protocol != 22 && protocol != Wire::Version) || r.Get<std::uint32_t>() != P::AssetVersion)
         throw std::runtime_error("archive.version");
     }
 
@@ -63,8 +63,12 @@ namespace Dreamsleeve::Client::Diagnostics
       return record;
     }
 
-    std::filesystem::path Latest(const std::filesystem::path& root, std::uint32_t scenario)
+    std::filesystem::path SelectArchive(const std::filesystem::path& root, std::uint32_t scenario)
     {
+      // Offline analysis may select one exact recording; the same Load path
+      // still checks its header, every model hash and every production pose.
+      if (std::filesystem::is_regular_file(root)) return root;
+      if (std::filesystem::is_regular_file(root / "capture.phdiag")) return root / "capture.phdiag";
       std::vector<std::filesystem::path> files;
       if (std::filesystem::exists(root))
         for (const auto& entry : std::filesystem::directory_iterator(root))
@@ -111,7 +115,7 @@ namespace Dreamsleeve::Client::Diagnostics
 
     void Load()
     {
-      const auto file = Latest(root, scenario);
+      const auto file = SelectArchive(root, scenario);
       {
         std::lock_guard lock(mutex);
         status.directory = file.parent_path().string();
@@ -156,7 +160,7 @@ namespace Dreamsleeve::Client::Diagnostics
           r.Take(raw);
           const auto compressed = r.Take(size);
           if (r.at != bytes.size()) throw std::runtime_error("archive.sample-length");
-          auto decoded = P::ReadSnapshot(compressed, *asset, CaptureLimits());
+          auto decoded = P::ReadRecordedSnapshot(compressed, *asset, CaptureLimits());
           if (!decoded) throw std::runtime_error(decoded.error().field);
           if (decoded->generation != generation || (frames && decoded->sampledAtUs <= lastTime))
             throw std::runtime_error("archive.sample-order");

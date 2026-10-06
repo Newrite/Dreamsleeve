@@ -258,3 +258,20 @@ private:
   };
 
 }
+
+export namespace Dreamsleeve::Utils::Time
+{
+
+  // Caller has consumed one due sample (next <= now), interval is positive.
+  // Advance to the first future slot, without drift or duplicate catch-up samples.
+  template <class Rep, class Period>
+  void AdvanceSample(
+    std::chrono::steady_clock::time_point& next,
+    std::chrono::steady_clock::time_point  now,
+    std::chrono::duration<Rep, Period>     interval)
+  {
+    if (next == std::chrono::steady_clock::time_point{}) next = now;
+    next += interval * ((now - next) / interval + 1);
+  }
+
+}

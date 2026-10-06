@@ -181,8 +181,9 @@ maxVisiblePhantoms = 4
 phantomDrawDistance = 4096
 phantomOpacity = 0.6
 phantomColor = "#8CCCCC"
-# Sampling rate in Hz, 1..50; the server may impose a lower rate.
-phantomSampleRate = 20
+# Pose sampling rate in Hz, 1..50; 10 by default, 20 for a denser stream.
+# The server may impose a lower rate (Phantoms.PoseIntervalMs).
+phantomSampleRate = 10
 # Playback delay, bounded extrapolation and stale-pose timeout in ms.
 phantomDelayMs = 100
 phantomExtrapolationMs = 100

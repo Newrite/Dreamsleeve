@@ -92,6 +92,13 @@ namespace Dreamsleeve::Client::Phantom::Wire
           out->set_generation(value.generation.value);
           out->set_request_id(value.request.value);
         }
+        else if constexpr (std::is_same_v<T, Displayed>)
+        {
+          auto* out = packet.mutable_displayed();
+          out->set_player_id(value.player);
+          out->set_view_revision(value.view);
+          out->set_generation(value.generation.value);
+        }
         else if constexpr (std::is_same_v<T, Cancel>)
           packet.mutable_cancel()->set_transfer_id(value.transfer.value);
         else if constexpr (std::is_same_v<T, Progress>)
@@ -112,6 +119,7 @@ namespace Dreamsleeve::Client::Phantom::Wire
     Proto::ClientPosePacket packet;
     packet.set_protocol_version(Client::Wire::Version);
     Set(pose, packet.mutable_sample());
+    if (pose.previous) Set(*pose.previous, packet.mutable_previous_sample());
     return Serialize(packet);
   }
 
@@ -123,6 +131,13 @@ namespace Dreamsleeve::Client::Phantom::Wire
       return std::unexpected(Invalid("asset.packet"));
     switch (packet.payload_case())
     {
+      case Proto::ServerAssetPacket::kSettled: {
+        const auto& v = packet.settled();
+        if (!v.generation() || !v.context_revision()) return std::unexpected(Invalid("settled"));
+        return Response{
+            Settled{Generation{v.generation()}, v.context_revision()}
+        };
+      }
       case Proto::ServerAssetPacket::kOffer: {
         const auto& v          = packet.offer();
         auto        descriptor = Get(v.asset(), limits);
@@ -208,7 +223,7 @@ namespace Dreamsleeve::Client::Phantom::Wire
 
   Result<RemotePose> DecodePose(std::span<const std::uint8_t> data, const Limits& limits)
   {
-    if (data.size() > limits.compressedPoseBytes + 1024ULL) return std::unexpected(Invalid("pose.packet.size"));
+    if (data.size() > 2ULL * limits.compressedPoseBytes + 1024ULL) return std::unexpected(Invalid("pose.packet.size"));
     Proto::ServerPosePacket packet;
     if (
       !packet.ParseFromArray(data.data(), static_cast<int>(data.size())) || packet.protocol_version() != Client::Wire::Version ||
@@ -219,7 +234,7 @@ namespace Dreamsleeve::Client::Phantom::Wire
       !v.generation() || !v.context_revision() || !v.sequence() || v.sampled_at_us() > MaximumSampleTime || v.payload().empty() ||
       v.payload().size() > limits.compressedPoseBytes)
       return std::unexpected(Invalid("pose.sample"));
-    return RemotePose{
+    RemotePose result{
         packet.player_id(),
         packet.view_revision(),
         Pose{
@@ -230,6 +245,22 @@ namespace Dreamsleeve::Client::Phantom::Wire
              Bytes(v.payload().begin(), v.payload().end())
         }
     };
+    if (packet.has_previous_sample())
+    {
+      const auto& p = packet.previous_sample();
+      if (
+        !p.generation() || p.generation() >= v.generation() || p.context_revision() != v.context_revision() ||
+        p.sampled_at_us() != v.sampled_at_us() || !p.sequence() || p.payload().empty() || p.payload().size() > limits.compressedPoseBytes)
+        return std::unexpected(Invalid("pose.previous"));
+      result.sample.previous = std::make_shared<const Pose>(Pose{
+          Generation{p.generation()},
+          p.context_revision(),
+          Sequence{p.sequence()},
+          p.sampled_at_us(),
+          Bytes(p.payload().begin(), p.payload().end())
+      });
+    }
+    return result;
   }
 
 }

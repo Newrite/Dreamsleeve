@@ -156,6 +156,21 @@ namespace Dreamsleeve::Client::Phantom
       return result;
     }
 
+    // A reversible byte-plane permutation improves compression without changing
+    // any quantized value or introducing a dependency on an earlier snapshot.
+    template <std::size_t Width, bool Decode = false>
+    void BytePlanes(std::span<std::uint8_t> records)
+    {
+      Bytes      copy(records.begin(), records.end());
+      const auto count = records.size() / Width;
+      for (std::size_t i = 0; i < count; ++i)
+        for (std::size_t b = 0; b < Width; ++b)
+          if constexpr (Decode)
+            records[i * Width + b] = copy[b * count + i];
+          else
+            records[b * count + i] = copy[i * Width + b];
+    }
+
     bool Finite(const Vec3& v)
     {
       return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
@@ -311,7 +326,7 @@ namespace Dreamsleeve::Client::Phantom
       Writer w;
       w.bytes.reserve(static_cast<std::size_t>(size));
       w.Put(PoseMagic);
-      w.Put(AssetVersion);
+      w.Put(PoseVersion);
       w.Put(snapshot.generation.value);
       w.Put(snapshot.sequence.value);
       w.Put(snapshot.context);
@@ -335,7 +350,9 @@ namespace Dreamsleeve::Client::Phantom
         PutPosition(w, bound.center, snapshot.origin);
         w.Put(bound.radius);
       }
-      if (w.bytes.size() > limits.poseBytes) Fail(Failure::LimitExceeded, "pose.bytes");
+      auto data = std::span(w.bytes);
+      BytePlanes<23>(data.subspan(60, snapshot.channels.size() * 23));
+      BytePlanes<16>(data.subspan(60 + snapshot.channels.size() * 23, snapshot.bounds.size() * 16));
       return std::move(w.bytes);
     }
     catch (const Invalid& invalid)
@@ -358,7 +375,11 @@ namespace Dreamsleeve::Client::Phantom
   }
 #endif
 
-  Result<Snapshot> ReadSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits)
+  static Result<Snapshot> DecodeSnapshot(
+    std::span<const std::uint8_t> compressed,
+    const ValidatedAsset&         asset,
+    const Limits&                 limits,
+    bool                          archived)
   {
     if (compressed.size() > limits.compressedPoseBytes) return std::unexpected(Error{Failure::LimitExceeded, "pose.compressed"});
     auto raw = Decompress(compressed, limits.poseBytes);
@@ -366,7 +387,9 @@ namespace Dreamsleeve::Client::Phantom
     try
     {
       Reader r(*raw);
-      if (r.Get<std::uint32_t>() != PoseMagic || r.Get<std::uint32_t>() != AssetVersion) Fail(Failure::InvalidFormat, "pose.version");
+      if (r.Get<std::uint32_t>() != PoseMagic) Fail(Failure::InvalidFormat, "pose.magic");
+      const auto version = r.Get<std::uint32_t>();
+      if (version != PoseVersion && !(archived && version == 2)) Fail(Failure::InvalidFormat, "pose.version");
       Snapshot snapshot;
       snapshot.generation  = {r.Get<std::uint64_t>()};
       snapshot.sequence    = {r.Get<std::uint64_t>()};
@@ -377,6 +400,13 @@ namespace Dreamsleeve::Client::Phantom
       const auto bounds    = r.Count(limits.nodes, 16);
       if (channels != asset.Layout().requiredChannels.size() || bounds != asset.Layout().bounds.size())
         Fail(Failure::InvalidFormat, "pose.counts");
+      if (r.Remaining() != channels * 23ULL + bounds * 16ULL) Fail(Failure::InvalidFormat, "pose.size");
+      if (version == PoseVersion)
+      {
+        auto data = std::span(*raw);
+        BytePlanes<23, true>(data.subspan(60, channels * 23ULL));
+        BytePlanes<16, true>(data.subspan(60 + channels * 23ULL, bounds * 16ULL));
+      }
       snapshot.channels.reserve(channels);
       for (std::uint32_t i = 0; i < channels; ++i)
       {
@@ -412,5 +442,16 @@ namespace Dreamsleeve::Client::Phantom
       return std::unexpected(invalid.error);
     }
   }
+
+  Result<Snapshot> ReadSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits)
+  {
+    return DecodeSnapshot(compressed, asset, limits, false);
+  }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  Result<Snapshot> ReadRecordedSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits)
+  {
+    return DecodeSnapshot(compressed, asset, limits, true);
+  }
+#endif
 
 }

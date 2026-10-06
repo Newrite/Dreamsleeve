@@ -68,7 +68,13 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     std::uint32_t nextOffset{};
   };
 
-  using Request = std::variant<Preferences, Publish, Chunk, Download, Cancel, Withdraw, Progress>;
+  struct Displayed
+  {
+    std::uint64_t player{}, view{};
+    Generation    generation;
+  };
+
+  using Request = std::variant<Preferences, Publish, Chunk, Download, Cancel, Withdraw, Progress, Displayed>;
 
   struct Offer
   {
@@ -110,15 +116,22 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     float         distance{};
   };
 
-  using Response = std::variant<Offer, Transfer, Chunk, Complete, Remove, Progress, Policy>;
-
-  struct Pose
+  struct Settled
   {
     Generation    generation;
     std::uint64_t context{};
-    Sequence      sequence;
-    std::uint64_t sampledAtUs{};
-    Bytes         payload;
+  };
+
+  using Response = std::variant<Offer, Transfer, Chunk, Complete, Remove, Progress, Policy, Settled>;
+
+  struct Pose
+  {
+    Generation                  generation;
+    std::uint64_t               context{};
+    Sequence                    sequence;
+    std::uint64_t               sampledAtUs{};
+    Bytes                       payload;
+    std::shared_ptr<const Pose> previous;
   };
 
   struct RemotePose

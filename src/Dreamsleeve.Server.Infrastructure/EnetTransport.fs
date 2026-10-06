@@ -9,6 +9,7 @@ open System.Net
 open System.Net.Sockets
 open Microsoft.Extensions.Logging
 open Enet
+open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure.Interop
 
@@ -176,7 +177,7 @@ module EnetTransport =
                || (event.ChannelId <= byte DeliveryLane.Poses && LanePolicy.reliable lane <> reliable)
                || packet.DataLength > unativeint state.Config.MaxPacketBytes
                || (lane = DeliveryLane.Models && packet.DataLength > unativeint (state.Phantoms.ChunkBytes + 512))
-               || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (state.Phantoms.Limits.PoseBytes + 128))
+               || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (PhantomAssetLimits.posePacketBytes state.Phantoms.Limits))
                || (event.ChannelId = byte DeliveryLane.Realtime
                    && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
                 reset state connection.Id

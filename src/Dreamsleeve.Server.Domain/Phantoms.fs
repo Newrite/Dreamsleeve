@@ -45,6 +45,11 @@ type PhantomAssetLimits = {
     CompressedBytes: int; RawBytes: int; Channels: int; PoseBytes: int; RawPoseBytes: int
 }
 
+[<RequireQualifiedAccess>]
+module PhantomAssetLimits =
+    // Two independently decodable snapshots plus both protobuf envelopes.
+    let posePacketBytes (limits: PhantomAssetLimits) = 2 * limits.PoseBytes + 256
+
 /// The server validates the envelope and compressed content identity, never engine data.
 type PhantomManifest = private {
     hash: AssetHash; generation: AppearanceGeneration; compressedBytes: int; rawBytes: int
@@ -71,13 +76,14 @@ type PhantomPreferences = { Publish: bool; Receive: bool; Maximum: int; Distance
 
 type PhantomPose = private {
     generation: AppearanceGeneration; context: uint64; sequence: PhantomSequence
-    sampledAtUs: uint64; payload: byte array
+    sampledAtUs: uint64; payload: byte array; previous: PhantomPose option
 } with
     member this.Generation = this.generation
     member this.Context = this.context
     member this.Sequence = this.sequence
     member this.SampledAtUs = this.sampledAtUs
     member this.Payload = this.payload
+    member this.Previous = this.previous
 
 [<RequireQualifiedAccess>]
 module PhantomPose =
@@ -89,7 +95,14 @@ module PhantomPose =
         elif sampledAtUs > maximumSampledAtUs then Error "pose timestamp"
         elif payload.Length = 0 || payload.Length > limits.PoseBytes then Error "pose payload"
         else Ok { generation = generation; context = context; sequence = sequence
-                  sampledAtUs = sampledAtUs; payload = payload.ToArray() }
+                  sampledAtUs = sampledAtUs; payload = payload.ToArray(); previous = None }
+
+    let withoutPrevious (pose: PhantomPose) = { pose with previous = None }
+
+    let withPrevious (previous: PhantomPose) (pose: PhantomPose) =
+        if previous.Previous.IsSome || previous.Generation.Value >= pose.Generation.Value || previous.Context <> pose.Context
+           || previous.SampledAtUs <> pose.SampledAtUs then Error "pose previous"
+        else Ok { pose with previous = Some previous }
 
 [<RequireQualifiedAccess>]
 type PhantomRequest =
@@ -100,6 +113,7 @@ type PhantomRequest =
     | Cancel of PhantomTransferId
     | Progress of PhantomTransferId * nextOffset: int
     | Withdraw
+    | Displayed of PlayerId * viewRevision: uint64 * AppearanceGeneration
 
 [<RequireQualifiedAccess>]
 type PhantomServerPolicy = {
@@ -121,6 +135,7 @@ type PhantomResponse =
     | Remove of PlayerId * viewRevision: uint64
     | Progress of PhantomTransferId * nextOffset: int
     | Policy of PhantomServerPolicy
+    | Settled of AppearanceGeneration * context: uint64
 
 /// Membership remains enabled for authenticated policy bootstrap when replication
 /// is disabled; only Full projects Presence-authorized views and distances.

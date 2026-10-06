@@ -116,7 +116,7 @@ export namespace Dreamsleeve::Host
     double      phantomDrawDistance{4096};
     double      phantomOpacity{0.6};
     std::string phantomColor{"#8CCCCC"};
-    double      phantomSampleRate{20};
+    double      phantomSampleRate{10};
     double      phantomDelayMs{100};
     double      phantomExtrapolationMs{100};
     double      phantomTimeoutMs{1000};

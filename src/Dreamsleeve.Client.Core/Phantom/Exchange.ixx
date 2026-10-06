@@ -13,16 +13,15 @@ export namespace Dreamsleeve::Client::Phantom
     std::shared_ptr<const PreparedAsset> asset;
   };
 
-  struct Remote
+  struct RemoteVersion
   {
-    std::uint64_t    player{}, view{};
+    std::uint64_t    view{};
     Wire::Descriptor descriptor;
     Playback         playback;
-    std::uint64_t    sceneBytes{};
 
-    Remote() = default;
+    RemoteVersion() = default;
 
-    Remote(std::uint64_t player, std::uint64_t view, Wire::Descriptor descriptor) : player(player), view(view), descriptor(descriptor) {}
+    RemoteVersion(std::uint64_t view, Wire::Descriptor descriptor) : view(view), descriptor(descriptor) {}
 
     std::shared_ptr<const ValidatedAsset> Asset() const
     {
@@ -30,18 +29,36 @@ export namespace Dreamsleeve::Client::Phantom
       return ready ? *ready : nullptr;
     }
 
+    bool WaitingBudget() const
+    {
+      return std::holds_alternative<Deferred>(content);
+    }
+
     Representation State() const
     {
-      if (std::holds_alternative<std::monostate>(content)) return Representation::Loading;
+      if (WaitingBudget() || std::holds_alternative<std::monostate>(content)) return Representation::Loading;
       return Asset() ? Representation::Ready : Representation::Unavailable;
     }
 
 private:
 
     friend class Exchange;
+
     // Exchange alone can install a non-null validated model. Readiness is
     // derived from this variant, never a separate flag beside a nullable model.
-    std::variant<std::monostate, std::shared_ptr<const ValidatedAsset>, std::string> content;
+    struct Deferred
+    {};
+
+    std::variant<std::monostate, std::shared_ptr<const ValidatedAsset>, std::string, Deferred> content;
+  };
+
+  struct Remote : RemoteVersion
+  {
+    std::uint64_t                player{}, sceneBytes{};
+    std::optional<RemoteVersion> previous;
+    Remote() = default;
+
+    Remote(std::uint64_t p, std::uint64_t v, Wire::Descriptor d) : RemoteVersion(v, d), player(p) {}
   };
 
   struct Metrics
@@ -62,10 +79,21 @@ private:
   // The only shared boundary. Large values are immutable, poses replace one slot.
   class Exchange final
   {
+    enum class PublicationPhase
+    {
+      Preparing,
+      Pending,
+      Settled,
+      Rejected
+    };
+    PublicationPhase                                     phase{PublicationPhase::Preparing};
     mutable std::mutex                                   mutex;
     ViewSettings                                         settings;
     std::uint64_t                                        epoch{1}, context{}, localRevision{1};
-    std::optional<Generation>                            localGeneration;
+    std::optional<Generation>                            localGeneration, previousGeneration;
+    std::uint64_t                                        previousReservation{};
+    std::shared_ptr<const Snapshot>                      previousSnapshot;
+    std::vector<Wire::Displayed>                         displayed;
     bool                                                 available{}, changed{true};
     std::uint32_t                                        serverSampleRate{50};
     std::optional<std::pair<Generation, ValidatedAsset>> capture;
@@ -80,6 +108,10 @@ private:
     {
       ++localRevision;
       localGeneration.reset();
+      previousGeneration.reset();
+      phase               = PublicationPhase::Preparing;
+      previousReservation = 0;
+      previousSnapshot.reset();
       capture.reset();
       snapshot.reset();
       publication.reset();
@@ -97,11 +129,24 @@ private:
              Limits{}.poseBytes + 4ULL * Limits{}.compressedPoseBytes;
     }
 
+    static std::uint64_t Retained(const RemoteVersion& remote)
+    {
+      const auto asset = remote.Asset();
+      return (asset ? asset->MemoryBytes() : 0) + (4 * BufferedPoseCount + 4) * SnapshotWorkingBytes() + Limits{}.poseBytes +
+             4ULL * Limits{}.compressedPoseBytes;
+    }
+
+    static std::uint64_t Reservation(const Remote& remote)
+    {
+      return (remote.WaitingBudget() ? 0 : Reservation(remote.descriptor)) + remote.sceneBytes +
+             (remote.previous ? Retained(*remote.previous) : 0);
+    }
+
     std::uint64_t Reserved(std::uint64_t except = 0) const
     {
-      std::uint64_t bytes = localReservation;
+      std::uint64_t bytes = localReservation + previousReservation;
       for (const auto& [id, remote] : remotes)
-        if (id != except) bytes += Reservation(remote.descriptor) + remote.sceneBytes;
+        if (id != except) bytes += Reservation(remote);
       return bytes;
     }
 
@@ -113,6 +158,8 @@ public:
       ViewSettings                                         settings;
       std::optional<std::pair<Generation, ValidatedAsset>> capture;
       std::shared_ptr<const Snapshot>                      snapshot;
+      std::optional<Generation>                            generation, previousGeneration;
+      std::shared_ptr<const Snapshot>                      previousSnapshot;
     };
 
     void Configure(ViewSettings value)
@@ -154,9 +201,13 @@ public:
         context   = value;
         available = ready;
         snapshot.reset();
+        previousSnapshot.reset();
         encoded.reset();
         for (auto& [id, remote] : remotes)
+        {
           remote.playback.Clear();
+          remote.previous.reset();
+        }
         changed = true;
       }
     }
@@ -170,17 +221,36 @@ public:
       changed   = true;
       ClearPublication();
       remotes.clear();
+      displayed.clear();
       metrics = {};
+    }
+
+    // The native source was destroyed/replaced across a context/root change.
+    // Neither of its generation-specific poses can safely be produced again.
+    void RestartCapture()
+    {
+      std::lock_guard lock(mutex);
+      ClearPublication();
+      changed = true;
     }
 
     bool Submit(Generation generation, ValidatedAsset asset)
     {
       std::lock_guard lock(mutex);
       const auto bytes = 4 * asset.MemoryBytes() + 6 * SnapshotWorkingBytes() + Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
-      if (!available || !settings.publish || capture || bytes > settings.memoryBytes) return false;
+      if (
+        !available || !settings.publish || capture ||
+        (localGeneration && phase != PublicationPhase::Settled && phase != PublicationPhase::Rejected) ||
+        bytes + Reserved() - (phase == PublicationPhase::Rejected ? localReservation : 0) > settings.memoryBytes)
+        return false;
+      // A rejected candidate never replaces the last usable bridge asset.
+      if (phase != PublicationPhase::Rejected)
+      {
+        previousGeneration  = localGeneration;
+        previousReservation = localReservation;
+      }
+      phase            = PublicationPhase::Preparing;
       localReservation = bytes;
-      while (Reserved() > settings.memoryBytes && !remotes.empty())
-        remotes.erase(remotes.begin());
       ++localRevision;
       localGeneration = generation;
       changed         = true;
@@ -188,10 +258,18 @@ public:
       return true;
     }
 
-    void Submit(std::shared_ptr<const Snapshot> pose)
+    void Submit(std::shared_ptr<const Snapshot> pose, std::shared_ptr<const Snapshot> prior = {})
     {
       std::lock_guard lock(mutex);
-      if (available && settings.publish && localGeneration == pose->generation) snapshot = std::move(pose);
+      if (!available || !settings.publish) return;
+      if (localGeneration == pose->generation)
+      {
+        if (prior && previousGeneration == prior->generation && prior->sampledAtUs == pose->sampledAtUs)
+          previousSnapshot = std::move(prior);
+        snapshot = std::move(pose);
+      }
+      else if (previousGeneration == pose->generation)
+        previousSnapshot = std::move(pose);
     }
 
     Work TakeWork()
@@ -199,14 +277,31 @@ public:
       std::lock_guard lock(mutex);
       auto            current = settings;
       current.sampleRate      = std::min(current.sampleRate, serverSampleRate);
-      return {epoch, context, localRevision, current, std::exchange(capture, {}), std::exchange(snapshot, {})};
+      return {
+          epoch,
+          context,
+          localRevision,
+          current,
+          std::exchange(capture, {}),
+          std::exchange(snapshot, {}),
+          localGeneration,
+          previousGeneration,
+          std::exchange(previousSnapshot, {})
+      };
     }
 
     void Prepared(std::uint64_t workEpoch, std::uint64_t revision, Publication value)
     {
       std::lock_guard lock(mutex);
       if (workEpoch == epoch && revision == localRevision && localGeneration == value.generation && settings.publish)
-        publication = std::move(value);
+      {
+        // Preparation scratch is gone; keep immutable NIF/compressed data and
+        // bounded pose work, not another compression reservation indefinitely.
+        localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() + 6 * SnapshotWorkingBytes() +
+                           Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
+        publication      = std::move(value);
+        if (phase == PublicationPhase::Preparing) phase = PublicationPhase::Pending;
+      }
     }
 
     void PreparationFailed(std::uint64_t workEpoch, std::uint64_t revision, std::string error)
@@ -214,39 +309,104 @@ public:
       std::lock_guard lock(mutex);
       if (workEpoch == epoch && revision == localRevision)
       {
-        ClearPublication();
+        if (previousGeneration)
+        {
+          ++localRevision;
+          localGeneration = previousGeneration;
+          phase           = PublicationPhase::Settled;
+          previousGeneration.reset();
+          localReservation = std::exchange(previousReservation, 0);
+          snapshot         = std::exchange(previousSnapshot, {});
+          capture.reset();
+          publication.reset();
+          encoded.reset();
+        }
+        else
+          ClearPublication();
         changed       = true;
         metrics.error = std::move(error);
         ++metrics.rejected;
       }
     }
 
+    // Terminal transport rejection is not settlement. Retain the old bridge,
+    // permit a later appearance generation, and never promote this candidate.
+    void PublicationRejected(Generation generation, std::string error)
+    {
+      std::lock_guard lock(mutex);
+      if (localGeneration != generation) return;
+      phase = PublicationPhase::Rejected;
+      encoded.reset();
+      metrics.error = std::move(error);
+      ++metrics.rejected;
+    }
+
     bool Capturing(Generation generation) const
     {
       std::lock_guard lock(mutex);
-      return localGeneration == generation && settings.publish;
+      return (localGeneration == generation || previousGeneration == generation) && settings.publish;
+    }
+
+    bool CanReplace() const
+    {
+      std::lock_guard lock(mutex);
+      return !localGeneration || phase == PublicationPhase::Settled || phase == PublicationPhase::Rejected;
+    }
+
+    void Settled(const Wire::Settled& value)
+    {
+      std::lock_guard lock(mutex);
+      if (context != value.context || localGeneration != value.generation) return;
+      if (phase == PublicationPhase::Rejected) return;
+      phase = PublicationPhase::Settled;
+      previousGeneration.reset();
+      previousSnapshot.reset();
+      previousReservation = 0;
+    }
+
+    void Displayed(Wire::Displayed value)
+    {
+      std::lock_guard lock(mutex);
+      const auto      found = remotes.find(value.player);
+      if (found == remotes.end() || found->second.view != value.view || found->second.descriptor.generation != value.generation) return;
+      found->second.previous.reset();
+      std::erase_if(displayed, [&](const auto& item) { return item.player == value.player; });
+      if (displayed.size() < 16) displayed.push_back(value);
     }
 
     void Encoded(std::uint64_t workEpoch, Wire::Pose value)
     {
       std::lock_guard lock(mutex);
       if (workEpoch == epoch && context == value.context && localGeneration == value.generation && settings.publish)
+      {
+        if (!previousGeneration) value.previous.reset();
         encoded = std::move(value);
+      }
     }
 
     struct Output
     {
-      bool                       changed{};
-      ViewSettings               settings;
-      std::uint64_t              localRevision{};
-      std::optional<Publication> publication;
-      std::optional<Wire::Pose>  pose;
+      std::optional<Generation>    generation;
+      bool                         changed{};
+      ViewSettings                 settings;
+      std::uint64_t                localRevision{};
+      std::optional<Publication>   publication;
+      std::optional<Wire::Pose>    pose;
+      std::vector<Wire::Displayed> displayed;
     };
 
     Output TakeOutput()
     {
       std::lock_guard lock(mutex);
-      return {std::exchange(changed, false), settings, localRevision, std::exchange(publication, {}), std::exchange(encoded, {})};
+      return {
+          localGeneration,
+          std::exchange(changed, false),
+          settings,
+          localRevision,
+          std::exchange(publication, {}),
+          std::exchange(encoded, {}),
+          std::exchange(displayed, {})
+      };
     }
 
     std::uint64_t Epoch() const
@@ -279,7 +439,9 @@ public:
         found->second.sceneBytes = bytes;
         return true;
       }
-      if (bytes + Reservation(found->second.descriptor) > settings.memoryBytes - std::min(settings.memoryBytes, Reserved(player)))
+      if (
+        bytes + Reservation(found->second) - found->second.sceneBytes >
+        settings.memoryBytes - std::min(settings.memoryBytes, Reserved(player)))
         return false;
       found->second.sceneBytes = bytes;
       return true;
@@ -292,16 +454,32 @@ public:
       const auto found = remotes.find(offer.player);
       if (found != remotes.end() && offer.view < found->second.view) return false;
       if (found == remotes.end() && remotes.size() >= settings.maximum) return false;
-      const auto sceneBytes = found == remotes.end() ? 0 : found->second.sceneBytes;
-      if (Reservation(offer.asset) + sceneBytes > settings.memoryBytes - std::min(settings.memoryBytes, Reserved(offer.player)))
-        return false;
+      const auto  sceneBytes = found == remotes.end() ? 0 : found->second.sceneBytes;
+      const auto* prior      = found == remotes.end() ? nullptr
+                             : found->second.Asset()  ? static_cast<const RemoteVersion*>(&found->second)
+                             : found->second.previous ? &*found->second.previous
+                                                      : nullptr;
+      const auto  priorBytes = prior && (found->second.view != offer.view || found->second.descriptor != offer.asset) ? Retained(*prior)
+                             : found != remotes.end() && found->second.previous ? Retained(*found->second.previous)
+                                                                                : 0;
+      const bool  admitted =
+        Reservation(offer.asset) + sceneBytes + priorBytes <= settings.memoryBytes - std::min(settings.memoryBytes, Reserved(offer.player));
+      if (!admitted && found == remotes.end()) return false;
       auto& remote = remotes[offer.player];
       if (remote.view != offer.view || remote.descriptor != offer.asset)
       {
-        remote            = {offer.player, offer.view, offer.asset};
+        auto prior = remote.Asset() ? std::optional<RemoteVersion>{static_cast<const RemoteVersion&>(remote)} : std::move(remote.previous);
+        remote     = {offer.player, offer.view, offer.asset};
         remote.sceneBytes = sceneBytes;
+        remote.previous   = std::move(prior);
       }
-      return true;
+      // Keep the new AOI view so bridge poses still reach the visible scene.
+      // Deferred metadata owns no incoming model allocation or decode job.
+      if (!admitted)
+        remote.content = RemoteVersion::Deferred{};
+      else if (remote.WaitingBudget())
+        remote.content = std::monostate{};
+      return admitted;
     }
 
     void Remove(const Wire::Remove& remove)
@@ -352,11 +530,12 @@ public:
     {
       std::lock_guard lock(mutex);
       const auto      found = remotes.find(wire.player);
-      if (
-        workEpoch != epoch || found == remotes.end() || found->second.view != wire.view ||
-        found->second.descriptor.generation != wire.sample.generation)
-        return;
-      if (!found->second.playback.Push(std::move(pose), arrivalUs)) ++metrics.dropped;
+      if (workEpoch != epoch || found == remotes.end() || found->second.view != wire.view) return;
+      auto& remote  = found->second;
+      auto* version = remote.descriptor.generation == wire.sample.generation ? static_cast<RemoteVersion*>(&remote)
+                    : remote.previous && remote.previous->descriptor.generation == wire.sample.generation ? &*remote.previous
+                                                                                                          : nullptr;
+      if (version && !version->playback.Push(std::move(pose), arrivalUs)) ++metrics.dropped;
     }
 
     void Failed(std::string error, bool rejected = true)

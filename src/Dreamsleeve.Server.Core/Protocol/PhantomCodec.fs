@@ -45,18 +45,28 @@ module PhantomCodec =
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Cancel when packet.Cancel.TransferId <> 0UL -> Ok (PhantomRequest.Cancel(PhantomTransferId packet.Cancel.TransferId))
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Progress when packet.Progress.TransferId <> 0UL && packet.Progress.NextOffset <= uint32 Int32.MaxValue ->
                     Ok (PhantomRequest.Progress(PhantomTransferId packet.Progress.TransferId, int packet.Progress.NextOffset))
+                | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Displayed ->
+                    let value = packet.Displayed
+                    match PlayerId.create value.PlayerId, AppearanceGeneration.create value.Generation with
+                    | Ok player, Ok generation when value.ViewRevision <> 0UL -> Ok (PhantomRequest.Displayed(player, value.ViewRevision, generation))
+                    | _ -> Error "displayed"
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Withdraw -> Ok PhantomRequest.Withdraw
                 | _ -> Error "payload")
 
     let decodePose options bytes =
-        parse (options.Limits.PoseBytes + 128) bytes Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser (fun packet ->
-            let value = packet.Sample
-            if packet.ProtocolVersion <> ProtocolCodec.Version || isNull value || value.ContextRevision = 0UL
-               || value.Payload.Length = 0 || value.Payload.Length > options.Limits.PoseBytes then Error "pose envelope"
+        let sample (value: Dreamsleeve.Protocol.Phantom.PoseSample) =
+            if isNull value || value.ContextRevision = 0UL || value.Payload.Length = 0 || value.Payload.Length > options.Limits.PoseBytes then Error "pose envelope"
             else
                 match AppearanceGeneration.create value.Generation, PhantomSequence.create value.Sequence with
                 | Ok generation, Ok sequence -> PhantomPose.create options.Limits generation value.ContextRevision sequence value.SampledAtUs value.Payload.Memory
-                | _ -> Error "pose generation/sequence")
+                | _ -> Error "pose generation/sequence"
+        parse (PhantomAssetLimits.posePacketBytes options.Limits) bytes Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser (fun packet ->
+            if packet.ProtocolVersion <> ProtocolCodec.Version then Error "protocol version"
+            else
+                match sample packet.Sample with
+                | Error error -> Error error
+                | Ok pose when isNull packet.PreviousSample -> Ok pose
+                | Ok pose -> sample packet.PreviousSample |> Result.bind (fun previous -> PhantomPose.withPrevious previous pose))
 
     let private descriptor (value: PhantomManifest) =
         Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom(AssetHash.bytes value.Hash), Generation = value.Generation.Value
@@ -79,6 +89,8 @@ module PhantomCodec =
             packet.Complete <- value
         | PhantomResponse.Remove(player, revision) -> packet.Remove <- Dreamsleeve.Protocol.Phantom.Remove(PlayerId = PlayerId.value player, ViewRevision = revision)
         | PhantomResponse.Progress(id, offset) -> packet.Progress <- Dreamsleeve.Protocol.Phantom.Progress(TransferId = id.Value, NextOffset = uint32 offset)
+        | PhantomResponse.Settled(generation, context) ->
+            packet.Settled <- Dreamsleeve.Protocol.Phantom.Settled(Generation = generation.Value, ContextRevision = context)
         | PhantomResponse.Policy policy ->
             packet.Policy <- Dreamsleeve.Protocol.Phantom.Policy(Enabled = policy.Enabled, RawAssetBytes = uint32 policy.Limits.RawBytes
                 , CompressedAssetBytes = uint32 policy.Limits.CompressedBytes, Channels = uint32 policy.Limits.Channels
@@ -97,6 +109,7 @@ module PhantomCodec =
         let sample = poseSampleSize value
         4 + CodedOutputStream.ComputeUInt32Size ProtocolCodec.Version + CodedOutputStream.ComputeUInt64Size (PlayerId.value player)
           + CodedOutputStream.ComputeUInt64Size revision + CodedOutputStream.ComputeLengthSize sample + sample
+          + (value.Previous |> Option.map (fun p -> let n = poseSampleSize p in 1 + CodedOutputStream.ComputeLengthSize n + n) |> Option.defaultValue 0)
 
     /// Serialize the shared immutable sample once, independently of view epochs.
     let encodePoseSample (value: PhantomPose) =
@@ -145,5 +158,8 @@ module PhantomCodec =
             output.WriteUInt64 value.SampledAtUs
         output.WriteTag(5, WireFormat.WireType.LengthDelimited)
         output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(value.Payload)))
+        value.Previous |> Option.iter (fun previous ->
+            output.WriteTag(5, WireFormat.WireType.LengthDelimited)
+            output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(encodePoseSample previous))))
         output.CheckNoSpaceLeft()
         { Lane = DeliveryLane.Poses; Bytes = bytes }

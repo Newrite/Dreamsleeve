@@ -83,6 +83,7 @@ type private State = {
     mutable RampMs: float
     mutable LoadMs: float
     mutable DrainMs: float
+    mutable BackpressurePackets: int64
     mutable BackpressuredMs: float
     mutable MaxInflight: int
     SentApplicationBytes: int64 array
@@ -130,6 +131,7 @@ let private fail state message =
 let private sendBytes state client channel reliable (bytes: byte array) =
     match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, (if reliable then PacketDelivery.Reliable else PacketDelivery.Sequenced)) with
     | PacketSendResult.Sent -> state.SentApplicationBytes[int channel] <- state.SentApplicationBytes[int channel] + int64 bytes.Length; true
+    | PacketSendResult.BudgetExceeded -> state.BackpressurePackets <- state.BackpressurePackets + 1L; false
     | failure ->
         fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
         false
@@ -613,6 +615,7 @@ let private report state =
         registrationMs = state.RegistrationMs; loginMs = state.LoginMs
         rampIncludesLogin = true; authenticationConcurrency = 4
         rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
+        backpressurePackets = state.BackpressurePackets
         backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 4
         workerIndex = state.Group.Index; workerCount = state.Group.Workers; totalClients = state.AllPlayerIds.Length
         hostCount = state.Hosts.Length; socketCount = state.Hosts.Length; serviceLoopCount = 1
@@ -681,7 +684,7 @@ let private run (options: Options) =
             })
             Slots = Dictionary(); Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L / int64 group.Workers); Messages = ResizeArray(); Errors = ResizeArray()
             ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
-            Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressuredMs = 0.; MaxInflight = 0
+            Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressurePackets = 0L; BackpressuredMs = 0.; MaxInflight = 0
         }
         match PhantomProbe.configuration() with
         | Some config ->
@@ -689,7 +692,7 @@ let private run (options: Options) =
                 (fun index lane delivery bytes ->
                     match OutgoingPackets.TrySend(state.Clients[index].Peer, ReadOnlySpan<byte>(bytes), state.Budget, state.Clients[index].Budget, lane, delivery) with
                     | PacketSendResult.Sent -> state.SentApplicationBytes[int lane] <- state.SentApplicationBytes[int lane] + int64 bytes.Length; true
-                    | PacketSendResult.BudgetExceeded -> false
+                    | PacketSendResult.BudgetExceeded -> state.BackpressurePackets <- state.BackpressurePackets + 1L; false
                     | result -> fail state (sprintf "Phantom packet admission lane%d: %A" lane result); false), fail state))
         | None -> ()
         try

@@ -34,7 +34,8 @@ DLL экспортирует `DreamsleeveDiagnosticsBuild`; `package_dist.py` о
 В SKSE Menu Framework открыть **Dreamsleeve → Запись фантомов**, выбрать
 сценарий и нажать **Начать запись**. Закрыть меню и выполнять движение. Частота
 берётся из существующей настройки фантомов; для первого сравнения достаточно
-20 Гц. Продолжительность — 15 или 30 секунд от первого захваченного кадра.
+10 Гц (текущий default). Для сравнения со старыми записями можно выбрать 20 Гц.
+Продолжительность — 15 или 30 секунд от первого захваченного кадра.
 Остановка доступна в том же меню. Настройки сценария не являются пользовательской
 конфигурацией и не переписывают `ui.toml`.
 
@@ -43,7 +44,9 @@ DLL экспортирует `DreamsleeveDiagnosticsBuild`; `package_dist.py` о
 приостановлена даже при подключении к серверу. После записи она возобновляется.
 Локальный буфер позы и codec используют тот же `Limits`, что сеть:
 raw256 КиБ/compressed128 КиБ. Dynamic vertex stream отсутствует.
-Формат архивов DLPDIAG2, version2, protocol22, asset2. Предыдущие пользовательские
+Формат новых архивов DLPDIAG2, version2, protocol23, asset2, pose3.
+Офлайн ReplayReader читает также protocol22/pose2 тем же валидатором.
+Это поддержка исторических записей; сетевой decoder принимает только pose3. Предыдущие пользовательские
 DLPDIAG1 записи остаются на диске неизменными; они относятся к neutral pipeline
 и не подаются нативному renderer.
 События movement продолжают записываться; `encoded`/`sent` относятся к
@@ -90,6 +93,12 @@ RE/GFx/D3D/engine pointers в очереди и формате отсутств�
 Shutdown прекращает admission и дожидается сохранения оставшихся заданий.
 
 ## Инспекция и формат
+
+Сравнение новых native записей, поколений NIF и обратимых вариантов упаковки:
+`Scripts/analyze_native_phantom_recordings.py` (offline NumPy и локальный
+Zstd bridge из `Scripts/phantom_zstd_probe.c`). Он использует новый output
+вне оригиналов, проверяет production compressed bytes и не изменяет DLL/сеть.
+[Измерения и воспроизведение эксперимента](benchmarks/phantom-native-recordings-2026-10-07.md).
 
 ```powershell
 python Scripts/inspect_phantom_diagnostics.py "<папка записи>" --output build/phantom-report.json

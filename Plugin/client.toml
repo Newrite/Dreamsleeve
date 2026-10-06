@@ -48,8 +48,9 @@ maxPendingChatRequests = 32
 maxPendingPlayerUpdates = 32
 # Actor values accepted per player, 1..2147483647; at least the server's MaxActorValues.
 maxActorValues = 64
-# How often the character's pose and state are sampled and sent, milliseconds, >= 1 (50 = 20 Hz).
-playerSampleIntervalMs = 50
+# Movement sampling/sending period in ms, >= 1: 100 = 10 Hz; 50 = 20 Hz.
+# Phantom poses have their own ui.toml setting: ui.chat.phantomSampleRate.
+playerSampleIntervalMs = 100
 # Other players within this many world units get a firefly, >= 0. The server sends
 # nothing beyond its own [Runtime.Presence] VisibilityDistance.
 visibilityDistance = 8192

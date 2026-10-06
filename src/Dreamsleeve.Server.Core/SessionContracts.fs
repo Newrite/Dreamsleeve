@@ -616,6 +616,6 @@ module ServerRuntimeOptions =
                    MaxBootstrapEvents = 512; MaxPendingOutput = 1152 }
         Chat = { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
                  Rate = { Burst = 5; RefillMs = 2000; DuplicateWindowMs = 30000 } }
-        Presence = { MailboxCapacity = 4096; ControlReserve = 128; MaxControlDeliveries = 512; ReplicationIntervalMs = 50
+        Presence = { MailboxCapacity = 4096; ControlReserve = 128; MaxControlDeliveries = 512; ReplicationIntervalMs = 100
                      VisibilityDistance = Visibility.DefaultDistance }
     }

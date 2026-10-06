@@ -46,7 +46,7 @@ module GameSettings =
 
     let withPhantoms options (settings: GameSettings) =
         let errors = PhantomOptions.validate options @ [
-            if options.ChunkBytes + 512 > settings.Server.MaxPacketBytes || options.Limits.PoseBytes + 128 > settings.Server.MaxPacketBytes then
+            if options.ChunkBytes + 512 > settings.Server.MaxPacketBytes || PhantomAssetLimits.posePacketBytes options.Limits > settings.Server.MaxPacketBytes then
                 "Server.MaxPacketBytes must allow phantom envelopes."
         ]
         if errors.IsEmpty then Ok { settings with phantoms = options } else Error errors

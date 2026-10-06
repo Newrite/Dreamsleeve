@@ -22,15 +22,8 @@ export namespace Dreamsleeve::Game::PhantomCapture
     std::uint64_t context{}, sampledAtUs{};
   };
 
-  std::atomic<std::uint64_t> completedRevision{};
-
-  // Hooks/events only mark a completed model change. All native work is later
-  // coalesced in the main-update phase; no scene ownership crosses threads.
-  inline void AppearanceChanged() noexcept
-  {
-    completedRevision.fetch_add(1, std::memory_order_relaxed);
-  }
-
+  // Events and completion hooks request an audit; only stable native contents
+  // can authorize publication. No game object crosses this atomic boundary.
   std::atomic<bool> auditRequested{};
 
   inline void RequestAudit() noexcept
@@ -56,11 +49,13 @@ export namespace Dreamsleeve::Game::PhantomCapture
 
   // Transforms, visibility, parent links and camera state are intentionally
   // absent. A bounded structural audit detects unannounced mesh replacements.
-  inline std::uint64_t Signature(RE::NiNode& root)
+  inline AppearanceProbe Probe(RE::NiNode& root)
   {
     std::vector<RE::NiAVObject*> nodes;
     N::Collect(&root, nodes);
-    std::uint64_t sum = 0;
+    AppearanceProbe result;
+    // Reparenting/reordering the same attachments is not an appearance change.
+    std::ranges::sort(nodes, std::less<RE::NiAVObject*>{});
     for (auto* node : nodes)
       if (auto* g = node->AsGeometry(); g && !N::Auxiliary(*g))
       {
@@ -74,7 +69,8 @@ export namespace Dreamsleeve::Game::PhantomCapture
           RE::BSSpinLockGuard guard(data.lock);
           if (data.dynamicData && data.dataSize >= 16 && data.dataSize <= P::Limits{}.assetBytes)
           {
-            const auto count = data.dataSize / 16;
+            const auto count  = data.dataSize / 16;
+            v                ^= std::uint64_t(count) << 37;
             // Bounded deformation probe, never a per-frame vertex stream.
             // Continuous expressions must settle before a new native asset.
             const auto* positions = static_cast<const float*>(data.dynamicData);
@@ -82,7 +78,8 @@ export namespace Dreamsleeve::Game::PhantomCapture
               for (unsigned axis = 0; axis < 3; ++axis)
               {
                 const float f = positions[(std::uint64_t(i) * count / std::min(count, 32u)) * 4 + axis];
-                if (std::isfinite(f) && std::abs(f) < 100000) v = (v ^ std::uint64_t(std::int64_t(std::round(f * 16)))) * 1099511628211ULL;
+                if (!std::isfinite(f) || std::abs(f) >= 100000) throw std::runtime_error("native.probe-position");
+                result.positions.push_back(f);
               }
           }
         }
@@ -92,9 +89,9 @@ export namespace Dreamsleeve::Game::PhantomCapture
           v             ^= std::uint64_t(c.vertexCount) << 32;
           v             ^= c.triangleCount;
         }
-        sum += v * 0x9e3779b185ebca87ULL;
+        result.structure += v * 0x9e3779b185ebca87ULL;
       }
-    return sum;
+    return result;
   }
 
   class Source
@@ -105,8 +102,18 @@ export namespace Dreamsleeve::Game::PhantomCapture
     std::vector<N::Binding>   bindings;
     P::ValidatedAsset         asset;
     P::Snapshot               last;
-    std::uint32_t             missingGeometry{};
-    std::uint64_t             signature{}, revision{}, candidate{}, changedAt{}, nextAudit{}, retryAt{};
+
+    struct Anchor
+    {
+      RE::NiPointer<RE::NiAVObject> parent;
+      RE::NiTransform               local;
+    };
+
+    std::vector<Anchor> anchors;
+    std::uint32_t       missingGeometry{};
+    AppearanceRevision  appearance;
+    AppearanceChange    change{};
+    std::uint64_t       nextAudit{}, retryAt{};
 
 public:
 
@@ -116,44 +123,41 @@ public:
           root(r),
           bindings(std::move(b)),
           asset(std::move(a)),
-          signature(Signature(*r)),
-          revision(completedRevision.load(std::memory_order_relaxed)),
-          candidate(signature)
+          appearance(Probe(*r))
     {}
 
     bool RebuildDue(std::uint64_t now)
     {
       if (now < retryAt) return false;
+      // Even many actor callbacks cannot trigger more than four probes/sec.
+      if (now < nextAudit) return false;
       const auto requested = auditRequested.exchange(false, std::memory_order_relaxed);
-      if (!requested && now < nextAudit) return false;
-      nextAudit     = now + 250000;
+      // Quiet scenes retain a bounded one-second fallback for third-party edits.
+      nextAudit     = now + (requested ? 250000 : 1000000);
       auto  ref     = player.get();
       auto* actor   = ref ? ref->As<RE::Actor>() : nullptr;
       auto* current = actor ? actor->Get3D(false) : nullptr;
       if (!current) return false;
-      if (current != root.get()) return true;
-      std::uint64_t observed{};
+      if (current != root.get())
+      {
+        change = AppearanceChange::Structure;
+        return true;
+      }
       try
       {
-        observed = Signature(*root);
+        change = appearance.Observe(Probe(*root), now);
+        if (appearance.Pending()) nextAudit = now + 250000;
       }
       catch (const std::exception&)
       {
-        return true;
+        change = AppearanceChange::Structure;
       }  // Open reports the concrete unsupported asset.
-      const auto rev = completedRevision.load(std::memory_order_relaxed);
-      if (observed == signature && rev == revision)
-      {
-        changedAt = 0;
-        return false;
-      }
-      if (!changedAt || candidate != observed)
-      {
-        candidate = observed;
-        changedAt = now;
-        return false;
-      }
-      return now - changedAt >= 750000;
+      return change != AppearanceChange::None;
+    }
+
+    std::string_view ChangeReason() const
+    {
+      return change == AppearanceChange::Structure ? "structure" : "settled-deformation";
     }
 
     void DeferRebuild(std::uint64_t now)
@@ -176,7 +180,7 @@ public:
       };
     }
 
-    P::Result<P::Snapshot> Sample(RE::PlayerCharacter& p, bool firstPerson, Stamp stamp)
+    P::Result<P::Snapshot> Sample(RE::PlayerCharacter& p, bool firstPerson, Stamp stamp, bool retainMissing = false)
     {
       if (!engine.mainThread || !engine.mainThread()) return A::Fail(P::Failure::Busy, "native.thread");
       if (p.GetHandle() != player || p.Get3D(false) != root.get()) return A::Fail(P::Failure::Stale, "native.source");
@@ -188,13 +192,28 @@ public:
       out.origin         = A::Value(root->world.translate);
       const auto& layout = asset.Layout();
       out.channels.resize(layout.requiredChannels.size());
+      anchors.resize(layout.requiredChannels.size());
       out.bounds.resize(layout.bounds.size());
       std::uint32_t missing = 0;
       for (std::size_t i = 0; i < layout.requiredChannels.size(); ++i)
       {
-        auto&       binding    = bindings[layout.requiredChannels[i]];
-        const auto  attachment = Locate(root.get(), binding.owner.get());
-        const auto* transform  = attachment.present ? N::Resolve(binding) : nullptr;
+        auto&           binding    = bindings[layout.requiredChannels[i]];
+        const auto      attachment = Locate(root.get(), binding.owner.get());
+        const auto*     transform  = attachment.present ? N::Resolve(binding) : nullptr;
+        const bool      geometry   = layout.nodes[layout.requiredChannels[i]].geometry;
+        RE::NiTransform retained;
+        auto&           anchor       = anchors[i];
+        const bool      hadTransform = transform != nullptr;
+        if (geometry && transform && binding.owner->parent && std::abs(binding.owner->parent->world.scale) > 1e-6f)
+        {
+          anchor.parent.reset(binding.owner->parent);
+          anchor.local = anchor.parent->world.Invert() * *transform;
+        }
+        else if (geometry && retainMissing && anchor.parent && Locate(root.get(), anchor.parent.get()).present)
+        {
+          retained  = anchor.parent->world * anchor.local;
+          transform = &retained;
+        }
         if (transform)
         {
           auto value = A::Value(*transform);
@@ -203,9 +222,10 @@ public:
         }
         else if (last.channels.empty())
           return A::Fail(P::Failure::MissingSource, "native.initial-channel");
-        if (!transform && layout.nodes[layout.requiredChannels[i]].geometry) ++missing;
-        out.channels[i].hidden = layout.nodes[layout.requiredChannels[i]].geometry &&
-                                 binding.visibility.Sample(transform != nullptr, attachment.hidden, firstPerson);
+        if (!hadTransform && geometry) ++missing;
+        out.channels[i].hidden = geometry && (retainMissing && !hadTransform && transform
+                                                ? last.channels[i].hidden
+                                                : binding.visibility.Sample(transform != nullptr, attachment.hidden, firstPerson));
       }
       for (std::size_t i = 0; i < layout.bounds.size(); ++i)
       {
@@ -214,6 +234,16 @@ public:
         {
           const auto& b = binding.owner->worldBound;
           out.bounds[i] = {A::Value(b.center), b.radius};
+        }
+        else if (retainMissing && !last.channels.empty())
+        {
+          const auto channel = std::ranges::lower_bound(layout.requiredChannels, layout.bounds[i]);
+          if (channel != layout.requiredChannels.end() && *channel == layout.bounds[i])
+          {
+            const auto index = static_cast<std::size_t>(channel - layout.requiredChannels.begin());
+            const auto delta = A::Native(out.channels[index].world) * A::Native(last.channels[index].world).Invert();
+            out.bounds[i]    = {A::Value(delta * A::Native(last.bounds[i].center)), last.bounds[i].radius * std::abs(delta.scale)};
+          }
         }
       }
       auto checked = P::CheckSnapshot(out, asset);

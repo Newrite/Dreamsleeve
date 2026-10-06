@@ -1,5 +1,6 @@
 export module Dreamsleeve.Client.Phantom.Streaming;
 import std;
+import Dreamsleeve.Client.Utils;
 export import Dreamsleeve.Client.Phantom.Worker;
 
 export namespace Dreamsleeve::Client::Phantom
@@ -72,10 +73,13 @@ export namespace Dreamsleeve::Client::Phantom
       double                 credit{};
     };
 
-    Exchange&                                       exchange;
-    Worker                                          worker;
-    std::optional<Wire::Policy>                     policy;
-    std::optional<Local>                            local;
+    Exchange&                   exchange;
+    Worker                      worker;
+    std::optional<Wire::Policy> policy;
+    std::optional<Local>        local;
+    // Last server commit receipt. A local preparation rollback does not republish
+    // that older generation through the server's monotonic manifest admission.
+    std::optional<Generation>                       committedGeneration;
     std::optional<Wire::Pose>                       latestPose;
     std::unordered_map<std::uint64_t, Download>     downloads;
     std::unordered_map<std::uint64_t, DownloadPlan> plans;
@@ -153,8 +157,9 @@ export namespace Dreamsleeve::Client::Phantom
         asset.compressed->size() > policy->limits.compressedAssetBytes || asset.rawBytes > policy->limits.assetBytes ||
         asset.asset.Layout().requiredChannels.size() > policy->limits.nodes)
       {
-        exchange.Failed("Модель фантома превышает лимит сервера");
-        local->state = Rejected{};
+        exchange.PublicationRejected(local->value.generation, "Модель фантома превышает лимит сервера");
+        local->state     = Rejected{};
+        lastPoseSequence = 0;
         return;
       }
       const Wire::Descriptor descriptor{
@@ -177,11 +182,17 @@ export namespace Dreamsleeve::Client::Phantom
       Publish(Clock::now());
     }
 
+    void Receive(const Wire::Settled& value)
+    {
+      exchange.Settled(value);
+    }
+
     void Receive(const Wire::Offer& value)
     {
-      if (!policy || !policy->enabled || !exchange.Offer(value)) return;
-      const auto remote = exchange.Find(value.player);
-      if (remote && remote->Asset()) return;
+      if (!policy || !policy->enabled) return;
+      const bool admitted = exchange.Offer(value);
+      const auto remote   = exchange.Find(value.player);
+      if (!remote || remote->view != value.view || remote->descriptor != value.asset || remote->Asset()) return;
       const auto existing = plans.find(value.player);
       if (existing != plans.end())
       {
@@ -192,7 +203,7 @@ export namespace Dreamsleeve::Client::Phantom
           downloads.erase(receiving->transfer.value);
         }
       }
-      const auto queued = worker.Queue(value);
+      const auto queued = admitted && worker.Queue(value);
       plans.insert_or_assign(
         value.player,
         DownloadPlan{
@@ -252,8 +263,9 @@ export namespace Dreamsleeve::Client::Phantom
       if (value.nextOffset < upload->acknowledged || value.nextOffset > upload->sent)
       {
         Cancel(value.transfer);
-        local->state = Rejected{};
-        exchange.Failed("Неверное подтверждение модели фантома");
+        local->state     = Rejected{};
+        lastPoseSequence = 0;
+        exchange.PublicationRejected(local->value.generation, "Неверное подтверждение модели фантома");
         return;
       }
       upload->acknowledged = value.nextOffset;
@@ -291,12 +303,21 @@ export namespace Dreamsleeve::Client::Phantom
         if (matches || refused)
         {
           if (value.accepted)
-            local->state = Ready{};
+          {
+            local->state        = Ready{};
+            committedGeneration = local->value.generation;
+          }
           else
           {
             local->state = value.retryAfterMs ? decltype(Local::state){Pending{now + std::chrono::milliseconds(value.retryAfterMs)}}
                                               : decltype(Local::state){Rejected{}};
-            exchange.Failed("Сервер отклонил модель фантома: " + value.reason);
+            if (value.retryAfterMs)
+              exchange.Failed("Сервер отклонил модель фантома: " + value.reason);
+            else
+            {
+              lastPoseSequence = 0;
+              exchange.PublicationRejected(local->value.generation, "Сервер отклонил модель фантома: " + value.reason);
+            }
           }
           return;
         }
@@ -392,6 +413,13 @@ export namespace Dreamsleeve::Client::Phantom
         }
         if (const auto* pending = std::get_if<Pending>(&plan.state); pending && now >= pending->at && count < policy->concurrentTransfers)
         {
+          const auto remote = exchange.Find(id);
+          if (remote && remote->WaitingBudget())
+          {
+            plan.state = Pending{now + std::chrono::seconds(1)};
+            if (exchange.Offer(plan.offer) && worker.Queue(plan.offer)) plan.state = CacheProbe{now + Timeout};
+            continue;
+          }
           const auto request = NextRequest();
           if (request.value && Request(Wire::Download{id, plan.offer.asset.generation, request}))
           {
@@ -410,6 +438,7 @@ public:
     {
       exchange.Reset();
       policy.reset();
+      committedGeneration.reset();
       local.reset();
       latestPose.reset();
       downloads.clear();
@@ -428,6 +457,7 @@ public:
       if (context != revision || active != ready)
       {
         CancelUpload();
+        committedGeneration.reset();
         context          = revision;
         active           = ready;
         lastPoseSequence = 0;
@@ -468,10 +498,18 @@ public:
       auto pose = Wire::DecodePose(bytes);
       if (!pose) return std::unexpected(pose.error());
       const auto remote = exchange.Find(pose->player);
-      if (remote && remote->Asset() && remote->view == pose->view && remote->descriptor.generation == pose->sample.generation)
+      if (remote && remote->view == pose->view)
       {
-        exchange.Count(0, bytes.size());
-        worker.Queue(std::move(*pose), remote->Asset(), arrivalUs);
+        const auto queue = [&](const Wire::Pose& sample, const RemoteVersion& version) {
+          if (version.Asset() && version.descriptor.generation == sample.generation)
+            worker.Queue(Wire::RemotePose{pose->player, pose->view, sample}, version.Asset(), arrivalUs);
+        };
+        queue(pose->sample, *remote);
+        if (pose->sample.previous)
+        {
+          queue(*pose->sample.previous, *remote);
+          if (remote->previous) queue(*pose->sample.previous, *remote->previous);
+        }
       }
       return {};
     }
@@ -480,8 +518,15 @@ public:
     {
       std::vector<Outbound> output;
       auto                  outgoing = exchange.TakeOutput();
+      for (const auto& ready : outgoing.displayed)
+        Request(ready);
       if (localRevision != outgoing.localRevision)
       {
+        if (local && !outgoing.generation)
+        {
+          committedGeneration.reset();
+          Request(Wire::Withdraw{});
+        }
         CancelUpload();
         local.reset();
         latestPose.reset();
@@ -495,6 +540,7 @@ public:
         {
           CancelUpload();
           local.reset();
+          committedGeneration.reset();
           latestPose.reset();
           Request(Wire::Withdraw{});
         }
@@ -509,7 +555,8 @@ public:
       if (outgoing.publication)
       {
         CancelUpload();
-        local = Local{std::move(*outgoing.publication), Pending{now}};
+        const bool restored = committedGeneration == outgoing.publication->generation;
+        local = Local{std::move(*outgoing.publication), restored ? decltype(Local::state){Ready{}} : decltype(Local::state){Pending{now}}};
         latestPose.reset();
         lastPoseSequence = 0;
       }
@@ -530,7 +577,7 @@ public:
       {
         const auto uploadRate = std::min(policy->modelBytesPerSecond, outgoing.settings.uploadBytesPerSecond);
         modelCredit           = std::min<double>(modelCredit + elapsed * uploadRate, Wire::ChunkBytes * policy->windowChunks);
-        poseCredit            = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, policy->limits.compressedPoseBytes);
+        poseCredit = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, 2ULL * policy->limits.compressedPoseBytes + 1024);
       }
       if (local && policy)
       {
@@ -607,20 +654,25 @@ public:
         else
           exchange.Failed("Не удалось сформировать запрос фантома");
       }
+      const bool rejected = local && std::holds_alternative<Rejected>(local->state);
+      if (rejected && latestPose && latestPose->generation == local->value.generation)
+        latestPose = latestPose->previous ? std::optional<Wire::Pose>{*latestPose->previous} : std::nullopt;
       const auto rate = policy ? std::min(outgoing.settings.sampleRate, policy->sampleRate) : 1;
       if (
-        latestPose && active && policy && local && std::holds_alternative<Ready>(local->state) && outgoing.settings.publish &&
-        latestPose->generation == local->value.generation && latestPose->context == context &&
-        latestPose->sequence.value > lastPoseSequence && now >= nextPose &&
-        latestPose->payload.size() <= policy->limits.compressedPoseBytes && latestPose->payload.size() <= poseCredit)
+        latestPose && active && policy && local && (std::holds_alternative<Ready>(local->state) || rejected || latestPose->previous) &&
+        outgoing.settings.publish &&
+        (latestPose->generation == local->value.generation || (rejected && latestPose->generation.value < local->value.generation.value)) &&
+        latestPose->context == context && latestPose->sequence.value > lastPoseSequence && now >= nextPose &&
+        latestPose->payload.size() <= policy->limits.compressedPoseBytes)
       {
         auto encoded = Wire::Encode(*latestPose);
-        if (encoded)
+        if (encoded && encoded->size() <= poseCredit)
         {
           exchange.Count(0, encoded->size());
-          poseCredit       -= latestPose->payload.size();
-          lastPoseSequence  = latestPose->sequence.value;
-          nextPose          = now + std::chrono::microseconds(1000000 / std::max(1u, rate));
+          poseCredit        -= encoded->size();
+          lastPoseSequence   = latestPose->sequence.value;
+          const auto period  = std::chrono::microseconds(1000000 / std::max(1u, rate));
+          Dreamsleeve::Utils::Time::AdvanceSample(nextPose, now, period);
           output.push_back({Wire::PosesLane, std::move(*encoded)});
         }
         latestPose.reset();

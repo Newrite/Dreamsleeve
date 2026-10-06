@@ -333,7 +333,7 @@ namespace
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {
-  REQUIRE(Dreamsleeve::Client::Wire::Version == 22);
+  REQUIRE(Dreamsleeve::Client::Wire::Version == 23);
   const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
   REQUIRE(portText);
   const auto port = std::stoul(*portText);
@@ -426,13 +426,27 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   CHECK(bob.downloadedBytes == downloaded);
   REQUIRE(bob.exchange.Stats().cacheHits > 0);
 
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{1}});
+  Await(alice, bob, "display acknowledgement releases generation bridge", [&] { return alice.exchange.CanReplace(); });
   const auto sent = alice.chunksSent;
   REQUIRE(alice.exchange.Submit(P::Generation{2}, Model()));
   Await(alice, bob, "warm server publication and native cached generation", [&] { return alice.readyGeneration == 2 && Loaded(bob, 2); });
   CHECK(alice.chunksSent == sent);
   CHECK(bob.downloadedBytes == downloaded);
-  alice.exchange.Submit(Pose(2, 1));
-  Await(alice, bob, "new generation pose", [&] { return Played(bob, 1); });
+  auto current       = Pose(2, 1);
+  auto prior         = std::make_shared<P::Snapshot>(*Pose(1, 4));
+  prior->sampledAtUs = current->sampledAtUs;
+  alice.exchange.Submit(current, prior);
+  Await(alice, bob, "both generations independently decoded from one packet", [&] {
+    const auto remote = bob.exchange.Find(1);
+    if (!remote || !remote->previous || !Played(bob, 1)) return false;
+    const auto pose = remote->previous->playback.At(NowUs(), bob.exchange.Settings());
+    return pose && pose->generation.value == 1 && pose->sequence.value == 4;
+  });
+  CHECK_FALSE(alice.exchange.CanReplace());
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{2}});
+  Await(alice, bob, "retire only after new generation displayed", [&] { return alice.exchange.CanReplace(); });
+  CHECK_FALSE(bob.exchange.Find(1)->previous);
   CHECK(alice.exchange.Stats().rejected == 0);
   CHECK(bob.exchange.Stats().rejected == 0);
   std::cout << "PHANTOM_NATIVE_UDP_PASS coldBytes=" << downloaded << " windowChunks=" << alice.windowChunks
