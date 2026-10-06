@@ -68,12 +68,14 @@ def distribution(values: list[int | float]) -> dict:
             "p50": ordered[int((len(values) - 1) * .5)], "p95": ordered[int((len(values) - 1) * .95)], "max": ordered[-1]}
 
 
-def inspect(path: Path, extract: Path | None = None) -> dict:
+def inspect(path: Path, extract: Path | None = None, compare_deformations: bool = False) -> dict:
     if path.is_dir():
         path = path / "capture.phdiag"
     models: dict[int, dict] = {}
     samples, encodes, sent, movements, failures = [], [], [], [], []
     total = 20
+    previous_deformations: dict[tuple[int, int], bytes] = {}
+    deformation_changes: dict[tuple[int, int], dict] = {}
     if extract:
         extract.mkdir(parents=True, exist_ok=True)
     with path.open("rb") as stream:
@@ -126,6 +128,26 @@ def inspect(path: Path, extract: Path | None = None) -> dict:
                     if geometry >= bounds or count > 65535:
                         raise ValueError("invalid deformation")
                     dynamic_vertices += count
+                    if compare_deformations:
+                        key = (gen, geometry)
+                        body = original[pos:pos + count * 24]
+                        if len(body) != count * 24:
+                            raise ValueError("truncated deformation")
+                        entry = deformation_changes.setdefault(key, {
+                            "vertices": count, "pairs": 0, "identicalPairs": 0,
+                            "changedPositions": [], "changedNormals": []})
+                        previous = previous_deformations.get(key)
+                        if previous is not None:
+                            if len(previous) != len(body):
+                                raise ValueError("deformation count changed within generation")
+                            entry["pairs"] += 1
+                            same = previous == body
+                            entry["identicalPairs"] += int(same)
+                            for name, offset in (("changedPositions", 0), ("changedNormals", count * 12)):
+                                a = struct.iter_unpack("<fff", body[offset:offset + count * 12])
+                                b = struct.iter_unpack("<fff", previous[offset:offset + count * 12])
+                                entry[name].append(0 if same else sum(x != y for x, y in zip(a, b)))
+                        previous_deformations[key] = body
                     pos += count * 24
                 if pos != len(original) or raw_n != 64 + channels * 19 + bounds * 10 + dynamic * 8 + dynamic_vertices * 24:
                     raise ValueError("snapshot body has wrong length")
@@ -189,10 +211,20 @@ def inspect(path: Path, extract: Path | None = None) -> dict:
             i = bisect.bisect_left(times, s["timeUs"])
             nearby = times[max(0, i - 1):i + 1]
             nearest.append(min(abs(t - s["timeUs"]) for t in nearby) / 1000)
+    changes = {f"{gen}:{geometry}": {
+        key: distribution(value) if isinstance(value, list) else value
+        for key, value in entry.items()
+    } for (gen, geometry), entry in deformation_changes.items()}
     return {"format": version, "protocol": protocol, "assetVersion": asset_version, "archiveBytes": total,
             "models": models, "samples": len(samples), "encoded": len(encodes), "acceptedByEnet": len(sent),
             "movementPackets": len(movements), "captureFailures": failures, "seconds": seconds,
             "capturedHz": (len(samples) - 1) / seconds if seconds else None,
+            "sampleSequenceGaps": [
+                {"generation": a["generation"], "after": a["sequence"], "next": b["sequence"],
+                 "missing": b["sequence"] - a["sequence"] - 1, "intervalMs": (b["timeUs"] - a["timeUs"]) / 1000}
+                for a, b in zip(samples, samples[1:])
+                if a["generation"] == b["generation"] and b["sequence"] > a["sequence"] + 1],
+            "deformationChanges": changes,
             "sampleIntervalMs": distribution(intervals), "captureMs": distribution([s["captureMs"] for s in samples]),
             "productionEncodeMs": distribution([e["ms"] for e in encodes]),
             "poseSizes": {k: distribution([s[k] for s in samples]) for k in (
@@ -210,9 +242,11 @@ def main() -> None:
     parser.add_argument("archive", type=Path)
     parser.add_argument("--extract", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--compare-deformations", action="store_true",
+                        help="compare saved vertex positions/normals between successive samples of each generation")
     args = parser.parse_args()
     try:
-        report = inspect(args.archive, args.extract)
+        report = inspect(args.archive, args.extract, args.compare_deformations)
     except (OSError, ValueError, struct.error) as error:
         parser.exit(1, f"Invalid diagnostic archive: {error}\n")
     text = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n"

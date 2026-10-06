@@ -54,7 +54,8 @@ namespace Phantoms
     P::Generation                                generation;
     P::Sequence                                  sequence;
     std::optional<P::ViewSettings>               settings;
-    Clock::time_point                            nextCapture{}, nextFailure{};
+    Capture::Cadence                             cadence;
+    Clock::time_point                            nextFailure{};
     std::uint32_t                                omittedGeometry{}, hiddenGeometry{};
     Capture::Context                             context;
     bool                                         waiting{};
@@ -136,7 +137,7 @@ namespace Phantoms
     {
       Get().source.reset();
       Get().diagnosticAsset.reset();
-      Get().nextCapture = {};
+      Get().cadence.Reset();
       logger::info("Phantom diagnostics recording requested");
     }
   }
@@ -210,11 +211,10 @@ namespace Phantoms
     if (state.source && publishing && !exchange.Capturing(state.generation))
     {
       state.source.reset();
-      state.nextCapture = now + std::chrono::seconds(1);
+      state.cadence.Defer(now);
       return;
     }
-    if (now < state.nextCapture) return;
-    state.nextCapture       = now + std::chrono::microseconds(1000000 / std::max(settings.sampleRate, 1u));
+    if (!state.cadence.Due(now, settings.sampleRate)) return;
     const auto* camera      = RE::PlayerCamera::GetSingleton();
     const bool  firstPerson = camera && camera->IsInFirstPerson();
     if (!state.source || state.source->RebuildDue(Micros(now)))
@@ -276,7 +276,7 @@ namespace Phantoms
       if (replace()) return;
       if (!state.source)
       {
-        state.nextCapture = now + std::chrono::seconds(1);
+        state.cadence.Defer(now);
         return;
       }
     }
@@ -295,7 +295,7 @@ namespace Phantoms
       if (pose.error().reason == P::Failure::Stale)
         state.source.reset();
       else
-        state.nextCapture = now + std::chrono::seconds(1);
+        state.cadence.Defer(now);
       return;
     }
     ReportCaptureHealth();

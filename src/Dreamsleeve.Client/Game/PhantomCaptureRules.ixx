@@ -20,6 +20,44 @@ export namespace Dreamsleeve::Game
 export namespace Dreamsleeve::Game::PhantomCapture
 {
 
+  // Preserve the sampling grid when a game frame arrives late. Take at most
+  // one fresh sample per tick; missed slots never become duplicate poses.
+  class Cadence
+  {
+public:
+
+    using Clock = std::chrono::steady_clock;
+
+    bool Due(Clock::time_point now, std::uint32_t rate)
+    {
+      const auto period = std::chrono::microseconds(1000000 / std::max(rate, 1u));
+      if (period != period_ || next_ == Clock::time_point{})
+      {
+        next_   = now;
+        period_ = period;
+      }
+      if (now < next_) return false;
+      next_ += period_ * ((now - next_) / period_ + 1);
+      return true;
+    }
+
+    void Defer(Clock::time_point now)
+    {
+      next_ = now + std::chrono::seconds(1);
+    }
+
+    void Reset()
+    {
+      next_   = {};
+      period_ = {};
+    }
+
+private:
+
+    Clock::time_point         next_{};
+    std::chrono::microseconds period_{};
+  };
+
   // Local identity of a coordinate space: CELL indoors, WRLD outdoors.
   // Missing readiness does not establish a different space.
   class Context

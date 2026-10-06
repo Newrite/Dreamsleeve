@@ -137,11 +137,21 @@ namespace Dreamsleeve::Client::Diagnostics
     std::atomic<bool>       active{};
     Status                  status;
     std::deque<Job>         queue;
-    std::filesystem::path   root;
-    std::uint32_t           scenario{}, seconds{}, rate{};
-    Clock::time_point       requestedAt{}, firstAt{}, lastAt{};
-    bool                    requested{}, shuttingDown{};
-    std::jthread            thread;
+
+    struct RetainedAsset
+    {
+      std::uint64_t bytes;
+      std::size_t   jobs;
+    };
+
+    // Jobs share immutable model storage, including the job currently being
+    // written. Charge that storage once, even across wrapper/generation copies.
+    std::unordered_map<const P::Asset*, RetainedAsset> retainedAssets;
+    std::filesystem::path                              root;
+    std::uint32_t                                      scenario{}, seconds{}, rate{};
+    Clock::time_point                                  requestedAt{}, firstAt{}, lastAt{};
+    bool                                               requested{}, shuttingDown{};
+    std::jthread                                       thread;
 
     explicit State(Budget value) : budget(value), thread([this] { Run(); }) {}
 
@@ -153,9 +163,11 @@ namespace Dreamsleeve::Client::Diagnostics
       wake.notify_one();
     }
 
-    bool Admit(std::uint64_t charge)
+    bool Admit(std::uint64_t charge, const P::ValidatedAsset* asset = nullptr)
     {
       if (!active.load()) return false;
+      const bool retain = asset && !retainedAssets.contains(&asset->Value());
+      if (retain) charge += asset->MemoryBytes();
       if (queue.size() >= budget.queueJobs || charge > budget.queueBytes - std::min(status.queuedBytes, budget.queueBytes))
       {
         ++status.dropped;
@@ -165,7 +177,33 @@ namespace Dreamsleeve::Client::Diagnostics
         return false;
       }
       status.queuedBytes += charge;
+      if (asset)
+      {
+        auto [entry, inserted] = retainedAssets.try_emplace(&asset->Value(), asset->MemoryBytes(), 0);
+        ++entry->second.jobs;
+      }
       return true;
+    }
+
+    void Release(const Job& job)
+    {
+      status.queuedBytes -= job.charge;
+      if (const auto* sample = std::get_if<SampleJob>(&job.value))
+      {
+        const auto entry = retainedAssets.find(&sample->asset->Value());
+        if (--entry->second.jobs == 0)
+        {
+          status.queuedBytes -= entry->second.bytes;
+          retainedAssets.erase(entry);
+        }
+      }
+    }
+
+    void ClearQueue()
+    {
+      queue.clear();
+      retainedAssets.clear();
+      status.queuedBytes = 0;
     }
 
     void Enqueue(RecordJob job)
@@ -333,12 +371,11 @@ namespace Dreamsleeve::Client::Diagnostics
         }
         {
           std::lock_guard lock(mutex);
-          status.queuedBytes -= job->charge;
-          status.bytes        = written;
+          Release(*job);
+          status.bytes = written;
           if (!saved)
           {
-            queue.clear();
-            status.queuedBytes = 0;
+            ClearQueue();
           }
         }
       }
@@ -413,8 +450,7 @@ namespace Dreamsleeve::Client::Diagnostics
           status.phase  = Phase::Failed;
           status.reason = e.what();
           ++status.errors;
-          queue.clear();
-          status.queuedBytes = 0;
+          ClearQueue();
         }
       }
     }
@@ -484,7 +520,7 @@ namespace Dreamsleeve::Client::Diagnostics
   {
     if (!Active() || !asset || !pose) return;
     const auto now    = Clock::now();
-    auto       charge = asset->MemoryBytes() + sizeof(Job) + sizeof(P::Snapshot) + pose->channels.capacity() * sizeof(P::Channel) +
+    auto       charge = sizeof(Job) + sizeof(P::Snapshot) + pose->channels.capacity() * sizeof(P::Channel) +
                         pose->bounds.capacity() * sizeof(P::Bound) + pose->deformations.capacity() * sizeof(P::Deformation);
     for (const auto& deformation : pose->deformations)
       charge += (deformation.positions.capacity() + deformation.normals.capacity()) * sizeof(P::Vec3);
@@ -495,7 +531,7 @@ namespace Dreamsleeve::Client::Diagnostics
       state->StopLocked("duration");
       return;
     }
-    if (!state->Admit(charge)) return;
+    if (!state->Admit(charge, asset.get())) return;
     if (state->status.omittedGeometry || state->status.hiddenGeometry) ++state->status.partialSamples;
     if (state->firstAt == Clock::time_point{}) state->firstAt = now;
     state->lastAt = now;

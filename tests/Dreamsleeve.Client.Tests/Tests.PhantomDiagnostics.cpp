@@ -374,4 +374,40 @@ TEST_CASE("Temporary recorder backpressure drops observations without ending the
   CHECK(result.samples > 0);
   CHECK(result.dropped > 0);
 }
+
+TEST_CASE("Diagnostic queue retains shared model storage once for a burst of distinct poses")
+{
+  Fixture  f;
+  P::Asset data            = f.asset->Value();
+  data.geometry[0].dynamic = false;
+  data.geometry[0].vertices.resize(45000);
+  auto asset = P::ValidatedAsset::Parse(std::move(data));
+  REQUIRE(asset);
+  f.asset = std::make_shared<const P::ValidatedAsset>(*asset);
+  // A wrapper copy still owns the same immutable Asset storage.
+  auto      wrapper = std::make_shared<const P::ValidatedAsset>(*asset);
+  D::Budget budget;
+  budget.queueBytes = asset->MemoryBytes() + 256 * 1024;
+  budget.queueJobs  = 128;
+  D::Recorder recorder(budget);
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  for (unsigned i = 1; i <= 64; ++i)
+  {
+    auto pose = std::make_shared<P::Snapshot>(*f.Pose(i, i > 32 ? 2 : 1));
+    pose->deformations.clear();
+    recorder.Sample(i % 2 ? f.asset : wrapper, std::move(pose), {}, 1, false);
+  }
+  recorder.Stop();
+  const auto result = Finished(recorder);
+  CHECK(result.phase == D::Phase::Complete);
+  CHECK(result.samples == 64);
+  CHECK(result.dropped == 0);
+  CHECK(result.queuedBytes == 0);
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  auto pose = std::make_shared<P::Snapshot>(*f.Pose(1));
+  pose->deformations.clear();
+  recorder.Sample(f.asset, std::move(pose), {}, 1, false);
+  recorder.Stop();
+  CHECK(Finished(recorder).samples == 1);
+}
 #endif
