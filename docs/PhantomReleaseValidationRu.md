@@ -136,3 +136,11 @@ fix: в свежем логе нет capture.main-thread, но захват бы
 Diagnostic DLL собрана и установлена, native 371/371 (9252 assertions,
 1 явный skip); normal dist остаётся от предыдущей сборки до игровой проверки.
 Подробности, ограничения и install evidence: [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).
+
+Следующая диагностическая итерация от 06.10.2026 исправляет отбор перед
+декодированием: hidden geometry и auxiliary blood decals больше не должны
+блокировать Open; кеш ранее захваченной скрытой геометрии сохраняется.
+375/375 native-тестов (9034 assertions, один явный skip), format/diff checks
+прошли; окончательная diagnostic DLL/PDB установлена в MO2 с проверкой SHA256.
+Normal dist не пересобирался, игровой результат этой итерации ещё не проверен.
+Evidence и ограничения: [PhantomDiagnosticsRu.md](PhantomDiagnosticsRu.md).

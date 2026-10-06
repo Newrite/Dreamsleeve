@@ -7,6 +7,7 @@ export module Dreamsleeve.Game.PhantomCapture;
 import std;
 import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Game.PhantomAsset;
+import Dreamsleeve.Game.PhantomCaptureRules;
 
 export namespace Dreamsleeve::Game::PhantomCapture
 {
@@ -42,17 +43,6 @@ export namespace Dreamsleeve::Game::PhantomCapture
   // authored visibility rule while first person hides the third-person tree.
   // Root-camera hiding is ignored; removed/reparented equipment is still
   // discovered from attachment to the actual third-person root every frame.
-  struct Visibility
-  {
-    bool hidden{};
-
-    bool Sample(bool present, bool culled, bool firstPerson)
-    {
-      if (present && !firstPerson) hidden = culled;
-      return !present || hidden;
-    }
-  };
-
   struct Attachment
   {
     bool present{}, hidden{};
@@ -98,17 +88,19 @@ export namespace Dreamsleeve::Game::PhantomCapture
     return objects;
   }
 
-  inline bool AuxiliaryEffect(RE::BSGeometry& geometry)
+  inline bool AuxiliaryGeometry(RE::BSGeometry& geometry)
   {
     const auto& data   = geometry.GetGeometryRuntimeData();
     auto*       shader = data.shaderProperty.get();
-    if (!shader || !A::Kind(*shader, "BSEffectShaderProperty")) return false;
+    if (!shader) return A::Kind(geometry, "BSSkinnedDecalTriShape");
     using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
-    // Only unskinned effect geometry is outside the neutral character model.
-    // A skinned effect may be authored clothing/hair: keep it in the capture
-    // path so its unsupported material fails explicitly instead of losing it.
-    // Projected/decal flags on lighting geometry do NOT remove its base mesh.
-    return !data.skinInstance && !shader->flags.all(Shader::kSkinned);
+    return Surface{
+        A::Kind(*shader, "BSEffectShaderProperty"),
+        shader->flags.any(Shader::kDecal, Shader::kDynamicDecal),
+        bool(data.skinInstance) || shader->flags.all(Shader::kSkinned),
+        shader->flags.all(Shader::kWeaponBlood) || A::Kind(geometry, "BSSkinnedDecalTriShape")
+    }
+      .Auxiliary();
   }
 
   inline std::unexpected<P::Error> GeometryError(P::Error error, RE::BSGeometry& geometry)
@@ -125,7 +117,30 @@ export namespace Dreamsleeve::Game::PhantomCapture
     return std::unexpected(std::move(error));
   }
 
-  inline void ReportMaterials(std::span<RE::NiAVObject* const> live)
+  inline bool AllPartitionsHidden(RE::BSTriShape& shape, const P::Limits& limits)
+  {
+    auto* skin = shape.GetGeometryRuntimeData().skinInstance.get();
+    if (!skin || !A::Kind(*skin, "BSDismemberSkinInstance")) return false;
+    const auto& data = static_cast<RE::BSDismemberSkinInstance*>(skin)->GetRuntimeData();
+    if (data.numPartitions <= 0 || std::uint32_t(data.numPartitions) > limits.geometry || !data.partitions) return false;
+    for (std::int32_t i = 0; i < data.numPartitions; ++i)
+      if (data.partitions[i].visible) return false;
+    return true;
+  }
+
+  inline bool CaptureCandidate(RE::NiAVObject& root, RE::NiAVObject& object, bool firstPerson, const P::Limits& limits)
+  {
+    const auto attachment = Locate(&root, &object, limits.nodes);
+    if (!attachment.present || !Visibility::Capture(attachment.hidden, false, firstPerson)) return false;
+    if (auto* geometry = object.AsGeometry())
+    {
+      if (AuxiliaryGeometry(*geometry)) return false;
+      if (auto* shape = geometry->AsTriShape(); shape && AllPartitionsHidden(*shape, limits)) return false;
+    }
+    return true;
+  }
+
+  inline void ReportMaterials(RE::NiAVObject& root, std::span<RE::NiAVObject* const> live, bool firstPerson, const P::Limits& limits)
   {
     // Capture can retry while GPU readback is pending. Bound both log cadence
     // and diagnostic names; never build a per-frame scene dump.
@@ -134,26 +149,29 @@ export namespace Dreamsleeve::Game::PhantomCapture
     const auto               now = Clock::now();
     if (now - last < std::chrono::seconds(5)) return;
     last                  = now;
-    std::uint32_t effects = 0, projected = 0;
+    std::uint32_t effects = 0, hidden = 0, projected = 0;
     std::string   names;
     using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
     for (auto* object : live)
       if (auto* geometry = object->AsGeometry())
       {
-        if (AuxiliaryEffect(*geometry))
+        if (AuxiliaryGeometry(*geometry))
         {
           if (++effects <= 4)
             names += std::format(" [{}]", std::string_view(geometry->name.c_str() ? geometry->name.c_str() : "").substr(0, 96));
         }
+        else if (!CaptureCandidate(root, *geometry, firstPerson, limits))
+          ++hidden;
         else if (
           auto* property = geometry->lightingShaderProp_cast();
           property && property->flags.any(Shader::kDecal, Shader::kDynamicDecal, Shader::kProjectedUV))
           ++projected;
       }
     logger::info(
-      "Phantom materials: {} auxiliary effect meshes omitted{}; {} projected/decal lighting meshes retained",
+      "Phantom selection: {} auxiliary/decal meshes omitted{}; {} hidden meshes skipped before readback; {} projected/decal lighting meshes retained",
       effects,
       names,
+      hidden,
       projected);
   }
 
@@ -332,17 +350,6 @@ export namespace Dreamsleeve::Game::PhantomCapture
     bool                          auditPending{};
   };
 
-  inline bool AllPartitionsHidden(RE::BSTriShape& shape, const P::Limits& limits)
-  {
-    auto* skin = shape.GetGeometryRuntimeData().skinInstance.get();
-    if (!skin || !A::Kind(*skin, "BSDismemberSkinInstance")) return false;
-    const auto& data = static_cast<RE::BSDismemberSkinInstance*>(skin)->GetRuntimeData();
-    if (data.numPartitions <= 0 || std::uint32_t(data.numPartitions) > limits.geometry || !data.partitions) return false;
-    for (std::int32_t i = 0; i < data.numPartitions; ++i)
-      if (data.partitions[i].visible) return false;
-    return true;
-  }
-
   // Cheap local stamps can contain addresses as integers. They never enter
   // the neutral asset, and no borrowed resource is dereferenced next frame.
   inline std::uint64_t CheapStamp(RE::BSTriShape& shape)
@@ -478,22 +485,23 @@ public:
         meshes.insert(mesh.owner.get());
       for (auto* object : *live)
       {
-        if (object->AsNiTriShape()) return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
+        if (object->AsNiTriShape() && CaptureCandidate(*root_, *object, firstPerson, limits_))
+          return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
         if (auto* geometry = object->AsGeometry())
         {
-          if (AuxiliaryEffect(*geometry))
+          if (AuxiliaryGeometry(*geometry))
           {
             if (meshes.contains(object)) return Dirty("capture.material-kind-changed");
             continue;
           }
-          if (!meshes.contains(object)) bindingsDirty_ = true;
+          if (!meshes.contains(object) && CaptureCandidate(*root_, *geometry, firstPerson, limits_)) bindingsDirty_ = true;
         }
       }
       for (const auto& binding : bindings_)
         if (!present.contains(binding.owner.get())) bindingsDirty_ = true;
       if (bindingsDirty_)
       {
-        auto rebound = Rebind(*live);
+        auto rebound = Rebind(*live, firstPerson);
         if (!rebound) return std::unexpected(rebound.error());
         bindingsDirty_ = false;
       }
@@ -561,7 +569,7 @@ public:
       {
         auto& binding = meshes_[i];
         if (AllPartitionsHidden(*binding.owner, limits_)) snapshot.channels[binding.node.value].hidden = true;
-        if (!present.contains(binding.owner.get()))
+        if (!present.contains(binding.owner.get()) || snapshot.channels[binding.node.value].hidden)
         {
           snapshot.bounds.push_back(binding.lastBound);
           if (binding.dynamic) snapshot.deformations.push_back(binding.lastDeformation);
@@ -634,6 +642,7 @@ public:
       for (std::size_t visited = 0; visited < meshes_.size() && audited < 4; ++visited)
       {
         auto& binding = meshes_[auditCursor_++ % meshes_.size()];
+        if (!present.contains(binding.owner.get()) || snapshot.channels[binding.node.value].hidden) continue;
         if (stamp.sampledAtUs >= binding.auditedAtUs && stamp.sampledAtUs - binding.auditedAtUs < 1000000) continue;
         if (binding.vertexCount > 65535 - vertices) break;
         auto checked = Audit(binding, transforms);
@@ -698,7 +707,7 @@ private:
       return {};
     }
 
-    P::Result<void> Rebind(std::span<RE::NiAVObject* const> live)
+    P::Result<void> Rebind(std::span<RE::NiAVObject* const> live, bool firstPerson)
     {
       // Match independently of parent attachment and child-array order.
       // Duplicate semantic keys are rejected, never arbitrarily rebound.
@@ -726,7 +735,12 @@ private:
         double                        nearest = std::numeric_limits<double>::max();
         // A moved existing object needs no readback. Full signature matching
         // is reserved for replacement clones, not ordinary draw/sheath.
-        const bool reusable = std::ranges::find(live, binding.owner.get()) != live.end() && !used.contains(binding.owner.get());
+        const bool originalPresent = std::ranges::find(live, binding.owner.get()) != live.end();
+        // Prefer a visible equivalent over a hidden attachment clone. Otherwise
+        // draw/sheath would retain the hidden original and misclassify its
+        // visible twin as a new appearance.
+        const bool reusable =
+          originalPresent && !used.contains(binding.owner.get()) && CaptureCandidate(*root_, *binding.owner, firstPerson, limits_);
         if (reusable) found = binding.owner;
         for (auto* object : live)
         {
@@ -734,7 +748,7 @@ private:
           auto* geometry = object->AsGeometry();
           auto* shape    = geometry ? geometry->AsTriShape() : nullptr;
           if (
-            !shape || AuxiliaryEffect(*geometry) || used.contains(shape) ||
+            !shape || !CaptureCandidate(*root_, *geometry, firstPerson, limits_) || used.contains(shape) ||
             binding.name != (shape->name.c_str() ? shape->name.c_str() : ""))
             continue;
           auto raw = engine_.mesh(*shape, limits_);
@@ -755,14 +769,22 @@ private:
             found   = RE::NiPointer<RE::BSTriShape>{shape};
           }
         }
+        // No visible replacement: keep the valid cached hidden mesh. It must
+        // not require decoding an inactive buffer just to preserve its slot.
+        if (!found && originalPresent && !used.contains(binding.owner.get()) && !AuxiliaryGeometry(*binding.owner)) found = binding.owner;
         if (!found) return Dirty("capture.equipment/schema-changed");
         next[binding.node.value] = found;
         used.insert(found.get());
-        binding.owner = std::move(found);
-        binding.stamp = CheapStamp(*binding.owner);
+        const bool replaced = found.get() != binding.owner.get();
+        binding.owner       = std::move(found);
+        // An original hidden mesh has not been reread. Preserve its old stamp
+        // so the next visible sample audits any changes made while hidden.
+        if (replaced) binding.stamp = CheapStamp(*binding.owner);
       }
       for (auto* object : live)
-        if (auto* geometry = object->AsGeometry(); geometry && !AuxiliaryEffect(*geometry) && !used.contains(object))
+        if (
+          auto* geometry = object->AsGeometry();
+          geometry && CaptureCandidate(*root_, *geometry, firstPerson, limits_) && !used.contains(object))
           return Dirty("capture.new-equipment/schema");
       for (std::uint32_t i = 0; i < bindings_.size(); ++i)
       {
@@ -962,7 +984,7 @@ private:
     if (!root) return A::Fail(P::Failure::MissingSource, "capture.third-person-root");
     auto live = Walk(*root, limits);
     if (!live) return std::unexpected(live.error());
-    ReportMaterials(*live);
+    ReportMaterials(*root, *live, firstPerson, limits);
     Captured out;
     out.source     = std::unique_ptr<Source>(new Source(engine, limits));
     auto& source   = *out.source;
@@ -1045,10 +1067,11 @@ private:
     std::uint64_t bytes = out.asset.nodes.size() * 48, vertices = 0, masks = 0;
     for (auto* object : *live)
     {
-      if (object->AsNiTriShape()) return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
+      if (object->AsNiTriShape() && CaptureCandidate(*root, *object, firstPerson, limits))
+        return A::Fail(P::Failure::UnsupportedGeometry, "source.legacy-NiTriShape");
       auto* geometry = object->AsGeometry();
       if (!geometry) continue;
-      if (AuxiliaryEffect(*geometry)) continue;
+      if (!CaptureCandidate(*root, *geometry, firstPerson, limits)) continue;
       auto* shape = geometry->AsTriShape();
       if (!shape) return GeometryError({P::Failure::UnsupportedGeometry, "source.nontriangle-geometry"}, *geometry);
       if (out.asset.geometry.size() >= limits.geometry) return A::Fail(P::Failure::LimitExceeded, "capture.geometry");

@@ -204,6 +204,8 @@ target("Dreamsleeve.Client.Tests")
     -- Game-independent host modules of the SKSE adapter are compiled here too:
     -- they depend on Core only, so bridge/settings/session logic is tested without Skyrim.
     add_module_interface_files("src/Dreamsleeve.Client/Host")
+    -- Pure capture policy; the engine adapter itself still needs Skyrim.
+    add_files("src/Dreamsleeve.Client/Game/PhantomCaptureRules.ixx", {public = true})
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")

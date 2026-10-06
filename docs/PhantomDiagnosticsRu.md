@@ -178,3 +178,52 @@ mesh в auxiliary effect инвалидирует appearance; Rebind испол�
 классификацию. Скиненные неподдерживаемые materials явно отклоняются.
 Релизный dist не пересобирался в этой диагностической итерации. Успех захвата
 модели в игре и её визуальная полнота требуют отдельной проверки.
+
+## Отбор скрытой геометрии и blood decals, 06.10.2026
+
+Запись `1791289940334-idle-0` после material fix снова содержала 0 моделей и
+0 поз: 445 movement, 25 capture errors. Лог теперь показал конкретный отказ:
+`mesh.vertex [mesh=EdgeBlood12, shader=BSLightingShaderProperty, flags=80208E400309]`.
+Флаги содержат Decal и DynamicDecal, но не Skinned. Это отделило проблему
+от потока и предыдущего запрета projected materials. Политика не использует
+имя EdgeBlood12 как исключение.
+
+При сравнении с локальным прототипом выявлено различие путей: прототип
+клонировал/сохранял сцену через NiStream, сетевой adapter напрямую декодирует
+буферы в neutral asset. Open раньше читал также скрытые meshes, а hidden
+применял только к уже построенной позе. Невалидный неактивный blood mesh
+поэтому мог остановить весь новый путь, не мешая прототипу.
+
+Теперь pure PhantomCaptureRules определяет auxiliary surfaces и camera-aware
+visibility; native adapter только извлекает факты из CommonLib. Нескиненные
+lighting decals также исключаются до декодирования, как dedicated skinned
+engine decals и WeaponBlood. Скиненные базовые lighting surfaces с decal flags
+сохраняются. Open/Sample/Rebind разделяют CaptureCandidate. Изначально скрытый
+mesh не декодируется; ранее сохранённый hidden mesh использует валидный кеш
+без повторного GPU readback/deformation/audit. При возврате видимости старый
+stamp проверяется. При draw/sheath видимый эквивалент имеет приоритет перед
+скрытым экземпляром; нового asset только из-за такого двойника не требуется.
+
+Строка `Phantom selection: ...` отдельно показывает auxiliary и hidden skips.
+Пути и файлы текстур не сериализуются; alpha masks для силуэта остаются.
+Четыре новых native-теста проверяют реальную используемую политику на blood
+surfaces, теле/одежде, hidden/partition visibility и смене камеры. Это ещё
+не игровой тест чтения GPU/skin данных конкретного персонажа.
+
+Проверка visibility fix: diagnostic DLL собрана из окончательного исходника;
+375/375 native-тестов, 9034 assertions, один явный skip реального UDP.
+Форматирование изменённых C++ файлов и diff check прошли. Логи:
+`build/phantom-visibility-diag-build.log`, `build/phantom-visibility-test-build.log`,
+`build/phantom-visibility-tests.log`.
+SHA256 установленной diagnostic DLL:
+`de6c572b4819169cb1864f92921a5283d12e756dbbc26b15941d9e8fe6a0a393`.
+DLL/PDB установлены в `F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`;
+client.toml, aliases.toml, theme.user.css и ESP сохранены по SHA256.
+Backup и install manifest:
+`build/phantom-visibility-install-backup-20261006-195551`.
+Самопроверка охватила отбор перед чтением буферов, скрытые legacy meshes,
+кеш скрытых опубликованных meshes и выбор видимого оружейного двойника.
+Релизный dist не пересобирался: его normal DLL остаётся от thread fix.
+Успех записи и полнота внешности в игре ещё не подтверждены. Для следующей
+проверки достаточно одной локальной записи 15 секунд при 20 Гц без сервера:
+должны увеличиваться samples и появиться model, вместо одних movement.
