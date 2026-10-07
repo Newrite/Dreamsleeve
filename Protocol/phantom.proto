@@ -17,6 +17,8 @@ message Progress { uint64 transfer_id = 1; uint32 next_offset = 2; }
 // Sent only after a native scene has applied its first pose and become visible.
 message Displayed { uint64 player_id = 1; uint64 view_revision = 2; uint64 generation = 3; }
 // The publisher may retire its prior bindings and prepare another generation.
+message PoseDemand { uint64 context_revision = 1; bool required = 2; }
+
 message Settled { uint64 generation = 1; uint64 context_revision = 2; }
 message Withdraw {}
 message ClientAssetPacket {
@@ -50,7 +52,8 @@ message Policy {
 }
 message ServerAssetPacket {
   uint32 protocol_version = 1;
-  oneof payload { Offer offer = 2; Transfer transfer = 3; Chunk chunk = 4; Complete complete = 5; Remove remove = 6; Progress progress = 7; Policy policy = 8; Settled settled = 9; }
+  oneof payload { Offer offer = 2; Transfer transfer = 3; Chunk chunk = 4; Complete complete = 5; Remove remove = 6; Progress progress = 7; Policy policy = 8; Settled settled = 9;
+    PoseDemand pose_demand = 10; }
 }
 // The payload is the bounded independently compressed Dreamsleeve pose format.
 message PoseSample {

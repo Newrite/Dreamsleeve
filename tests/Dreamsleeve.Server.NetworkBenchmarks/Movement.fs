@@ -77,7 +77,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         let x = offset + float32 (index % 25) * 4.f + 100.f * float32 (sin ((time - started) / 500.))
         PlayerLocation(
             Location = Location(LocationId = FormKey(PluginName = "skyrim.esm", LocalFormId = uint32 (0x3c + group)), LocationName = "Benchmark"),
-            Position = Position(X = x, Y = 0.f, Z = 0.f), Rotation = Rotation(Z = float32 ((time - started) / 1000.)),
+            Position = Position(X = x, Y = 0.f, Z = 0.f), CameraDirection = CameraDirection(),
             SampledAtUs = uint64 (time * 1000.) + 1UL)
 
     let publishPose index (location: PlayerLocation) =
@@ -85,7 +85,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         let packet = ClientMovementPacket(
             ProtocolVersion = Dreamsleeve.Server.Core.ProtocolCodec.Version,
             Sample = MovementSample(ContextRevision = contexts[index], Sequence = sequences[index],
-                                    Pose = MovementPose(Position = location.Position, Rotation = location.Rotation,
+                                    Pose = MovementPose(Position = location.Position, CameraDirection = location.CameraDirection,
                                                         SampledAtUs = location.SampledAtUs)))
         if sendMovement index packet && measuring then
             sent <- sent + 1L
@@ -121,7 +121,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         publishPose index location
 
     let observe observer index (pose: MovementPose) =
-        if isNull pose || isNull pose.Position || isNull pose.Rotation || pose.SampledAtUs = 0UL then
+        if isNull pose || isNull pose.Position || isNull pose.CameraDirection || pose.SampledAtUs = 0UL then
             fail "Invalid measured movement"
         else
             let fresh = seen[observer, index] <> pose.SampledAtUs
@@ -151,7 +151,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                     if measuring then cleared <- cleared + 1L
                 else
                     seenSpaces[observer, index] <- location.Location.LocationId
-                    observe observer index (MovementPose(Position = location.Position, Rotation = location.Rotation, SampledAtUs = location.SampledAtUs))
+                    observe observer index (MovementPose(Position = location.Position, CameraDirection = location.CameraDirection, SampledAtUs = location.SampledAtUs))
 
     member _.BeginCharacters(serviceBatch: unit -> unit) =
         for index in 0 .. count - 1 do
@@ -278,7 +278,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
             let location =
                 if isNull entry.Pose then null
                 else PlayerLocation(Location = presence.Space, Position = entry.Pose.Position,
-                                    Rotation = entry.Pose.Rotation, SampledAtUs = entry.Pose.SampledAtUs)
+                                    CameraDirection = entry.Pose.CameraDirection, SampledAtUs = entry.Pose.SampledAtUs)
             baseline observer entry.PlayerId entry.ViewRevision entry.Sequence location
 
     member _.FinalLocations =
@@ -346,7 +346,7 @@ let verifyOracle () =
         let entry = PlayerVisibility(PlayerId = 1UL, ViewRevision = revision, Sequence = 0UL)
         if not (isNull location) then
             presence.Space <- location.Location
-            entry.Pose <- MovementPose(Position = location.Position, Rotation = location.Rotation, SampledAtUs = location.SampledAtUs)
+            entry.Pose <- MovementPose(Position = location.Position, CameraDirection = location.CameraDirection, SampledAtUs = location.SampledAtUs)
         presence.Visibility.Add entry
         presence
     let baseline revision location = probe.ReceivePresence(0, visibility revision location, 0)
@@ -354,7 +354,7 @@ let verifyOracle () =
         let values = PlayersMoved()
         values.Players.Add(PlayerMoved(PlayerId = 1UL, ViewRevision = revision, Sequence = sequence, Pose = pose))
         probe.ReceiveMovement(0, ServerMovementPacket(Movements = values), 0)
-    let wrong = MovementPose(Position = Position(X = -999.f), Rotation = Rotation(), SampledAtUs = 1UL)
+    let wrong = MovementPose(Position = Position(X = -999.f), CameraDirection = CameraDirection(), SampledAtUs = 1UL)
 
     movement 1UL 1UL samples[0].Sample.Pose
     check (not (probe.Converged())) "Realtime must not establish visibility before control baseline"

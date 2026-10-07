@@ -131,6 +131,13 @@ namespace Dreamsleeve::Client::Phantom::Wire
       return std::unexpected(Invalid("asset.packet"));
     switch (packet.payload_case())
     {
+      case Proto::ServerAssetPacket::kPoseDemand: {
+        const auto& v = packet.pose_demand();
+        if (!v.context_revision()) return std::unexpected(Invalid("pose_demand.context"));
+        return Response{
+            PoseDemand{v.context_revision(), v.required()}
+        };
+      }
       case Proto::ServerAssetPacket::kSettled: {
         const auto& v = packet.settled();
         if (!v.generation() || !v.context_revision()) return std::unexpected(Invalid("settled"));

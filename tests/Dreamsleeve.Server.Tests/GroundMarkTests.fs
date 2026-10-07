@@ -26,7 +26,7 @@ let private riften = formKey "Skyrim.esm" 0x16BB4u
 let private position x = Position.create x 0.0f 0.0f |> ok
 let private placement space x = GroundMarkPlacement.create space (position x) (Radian.create 1.5f |> ok)
 let private located space x =
-    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) Rotation.zero)
+    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) CameraDirection.zero)
 let private note text = GroundMarkBody.Note (GroundNoteText.create 200 text |> ok)
 let private death label = GroundMarkBody.Death (DeathMarkText.create 64 label |> ok)
 let private markId value = GroundMarkId.create value |> ok

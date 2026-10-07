@@ -24,7 +24,7 @@ let private formKey plugin id =
     FormKey.create (PluginName.create 255 plugin |> ok) (LocalFormId.create id |> ok)
 
 let private location key name position =
-    PlayerLocation.create (Location.create key (LocationName.create 128 name |> ok)) position Rotation.zero
+    PlayerLocation.create (Location.create key (LocationName.create 128 name |> ok)) position CameraDirection.zero
 
 let private label value = ActorValueName.create 64 value |> ok
 let private reading name amount = ActorValueInfo.create (label name) (ActorValueState.resource amount 100)
@@ -182,18 +182,18 @@ let private textTests =
 
 let private spatialTests =
     testList "native coordinates" [
-        testCase "coordinates and unwrapped radians preserve finite native values" <| fun _ ->
+        testCase "coordinates and camera directions preserve finite native values" <| fun _ ->
             let position = Position.create -123.5f 0.0f 42.25f |> ok
-            let rotation = Rotation.create -12.0f 40.0f 0.5f |> ok
+            let cameraDirection = CameraDirection.create -12.0f 40.0f 0.5f |> ok
             WorldUnit.value position.X |> fun value -> value.Should().Be(-123.5f) |> ignore
-            Radian.value rotation.X |> fun value -> value.Should().Be(-12.0f) |> ignore
-            Radian.value rotation.Y |> fun value -> value.Should().Be(40.0f) |> ignore
+            cameraDirection.X |> fun value -> value.Should().Be(-12.0f) |> ignore
+            cameraDirection.Y |> fun value -> value.Should().Be(40.0f) |> ignore
 
-        testCase "positions and rotations reject every non-finite component" <| fun _ ->
+        testCase "positions and camera directions reject every non-finite component" <| fun _ ->
             for bad in [ Single.NaN; Single.PositiveInfinity; Single.NegativeInfinity ] do
                 for x, y, z in [ bad, 0.0f, 0.0f; 0.0f, bad, 0.0f; 0.0f, 0.0f, bad ] do
                     Expect.isError (Position.create x y z) "Reject invalid position"
-                    Expect.isError (Rotation.create x y z) "Reject invalid rotation"
+                    Expect.isError (CameraDirection.create x y z) "Reject invalid cameraDirection"
 
         testCase "distance promotes coordinates before subtraction and squaring" <| fun _ ->
             let left = Position.create Single.MaxValue 0.0f 0.0f |> ok

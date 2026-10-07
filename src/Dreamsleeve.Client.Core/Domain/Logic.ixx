@@ -75,7 +75,7 @@ export namespace Domain::Checks
     return Finite(value.X, value.Y, value.Z);
   }
 
-  bool Finite(const Rotation& value)
+  bool Finite(const CameraDirection& value)
   {
     return Finite(value.X, value.Y, value.Z);
   }
@@ -173,14 +173,6 @@ export namespace Domain::Spatial
 export namespace Domain::Motion
 {
 
-  // The shorter way round from one angle to another, at alpha (0..1) of the turn.
-  float BlendAngle(float from, float to, double alpha)
-  {
-    constexpr auto Turn       = 2.0 * std::numbers::pi;
-    const auto     difference = std::remainder(static_cast<double>(to) - from, Turn);
-    return static_cast<float>(std::remainder(from + difference * alpha, Turn));
-  }
-
   // Adjacent movement samples of one context replace each other: both absent,
   // or both in one space.
   bool SameContext(const std::optional<PlayerLocation>& previous, const std::optional<PlayerLocation>& next)
@@ -191,9 +183,9 @@ export namespace Domain::Motion
   // A sample moves a placed player within its space and view.
   void Apply(PlayerLocation& location, const MovementPose& pose)
   {
-    location.position    = pose.position;
-    location.rotation    = pose.rotation;
-    location.sampledAtUs = pose.sampledAtUs;
+    location.position        = pose.position;
+    location.cameraDirection = pose.cameraDirection;
+    location.sampledAtUs     = pose.sampledAtUs;
   }
 
   // When a sample happened on this receiver's clock: the previous sample's
@@ -233,13 +225,8 @@ export namespace Domain::Motion
     const auto lerp = [alpha](float a, float b) {
       return static_cast<float>(std::lerp(static_cast<double>(a), static_cast<double>(b), alpha));
     };
-    auto result     = to;
-    result.position = {lerp(from.position.X, to.position.X), lerp(from.position.Y, to.position.Y), lerp(from.position.Z, to.position.Z)};
-    result.rotation = {
-        BlendAngle(from.rotation.X, to.rotation.X, alpha),
-        BlendAngle(from.rotation.Y, to.rotation.Y, alpha),
-        BlendAngle(from.rotation.Z, to.rotation.Z, alpha)
-    };
+    auto result        = to;
+    result.position    = {lerp(from.position.X, to.position.X), lerp(from.position.Y, to.position.Y), lerp(from.position.Z, to.position.Z)};
     result.sampledAtUs = 0;
     return result;
   }

@@ -126,3 +126,12 @@ marker при переполнении unreliable sequence потребляет�
 геометрию сервер не распаковывает. Настройки/лимиты: [PhantomsRu](PhantomsRu.md).
 Capacity по сессиям не равна capacity одновременной холодной загрузки моделей;
 сравнения нужно читать с achieved Hz и плотностью AOI.
+
+## Phantom camera interest (protocol24)
+
+PlayerLocation/MovementPose передают CameraDirection вместо rotation актёра.
+Presence замечает поворот камеры даже без перемещения и обновляет View observation.
+PhantomPolicy использует широкий сектор с ближней зоной и гистерезисом; остальная
+видимость movement, имён и светлячков по-прежнему определяется Presence/AOI.
+Серверная настройка Phantoms.CameraCulling=true. Источник получает reliable
+PoseDemand по наличию выбранных зрителей, без отдельного actor или индекса.

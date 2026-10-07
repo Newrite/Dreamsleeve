@@ -1107,7 +1107,7 @@ private:
         Wire::MovementSample{
             contextRevision,
             ++movementSequence,
-            {latestMovement->position, latestMovement->rotation, latestMovement->sampledAtUs}
+            {latestMovement->position, latestMovement->cameraDirection, latestMovement->sampledAtUs}
       },
         transport->MaxUnfragmentedPayloadBytes());
       if (!packet) return Fail(packet.error());
@@ -1120,7 +1120,7 @@ private:
       if (!sent) return Fail(sent.error());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       const auto& p = latestMovement->position;
-      const auto& r = latestMovement->rotation;
+      const auto& r = latestMovement->cameraDirection;
       Diagnostics::Phantoms().MovementSent(
         {
             contextRevision,

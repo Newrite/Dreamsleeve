@@ -422,7 +422,7 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   const auto& movement = packet.update_player().set_location();
   CHECK(movement.location().sampled_at_us() == 123456789);
   CHECK(movement.location().position().x() == 1);
-  CHECK(movement.location().rotation().z() == doctest::Approx(3.14));
+  CHECK(movement.location().camera_direction().z() == doctest::Approx(3.14));
   encoded = codec.Encode(W::UpdatePlayer{52, values});
   REQUIRE(encoded);
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
@@ -896,7 +896,9 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
   P::ClientPacket opening;
   REQUIRE(opening.ParseFromArray(hidden->DataBytesView().data(), static_cast<int>(hidden->Size())));
   CHECK(opening.open_session().hidden_identity() == P::HIDDEN_IDENTITY_EVERYWHERE);
-  const auto request = W::ClientRequest{SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}};
+  const auto request = W::ClientRequest{
+      SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}
+  };
   const auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket sent;
@@ -942,8 +944,9 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
 TEST_CASE("A name color travels in SetNameColor, its answer and profiles, never with a pseudonym")
 {
   const auto codec   = MakeCodec();
-  const auto encoded = codec.Encode(W::ClientRequest{
-      SetNameColor{8, 0xE57373}
+  const auto encoded = codec.Encode(
+    W::ClientRequest{
+        SetNameColor{8, 0xE57373}
   });
   REQUIRE(encoded);
   P::ClientPacket sent;

@@ -505,6 +505,8 @@ Trusted = []
 # At ENet sequence FFFF, only an empty reliable epoch marker precedes the pose.
 # The transport swallows that marker; a pose payload is always unreliable.
 [Phantoms]
+# Broad horizontal camera sector; near players and unavailable camera remain visible.
+CameraCulling = true
 Enabled = true
 StoragePath = "phantoms"
 DiskBytes = 4294967296

@@ -21,7 +21,7 @@ let private player number context =
     let profile = PlayerData.create (PlayerId.create number |> ok) (Username.create 32 $"p{number}" |> ok)
                       (DisplayName.create 64 $"P{number}" |> ok) NameColor.unknown
     let form = FormKey.create (PluginName.create 260 "Skyrim.esm" |> ok) (LocalFormId.create 1u |> ok)
-    let location = PlayerLocation.create (Location.create form (LocationName.create 256 "Test" |> ok)) Position.zero Rotation.zero
+    let location = PlayerLocation.create (Location.create form (LocationName.create 256 "Test" |> ok)) Position.zero CameraDirection.zero
     Player.create profile
     |> Player.applyUpdate (PlayerUpdate.BeginCharacter(CharacterName.create 128 "Test" |> ok))
     |> Player.applyUpdate (PlayerUpdate.SetLocation(context, ValueSome location))
@@ -53,7 +53,7 @@ let private ready state (id, value: PlayerSnapshot) manifest =
     PhantomAgent.handle state 2L id (PhantomRequest.Publish(manifest, value.MovementContext, requestId()))
     PhantomAgent.tick state 3L
 let private view state (observer, _: PlayerSnapshot) (source, value: PlayerSnapshot) revision distance =
-    PhantomAgent.observe state (PhantomObservation.View(observer, source, value.Identity.PlayerId, revision, distance))
+    PhantomAgent.observe state (PhantomObservation.View(observer, source, value.Identity.PlayerId, revision, distance, None))
 let private pose gen sequence context =
     Dreamsleeve.Protocol.Phantom.ClientPosePacket(ProtocolVersion = ProtocolCodec.Version,
         Sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = gen, ContextRevision = context, Sequence = sequence,
@@ -74,6 +74,50 @@ let private storageCase name run = case name (fun () -> task {
 })
 
 let tests = testList "Phantoms" [
+    testCase "camera sector has near protection hysteresis and unknown fallback" <| fun _ ->
+        Expect.isTrue (PhantomPolicy.inView false 100.0 (Some -1.0)) "Near player remains visible."
+        Expect.isTrue (PhantomPolicy.inView false 1000000.0 None) "Unknown camera fails open."
+        Expect.isFalse (PhantomPolicy.inView false 1000000.0 (Some -1.0)) "Behind camera is culled."
+        Expect.isFalse (PhantomPolicy.inView false 1000000.0 (Some -0.4)) "Does not enter beyond 105 degrees."
+        Expect.isTrue (PhantomPolicy.inView true 1000000.0 (Some -0.4)) "Retained until 120 degrees."
+        let origin = (player 1UL 10UL).Location.Value
+        let camera = CameraDirection.create 0.0f 1.0f 0.0f |> ok
+        let origin = PlayerLocation.create origin.Location Position.zero camera
+        let target y = PlayerLocation.create origin.Location (Position.create 0.0f y 0.0f |> ok) CameraDirection.zero
+        Expect.equal (PhantomPolicy.facing origin (target 1000.0f)) (Some 1.0) "Forward."
+        Expect.equal (PhantomPolicy.facing origin (target -1000.0f)) (Some -1.0) "Backward."
+
+    testCase "camera turn changes subscriptions and resumes demand without republishing model" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        let sourceId, sourcePlayer = members[0]
+        let observerId, _ = members[1]
+        ready state members[0] (asset 1UL [|1uy|])
+        output.Clear()
+        let look cosine =
+            PhantomAgent.observe state (PhantomObservation.View(observerId, sourceId, sourcePlayer.Identity.PlayerId, 1UL, 1000000.0, Some cosine))
+        look -1.0
+        PhantomAgent.tick state 4L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Behind camera."
+        look 1.0
+        PhantomAgent.tick state 5L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Same AOI authority, changed camera."
+        let demand required = models output |> Array.exists (fun p -> not (isNull p.PoseDemand) && p.PoseDemand.Required = required && p.PoseDemand.ContextRevision = 10UL)
+        Expect.isTrue (demand true) "Source resumes."
+        output.Clear()
+        look -0.4
+        PhantomAgent.tick state 6L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Hysteresis retains view."
+        look -1.0
+        PhantomAgent.tick state 7L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Last viewer gone."
+        Expect.isTrue (demand false) "Source pauses."
+        Expect.equal (PhantomAgent.snapshot state).Sources 1 "Asset retained."
+        output.Clear()
+        look 1.0
+        PhantomAgent.tick state 8L
+        Expect.isTrue (demand true) "Source resumes from retained asset."
+        PhantomAgent.stop state
+
     testCase "native asset policy bounds bytes and pose channels without geometry schema" <| fun _ ->
         let defaults = PhantomOptions.defaults
         Expect.isEmpty (PhantomOptions.validate defaults) "Default is within format bounds."
@@ -173,7 +217,7 @@ let tests = testList "Phantoms" [
 
     testCase "repeated unchanged authority views do not allocate replacements" <| fun _ ->
         let state, members, _ = setup options memoryStorage 2
-        let observation = PhantomObservation.View(fst members[1], fst members[0], (snd members[0]).Identity.PlayerId, 1UL, 100.0)
+        let observation = PhantomObservation.View(fst members[1], fst members[0], (snd members[0]).Identity.PlayerId, 1UL, 100.0, None)
         PhantomAgent.observe state observation
         let before = GC.GetAllocatedBytesForCurrentThread()
         for _ in 1 .. 16384 do PhantomAgent.observe state observation
@@ -286,7 +330,7 @@ let tests = testList "Phantoms" [
         view state members[1] members[0] 2UL 1.0
         PhantomAgent.observe state (PhantomObservation.Departed oldId)
         let previous = oldSource.Location.Value
-        let far = PlayerLocation.create previous.Location (Position.create 20000.0f 0.0f 0.0f |> ok) previous.Rotation
+        let far = PlayerLocation.create previous.Location (Position.create 20000.0f 0.0f 0.0f |> ok) previous.CameraDirection
         let newId = Guid.NewGuid()
         let newSource = { oldSource with Location = ValueSome far }
         PhantomAgent.observe state (PhantomObservation.Member(newId, newSource))

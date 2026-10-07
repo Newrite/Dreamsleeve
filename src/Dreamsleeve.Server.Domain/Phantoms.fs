@@ -136,6 +136,7 @@ type PhantomResponse =
     | Progress of PhantomTransferId * nextOffset: int
     | Policy of PhantomServerPolicy
     | Settled of AppearanceGeneration * context: uint64
+    | PoseDemand of context: uint64 * required: bool
 
 /// Membership remains enabled for authenticated policy bootstrap when replication
 /// is disabled; only Full projects Presence-authorized views and distances.
@@ -148,13 +149,32 @@ type PhantomObservationMode =
 [<RequireQualifiedAccess>]
 type PhantomObservation =
     | Member of Guid * PlayerSnapshot
-    | View of observer: Guid * sourceConnection: Guid * source: PlayerId * revision: uint64 * distanceSquared: double
+    | View of observer: Guid * sourceConnection: Guid * source: PlayerId * revision: uint64 * distanceSquared: double * facing: double option
     | Hidden of observer: Guid * source: PlayerId * revision: uint64
     | Departed of Guid
     | Batch of PhantomObservation array
 
 [<RequireQualifiedAccess>]
 module PhantomPolicy =
+    /// Horizontal sector around the observer. Unknown/vertical camera fails open.
+    let facing (origin: PlayerLocation) (target: PlayerLocation) =
+        let direction = origin.CameraDirection
+        let x, y = double direction.X, double direction.Y
+        let dx = double target.Position.X - double origin.Position.X
+        let dy = double target.Position.Y - double origin.Position.Y
+        let magnitude = sqrt (x*x + y*y)
+        let distance = sqrt (dx*dx + dy*dy)
+        if magnitude < 0.1 || distance < 1.0 then None
+        else Some ((x*dx + y*dy) / (magnitude * distance))
+
+    /// A 210-degree entry sector, 240-degree retained sector and 512-unit near zone
+    /// accommodate third-person camera offset and prevent boundary chatter.
+    let inView retained distance facing =
+        distance <= 512.0 * 512.0
+        || match facing with
+           | None -> true
+           | Some cosine -> cosine >= (if retained then -0.5 else -0.2588190451)
+
     let effective maximum distance (preferences: PhantomPreferences) =
         { preferences with Maximum = min maximum preferences.Maximum; Distance = min distance preferences.Distance }
 

@@ -133,7 +133,7 @@ TEST_CASE("Phantom upload retries correlated admission and sends poses only afte
   Policy(stream);
   const auto initial = Models(stream.Poll());
   REQUIRE(std::ranges::any_of(initial, [](const auto& p) { return p.has_publish(); }));
-  exchange.Encoded(exchange.Epoch(), Pose(*model));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
   REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
     auto* c = p.mutable_complete();
     c->set_request_id(1);
@@ -173,7 +173,7 @@ TEST_CASE("Phantom upload retries correlated admission and sends poses only afte
   const auto ready = stream.Poll();
   CHECK(std::ranges::any_of(ready, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
   stream.Context(2, false);
-  exchange.Encoded(exchange.Epoch(), Pose(*model));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
   const auto stopped = stream.Poll();
   CHECK(std::ranges::none_of(stopped, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
   CHECK(std::ranges::any_of(Models(stopped), [](const auto& p) { return p.has_withdraw(); }));
@@ -704,7 +704,7 @@ TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a la
   auto packet       = Pose(*model);
   packet.previous   = std::make_shared<const P::Wire::Pose>(packet);
   packet.generation = {2};
-  exchange.Encoded(exchange.Epoch(), std::move(packet));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, std::move(packet));
   const auto at       = Clock::now() + std::chrono::seconds(1);
   const auto fallback = stream.Poll(at);
   const auto sent     = std::ranges::find_if(fallback, [](const auto& p) { return p.lane == P::Wire::PosesLane; });
@@ -717,7 +717,7 @@ TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a la
   fresh.sequence   = {2};
   fresh.previous   = std::make_shared<const P::Wire::Pose>(fresh);
   fresh.generation = {2};
-  exchange.Encoded(exchange.Epoch(), std::move(fresh));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, std::move(fresh));
   for (int ms : {10, 20})
     CHECK(
       std::ranges::none_of(stream.Poll(at + std::chrono::milliseconds(ms)), [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
@@ -798,8 +798,59 @@ TEST_CASE("Preparation rollback resumes the committed model without republishing
   exchange.PreparationFailed(work.epoch, work.localRevision, "prepare failed");
   work = exchange.TakeWork();
   exchange.Prepared(work.epoch, work.localRevision, {{1}, model});
-  exchange.Encoded(exchange.Epoch(), Pose(*model));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
   const auto resumed = stream.Poll(Clock::now() + std::chrono::seconds(1));
   CHECK(std::ranges::none_of(Models(resumed), [](const auto& p) { return p.has_publish() || p.has_withdraw(); }));
   CHECK(std::ranges::any_of(resumed, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
+}
+
+TEST_CASE("Phantom audience pause keeps publication and rejects stale encoded work after resume")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  exchange.Context(1, true);
+  REQUIRE(exchange.Submit(P::Generation{1}, model->asset));
+  auto work = exchange.TakeWork();
+  exchange.PoseDemand({1, false});
+  CHECK_FALSE(exchange.PosesRequired());
+  exchange.Prepared(work.epoch, work.localRevision, {P::Generation{1}, model});
+  REQUIRE(exchange.TakeOutput().publication);
+  exchange.PoseDemand({0, true});
+  CHECK_FALSE(exchange.PosesRequired());
+  exchange.PoseDemand({1, true});
+  CHECK(exchange.PosesRequired());
+  exchange.Encoded(work.epoch, work.poseRevision, Pose(*model));
+  CHECK_FALSE(exchange.TakeOutput().pose);
+  auto fresh = exchange.TakeWork();
+  exchange.Encoded(fresh.epoch, fresh.poseRevision, Pose(*model));
+  CHECK(exchange.TakeOutput().pose.has_value());
+  exchange.PoseDemand({1, false});
+  exchange.Context(2, true);
+  exchange.PoseDemand({1, false});
+  CHECK(exchange.PosesRequired());
+}
+
+TEST_CASE("Phantom demand survives control and model lane reordering during bootstrap")
+{
+  P::Exchange  exchange;
+  P::Streaming stream(exchange, {});
+  stream.Context(1, false);
+  REQUIRE(stream.ReceiveAsset(Server([](auto& packet) {
+    auto* demand = packet.mutable_pose_demand();
+    demand->set_context_revision(1);
+    demand->set_required(false);
+  })));
+  Policy(stream);
+  CHECK_FALSE(exchange.PosesRequired());
+  REQUIRE(stream.ReceiveAsset(Server([](auto& packet) {
+    auto* demand = packet.mutable_pose_demand();
+    demand->set_context_revision(2);
+    demand->set_required(false);
+  })));
+  stream.Context(2, true);
+  CHECK_FALSE(exchange.PosesRequired());
+  exchange.PoseDemand({1, true});
+  CHECK_FALSE(exchange.PosesRequired());
+  exchange.PoseDemand({2, true});
+  CHECK(exchange.PosesRequired());
 }

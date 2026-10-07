@@ -88,28 +88,28 @@ export namespace Domain
     bool operator==(const Position&) const = default;
   };
 
-  struct Rotation
+  struct CameraDirection
   {
-    Radian X{};
-    Radian Y{};
-    Radian Z{};
+    float X{};
+    float Y{};
+    float Z{};
 
-    bool operator==(const Rotation&) const = default;
+    bool operator==(const CameraDirection&) const = default;
   };
 
   struct MovementPose
   {
-    Position      position{};
-    Rotation      rotation{};
-    std::uint64_t sampledAtUs{};
+    Position        position{};
+    CameraDirection cameraDirection{};
+    std::uint64_t   sampledAtUs{};
   };
 
   struct PlayerLocation
   {
-    Location      location{};
-    Position      position{};
-    Rotation      rotation{};
-    std::uint64_t sampledAtUs{};  // Sender monotonic clock, not UTC.
+    Location        location{};
+    Position        position{};
+    CameraDirection cameraDirection{};
+    std::uint64_t   sampledAtUs{};  // Sender monotonic clock, not UTC.
 
     bool operator==(const PlayerLocation&) const = default;
   };
@@ -363,7 +363,7 @@ export namespace Domain
   {
     std::uint32_t maxGuildsPerPlayer{};  // Own guilds included.
     std::uint32_t maxMembers{};
-    std::uint32_t nameMinLength{};  // Unicode scalar values.
+    std::uint32_t nameMinLength{};       // Unicode scalar values.
     std::uint32_t nameMaxLength{};
 
     bool operator==(const GuildLimits&) const = default;

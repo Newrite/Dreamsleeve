@@ -1,3 +1,6 @@
+Текущий protocol24: [камера, аудитория и проверки](benchmarks/phantom-camera-audience-2026-10-07.md).
+Старые результаты ниже относятся к своим версиям; asset2 / pose3 сохранены.
+
 Исправления по двухклиентской игре07.10.2026 и новые проверки:
 [phantom-two-player-2026-10-07.md](benchmarks/phantom-two-player-2026-10-07.md).
 Протокол23 / asset2 / pose3 не менялись.

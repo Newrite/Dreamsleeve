@@ -91,15 +91,37 @@ export namespace World
     };
   }
 
-  // The player's location in a space, turned as the character is.
+  Domain::CameraDirection CameraDirection()
+  {
+    const auto* camera = RE::PlayerCamera::GetSingleton();
+    if (!camera || !camera->cameraRoot) return {};
+    std::array<RE::NiAVObject*, 32> pending{};
+    std::size_t                     count = 1, visited = 0;
+    pending[0] = camera->cameraRoot.get();
+    while (count && visited++ < pending.size())
+    {
+      auto* object = pending[--count];
+      if (auto* native = netimmerse_cast<RE::NiCamera*>(object))
+      {
+        const auto&             r = native->world.rotate;
+        Domain::CameraDirection direction{r.entry[0][0], r.entry[1][0], r.entry[2][0]};
+        return Domain::Checks::Finite(direction) ? direction : Domain::CameraDirection{};
+      }
+      if (auto* node = object->AsNode())
+        for (auto& child : node->GetChildren())
+          if (child && count < pending.size()) pending[count++] = child.get();
+    }
+    return {};
+  }
+
+  // Actor position and actual rendered camera direction, including third person.
   Domain::PlayerLocation ReadLocation(RE::PlayerCharacter* player, const Space& space)
   {
     Domain::PlayerLocation location;
-    location.location   = {KeyOf(space.form), space.name};
-    const auto position = player->GetPosition();
-    const auto angle    = player->GetAngle();
-    location.position   = {position.x, position.y, position.z};
-    location.rotation   = {angle.x, angle.y, angle.z};
+    location.location        = {KeyOf(space.form), space.name};
+    const auto position      = player->GetPosition();
+    location.position        = {position.x, position.y, position.z};
+    location.cameraDirection = CameraDirection();
     return location;
   }
 

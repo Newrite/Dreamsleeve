@@ -93,7 +93,7 @@ let private beginCharacter requestId name =
 
 let private playerLocation x =
     PlayerLocation(Location = Location(LocationId = FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u), LocationName = "Whiterun"),
-                   Position = Position(X = x, Y = 2.0f, Z = 3.0f), Rotation = Rotation())
+                   Position = Position(X = x, Y = 2.0f, Z = 3.0f), CameraDirection = CameraDirection())
 
 let private telemetry requestId x =
     packet requestId (fun packet ->
@@ -345,6 +345,7 @@ let tests = testList "ServerRuntime" [
                 elif id = alice && not (isNull packet.Settled) then
                     equal 1UL packet.Settled.Generation
                     settled <- true
+                elif not (isNull packet.PoseDemand) then equal 10UL packet.PoseDemand.ContextRevision
                 else failwith "Unexpected phantom transition response."
             check removed "Receive off removes the subscription and releases the publisher's display barrier."
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected alice)
@@ -540,7 +541,7 @@ let tests = testList "ServerRuntime" [
             let point = Dreamsleeve.Server.Domain.Position.create 2.f 0.f 0.f |> ok
             let change: Dreamsleeve.Server.Domain.MovementChange = {
                 PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
-                Pose = { Position = point; Rotation = Dreamsleeve.Server.Domain.Rotation.zero; SampledAtUs = 1UL }
+                Pose = { Position = point; CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 1UL }
             }
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved [|change|])))
             let! target, value = receive fixture.Movement
@@ -800,7 +801,7 @@ let tests = testList "ServerRuntime" [
             let change: Dreamsleeve.Server.Domain.MovementChange = {
                 PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
                 Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
-                         Rotation = Dreamsleeve.Server.Domain.Rotation.zero; SampledAtUs = 0UL }
+                         CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 0UL }
             }
             fixture.SendFailures[DeliveryLane.Realtime] <- "Outgoing budget full"
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|])))
@@ -825,7 +826,7 @@ let tests = testList "ServerRuntime" [
             let! _ = nextWhere fixture (fun id p -> id = alice && p.HasRequestId && p.RequestId = 3UL)
             let sample = ClientMovementPacket(ProtocolVersion = ProtocolCodec.Version,
                 Sample = MovementSample(ContextRevision = 3UL, Sequence = 1UL,
-                    Pose = MovementPose(Position = Position(X = 20.f, Y = 2.f, Z = 3.f), Rotation = Rotation(), SampledAtUs = 123UL)))
+                    Pose = MovementPose(Position = Position(X = 20.f, Y = 2.f, Z = 3.f), CameraDirection = CameraDirection(), SampledAtUs = 123UL)))
             fixture.Input.Enqueue(ServerTransportEvent.Received(alice, DeliveryLane.Realtime, sample.ToByteArray()))
             let observed = System.Collections.Generic.HashSet<Guid>()
             while observed.Count < 2 do

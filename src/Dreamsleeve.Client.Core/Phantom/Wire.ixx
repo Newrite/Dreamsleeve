@@ -116,13 +116,19 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     float         distance{};
   };
 
+  struct PoseDemand
+  {
+    std::uint64_t context{};
+    bool          required{};
+  };
+
   struct Settled
   {
     Generation    generation;
     std::uint64_t context{};
   };
 
-  using Response = std::variant<Offer, Transfer, Chunk, Complete, Remove, Progress, Policy, Settled>;
+  using Response = std::variant<Offer, Transfer, Chunk, Complete, Remove, Progress, Policy, Settled, PoseDemand>;
 
   struct Pose
   {

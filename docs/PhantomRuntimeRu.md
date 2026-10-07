@@ -526,3 +526,24 @@ SRV diffuse. Периодический deep audit распределён по �
 по identity перед сравнением pixels. Это убирает повторные GPU alpha reads
 и полный hash общих масок на каждом audit. In-place alpha updates с прежним
 SRV не отслеживаются автоматически и требуют explicit invalidation.
+
+## Чтение направления камеры, protocol24 (2026-10-07)
+
+Game/World читает NiCamera.world.rotate через CommonLib, первый столбец — forward.
+Поиск ограничен 32 объектами под PlayerCamera.cameraRoot, только на игровом потоке;
+указатели за кадр не сохраняются, новые engine calls/hooks/allocators не добавлены.
+Ось сверена с NiCamera WindowPointToRay и helper построения луча,
+включая movss/addss в машинных инструкциях всех трёх образов:
+
+| Runtime | Address Library ID / RVA | Основание |
+|---|---|---|
+| SE 1.5.97 | 69263 / C65760; helper C65860 | нулевые проекционные слагаемые оставляют world[0][0], [1][0], [2][0] |
+| AE 1.6.1170 | 70630 / D2B650 | та же формула встроена в функцию |
+| VR 1.4.15 | 69263 / CAB2C0 (CommonLib CSV); helper CAB3B0 | луч читает +7C/+88/+94; disasm подтверждает float32 поля |
+
+Imagebase 140000000, IDB/input сверены через server_health. В SE таблице ID→RVA,
+в AE ID→VA, VR CSV ID→RVA. +7C — общий NiAVObject.world в установленной CommonLib;
+численные offsets используются только как доказательство, не в Game-коде.
+Чтение поля не вызывает WindowPointToRay и не зависит от её ABI. Ни один адрес
+новой операцией не релокируется. Это статическая проверка направления; реальный
+VR head tracking, свободное третье лицо и моды камеры требуют игрового теста.

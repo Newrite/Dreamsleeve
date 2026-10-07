@@ -5,22 +5,38 @@ import Dreamsleeve.Client.Model;
 
 namespace
 {
+
   using namespace Domain;
   using namespace Dreamsleeve::Client;
 
   Player ChangeTestPlayer(PlayerId id = 7)
   {
     Player player;
-    player.data = PlayerData{id, "player", "Display"};
+    player.data          = PlayerData{id, "player", "Display"};
     player.characterName = "Dragonborn";
-    player.location = PlayerLocation{Location{FormKey{"skyrim.esm", 0x3c}, "Tamriel"}, Position{1, 2, 3}, Rotation{}};
-    player.actorValues.emplace("skyrim:health", ActorValueInfo{"Health", ResourceActorValue{90, 100}});
+    player.location      = PlayerLocation{
+        Location{FormKey{"skyrim.esm", 0x3c}, "Tamriel"},
+        Position{1, 2, 3},
+        CameraDirection{}
+    };
+    player.actorValues.emplace(
+      "skyrim:health",
+      ActorValueInfo{
+          "Health",
+          ResourceActorValue{90, 100}
+    });
     return player;
   }
 
   ChatMessage ChangeTestMessage(ChatMessageId id = 1)
   {
-    return ChatMessage{id, 1, PlayerData{7, "player", "Display"}, "Hello", MessageTime{}};
+    return ChatMessage{
+        id,
+        1,
+        PlayerData{7, "player", "Display"},
+        "Hello",
+        MessageTime{}
+    };
   }
 
   void CheckSinglePlayerChange(const ChangeBatch& changes, PlayerId id)
@@ -33,6 +49,7 @@ namespace
     CHECK(changes.players.front() == id);
     CHECK(changes.chats.empty());
   }
+
 }
 
 TEST_SUITE_BEGIN("Client.Changes");
@@ -45,13 +62,13 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
   changes.chats.reserve(32);
   changes.resetChats.reserve(16);
   const auto playerCapacity = changes.players.capacity();
-  const auto chatCapacity = changes.chats.capacity();
-  const auto resetCapacity = changes.resetChats.capacity();
-  changes.generation = 4;
-  changes.revision = 9;
-  changes.requiresSnapshot = true;
+  const auto chatCapacity   = changes.chats.capacity();
+  const auto resetCapacity  = changes.resetChats.capacity();
+  changes.generation        = 4;
+  changes.revision          = 9;
+  changes.requiresSnapshot  = true;
   changes.selfPlayerChanged = true;
-  changes.playersReplaced = true;
+  changes.playersReplaced   = true;
   changes.players.push_back(7);
   changes.chats.push_back(1);
   changes.resetChats.push_back(1);
@@ -76,7 +93,7 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
 TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.RegisterChannel(1, 20));
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   REQUIRE(model.SetSelfPlayer(generation, 7));
@@ -95,7 +112,7 @@ TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
   CHECK_FALSE(changes.playersReplaced);
   REQUIRE(changes.players.size() == 1);
   CHECK(changes.players.front() == 7);
-  REQUIRE(changes.chats.size() == 1); // channel registration metadata
+  REQUIRE(changes.chats.size() == 1);  // channel registration metadata
   CHECK(changes.chats.front() == 1);
   REQUIRE(changes.chatContent.size() == 1);
   REQUIRE(std::holds_alternative<ChatMessagesAdded>(changes.chatContent.front()));
@@ -129,14 +146,14 @@ TEST_CASE("ClientModel coalesces changes and exposes detached targeted queries")
 TEST_CASE("ClientModel records every supported player mutation")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   ChangeBatch changes;
   model.TakeChanges(changes);
 
   SUBCASE("complete player replacement")
   {
-    auto player = ChangeTestPlayer();
+    auto player             = ChangeTestPlayer();
     player.data.displayName = "Replacement";
     REQUIRE(model.Apply(generation, PlayerUpserted{std::move(player)}));
   }
@@ -185,7 +202,7 @@ TEST_CASE("ClientModel reports a channel registration and content, not a duplica
 TEST_CASE("ClientModel rejected updates preserve earlier pending changes")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.RegisterChannel(1, 20));
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   REQUIRE(model.Apply(generation, ChatMessagesReceived{1, {ChangeTestMessage()}}));
@@ -198,10 +215,14 @@ TEST_CASE("ClientModel rejected updates preserve earlier pending changes")
 
   CHECK_FALSE(model.Apply(generation + 1, PlayerUpserted{ChangeTestPlayer(8)}));
   CHECK_FALSE(model.Apply(generation, PlayerLocationUpdated{99, std::nullopt}));
-  CHECK_FALSE(model.Apply(generation, OnlinePlayersReplaced{{ChangeTestPlayer(8), ChangeTestPlayer(8)}}));
+  CHECK_FALSE(model.Apply(
+    generation,
+    OnlinePlayersReplaced{
+        {ChangeTestPlayer(8), ChangeTestPlayer(8)}
+  }));
   CHECK_FALSE(model.RegisterChannel(1, 20));
   CHECK_FALSE(model.RegisterChannel(2, 0));
-  auto conflict = ChangeTestMessage();
+  auto conflict        = ChangeTestMessage();
   conflict.messageText = "Conflict";
   CHECK_FALSE(model.Apply(generation, ChatMessagesReceived{1, {conflict}}));
 
@@ -219,7 +240,7 @@ TEST_CASE("ClientModel rejected updates preserve earlier pending changes")
 TEST_CASE("ClientModel full player replacement absorbs individual invalidations")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer(7)}));
   REQUIRE(model.Apply(generation, OnlinePlayersReplaced{{ChangeTestPlayer(2)}}));
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer(3)}));
@@ -245,7 +266,7 @@ TEST_CASE("ClientModel full player replacement absorbs individual invalidations"
 TEST_CASE("ClientModel session resets replace pending invalidations")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.RegisterChannel(1, 20));
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer()}));
   REQUIRE(model.SetSelfPlayer(generation, 7));
@@ -277,9 +298,14 @@ TEST_CASE("ClientModel emits ordered chat deltas instead of invalidating full ch
   ClientModel model;
   ChangeBatch changes;
   REQUIRE(model.RegisterChannel(1, 2));
-  model.TakeChanges(changes); // discard registration metadata
+  model.TakeChanges(changes);  // discard registration metadata
 
-  REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {ChangeTestMessage(1), ChangeTestMessage(2)}}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    ChatMessagesReceived{
+        1,
+        {ChangeTestMessage(1), ChangeTestMessage(2)}
+  }));
   model.TakeChanges(changes);
   CHECK(changes.chats.empty());
   REQUIRE(changes.chatContent.size() == 1);
@@ -311,7 +337,7 @@ TEST_CASE("ClientModel emits ordered chat deltas instead of invalidating full ch
 TEST_CASE("ClientModel.TakeChanges replaces the output and recycles its capacities")
 {
   ClientModel model;
-  const auto generation = model.Generation();
+  const auto  generation = model.Generation();
   REQUIRE(model.Apply(generation, PlayerUpserted{ChangeTestPlayer(7)}));
   REQUIRE(model.RegisterChannel(1, 20));
 
@@ -319,14 +345,14 @@ TEST_CASE("ClientModel.TakeChanges replaces the output and recycles its capaciti
   output.players.reserve(64);
   output.chats.reserve(32);
   auto* const reusablePlayers = output.players.data();
-  auto* const reusableChats = output.chats.data();
+  auto* const reusableChats   = output.chats.data();
   output.players.push_back(999);
   output.chats.push_back(999);
-  output.generation = 999;
-  output.revision = 999;
-  output.requiresSnapshot = true;
+  output.generation        = 999;
+  output.revision          = 999;
+  output.requiresSnapshot  = true;
   output.selfPlayerChanged = true;
-  output.playersReplaced = true;
+  output.playersReplaced   = true;
 
   model.TakeChanges(output);
   CHECK(output.generation == generation);
@@ -354,8 +380,8 @@ TEST_CASE("ClientModel.TakeChanges replaces the output and recycles its capaciti
 TEST_CASE("Metadata replacement preserves movement and publishes the changed player")
 {
   ClientModel model;
-  const auto generation = model.Generation();
-  const auto original = ChangeTestPlayer();
+  const auto  generation = model.Generation();
+  const auto  original   = ChangeTestPlayer();
   REQUIRE(model.Apply(generation, PlayerUpserted{original}));
   ChangeBatch changes;
   model.TakeChanges(changes);

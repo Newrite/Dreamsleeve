@@ -89,12 +89,13 @@ private:
     PublicationPhase                                     phase{PublicationPhase::Preparing};
     mutable std::mutex                                   mutex;
     ViewSettings                                         settings;
-    std::uint64_t                                        epoch{1}, context{}, localRevision{1};
+    std::uint64_t                                        epoch{1}, context{}, localRevision{1}, poseRevision{1};
     std::optional<Generation>                            localGeneration, previousGeneration;
     std::uint64_t                                        previousReservation{};
     std::shared_ptr<const Snapshot>                      previousSnapshot;
     std::vector<Wire::Displayed>                         displayed;
     bool                                                 available{}, changed{true};
+    std::optional<Wire::PoseDemand>                      poseDemand;
     std::uint32_t                                        serverSampleRate{50};
     std::optional<std::pair<Generation, ValidatedAsset>> capture;
     std::shared_ptr<const Snapshot>                      snapshot;
@@ -103,6 +104,11 @@ private:
     std::unordered_map<std::uint64_t, Remote>            remotes;
     Metrics                                              metrics;
     std::uint64_t                                        localReservation{};
+
+    bool DemandAllowsPoses() const
+    {
+      return !poseDemand || poseDemand->context != context || poseDemand->required;
+    }
 
     void ClearPublication()
     {
@@ -154,7 +160,7 @@ public:
 
     struct Work
     {
-      std::uint64_t                                        epoch{}, context{}, localRevision{};
+      std::uint64_t                                        epoch{}, context{}, localRevision{}, poseRevision{};
       ViewSettings                                         settings;
       std::optional<std::pair<Generation, ValidatedAsset>> capture;
       std::shared_ptr<const Snapshot>                      snapshot;
@@ -186,6 +192,30 @@ public:
       return result;
     }
 
+    bool PoseDemand(const Wire::PoseDemand& value)
+    {
+      std::lock_guard lock(mutex);
+      // Models and control are independent lanes. Preserve a future context's
+      // command until the local movement ACK activates that context.
+      if (value.context < context || (poseDemand && value.context < poseDemand->context)) return false;
+      if (poseDemand && value.context == poseDemand->context && value.required == poseDemand->required) return false;
+      ++poseRevision;
+      poseDemand = value;
+      if (!value.required)
+      {
+        snapshot.reset();
+        previousSnapshot.reset();
+        encoded.reset();
+      }
+      return true;
+    }
+
+    bool PosesRequired() const
+    {
+      std::lock_guard lock(mutex);
+      return available && settings.publish && DemandAllowsPoses();
+    }
+
     void SampleRate(std::uint32_t rate)
     {
       std::lock_guard lock(mutex);
@@ -198,6 +228,8 @@ public:
       std::lock_guard lock(mutex);
       if (value != context || available != ready)
       {
+        ++poseRevision;
+        if (poseDemand && poseDemand->context < value) poseDemand.reset();
         context   = value;
         available = ready;
         snapshot.reset();
@@ -216,6 +248,8 @@ public:
     {
       std::lock_guard lock(mutex);
       ++epoch;
+      ++poseRevision;
+      poseDemand.reset();
       context   = 0;
       available = false;
       changed   = true;
@@ -261,7 +295,7 @@ public:
     void Submit(std::shared_ptr<const Snapshot> pose, std::shared_ptr<const Snapshot> prior = {})
     {
       std::lock_guard lock(mutex);
-      if (!available || !settings.publish) return;
+      if (!available || !settings.publish || !DemandAllowsPoses()) return;
       if (localGeneration == pose->generation)
       {
         if (prior && previousGeneration == prior->generation && prior->sampledAtUs == pose->sampledAtUs)
@@ -281,6 +315,7 @@ public:
           epoch,
           context,
           localRevision,
+          poseRevision,
           current,
           std::exchange(capture, {}),
           std::exchange(snapshot, {}),
@@ -374,10 +409,12 @@ public:
       if (displayed.size() < 16) displayed.push_back(value);
     }
 
-    void Encoded(std::uint64_t workEpoch, Wire::Pose value)
+    void Encoded(std::uint64_t workEpoch, std::uint64_t workPoseRevision, Wire::Pose value)
     {
       std::lock_guard lock(mutex);
-      if (workEpoch == epoch && context == value.context && localGeneration == value.generation && settings.publish)
+      if (
+        workEpoch == epoch && workPoseRevision == poseRevision && context == value.context && localGeneration == value.generation &&
+        settings.publish && DemandAllowsPoses())
       {
         if (!previousGeneration) value.previous.reset();
         encoded = std::move(value);

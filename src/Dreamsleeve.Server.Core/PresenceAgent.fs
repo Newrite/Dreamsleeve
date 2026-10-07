@@ -81,7 +81,7 @@ module PresenceAgent =
             match observer.Latest.Location, source.Latest.Location with
             | ValueSome origin, ValueSome target ->
                 state.PhantomObservations.Add(PhantomObservation.View(observer.ConnectionId, source.ConnectionId, source.Latest.Identity.PlayerId, revision,
-                                                       double (Position.distanceSquared origin.Position target.Position)))
+                                                       double (Position.distanceSquared origin.Position target.Position), PhantomPolicy.facing origin target))
             | _ -> ()
 
     let private flushObservations state context =

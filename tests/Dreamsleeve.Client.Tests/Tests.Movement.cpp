@@ -6,6 +6,7 @@ import Dreamsleeve.Client.Exchange;
 
 namespace
 {
+
   using namespace Dreamsleeve::Client;
   using namespace std::chrono_literals;
 
@@ -16,19 +17,27 @@ namespace
 
   Domain::PlayerLocation MovementLocation(float x, std::uint64_t stamp = 1000000)
   {
-    return {{{"skyrim.esm", 0x3c}, "Tamriel"}, {x, 0, 0}, {}, stamp};
+    return {
+        {{"skyrim.esm", 0x3c}, "Tamriel"},
+        {x, 0, 0},
+        {},
+        stamp
+    };
   }
 
   struct MovementFixture
   {
-    ClientModel model;
+    ClientModel         model;
     ClientExchange::Ptr exchange = std::move(*ClientExchange::TryCreate(8, 8));
-    MovementView::Ptr view = MovementView::Create();
-    ClientOutput output;
+    MovementView::Ptr   view     = MovementView::Create();
+    ClientOutput        output;
 
     MovementFixture()
     {
-      Domain::Player player{.data = {7, "player", "Player"}, .characterGeneration = 1};
+      Domain::Player player{
+          .data                = {7, "player", "Player"},
+          .characterGeneration = 1
+      };
       REQUIRE(model.Apply(model.Generation(), PlayerUpserted{player}, At(0)));
       REQUIRE(exchange->Publish(model));
       Drain(0);
@@ -51,6 +60,7 @@ namespace
       }
     }
   };
+
 }
 
 TEST_SUITE_BEGIN("Client.Movement");
@@ -75,20 +85,20 @@ TEST_CASE("Source sample intervals survive delivery jitter and a late game-threa
   CHECK(fixture.view->Sample(7, At(5000))->position.X == 20);
 }
 
-TEST_CASE("Rotation crosses the wrap boundary by the shortest arc")
+TEST_CASE("Movement interpolation preserves latest camera telemetry")
 {
   MovementFixture fixture;
-  auto first = MovementLocation(0);
-  auto second = MovementLocation(10, 1100000);
-  first.rotation.Z = static_cast<float>(std::numbers::pi * 179 / 180);
-  second.rotation.Z = -first.rotation.Z;
+  auto            first  = MovementLocation(0);
+  auto            second = MovementLocation(10, 1100000);
+  first.cameraDirection  = {0, 1, 0};
+  second.cameraDirection = {0, -1, 0};
   REQUIRE(fixture.model.Apply(1, PlayerLocationUpdated{7, first}, At(100)));
   REQUIRE(fixture.model.Apply(1, PlayerLocationUpdated{7, second}, At(200)));
   REQUIRE(fixture.exchange->Publish(fixture.model));
   fixture.Drain(200);
 
   REQUIRE(fixture.view->Sample(7, At(300)));
-  CHECK(std::abs(fixture.view->Sample(7, At(300))->rotation.Z) == doctest::Approx(std::numbers::pi));
+  CHECK(fixture.view->Sample(7, At(300))->cameraDirection == second.cameraDirection);
 }
 
 TEST_CASE("Visibility loss and restoration inside one batch do not bridge old movement")
@@ -116,12 +126,30 @@ TEST_CASE("Space character teleport and long gaps snap instead of interpolating"
   fixture.Move(10, 100, 200);
   auto next = MovementLocation(20, 1200000);
 
-  SUBCASE("Different plugin with the same form number") { next.location.locationId.pluginName = "other.esm"; }
-  SUBCASE("Different cell") { next.location.locationId.localFormId = 0x42; }
-  SUBCASE("Teleport") { next.position.X = 5000; }
-  SUBCASE("Source clock restart") { next.sampledAtUs = 100; }
-  SUBCASE("Source gap") { next.sampledAtUs = 9000000; }
-  SUBCASE("Huge untrusted source timestamp") { next.sampledAtUs = std::numeric_limits<std::uint64_t>::max(); }
+  SUBCASE("Different plugin with the same form number")
+  {
+    next.location.locationId.pluginName = "other.esm";
+  }
+  SUBCASE("Different cell")
+  {
+    next.location.locationId.localFormId = 0x42;
+  }
+  SUBCASE("Teleport")
+  {
+    next.position.X = 5000;
+  }
+  SUBCASE("Source clock restart")
+  {
+    next.sampledAtUs = 100;
+  }
+  SUBCASE("Source gap")
+  {
+    next.sampledAtUs = 9000000;
+  }
+  SUBCASE("Huge untrusted source timestamp")
+  {
+    next.sampledAtUs = std::numeric_limits<std::uint64_t>::max();
+  }
   SUBCASE("New character")
   {
     // The server replaces the whole player: a new generation without a place yet.
@@ -176,14 +204,15 @@ TEST_CASE("Co-timed measurements replace without a zero interpolation denominato
 
 TEST_CASE("History capacity bounds a long moving stream")
 {
-  MovementFixture fixture;
+  MovementFixture  fixture;
   MovementSettings settings;
   settings.historyCapacity = 3;
-  fixture.view = MovementView::Create(settings);
+  fixture.view             = MovementView::Create(settings);
   REQUIRE(fixture.exchange->Publish(fixture.model, true));
   fixture.Drain(0);
 
-  for (int index = 0; index < 100; ++index) fixture.Move(static_cast<float>(index), index * 100, index * 100 + 10);
+  for (int index = 0; index < 100; ++index)
+    fixture.Move(static_cast<float>(index), index * 100, index * 100 + 10);
   CHECK(fixture.view->HistorySize(7) == 3);
   CHECK(fixture.view->Sample(7, At(20000))->position.X == 99);
 }
@@ -213,7 +242,9 @@ TEST_CASE("Observation overflow recovers with a snapshot and resets history")
 {
   MovementFixture fixture;
   fixture.model = ClientModel{2};
-  Domain::Player player{.data = {7, "player", "Player"}};
+  Domain::Player player{
+      .data = {7, "player", "Player"}
+  };
   REQUIRE(fixture.model.Apply(1, PlayerUpserted{player}));
   REQUIRE(fixture.exchange->Publish(fixture.model, true));
   fixture.Drain(0);
@@ -272,12 +303,18 @@ TEST_CASE("Stationary samples retain the stop interval before movement resumes")
 
 TEST_CASE("Snapshot timeline starts at publication rather than delayed consumption")
 {
-  auto view = MovementView::Create();
-  Domain::Player player{.data = {7, "player", "Player"}, .location = MovementLocation(0), .characterGeneration = 1};
-  ClientSnapshot snapshot{.generation = 1, .revision = 1, .players = {player}, .observedAt = At(100)};
+  auto           view = MovementView::Create();
+  Domain::Player player{
+      .data                = {7, "player", "Player"},
+      .location            = MovementLocation(0),
+      .characterGeneration = 1
+  };
+  ClientSnapshot   snapshot{.generation = 1, .revision = 1, .players = {player}, .observedAt = At(100)};
   ClientStateDelta delta{.generation = 1, .revision = 2};
   delta.movement.push_back({7, 1, At(240), MovementLocation(10, 1100000)});
-  StateUpdateBatch batch{{snapshot, delta}};
+  StateUpdateBatch batch{
+      {snapshot, delta}
+  };
   view->Apply(batch, At(300));
   CHECK(view->Sample(7, At(300))->position.X == doctest::Approx(5));
 }
@@ -286,14 +323,18 @@ TEST_CASE("A missing new-session snapshot clears history and rejects old-session
 {
   MovementFixture fixture;
   fixture.Move(0, 0, 100);
-  auto old = fixture.model.Snapshot();
+  auto             old = fixture.model.Snapshot();
   ClientStateDelta next{.generation = 2, .revision = 50};
   fixture.view->Apply(StateUpdateBatch{{next}}, At(200));
   fixture.view->Apply(StateUpdateBatch{{old}}, At(210));
   CHECK_FALSE(fixture.view->Sample(7, At(300)));
 
   ClientSnapshot recovered{.generation = 2, .revision = 50};
-  recovered.players.push_back(Domain::Player{.data = {7, "player", "Player"}, .location = MovementLocation(50)});
+  recovered.players.push_back(
+    Domain::Player{
+        .data     = {7, "player", "Player"},
+        .location = MovementLocation(50)
+  });
   fixture.view->Apply(StateUpdateBatch{{recovered}}, At(220));
   REQUIRE(fixture.view->Sample(7, At(300)));
   CHECK(fixture.view->Sample(7, At(300))->position.X == 50);
@@ -311,20 +352,28 @@ TEST_CASE("An old visibility seed cannot stretch the next sample into the future
 TEST_CASE("Realtime cannot create visibility or resurrect an old context and repeat restores a lost final pose")
 {
   MovementFixture fixture;
-  auto& model = fixture.model;
-  const auto generation = model.Generation();
-  auto apply = [&](std::uint64_t token, std::uint64_t sequence, float x) {
-    REQUIRE(model.Apply(generation, PlayerMovementReceived{7, token, sequence, {{x, 0, 0}, {}, sequence * 100000}}, At(100)));
+  auto&           model      = fixture.model;
+  const auto      generation = model.Generation();
+  auto            apply      = [&](std::uint64_t token, std::uint64_t sequence, float x) {
+    REQUIRE(model.Apply(
+      generation,
+      PlayerMovementReceived{
+          7,
+          token,
+          sequence,
+          {{x, 0, 0}, {}, sequence * 100000}
+    },
+      At(100)));
   };
-  apply(1, 1, 20); // Overtakes reliable baseline: drop.
+  apply(1, 1, 20);  // Overtakes reliable baseline: drop.
   CHECK_FALSE(model.FindPlayer(7)->location);
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, At(100)));
-  apply(1, 2, 20); // Sample 1 was lost; independent sample 2 is enough.
-  apply(1, 1, 10); // Late sample cannot roll back.
+  apply(1, 2, 20);   // Sample 1 was lost; independent sample 2 is enough.
+  apply(1, 1, 10);   // Late sample cannot roll back.
   CHECK(model.FindPlayer(7)->location->position.X == 20);
-  apply(1, 3, 30); // A subsequent repeat repairs the lost final position.
+  apply(1, 3, 30);   // A subsequent repeat repairs the lost final position.
   const auto sequence = model.FindPlayer(7)->movementSequence;
-  apply(1, 3, 999); // Server repeating the same source sample cannot add motion.
+  apply(1, 3, 999);  // Server repeating the same source sample cannot add motion.
   CHECK(model.FindPlayer(7)->location->position.X == 30);
   CHECK(model.FindPlayer(7)->movementSequence == sequence);
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, std::nullopt, 2, 0}));
@@ -343,15 +392,23 @@ TEST_CASE("Realtime cannot create visibility or resurrect an old context and rep
 TEST_CASE("Metadata cannot roll back realtime and same-space new view token resets interpolation")
 {
   MovementFixture fixture;
-  auto& model = fixture.model;
-  const auto generation = model.Generation();
+  auto&           model      = fixture.model;
+  const auto      generation = model.Generation();
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, At(100)));
-  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 1, 1, {{10, 0, 0}, {}, 1100000}}, At(200)));
-  auto metadata = *model.FindPlayer(7);
+  REQUIRE(model.Apply(
+    generation,
+    PlayerMovementReceived{
+        7,
+        1,
+        1,
+        {{10, 0, 0}, {}, 1100000}
+  },
+    At(200)));
+  auto metadata         = *model.FindPlayer(7);
   metadata.viewRevision = 0;
   metadata.location.reset();
   metadata.movementSequence = 0;
-  metadata.characterName = "Renamed";
+  metadata.characterName    = "Renamed";
   REQUIRE(model.Apply(generation, PlayerUpserted{metadata}));
   CHECK(model.FindPlayer(7)->location->position.X == 10);
   CHECK(model.FindPlayer(7)->viewRevision == 1);
@@ -367,19 +424,33 @@ TEST_CASE("Metadata cannot roll back realtime and same-space new view token rese
 TEST_CASE("A character change invalidates old realtime before its visibility baseline arrives")
 {
   MovementFixture fixture;
-  auto& model = fixture.model;
-  const auto generation = model.Generation();
+  auto&           model      = fixture.model;
+  const auto      generation = model.Generation();
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(10), 4, 0}));
   auto next = *model.FindPlayer(7);
   ++next.characterGeneration;
-  next.viewRevision = 0;
+  next.viewRevision     = 0;
   next.movementSequence = 0;
   next.location.reset();
   REQUIRE(model.Apply(generation, PlayerUpserted{next}));
-  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 4, 100, {{50, 0, 0}, {}, 1000}}));
+  REQUIRE(model.Apply(
+    generation,
+    PlayerMovementReceived{
+        7,
+        4,
+        100,
+        {{50, 0, 0}, {}, 1000}
+  }));
   CHECK_FALSE(model.FindPlayer(7)->location);
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(20), 5, 0}));
-  REQUIRE(model.Apply(generation, PlayerMovementReceived{7, 4, 101, {{60, 0, 0}, {}, 2000}}));
+  REQUIRE(model.Apply(
+    generation,
+    PlayerMovementReceived{
+        7,
+        4,
+        101,
+        {{60, 0, 0}, {}, 2000}
+  }));
   CHECK(model.FindPlayer(7)->location->position.X == 20);
 }
 

@@ -145,7 +145,7 @@ let private flushBoth fixture expected = flushViews fixture expected expected
 let private location x =
     let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok)
     PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok))
-        (Position.create x 2.0f 3.0f |> ok) Rotation.zero
+        (Position.create x 2.0f 3.0f |> ok) CameraDirection.zero
 
 let private profileOf (snapshot: PlayerSnapshot) =
     match snapshot.Identity with
@@ -548,7 +548,7 @@ let tests = testList "PresenceAgent" [
             equal (fixture.Alice.Snapshot.Location |> ValueOption.map MovementPose.ofLocation) baseline.Pose
             equal [ observer.Location |> ValueOption.map _.Location ] (spaces events)
             let key = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 61u |> ok)
-            let elsewhere = PlayerLocation.create (Location.create key (LocationName.create 128 "Elsewhere" |> ok)) Position.zero Rotation.zero
+            let elsewhere = PlayerLocation.create (Location.create key (LocationName.create 128 "Elsewhere" |> ok)) Position.zero CameraDirection.zero
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, { observer with Location = ValueSome elsewhere; MovementContext = 2UL; MovementSequence = 0UL }))
             let! _, (events, _) = flushViewsNow fixture
             check (visibilityOf baseline.PlayerId events |> List.exists _.Pose.IsNone) "Space change clears stationary remote players reliably."

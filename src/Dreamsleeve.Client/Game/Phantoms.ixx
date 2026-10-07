@@ -303,6 +303,7 @@ namespace Phantoms
         return;
       }
     }
+    if (publishing && !exchange.PosesRequired()) return;
     if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
     {
       state.source.reset();

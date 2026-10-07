@@ -12,22 +12,22 @@ module internal PlayerCodec =
         if isNull source then
             Ok ValueNone
         elif isNull source.Location || isNull source.Location.LocationId
-             || isNull source.Position || isNull source.Rotation then
+             || isNull source.Position || isNull source.CameraDirection then
             Error(ProtocolCodecFailure.InvalidPayload "location")
         else
             let key = source.Location.LocationId
             let point = source.Position
-            let angles = source.Rotation
+            let angles = source.CameraDirection
 
             match PluginName.create limits.PluginName key.PluginName,
                   LocalFormId.create key.LocalFormId,
                   LocationName.create limits.LocationName source.Location.LocationName,
                   Position.create point.X point.Y point.Z,
-                  Rotation.create angles.X angles.Y angles.Z with
-            | Ok plugin, Ok localId, Ok name, Ok position, Ok rotation ->
+                  CameraDirection.create angles.X angles.Y angles.Z with
+            | Ok plugin, Ok localId, Ok name, Ok position, Ok cameraDirection ->
                 let location = Location.create (FormKey.create plugin localId) name
                 let sampled =
-                    PlayerLocation.create location position rotation
+                    PlayerLocation.create location position cameraDirection
                     |> PlayerLocation.withSampleTime source.SampledAtUs
 
                 Ok(ValueSome sampled)
@@ -187,14 +187,14 @@ module internal PlayerCodec =
     let decodeMovement (source: Dreamsleeve.Protocol.Chat.MovementSample) =
         if isNull source || source.ContextRevision = 0UL || source.Sequence = 0UL then
             Error(ProtocolCodecFailure.InvalidPayload "movement_sample")
-        elif isNull source.Pose || isNull source.Pose.Position || isNull source.Pose.Rotation then
+        elif isNull source.Pose || isNull source.Pose.Position || isNull source.Pose.CameraDirection then
             Error(ProtocolCodecFailure.InvalidPayload "pose")
         else
-            let point, angles = source.Pose.Position, source.Pose.Rotation
-            match Position.create point.X point.Y point.Z, Rotation.create angles.X angles.Y angles.Z with
-            | Ok position, Ok rotation ->
+            let point, angles = source.Pose.Position, source.Pose.CameraDirection
+            match Position.create point.X point.Y point.Z, CameraDirection.create angles.X angles.Y angles.Z with
+            | Ok position, Ok cameraDirection ->
                 Ok { ContextRevision = source.ContextRevision; Sequence = source.Sequence
-                     Pose = { Position = position; Rotation = rotation; SampledAtUs = source.Pose.SampledAtUs } }
+                     Pose = { Position = position; CameraDirection = cameraDirection; SampledAtUs = source.Pose.SampledAtUs } }
             | Error error, _ | _, Error error -> Error(ProtocolCodecFailure.InvalidDomain error)
 
     /// A pseudonymous identity carries no username; the pseudonym stands in display_name.
@@ -223,8 +223,7 @@ module internal PlayerCodec =
             Location = place value.Location,
             Position = Dreamsleeve.Protocol.Chat.Position(
                 X = WorldUnit.value value.Position.X, Y = WorldUnit.value value.Position.Y, Z = WorldUnit.value value.Position.Z),
-            Rotation = Dreamsleeve.Protocol.Chat.Rotation(
-                X = Radian.value value.Rotation.X, Y = Radian.value value.Rotation.Y, Z = Radian.value value.Rotation.Z))
+            CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection())
 
     let private kindOf (key: ActorValueKey) (info: ActorValueInfo) = struct (key, info.DisplayName)
 
@@ -350,12 +349,12 @@ module internal PlayerCodec =
         patch.Details |> ValueOption.iter (detailsPatch result)
         result
 
+    // Camera interest belongs to the observer and is not forwarded to other players.
     let pose (value: MovementPose) =
         Dreamsleeve.Protocol.Chat.MovementPose(
             Position = Dreamsleeve.Protocol.Chat.Position(
                 X = WorldUnit.value value.Position.X, Y = WorldUnit.value value.Position.Y, Z = WorldUnit.value value.Position.Z),
-            Rotation = Dreamsleeve.Protocol.Chat.Rotation(
-                X = Radian.value value.Rotation.X, Y = Radian.value value.Rotation.Y, Z = Radian.value value.Rotation.Z),
+            CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection(),
             SampledAtUs = value.SampledAtUs)
 
     let moved (value: MovementChange) =

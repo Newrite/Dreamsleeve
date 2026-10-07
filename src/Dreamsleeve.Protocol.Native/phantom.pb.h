@@ -96,6 +96,10 @@ class Policy;
 struct PolicyDefaultTypeInternal;
 extern PolicyDefaultTypeInternal _Policy_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull Policy_class_data_;
+class PoseDemand;
+struct PoseDemandDefaultTypeInternal;
+extern PoseDemandDefaultTypeInternal _PoseDemand_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull PoseDemand_class_data_;
 class PoseSample;
 struct PoseSampleDefaultTypeInternal;
 extern PoseSampleDefaultTypeInternal _PoseSample_default_instance_;
@@ -207,7 +211,7 @@ class Withdraw final : public ::google::protobuf::internal::ZeroFieldsBase
     return *reinterpret_cast<const Withdraw*>(
         &_Withdraw_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(Withdraw& a, Withdraw& b) { a.Swap(&b); }
   inline void Swap(Withdraw* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -342,7 +346,7 @@ class Settled final : public ::google::protobuf::Message
     return *reinterpret_cast<const Settled*>(
         &_Settled_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(Settled& a, Settled& b) { a.Swap(&b); }
   inline void Swap(Settled* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -544,7 +548,7 @@ class Remove final : public ::google::protobuf::Message
     return *reinterpret_cast<const Remove*>(
         &_Remove_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(Remove& a, Remove& b) { a.Swap(&b); }
   inline void Swap(Remove* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1174,7 +1178,7 @@ class PoseSample final : public ::google::protobuf::Message
     return *reinterpret_cast<const PoseSample*>(
         &_PoseSample_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(PoseSample& a, PoseSample& b) { a.Swap(&b); }
   inline void Swap(PoseSample* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1362,6 +1366,208 @@ class PoseSample final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull PoseSample_class_data_;
 // -------------------------------------------------------------------
 
+class PoseDemand final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.PoseDemand) */ {
+ public:
+  inline PoseDemand() : PoseDemand(nullptr) {}
+  ~PoseDemand() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PoseDemand* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PoseDemand));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR PoseDemand(::google::protobuf::internal::ConstantInitialized);
+
+  inline PoseDemand(const PoseDemand& from) : PoseDemand(nullptr, from) {}
+  inline PoseDemand(PoseDemand&& from) noexcept
+      : PoseDemand(nullptr, ::std::move(from)) {}
+  inline PoseDemand& operator=(const PoseDemand& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PoseDemand& operator=(PoseDemand&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const PoseDemand& default_instance() {
+    return *reinterpret_cast<const PoseDemand*>(
+        &_PoseDemand_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(PoseDemand& a, PoseDemand& b) { a.Swap(&b); }
+  inline void Swap(PoseDemand* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PoseDemand* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PoseDemand* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PoseDemand>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PoseDemand& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PoseDemand& from) { PoseDemand::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PoseDemand* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Phantom.PoseDemand"; }
+
+  explicit PoseDemand(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PoseDemand(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PoseDemand& from);
+  PoseDemand(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PoseDemand&& from) noexcept
+      : PoseDemand(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kContextRevisionFieldNumber = 1,
+    kRequiredFieldNumber = 2,
+  };
+  // uint64 context_revision = 1;
+  void clear_context_revision() ;
+  ::uint64_t context_revision() const;
+  void set_context_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_context_revision() const;
+  void _internal_set_context_revision(::uint64_t value);
+
+  public:
+  // bool required = 2;
+  void clear_required() ;
+  bool required() const;
+  void set_required(bool value);
+
+  private:
+  bool _internal_required() const;
+  void _internal_set_required(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.PoseDemand)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PoseDemand& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t context_revision_;
+    bool required_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_phantom_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull PoseDemand_class_data_;
+// -------------------------------------------------------------------
+
 class Policy final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.Policy) */ {
  public:
@@ -1417,7 +1623,7 @@ class Policy final : public ::google::protobuf::Message
     return *reinterpret_cast<const Policy*>(
         &_Policy_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(Policy& a, Policy& b) { a.Swap(&b); }
   inline void Swap(Policy* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2179,7 +2385,7 @@ class Complete final : public ::google::protobuf::Message
     return *reinterpret_cast<const Complete*>(
         &_Complete_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(Complete& a, Complete& b) { a.Swap(&b); }
   inline void Swap(Complete* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3122,7 +3328,7 @@ class Transfer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Transfer*>(
         &_Transfer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(Transfer& a, Transfer& b) { a.Swap(&b); }
   inline void Swap(Transfer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3365,7 +3571,7 @@ class ServerPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ServerPosePacket*>(
         &_ServerPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(ServerPosePacket& a, ServerPosePacket& b) { a.Swap(&b); }
   inline void Swap(ServerPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3832,7 +4038,7 @@ class Offer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Offer*>(
         &_Offer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(Offer& a, Offer& b) { a.Swap(&b); }
   inline void Swap(Offer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4051,7 +4257,7 @@ class ClientPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ClientPosePacket*>(
         &_ClientPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(ClientPosePacket& a, ClientPosePacket& b) { a.Swap(&b); }
   inline void Swap(ClientPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4284,9 +4490,10 @@ class ServerAssetPacket final : public ::google::protobuf::Message
     kProgress = 7,
     kPolicy = 8,
     kSettled = 9,
+    kPoseDemand = 10,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(ServerAssetPacket& a, ServerAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ServerAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4382,6 +4589,7 @@ class ServerAssetPacket final : public ::google::protobuf::Message
     kProgressFieldNumber = 7,
     kPolicyFieldNumber = 8,
     kSettledFieldNumber = 9,
+    kPoseDemandFieldNumber = 10,
   };
   // uint32 protocol_version = 1;
   void clear_protocol_version() ;
@@ -4545,6 +4753,25 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Phantom::Settled* PROTOBUF_NONNULL _internal_mutable_settled();
 
   public:
+  // .Dreamsleeve.Protocol.Phantom.PoseDemand pose_demand = 10;
+  bool has_pose_demand() const;
+  private:
+  bool _internal_has_pose_demand() const;
+
+  public:
+  void clear_pose_demand() ;
+  const ::Dreamsleeve::Protocol::Phantom::PoseDemand& pose_demand() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE release_pose_demand();
+  ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NONNULL mutable_pose_demand();
+  void set_allocated_pose_demand(::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pose_demand(::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE unsafe_arena_release_pose_demand();
+
+  private:
+  const ::Dreamsleeve::Protocol::Phantom::PoseDemand& _internal_pose_demand() const;
+  ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NONNULL _internal_mutable_pose_demand();
+
+  public:
   void clear_payload();
   PayloadCase payload_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.ServerAssetPacket)
@@ -4558,11 +4785,12 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   void set_has_progress();
   void set_has_policy();
   void set_has_settled();
+  void set_has_pose_demand();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 9,
-                                   8, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 10,
+                                   9, 0,
                                    2>
       _table_;
 
@@ -4595,6 +4823,7 @@ class ServerAssetPacket final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE progress_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE policy_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE settled_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE pose_demand_;
     } payload_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4672,7 +4901,7 @@ class ClientAssetPacket final : public ::google::protobuf::Message
     kDisplayed = 9,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(ClientAssetPacket& a, ClientAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ClientAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5812,6 +6041,60 @@ inline ::uint64_t Displayed::_internal_generation() const {
 inline void Displayed::_internal_set_generation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.generation_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PoseDemand
+
+// uint64 context_revision = 1;
+inline void PoseDemand::clear_context_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint64_t PoseDemand::context_revision() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.PoseDemand.context_revision)
+  return _internal_context_revision();
+}
+inline void PoseDemand::set_context_revision(::uint64_t value) {
+  _internal_set_context_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.PoseDemand.context_revision)
+}
+inline ::uint64_t PoseDemand::_internal_context_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.context_revision_;
+}
+inline void PoseDemand::_internal_set_context_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.context_revision_ = value;
+}
+
+// bool required = 2;
+inline void PoseDemand::clear_required() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline bool PoseDemand::required() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.PoseDemand.required)
+  return _internal_required();
+}
+inline void PoseDemand::set_required(bool value) {
+  _internal_set_required(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.PoseDemand.required)
+}
+inline bool PoseDemand::_internal_required() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_;
+}
+inline void PoseDemand::_internal_set_required(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8231,6 +8514,88 @@ inline ::Dreamsleeve::Protocol::Phantom::Settled* PROTOBUF_NONNULL ServerAssetPa
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Phantom::Settled* _msg = _internal_mutable_settled();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.settled)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Phantom.PoseDemand pose_demand = 10;
+inline bool ServerAssetPacket::has_pose_demand() const {
+  return payload_case() == kPoseDemand;
+}
+inline bool ServerAssetPacket::_internal_has_pose_demand() const {
+  return payload_case() == kPoseDemand;
+}
+inline void ServerAssetPacket::set_has_pose_demand() {
+  _impl_._oneof_case_[0] = kPoseDemand;
+}
+inline void ServerAssetPacket::clear_pose_demand() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kPoseDemand) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.pose_demand_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.pose_demand_);
+    }
+    clear_has_payload();
+  }
+}
+inline ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE ServerAssetPacket::release_pose_demand() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
+  if (payload_case() == kPoseDemand) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::PoseDemand*>(_impl_.payload_.pose_demand_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.payload_.pose_demand_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Phantom::PoseDemand& ServerAssetPacket::_internal_pose_demand() const {
+  return payload_case() == kPoseDemand ? static_cast<const ::Dreamsleeve::Protocol::Phantom::PoseDemand&>(*reinterpret_cast<::Dreamsleeve::Protocol::Phantom::PoseDemand*>(_impl_.payload_.pose_demand_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::PoseDemand&>(::Dreamsleeve::Protocol::Phantom::_PoseDemand_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Phantom::PoseDemand& ServerAssetPacket::pose_demand() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
+  return _internal_pose_demand();
+}
+inline ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE ServerAssetPacket::unsafe_arena_release_pose_demand() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
+  if (payload_case() == kPoseDemand) {
+    clear_has_payload();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::PoseDemand*>(_impl_.payload_.pose_demand_);
+    _impl_.payload_.pose_demand_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ServerAssetPacket::unsafe_arena_set_allocated_pose_demand(
+    ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_payload();
+  if (value) {
+    set_has_pose_demand();
+    _impl_.payload_.pose_demand_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
+}
+inline ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NONNULL ServerAssetPacket::_internal_mutable_pose_demand() {
+  if (payload_case() != kPoseDemand) {
+    clear_payload();
+    set_has_pose_demand();
+    _impl_.payload_.pose_demand_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::PoseDemand>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Phantom::PoseDemand*>(_impl_.payload_.pose_demand_);
+}
+inline ::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NONNULL ServerAssetPacket::mutable_pose_demand()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Phantom::PoseDemand* _msg = _internal_mutable_pose_demand();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
   return _msg;
 }
 

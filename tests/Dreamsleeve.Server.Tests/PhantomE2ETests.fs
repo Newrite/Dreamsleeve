@@ -58,7 +58,7 @@ let private service client =
                     | 3uy ->
                         Expect.isTrue reliable "Models reliable."
                         let value = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom bytes
-                        Expect.equal value.ProtocolVersion 23u "Protocol23 model envelope."
+                        Expect.equal value.ProtocolVersion 24u "Protocol24 model envelope."
                         if not (isNull value.Transfer) then Expect.isGreaterThan value.Transfer.RequestId 0UL "Transfer request correlation."
                         if not (isNull value.Complete) then Expect.isGreaterThan value.Complete.RequestId 0UL "Complete request correlation."
                         client.Models.Add value
@@ -66,7 +66,7 @@ let private service client =
                         Expect.isFalse reliable "Pose payload must stay unreliable."
                         Expect.equal (packet.Flags &&& EnetPacketFlag.Unsequenced) (enum<EnetPacketFlag> 0) "Pose sequenced."
                         let value = Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom bytes
-                        Expect.equal value.ProtocolVersion 23u "Protocol23 pose envelope."
+                        Expect.equal value.ProtocolVersion 24u "Protocol24 pose envelope."
                         client.Poses.Add value
                     | 0uy | 1uy -> client.Control.Add(Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom bytes)
                     | 2uy -> ()
@@ -79,16 +79,16 @@ let private send client lane flags (value: IMessage) =
     finally if packet.IsCreated then packet.Dispose()
 let private asset client value = send client 3uy EnetPacketFlag.Reliable value
 let private command client id apply =
-    let packet = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = 23u, RequestId = id)
+    let packet = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = 24u, RequestId = id)
     apply packet
     send client 0uy EnetPacketFlag.Reliable packet
 
 /// This is the real server's UDP path with production runtime, Presence, transport
 /// owner and file storage. Account verification is a controlled dependency; the
 /// parent-owned native smoke separately exercises production client Streaming.
-let tests = testSequenced <| testList "Phantom protocol23 E2E" [
+let tests = testSequenced <| testList "Phantom protocol24 E2E" [
     testCase "authenticated UDP cold/warm transfer, pose fanout, chat and receive revocation" <| fun _ ->
-        Expect.equal ProtocolCodec.Version 23u "Fixture targets protocol23."
+        Expect.equal ProtocolCodec.Version 24u "Fixture targets protocol24."
         let root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "dreamsleeve-phantom-e2e-" + Guid.NewGuid().ToString("N")))
         let options = { PhantomOptions.defaults with StoragePath = root; DiskBytes = 8L * 1024L * 1024L; RamBytes = 1024L * 1024L;
                                                       PublishCooldownMs = 100; ReplicationIntervalMs = 10; PoseIntervalMs = 10;
@@ -125,7 +125,7 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             let until = Environment.TickCount64 + 15000L
             while not (predicate()) && Environment.TickCount64 < until do pump(); Thread.Sleep 1
             Expect.isTrue (predicate()) reason
-        let preferences receive = asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Preferences = Dreamsleeve.Protocol.Phantom.Preferences(Publish = true, Receive = receive, Maximum = 1u, Distance = 4096.0f)))
+        let preferences receive = asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Preferences = Dreamsleeve.Protocol.Phantom.Preferences(Publish = true, Receive = receive, Maximum = 1u, Distance = 4096.0f)))
         try
             wait "Both ENet peers connected." (fun () -> alice.Connected && bob.Connected)
             for _ in 1 .. 30 do pump(); Thread.Sleep 1
@@ -139,25 +139,25 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
                 command client 2UL (fun packet -> packet.UpdatePlayer <- Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = "E2E")))
                 command client 10UL (fun packet ->
                     packet.UpdatePlayer <- Dreamsleeve.Protocol.Chat.UpdatePlayer(SetLocation = Dreamsleeve.Protocol.Chat.SetPlayerLocation(ContextRevision = 10UL,
-                        Location = Dreamsleeve.Protocol.Chat.PlayerLocation(Location = Dreamsleeve.Protocol.Chat.Location(LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u), LocationName = "Whiterun"), Position = Dreamsleeve.Protocol.Chat.Position(), Rotation = Dreamsleeve.Protocol.Chat.Rotation()))))
+                        Location = Dreamsleeve.Protocol.Chat.PlayerLocation(Location = Dreamsleeve.Protocol.Chat.Location(LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u), LocationName = "Whiterun"), Position = Dreamsleeve.Protocol.Chat.Position(), CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection()))))
             wait "Source movement context admitted." (fun () -> alice.Control |> Seq.exists (fun packet -> packet.RequestId = 10UL && not (isNull packet.PlayerUpdateAccepted)))
             let bytes = Array.zeroCreate (2 * options.WindowChunks * options.ChunkBytes + 7)
             Random(21).NextBytes bytes
             let descriptor = Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom(SHA256.HashData bytes), Generation = 1UL, FormatVersion = 2u,
                                 CompressedBytes = uint32 bytes.Length, RawBytes = uint32 bytes.Length, Channels = 2u)
-            let publish request descriptor = asset alice (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Publish = Dreamsleeve.Protocol.Phantom.Publish(Asset = descriptor, ContextRevision = 10UL, RequestId = request)))
+            let publish request descriptor = asset alice (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Publish = Dreamsleeve.Protocol.Phantom.Publish(Asset = descriptor, ContextRevision = 10UL, RequestId = request)))
             publish 101UL descriptor
             wait "Cold upload transfer." (fun () -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Transfer)))
             let transfer = alice.Models |> Seq.pick (fun packet -> if isNull packet.Transfer then None else Some packet.Transfer)
             Expect.equal transfer.RequestId 101UL "Publish assignment echoes request."
             Expect.equal transfer.PlayerId 1UL "Authenticated source assigned by server."
-            let chat = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = 23u, RequestId = 11UL, SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = "phantom-e2e-chat"))
+            let chat = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = 24u, RequestId = 11UL, SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = "phantom-e2e-chat"))
             send bob 1uy EnetPacketFlag.Reliable chat
             let mutable sent, acknowledged = 0, 0
             while sent < bytes.Length do
                 while sent < bytes.Length && sent - acknowledged < options.WindowChunks * options.ChunkBytes do
                     let count = min options.ChunkBytes (bytes.Length - sent)
-                    asset alice (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Chunk = Dreamsleeve.Protocol.Phantom.Chunk(TransferId = transfer.TransferId, Offset = uint32 sent, Data = ByteString.CopyFrom(bytes, sent, count))))
+                    asset alice (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Chunk = Dreamsleeve.Protocol.Phantom.Chunk(TransferId = transfer.TransferId, Offset = uint32 sent, Data = ByteString.CopyFrom(bytes, sent, count))))
                     sent <- sent + count
                 let previous = acknowledged
                 wait "Upload window acknowledged." (fun () ->
@@ -169,7 +169,7 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             let offer = bob.Models |> Seq.pick (fun packet -> if isNull packet.Offer then None else Some packet.Offer)
             Expect.equal offer.PlayerId 1UL "Presence-authorized source."
             Expect.isTrue (bob.Control |> Seq.exists (fun packet -> not (isNull packet.ChatPublished) && packet.ChatPublished.Message.Text = "phantom-e2e-chat")) "Chat remains live during model streaming."
-            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 201UL)))
+            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 201UL)))
             let chunks () = bob.Models |> Seq.filter (fun packet -> not (isNull packet.Chunk)) |> Seq.length
             wait "Complete download window without application ACK." (fun () -> chunks() >= options.WindowChunks)
             Expect.equal (chunks()) options.WindowChunks "Download waits for application Progress at the negotiated window."
@@ -181,7 +181,7 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             wait "Fresh reentry Offer." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Offer) && packet.Offer.ViewRevision > removed.ViewRevision))
             let fresh = bob.Models |> Seq.choose (fun packet -> if isNull packet.Offer then None else Some packet.Offer) |> Seq.last
             bob.Models.Clear()
-            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 202UL)))
+            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 202UL)))
             wait "New download Transfer." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Transfer)))
             let download = bob.Models |> Seq.pick (fun packet -> if isNull packet.Transfer then None else Some packet.Transfer)
             Expect.equal download.RequestId 202UL "New download assignment echoes request."
@@ -195,14 +195,14 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
                     if not (isNull packet.Chunk) then
                         Expect.equal packet.Chunk.Offset (uint32 received.Count) "Chunk ordering."
                         received.AddRange(packet.Chunk.Data.ToByteArray())
-                        asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Progress = Dreamsleeve.Protocol.Phantom.Progress(TransferId = download.TransferId, NextOffset = uint32 received.Count)))
+                        asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Progress = Dreamsleeve.Protocol.Phantom.Progress(TransferId = download.TransferId, NextOffset = uint32 received.Count)))
             wait "Final download ACK completes." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.TransferId = download.TransferId && packet.Complete.Accepted))
             Expect.equal (received.ToArray()) bytes "Real UDP compressed-byte round trip."
-            let pose = Dreamsleeve.Protocol.Phantom.ClientPosePacket(ProtocolVersion = 23u, Sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = 1UL, ContextRevision = 10UL, Sequence = 1UL, SampledAtUs = 50000UL, Payload = ByteString.CopyFrom(Array.init 20000 (fun index -> byte (index % 251)))))
+            let pose = Dreamsleeve.Protocol.Phantom.ClientPosePacket(ProtocolVersion = 24u, Sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = 1UL, ContextRevision = 10UL, Sequence = 1UL, SampledAtUs = 50000UL, Payload = ByteString.CopyFrom(Array.init 20000 (fun index -> byte (index % 251)))))
             send alice 4uy EnetPacketFlag.UnreliableFragment pose
             wait "Fragmented pose fanout." (fun () -> bob.Poses.Count > 0)
             Expect.equal (bob.Poses[0].PlayerId, bob.Poses[0].ViewRevision, bob.Poses[0].Sample.Sequence) (1UL,fresh.ViewRevision,1UL) "Pose follows authenticated source and fresh AOI epoch."
-            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Displayed = Dreamsleeve.Protocol.Phantom.Displayed(PlayerId = 1UL, ViewRevision = fresh.ViewRevision, Generation = 1UL)))
+            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Displayed = Dreamsleeve.Protocol.Phantom.Displayed(PlayerId = 1UL, ViewRevision = fresh.ViewRevision, Generation = 1UL)))
             wait "Scene display settles initial publication." (fun () -> alice.Models |> Seq.exists (fun p -> not (isNull p.Settled) && p.Settled.Generation = 1UL))
             alice.Models.Clear()
             let warm = descriptor.Clone()
@@ -220,7 +220,24 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             Expect.equal paired.PreviousSample.Payload.Length 100000 "Complete previous snapshot, no partial fragment."
             Expect.equal (File.ReadAllBytes(Path.Combine(root, Convert.ToHexStringLower(SHA256.HashData bytes) + ".zst"))) bytes "One verified content-addressed file."
             Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "No partial upload after warm reuse."
-            printfn "protocol23 E2E PASS: auth/bootstrap + cold %d-byte UDP upload/download + ACK windows + chat + fragmented pose + receive revoke/reentry + warm cache" bytes.Length
+            // Actual movement lane drives camera-only subscription changes.
+            let look sequence forward =
+                let movement = Dreamsleeve.Protocol.Chat.ClientMovementPacket(ProtocolVersion = 24u,
+                    Sample = Dreamsleeve.Protocol.Chat.MovementSample(ContextRevision = 10UL, Sequence = sequence,
+                        Pose = Dreamsleeve.Protocol.Chat.MovementPose(Position = Dreamsleeve.Protocol.Chat.Position(Y = 1000.0f),
+                            CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection(Y = forward), SampledAtUs = sequence * 100000UL)))
+                send bob 2uy Unchecked.defaultof<EnetPacketFlag> movement
+            alice.Models.Clear(); bob.Models.Clear()
+            look 1UL 1.0f
+            wait "Camera behind removes subscription and stops demand." (fun () ->
+                (bob.Models |> Seq.exists (fun p -> not (isNull p.Remove))) &&
+                (alice.Models |> Seq.exists (fun p -> not (isNull p.PoseDemand) && not p.PoseDemand.Required)))
+            alice.Models.Clear(); bob.Models.Clear()
+            look 2UL -1.0f
+            wait "Camera returns: cached generation offered and demand resumes." (fun () ->
+                (bob.Models |> Seq.exists (fun p -> not (isNull p.Offer) && p.Offer.Asset.Generation = 2UL)) &&
+                (alice.Models |> Seq.exists (fun p -> not (isNull p.PoseDemand) && p.PoseDemand.Required)))
+            printfn "protocol24 E2E PASS: auth/bootstrap + cold %d-byte UDP upload/download + ACK windows + chat + fragmented pose + receive revoke/reentry + warm cache" bytes.Length
             runtime.PostAsync(ServerRuntimeMessage.Stop).GetAwaiter().GetResult() |> ignore
             wait "Runtime cleanup completes." (fun () -> runtime.Completion.IsCompleted)
             runtime.Completion.GetAwaiter().GetResult()

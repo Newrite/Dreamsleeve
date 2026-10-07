@@ -8,7 +8,7 @@ open Dreamsleeve.Server.Core
 
 let private movementBatch items =
     items |> List.map (fun (id, location) ->
-        let pose = match location with ValueSome value -> MovementPose.ofLocation value | ValueNone -> { Position = Position.zero; Rotation = Rotation.zero; SampledAtUs = 0UL }
+        let pose = match location with ValueSome value -> MovementPose.ofLocation value | ValueNone -> { Position = Position.zero; CameraDirection = CameraDirection.zero; SampledAtUs = 0UL }
         ({ PlayerId = id; ViewRevision = 1UL; Sequence = 0UL; Pose = pose }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
 
 let private config = ServerConfig.defaults
@@ -34,7 +34,7 @@ let private health current maximum = ActorValueInfo.create healthName (ActorValu
 let private whiterun =
     PlayerLocation.create
         (Location.create (FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)) (LocationName.create 128 "Whiterun" |> ok))
-        (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
+        (Position.create 1.0f 2.0f 3.0f |> ok) CameraDirection.zero
 
 /// Numbers the readings of these players from one, as presence does for a recipient that knows no kind.
 let private kindsOf (players: PlayerSnapshot list) : ActorValueKinds =
@@ -91,7 +91,7 @@ let private wireLocation () =
         Location = Dreamsleeve.Protocol.Chat.Location(
             LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.ESM", LocalFormId = 0x3Cu),
             LocationName = "Тамриэль"),
-        Position = Dreamsleeve.Protocol.Chat.Position(), Rotation = Dreamsleeve.Protocol.Chat.Rotation())
+        Position = Dreamsleeve.Protocol.Chat.Position(), CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection())
 
 let private scalarEntry key scalar =
     Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = key, DisplayName = "", Scalar = scalar)
@@ -551,7 +551,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let decoded = locationPacket (wireLocation()) |> update |> playerUpdate |> apply
         let place = decoded.Location |> ValueOption.get
         Expect.equal place.Position Position.zero "all-zero coordinates are valid"
-        Expect.equal place.Rotation Rotation.zero "all-zero radians are valid"
+        Expect.equal place.CameraDirection CameraDirection.zero "all-zero radians are valid"
         Expect.equal (PluginName.value place.Location.LocationId.PluginName) "skyrim.esm" "canonical identity"
         let noLocation = locationPacket null |> update |> playerUpdate |> apply
         Expect.equal noLocation.Location ValueNone "unknown is represented by presence"
@@ -561,7 +561,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             | 0 -> broken.Location <- null
             | 1 -> broken.Location.LocationId <- null
             | 2 -> broken.Position <- null
-            | _ -> broken.Rotation <- null
+            | _ -> broken.CameraDirection <- null
             Expect.equal (locationPacket broken |> update |> error).Failure
                 (ProtocolCodecFailure.InvalidPayload "location") "partial location rejected"
 
@@ -573,9 +573,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 | 0 -> place.Position.X <- bad
                 | 1 -> place.Position.Y <- bad
                 | 2 -> place.Position.Z <- bad
-                | 3 -> place.Rotation.X <- bad
-                | 4 -> place.Rotation.Y <- bad
-                | _ -> place.Rotation.Z <- bad
+                | 3 -> place.CameraDirection.X <- bad
+                | 4 -> place.CameraDirection.Y <- bad
+                | _ -> place.CameraDirection.Z <- bad
                 let failure = locationPacket place |> update |> error
                 Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
                 match failure.Failure with
@@ -736,7 +736,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "realtime decoding validates independent context and sequence without request correlation" <| fun _ ->
         let sample () = Dreamsleeve.Protocol.Chat.MovementSample(ContextRevision = 3UL, Sequence = 9UL,
             Pose = Dreamsleeve.Protocol.Chat.MovementPose(Position = Dreamsleeve.Protocol.Chat.Position(),
-                Rotation = Dreamsleeve.Protocol.Chat.Rotation(), SampledAtUs = UInt64.MaxValue))
+                CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection(), SampledAtUs = UInt64.MaxValue))
         let packet = Dreamsleeve.Protocol.Chat.ClientMovementPacket(ProtocolVersion = ProtocolCodec.Version, Sample = sample())
         let decode () = ProtocolCodec.decodeMovement codec (packet.ToByteArray())
         let actual = decode() |> ok

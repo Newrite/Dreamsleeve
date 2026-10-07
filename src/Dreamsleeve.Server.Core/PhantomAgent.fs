@@ -16,11 +16,11 @@ module PhantomAgent =
     let private downloaded = meter.CreateCounter<int64>("phantom.download.bytes", "bytes")
     let private fanout = meter.CreateCounter<int64>("phantom.pose.fanout")
     type private Credit = { mutable At: int64; mutable Available: double }
-    type private View = { Authority: uint64; Distance: double }
+    type private View = { Authority: uint64; Distance: double; Facing: double option }
     type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64; mutable SentGeneration: AppearanceGeneration option; mutable Displayed: AppearanceGeneration option }
     type private Member = {
         Player: PlayerId; mutable Character: uint64; mutable Context: uint64; mutable Located: bool; mutable Active: bool
-        mutable Preferences: PhantomPreferences; Views: Dictionary<PlayerId, View>; Selected: Dictionary<PlayerId, Selected>
+        mutable Demand: struct (uint64 * bool) option; mutable Preferences: PhantomPreferences; Views: Dictionary<PlayerId, View>; Selected: Dictionary<PlayerId, Selected>
         mutable ClearedAuthority: uint64; mutable Revision: uint64; mutable HighManifest: PhantomManifest option
         mutable Ready: PhantomManifest option; mutable Latest: struct (PhantomPose * int64) option
         mutable Previous: AppearanceGeneration option; mutable Settled: AppearanceGeneration option; mutable CommittedAt: int64
@@ -123,7 +123,10 @@ module PhantomAgent =
                         match source state player with
                         | ValueSome current when current.Active && current.Located && current.Preferences.Publish && current.Ready.IsSome ->
                             let count = match subscribers.TryGetValue player with true, count -> count | _ -> 0
-                            if observer.Selected.ContainsKey player || count < state.Options.MaxSubscribers then yield player, view.Distance
+                            let retained = observer.Selected.ContainsKey player
+                            if (retained || count < state.Options.MaxSubscribers)
+                               && (not state.Options.CameraCulling || PhantomPolicy.inView retained view.Distance view.Facing) then
+                                yield player, view.Distance
                         | _ -> ()
             }
             let selection = PhantomPolicy.select observer.Preferences (observer.Selected.Keys |> Set.ofSeq) candidates
@@ -172,6 +175,14 @@ module PhantomAgent =
 
     let private refresh state =
         if state.Options.Enabled then refreshEnabled state
+        for KeyValue(id, memberState) in state.Members do
+            let required = state.Options.Enabled && memberState.Active && memberState.Located && memberState.Preferences.Publish
+                           && state.Audiences.ContainsKey memberState.Player
+            let demand = struct (memberState.Context, required)
+            if state.Options.Enabled && memberState.Active && memberState.Context <> 0UL && memberState.Demand <> Some demand then
+                memberState.Demand <- Some demand
+                if not required then memberState.Latest <- None
+                emit state id (PhantomResponse.PoseDemand(memberState.Context, required))
 
     let create options storage send = {
         Options = options; Storage = storage; Send = send; Members = Dictionary(); Players = Dictionary(); Transfers = Dictionary()
@@ -248,7 +259,7 @@ module PhantomAgent =
                     Player = value.Identity.PlayerId; Character = value.CharacterGeneration; Context = value.MovementContext
                     Located = value.Location.IsSome && value.MovementContext <> 0UL; Active = false
                     Preferences = { Publish = options.Enabled; Receive = options.Enabled; Maximum = options.Maximum; Distance = options.Distance }
-                    Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
+                    Demand = None; Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
                     Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; NextPublish = 0L; PoseCursor = 0
                     ModelCredit = credit 0L options.PlayerModelBytesPerSecond; PoseCredit = credit 0L options.PoseBytesPerSecond
                     OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = { At = 0L; Available = 2.0 }
@@ -256,7 +267,7 @@ module PhantomAgent =
                 }
                 state.Players[value.Identity.PlayerId] <- id
             | _ -> ()
-        | PhantomObservation.View(id, sourceConnection, player, revision, distance) ->
+        | PhantomObservation.View(id, sourceConnection, player, revision, distance, facing) ->
             let mutable observer = Unchecked.defaultof<Member>
             let mutable currentSource = Guid.Empty
             // Presence captures the source session epoch when it projects a view.
@@ -266,10 +277,10 @@ module PhantomAgent =
                && Double.IsFinite distance && distance >= 0.0 then
                 let mutable view = Unchecked.defaultof<View>
                 if observer.Views.TryGetValue(player, &view) then
-                    if revision >= view.Authority && (revision <> view.Authority || distance <> view.Distance) then
-                        observer.Views[player] <- { Authority = revision; Distance = distance }
+                    if revision >= view.Authority && (revision <> view.Authority || distance <> view.Distance || facing <> view.Facing) then
+                        observer.Views[player] <- { Authority = revision; Distance = distance; Facing = facing }
                 elif revision > observer.ClearedAuthority then
-                    observer.Views[player] <- { Authority = revision; Distance = distance }
+                    observer.Views[player] <- { Authority = revision; Distance = distance; Facing = facing }
         | PhantomObservation.Hidden(id, player, revision) ->
             match state.Members.TryGetValue id with
             | true, observer ->

@@ -269,7 +269,7 @@ export namespace Dreamsleeve::Client::Phantom
                   packet.previous = std::make_shared<const Wire::Pose>(
                     Wire::Pose{prior.generation, prior.context, prior.sequence, prior.sampledAtUs, std::move(*bytes)});
               }
-              exchange.Encoded(work.epoch, std::move(packet));
+              exchange.Encoded(work.epoch, work.poseRevision, std::move(packet));
             }
             else
               exchange.Failed("Не удалось подготовить позу фантома: " + encoded.error().field);

@@ -28,121 +28,122 @@ namespace Dreamsleeve.Protocol.Chat {
             "bW1vbi5wcm90byJaCghMb2NhdGlvbhI3Cgtsb2NhdGlvbl9pZBgBIAEoCzIi",
             "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuRm9ybUtleRIVCg1sb2NhdGlv",
             "bl9uYW1lGAIgASgJIisKCFBvc2l0aW9uEgkKAXgYASABKAISCQoBeRgCIAEo",
-            "AhIJCgF6GAMgASgCIisKCFJvdGF0aW9uEgkKAXgYASABKAISCQoBeRgCIAEo",
-            "AhIJCgF6GAMgASgCIswBCg5QbGF5ZXJMb2NhdGlvbhI1Cghsb2NhdGlvbhgB",
-            "IAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTG9jYXRpb24SNQoI",
-            "cG9zaXRpb24YAiABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBv",
-            "c2l0aW9uEjUKCHJvdGF0aW9uGAMgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuQ2hhdC5Sb3RhdGlvbhIVCg1zYW1wbGVkX2F0X3VzGAQgASgEIjYKElJl",
-            "c291cmNlQWN0b3JWYWx1ZRIPCgdjdXJyZW50GAEgASgREg8KB21heGltdW0Y",
-            "AiABKBEikgEKD0FjdG9yVmFsdWVFbnRyeRILCgNrZXkYASABKAkSFAoMZGlz",
-            "cGxheV9uYW1lGAIgASgJEhAKBnNjYWxhchgDIAEoAkgAEkEKCHJlc291cmNl",
-            "GAQgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5SZXNvdXJjZUFj",
-            "dG9yVmFsdWVIAEIHCgV2YWx1ZSI/Cg5BY3RvclZhbHVlS2luZBIKCgJpZBgB",
-            "IAEoBBILCgNrZXkYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJIngKCkFj",
-            "dG9yVmFsdWUSDAoEa2luZBgBIAEoBBIQCgZzY2FsYXIYAiABKAJIABJBCghy",
-            "ZXNvdXJjZRgDIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVz",
-            "b3VyY2VBY3RvclZhbHVlSABCBwoFdmFsdWUinQMKClBsYXllckluZm8SOQoH",
-            "cHJvZmlsZRgBIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxh",
-            "eWVyUHJvZmlsZRIbCg5jaGFyYWN0ZXJfbmFtZRgCIAEoCUgAiAEBEjsKCGxv",
-            "Y2F0aW9uGAMgASgLMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5",
-            "ZXJMb2NhdGlvbhI7CgxhY3Rvcl92YWx1ZXMYBCADKAsyJS5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5DaGF0LkFjdG9yVmFsdWUSHAoUY2hhcmFjdGVyX2dlbmVy",
-            "YXRpb24YBSABKAQSOQoHZGV0YWlscxgGIAEoCzIoLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLkNoYXQuUGxheWVyRGV0YWlscxIVCg12aWV3X3JldmlzaW9uGAcg",
-            "ASgEEhkKEW1vdmVtZW50X3NlcXVlbmNlGAggASgEEh8KF2NoYXJhY3Rlcl9u",
-            "YW1lX3dpdGhoZWxkGAkgASgIQhEKD19jaGFyYWN0ZXJfbmFtZSJLCglOYW1l",
-            "ZEZvcm0SMAoEZm9ybRgBIAEoCzIiLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
-            "YXQuRm9ybUtleRIMCgRuYW1lGAIgASgJItkBCg5QbGF5ZXJBY3Rpdml0eRI1",
-            "CgRraW5kGAEgASgOMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5BY3Rp",
-            "dml0eUtpbmQSGAoLdGFyZ2V0X25hbWUYAiABKAlIAIgBARJCCg9sb2NrX2Rp",
-            "ZmZpY3VsdHkYAyABKA4yKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkxv",
-            "Y2tEaWZmaWN1bHR5EhUKCG1lbnVfa2V5GAQgASgJSAGIAQFCDgoMX3Rhcmdl",
-            "dF9uYW1lQgsKCV9tZW51X2tleSKIAQoQUGxhY2VEZXNjcmlwdGlvbhIXCg93",
-            "b3JsZHNwYWNlX25hbWUYASABKAkSFQoNbG9jYXRpb25fbmFtZRgCIAEoCRIa",
-            "ChJuZWFyYnlfbWFya2VyX25hbWUYAyABKAkSEwoLbWFya2VyX2tpbmQYBCAB",
-            "KAkSEwoLaXNfaW50ZXJpb3IYBSABKAginAIKDVBsYXllckRldGFpbHMSMgoE",
-            "cmFjZRgBIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTmFtZWRG",
-            "b3JtEhIKBWxldmVsGAIgASgNSACIAQESOwoIYWN0aXZpdHkYAyABKAsyKS5E",
-            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckFjdGl2aXR5EjoKBXBs",
-            "YWNlGAQgASgLMisuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGFjZURl",
-            "c2NyaXB0aW9uEiQKF2dhbWVfc3RhcnRlZF9hdF91bml4X21zGAUgASgDSAGI",
-            "AQFCCAoGX2xldmVsQhoKGF9nYW1lX3N0YXJ0ZWRfYXRfdW5peF9tcyIeCg5C",
-            "ZWdpbkNoYXJhY3RlchIMCgRuYW1lGAEgASgJIh8KD1JlbmFtZUNoYXJhY3Rl",
-            "chIMCgRuYW1lGAEgASgJImoKEVNldFBsYXllckxvY2F0aW9uEhgKEGNvbnRl",
-            "eHRfcmV2aXNpb24YASABKAQSOwoIbG9jYXRpb24YAiABKAsyKS5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckxvY2F0aW9uIpMBCgxNb3ZlbWVu",
-            "dFBvc2USNQoIcG9zaXRpb24YASABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
-            "bC5DaGF0LlBvc2l0aW9uEjUKCHJvdGF0aW9uGAIgASgLMiMuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5Sb3RhdGlvbhIVCg1zYW1wbGVkX2F0X3VzGAMg",
-            "ASgEInMKDk1vdmVtZW50U2FtcGxlEhgKEGNvbnRleHRfcmV2aXNpb24YASAB",
-            "KAQSEAoIc2VxdWVuY2UYAiABKAQSNQoEcG9zZRgDIAEoCzInLkRyZWFtc2xl",
-            "ZXZlLlByb3RvY29sLkNoYXQuTW92ZW1lbnRQb3NlIkkKC0FjdG9yVmFsdWVz",
-            "EjoKBnZhbHVlcxgBIAMoCzIqLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQu",
-            "QWN0b3JWYWx1ZUVudHJ5IgsKCUxlYXZlR2FtZSLfAwoMVXBkYXRlUGxheWVy",
-            "EkQKD2JlZ2luX2NoYXJhY3RlchgBIAEoCzIpLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuQmVnaW5DaGFyYWN0ZXJIABJGChByZW5hbWVfY2hhcmFjdGVy",
-            "GAIgASgLMiouRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5SZW5hbWVDaGFy",
-            "YWN0ZXJIABJECgxzZXRfbG9jYXRpb24YCCABKAsyLC5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5DaGF0LlNldFBsYXllckxvY2F0aW9uSAASQgoQc2V0X2FjdG9y",
-            "X3ZhbHVlcxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQWN0",
-            "b3JWYWx1ZXNIABI6CgpsZWF2ZV9nYW1lGAQgASgLMiQuRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuQ2hhdC5MZWF2ZUdhbWVIABI/CgtzZXRfZGV0YWlscxgFIAEo",
-            "CzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyRGV0YWlsc0gA",
-            "QggKBmFjdGlvbkoECAMQBEoECAYQB1ITc2FtcGxlX3BsYXllcl9zdGF0ZVIP",
-            "c2FtcGxlX21vdmVtZW50IoYCChNQbGF5ZXJNZXRhZGF0YVBhdGNoEhEKCXBs",
-            "YXllcl9pZBgBIAEoBBIcChRyZW1vdmVkX2FjdG9yX3ZhbHVlcxgCIAMoBBI7",
-            "CgxhY3Rvcl92YWx1ZXMYAyADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
-            "aGF0LkFjdG9yVmFsdWUSOQoHZGV0YWlscxgEIAEoCzIoLkRyZWFtc2xlZXZl",
-            "LlByb3RvY29sLkNoYXQuUGxheWVyRGV0YWlscxJGCg9jbGVhcmVkX2RldGFp",
-            "bHMYBSADKA4yLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckRl",
-            "dGFpbHNGaWVsZCKQAQoLUGxheWVyTW92ZWQSEQoJcGxheWVyX2lkGAEgASgE",
-            "EhUKDXZpZXdfcmV2aXNpb24YAyABKAQSEAoIc2VxdWVuY2UYBCABKAQSNQoE",
-            "cG9zZRgFIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTW92ZW1l",
-            "bnRQb3NlSgQIAhADUghsb2NhdGlvbiKFAQoQUGxheWVyVmlzaWJpbGl0eRIR",
-            "CglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBBIQCghz",
-            "ZXF1ZW5jZRgDIAEoBBI1CgRwb3NlGAQgASgLMicuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5Nb3ZlbWVudFBvc2UiiwMKD1ByZXNlbmNlQ2hhbmdlZBJE",
-            "ChFhY3Rvcl92YWx1ZV9raW5kcxgBIAMoCzIpLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuQWN0b3JWYWx1ZUtpbmQSNQoGam9pbmVkGAIgAygLMiUuRHJl",
-            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJJbmZvEjYKB3VwZGF0ZWQY",
-            "AyADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckluZm8S",
-            "QAoIbWV0YWRhdGEYBCADKAsyLi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
-            "LlBsYXllck1ldGFkYXRhUGF0Y2gSMgoFc3BhY2UYBSABKAsyIy5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkxvY2F0aW9uEj8KCnZpc2liaWxpdHkYBiAD",
-            "KAsyKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllclZpc2liaWxp",
-            "dHkSDAoEbGVmdBgHIAMoBCJHCgxQbGF5ZXJzTW92ZWQSNwoHcGxheWVycxgB",
-            "IAMoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyTW92ZWQq",
-            "mAQKDEFjdGl2aXR5S2luZBIZChVBQ1RJVklUWV9LSU5EX1VOS05PV04QABIb",
-            "ChdBQ1RJVklUWV9LSU5EX0VYUExPUklORxABEhgKFEFDVElWSVRZX0tJTkRf",
-            "Q09NQkFUEAISGQoVQUNUSVZJVFlfS0lORF9UQUxLSU5HEAMSGwoXQUNUSVZJ",
-            "VFlfS0lORF9CQVJURVJJTkcQBBIaChZBQ1RJVklUWV9LSU5EX1RSQUlOSU5H",
-            "EAUSGQoVQUNUSVZJVFlfS0lORF9SRUFESU5HEAYSHQoZQUNUSVZJVFlfS0lO",
-            "RF9MT0NLUElDS0lORxAHEhoKFkFDVElWSVRZX0tJTkRfQ1JBRlRJTkcQCBIe",
-            "ChpBQ1RJVklUWV9LSU5EX1VTSU5HX09CSkVDVBAJEhgKFEFDVElWSVRZX0tJ",
-            "TkRfUklESU5HEAoSGgoWQUNUSVZJVFlfS0lORF9TTkVBS0lORxALEhoKFkFD",
-            "VElWSVRZX0tJTkRfU1dJTU1JTkcQDBIYChRBQ1RJVklUWV9LSU5EX0ZMWUlO",
-            "RxANEhYKEkFDVElWSVRZX0tJTkRfREVBRBAOEhkKFUFDVElWSVRZX0tJTkRf",
-            "UkFHRE9MTBAPEhYKEkFDVElWSVRZX0tJTkRfTUVOVRAQEhoKFkFDVElWSVRZ",
-            "X0tJTkRfTkVXX0dBTUUQERIZChVBQ1RJVklUWV9LSU5EX0xPQURJTkcQEir8",
-            "AQoOTG9ja0RpZmZpY3VsdHkSGwoXTE9DS19ESUZGSUNVTFRZX1VOS05PV04Q",
-            "ABIcChhMT0NLX0RJRkZJQ1VMVFlfVU5MT0NLRUQQARIdChlMT0NLX0RJRkZJ",
-            "Q1VMVFlfVkVSWV9FQVNZEAISGAoUTE9DS19ESUZGSUNVTFRZX0VBU1kQAxIb",
-            "ChdMT0NLX0RJRkZJQ1VMVFlfQVZFUkFHRRAEEhgKFExPQ0tfRElGRklDVUxU",
-            "WV9IQVJEEAUSHQoZTE9DS19ESUZGSUNVTFRZX1ZFUllfSEFSRBAGEiAKHExP",
-            "Q0tfRElGRklDVUxUWV9SRVFVSVJFU19LRVkQByrDAQoSUGxheWVyRGV0YWls",
-            "c0ZpZWxkEiQKIFBMQVlFUl9ERVRBSUxTX0ZJRUxEX1VOU1BFQ0lGSUVEEAAS",
-            "HQoZUExBWUVSX0RFVEFJTFNfRklFTERfUkFDRRABEh4KGlBMQVlFUl9ERVRB",
-            "SUxTX0ZJRUxEX0xFVkVMEAISHgoaUExBWUVSX0RFVEFJTFNfRklFTERfUExB",
-            "Q0UQAxIoCiRQTEFZRVJfREVUQUlMU19GSUVMRF9HQU1FX1NUQVJURURfQVQQ",
-            "BGIGcHJvdG8z"));
+            "AhIJCgF6GAMgASgCIjIKD0NhbWVyYURpcmVjdGlvbhIJCgF4GAEgASgCEgkK",
+            "AXkYAiABKAISCQoBehgDIAEoAiLbAQoOUGxheWVyTG9jYXRpb24SNQoIbG9j",
+            "YXRpb24YASABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkxvY2F0",
+            "aW9uEjUKCHBvc2l0aW9uGAIgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5Qb3NpdGlvbhJEChBjYW1lcmFfZGlyZWN0aW9uGAMgASgLMiouRHJl",
+            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5DYW1lcmFEaXJlY3Rpb24SFQoNc2Ft",
+            "cGxlZF9hdF91cxgEIAEoBCI2ChJSZXNvdXJjZUFjdG9yVmFsdWUSDwoHY3Vy",
+            "cmVudBgBIAEoERIPCgdtYXhpbXVtGAIgASgRIpIBCg9BY3RvclZhbHVlRW50",
+            "cnkSCwoDa2V5GAEgASgJEhQKDGRpc3BsYXlfbmFtZRgCIAEoCRIQCgZzY2Fs",
+            "YXIYAyABKAJIABJBCghyZXNvdXJjZRgEIAEoCzItLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuUmVzb3VyY2VBY3RvclZhbHVlSABCBwoFdmFsdWUiPwoO",
+            "QWN0b3JWYWx1ZUtpbmQSCgoCaWQYASABKAQSCwoDa2V5GAIgASgJEhQKDGRp",
+            "c3BsYXlfbmFtZRgDIAEoCSJ4CgpBY3RvclZhbHVlEgwKBGtpbmQYASABKAQS",
+            "EAoGc2NhbGFyGAIgASgCSAASQQoIcmVzb3VyY2UYAyABKAsyLS5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlJlc291cmNlQWN0b3JWYWx1ZUgAQgcKBXZh",
+            "bHVlIp0DCgpQbGF5ZXJJbmZvEjkKB3Byb2ZpbGUYASABKAsyKC5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllclByb2ZpbGUSGwoOY2hhcmFjdGVy",
+            "X25hbWUYAiABKAlIAIgBARI7Cghsb2NhdGlvbhgDIAEoCzIpLkRyZWFtc2xl",
+            "ZXZlLlByb3RvY29sLkNoYXQuUGxheWVyTG9jYXRpb24SOwoMYWN0b3JfdmFs",
+            "dWVzGAQgAygLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5BY3RvclZh",
+            "bHVlEhwKFGNoYXJhY3Rlcl9nZW5lcmF0aW9uGAUgASgEEjkKB2RldGFpbHMY",
+            "BiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckRldGFp",
+            "bHMSFQoNdmlld19yZXZpc2lvbhgHIAEoBBIZChFtb3ZlbWVudF9zZXF1ZW5j",
+            "ZRgIIAEoBBIfChdjaGFyYWN0ZXJfbmFtZV93aXRoaGVsZBgJIAEoCEIRCg9f",
+            "Y2hhcmFjdGVyX25hbWUiSwoJTmFtZWRGb3JtEjAKBGZvcm0YASABKAsyIi5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkZvcm1LZXkSDAoEbmFtZRgCIAEo",
+            "CSLZAQoOUGxheWVyQWN0aXZpdHkSNQoEa2luZBgBIAEoDjInLkRyZWFtc2xl",
+            "ZXZlLlByb3RvY29sLkNoYXQuQWN0aXZpdHlLaW5kEhgKC3RhcmdldF9uYW1l",
+            "GAIgASgJSACIAQESQgoPbG9ja19kaWZmaWN1bHR5GAMgASgOMikuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5Mb2NrRGlmZmljdWx0eRIVCghtZW51X2tl",
+            "eRgEIAEoCUgBiAEBQg4KDF90YXJnZXRfbmFtZUILCglfbWVudV9rZXkiiAEK",
+            "EFBsYWNlRGVzY3JpcHRpb24SFwoPd29ybGRzcGFjZV9uYW1lGAEgASgJEhUK",
+            "DWxvY2F0aW9uX25hbWUYAiABKAkSGgoSbmVhcmJ5X21hcmtlcl9uYW1lGAMg",
+            "ASgJEhMKC21hcmtlcl9raW5kGAQgASgJEhMKC2lzX2ludGVyaW9yGAUgASgI",
+            "IpwCCg1QbGF5ZXJEZXRhaWxzEjIKBHJhY2UYASABKAsyJC5EcmVhbXNsZWV2",
+            "ZS5Qcm90b2NvbC5DaGF0Lk5hbWVkRm9ybRISCgVsZXZlbBgCIAEoDUgAiAEB",
+            "EjsKCGFjdGl2aXR5GAMgASgLMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5QbGF5ZXJBY3Rpdml0eRI6CgVwbGFjZRgEIAEoCzIrLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuUGxhY2VEZXNjcmlwdGlvbhIkChdnYW1lX3N0YXJ0",
+            "ZWRfYXRfdW5peF9tcxgFIAEoA0gBiAEBQggKBl9sZXZlbEIaChhfZ2FtZV9z",
+            "dGFydGVkX2F0X3VuaXhfbXMiHgoOQmVnaW5DaGFyYWN0ZXISDAoEbmFtZRgB",
+            "IAEoCSIfCg9SZW5hbWVDaGFyYWN0ZXISDAoEbmFtZRgBIAEoCSJqChFTZXRQ",
+            "bGF5ZXJMb2NhdGlvbhIYChBjb250ZXh0X3JldmlzaW9uGAEgASgEEjsKCGxv",
+            "Y2F0aW9uGAIgASgLMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5",
+            "ZXJMb2NhdGlvbiKiAQoMTW92ZW1lbnRQb3NlEjUKCHBvc2l0aW9uGAEgASgL",
+            "MiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Qb3NpdGlvbhJEChBjYW1l",
+            "cmFfZGlyZWN0aW9uGAIgASgLMiouRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5DYW1lcmFEaXJlY3Rpb24SFQoNc2FtcGxlZF9hdF91cxgDIAEoBCJzCg5N",
+            "b3ZlbWVudFNhbXBsZRIYChBjb250ZXh0X3JldmlzaW9uGAEgASgEEhAKCHNl",
+            "cXVlbmNlGAIgASgEEjUKBHBvc2UYAyABKAsyJy5EcmVhbXNsZWV2ZS5Qcm90",
+            "b2NvbC5DaGF0Lk1vdmVtZW50UG9zZSJJCgtBY3RvclZhbHVlcxI6CgZ2YWx1",
+            "ZXMYASADKAsyKi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkFjdG9yVmFs",
+            "dWVFbnRyeSILCglMZWF2ZUdhbWUi3wMKDFVwZGF0ZVBsYXllchJECg9iZWdp",
+            "bl9jaGFyYWN0ZXIYASABKAsyKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LkJlZ2luQ2hhcmFjdGVySAASRgoQcmVuYW1lX2NoYXJhY3RlchgCIAEoCzIq",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUmVuYW1lQ2hhcmFjdGVySAAS",
+            "RAoMc2V0X2xvY2F0aW9uGAggASgLMiwuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5TZXRQbGF5ZXJMb2NhdGlvbkgAEkIKEHNldF9hY3Rvcl92YWx1ZXMY",
+            "ByABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkFjdG9yVmFsdWVz",
+            "SAASOgoKbGVhdmVfZ2FtZRgEIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LkNoYXQuTGVhdmVHYW1lSAASPwoLc2V0X2RldGFpbHMYBSABKAsyKC5EcmVh",
+            "bXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllckRldGFpbHNIAEIICgZhY3Rp",
+            "b25KBAgDEARKBAgGEAdSE3NhbXBsZV9wbGF5ZXJfc3RhdGVSD3NhbXBsZV9t",
+            "b3ZlbWVudCKGAgoTUGxheWVyTWV0YWRhdGFQYXRjaBIRCglwbGF5ZXJfaWQY",
+            "ASABKAQSHAoUcmVtb3ZlZF9hY3Rvcl92YWx1ZXMYAiADKAQSOwoMYWN0b3Jf",
+            "dmFsdWVzGAMgAygLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5BY3Rv",
+            "clZhbHVlEjkKB2RldGFpbHMYBCABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LlBsYXllckRldGFpbHMSRgoPY2xlYXJlZF9kZXRhaWxzGAUgAygO",
+            "Mi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJEZXRhaWxzRmll",
+            "bGQikAEKC1BsYXllck1vdmVkEhEKCXBsYXllcl9pZBgBIAEoBBIVCg12aWV3",
+            "X3JldmlzaW9uGAMgASgEEhAKCHNlcXVlbmNlGAQgASgEEjUKBHBvc2UYBSAB",
+            "KAsyJy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk1vdmVtZW50UG9zZUoE",
+            "CAIQA1IIbG9jYXRpb24ihQEKEFBsYXllclZpc2liaWxpdHkSEQoJcGxheWVy",
+            "X2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQSEAoIc2VxdWVuY2UY",
+            "AyABKAQSNQoEcG9zZRgEIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
+            "YXQuTW92ZW1lbnRQb3NlIosDCg9QcmVzZW5jZUNoYW5nZWQSRAoRYWN0b3Jf",
+            "dmFsdWVfa2luZHMYASADKAsyKS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LkFjdG9yVmFsdWVLaW5kEjUKBmpvaW5lZBgCIAMoCzIlLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuUGxheWVySW5mbxI2Cgd1cGRhdGVkGAMgAygLMiUu",
+            "RHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJJbmZvEkAKCG1ldGFk",
+            "YXRhGAQgAygLMi4uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJN",
+            "ZXRhZGF0YVBhdGNoEjIKBXNwYWNlGAUgASgLMiMuRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5Mb2NhdGlvbhI/Cgp2aXNpYmlsaXR5GAYgAygLMisuRHJl",
+            "YW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5QbGF5ZXJWaXNpYmlsaXR5EgwKBGxl",
+            "ZnQYByADKAQiRwoMUGxheWVyc01vdmVkEjcKB3BsYXllcnMYASADKAsyJi5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlBsYXllck1vdmVkKpgECgxBY3Rp",
+            "dml0eUtpbmQSGQoVQUNUSVZJVFlfS0lORF9VTktOT1dOEAASGwoXQUNUSVZJ",
+            "VFlfS0lORF9FWFBMT1JJTkcQARIYChRBQ1RJVklUWV9LSU5EX0NPTUJBVBAC",
+            "EhkKFUFDVElWSVRZX0tJTkRfVEFMS0lORxADEhsKF0FDVElWSVRZX0tJTkRf",
+            "QkFSVEVSSU5HEAQSGgoWQUNUSVZJVFlfS0lORF9UUkFJTklORxAFEhkKFUFD",
+            "VElWSVRZX0tJTkRfUkVBRElORxAGEh0KGUFDVElWSVRZX0tJTkRfTE9DS1BJ",
+            "Q0tJTkcQBxIaChZBQ1RJVklUWV9LSU5EX0NSQUZUSU5HEAgSHgoaQUNUSVZJ",
+            "VFlfS0lORF9VU0lOR19PQkpFQ1QQCRIYChRBQ1RJVklUWV9LSU5EX1JJRElO",
+            "RxAKEhoKFkFDVElWSVRZX0tJTkRfU05FQUtJTkcQCxIaChZBQ1RJVklUWV9L",
+            "SU5EX1NXSU1NSU5HEAwSGAoUQUNUSVZJVFlfS0lORF9GTFlJTkcQDRIWChJB",
+            "Q1RJVklUWV9LSU5EX0RFQUQQDhIZChVBQ1RJVklUWV9LSU5EX1JBR0RPTEwQ",
+            "DxIWChJBQ1RJVklUWV9LSU5EX01FTlUQEBIaChZBQ1RJVklUWV9LSU5EX05F",
+            "V19HQU1FEBESGQoVQUNUSVZJVFlfS0lORF9MT0FESU5HEBIq/AEKDkxvY2tE",
+            "aWZmaWN1bHR5EhsKF0xPQ0tfRElGRklDVUxUWV9VTktOT1dOEAASHAoYTE9D",
+            "S19ESUZGSUNVTFRZX1VOTE9DS0VEEAESHQoZTE9DS19ESUZGSUNVTFRZX1ZF",
+            "UllfRUFTWRACEhgKFExPQ0tfRElGRklDVUxUWV9FQVNZEAMSGwoXTE9DS19E",
+            "SUZGSUNVTFRZX0FWRVJBR0UQBBIYChRMT0NLX0RJRkZJQ1VMVFlfSEFSRBAF",
+            "Eh0KGUxPQ0tfRElGRklDVUxUWV9WRVJZX0hBUkQQBhIgChxMT0NLX0RJRkZJ",
+            "Q1VMVFlfUkVRVUlSRVNfS0VZEAcqwwEKElBsYXllckRldGFpbHNGaWVsZBIk",
+            "CiBQTEFZRVJfREVUQUlMU19GSUVMRF9VTlNQRUNJRklFRBAAEh0KGVBMQVlF",
+            "Ul9ERVRBSUxTX0ZJRUxEX1JBQ0UQARIeChpQTEFZRVJfREVUQUlMU19GSUVM",
+            "RF9MRVZFTBACEh4KGlBMQVlFUl9ERVRBSUxTX0ZJRUxEX1BMQUNFEAMSKAok",
+            "UExBWUVSX0RFVEFJTFNfRklFTERfR0FNRV9TVEFSVEVEX0FUEARiBnByb3Rv",
+            "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.ActivityKind), typeof(global::Dreamsleeve.Protocol.Chat.LockDifficulty), typeof(global::Dreamsleeve.Protocol.Chat.PlayerDetailsField), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Location), global::Dreamsleeve.Protocol.Chat.Location.Parser, new[]{ "LocationId", "LocationName" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Position), global::Dreamsleeve.Protocol.Chat.Position.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Rotation), global::Dreamsleeve.Protocol.Chat.Rotation.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerLocation), global::Dreamsleeve.Protocol.Chat.PlayerLocation.Parser, new[]{ "Location", "Position", "Rotation", "SampledAtUs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.CameraDirection), global::Dreamsleeve.Protocol.Chat.CameraDirection.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlayerLocation), global::Dreamsleeve.Protocol.Chat.PlayerLocation.Parser, new[]{ "Location", "Position", "CameraDirection", "SampledAtUs" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ResourceActorValue), global::Dreamsleeve.Protocol.Chat.ResourceActorValue.Parser, new[]{ "Current", "Maximum" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValueEntry), global::Dreamsleeve.Protocol.Chat.ActorValueEntry.Parser, new[]{ "Key", "DisplayName", "Scalar", "Resource" }, new[]{ "Value" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValueKind), global::Dreamsleeve.Protocol.Chat.ActorValueKind.Parser, new[]{ "Id", "Key", "DisplayName" }, null, null, null, null),
@@ -155,7 +156,7 @@ namespace Dreamsleeve.Protocol.Chat {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.BeginCharacter), global::Dreamsleeve.Protocol.Chat.BeginCharacter.Parser, new[]{ "Name" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RenameCharacter), global::Dreamsleeve.Protocol.Chat.RenameCharacter.Parser, new[]{ "Name" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetPlayerLocation), global::Dreamsleeve.Protocol.Chat.SetPlayerLocation.Parser, new[]{ "ContextRevision", "Location" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MovementPose), global::Dreamsleeve.Protocol.Chat.MovementPose.Parser, new[]{ "Position", "Rotation", "SampledAtUs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MovementPose), global::Dreamsleeve.Protocol.Chat.MovementPose.Parser, new[]{ "Position", "CameraDirection", "SampledAtUs" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MovementSample), global::Dreamsleeve.Protocol.Chat.MovementSample.Parser, new[]{ "ContextRevision", "Sequence", "Pose" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ActorValues), global::Dreamsleeve.Protocol.Chat.ActorValues.Parser, new[]{ "Values" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.LeaveGame), global::Dreamsleeve.Protocol.Chat.LeaveGame.Parser, null, null, null, null, null),
@@ -735,19 +736,19 @@ namespace Dreamsleeve.Protocol.Chat {
   }
 
   /// <summary>
-  /// Euler angles in radians, in the same axes as Position.
+  /// World-space camera forward. Zero means unavailable; not actor Euler angles.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class Rotation : pb::IMessage<Rotation>
+  public sealed partial class CameraDirection : pb::IMessage<CameraDirection>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<Rotation> _parser = new pb::MessageParser<Rotation>(() => new Rotation());
+    private static readonly pb::MessageParser<CameraDirection> _parser = new pb::MessageParser<CameraDirection>(() => new CameraDirection());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<Rotation> Parser { get { return _parser; } }
+    public static pb::MessageParser<CameraDirection> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -763,7 +764,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Rotation() {
+    public CameraDirection() {
       OnConstruction();
     }
 
@@ -771,7 +772,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Rotation(Rotation other) : this() {
+    public CameraDirection(CameraDirection other) : this() {
       x_ = other.x_;
       y_ = other.y_;
       z_ = other.z_;
@@ -780,8 +781,8 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Rotation Clone() {
-      return new Rotation(this);
+    public CameraDirection Clone() {
+      return new CameraDirection(this);
     }
 
     /// <summary>Field number for the "x" field.</summary>
@@ -823,12 +824,12 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as Rotation);
+      return Equals(other as CameraDirection);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(Rotation other) {
+    public bool Equals(CameraDirection other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
@@ -927,7 +928,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(Rotation other) {
+    public void MergeFrom(CameraDirection other) {
       if (other == null) {
         return;
       }
@@ -1046,7 +1047,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public PlayerLocation(PlayerLocation other) : this() {
       location_ = other.location_ != null ? other.location_.Clone() : null;
       position_ = other.position_ != null ? other.position_.Clone() : null;
-      rotation_ = other.rotation_ != null ? other.rotation_.Clone() : null;
+      cameraDirection_ = other.cameraDirection_ != null ? other.cameraDirection_.Clone() : null;
       sampledAtUs_ = other.sampledAtUs_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
@@ -1081,15 +1082,15 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "rotation" field.</summary>
-    public const int RotationFieldNumber = 3;
-    private global::Dreamsleeve.Protocol.Chat.Rotation rotation_;
+    /// <summary>Field number for the "camera_direction" field.</summary>
+    public const int CameraDirectionFieldNumber = 3;
+    private global::Dreamsleeve.Protocol.Chat.CameraDirection cameraDirection_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.Rotation Rotation {
-      get { return rotation_; }
+    public global::Dreamsleeve.Protocol.Chat.CameraDirection CameraDirection {
+      get { return cameraDirection_; }
       set {
-        rotation_ = value;
+        cameraDirection_ = value;
       }
     }
 
@@ -1126,7 +1127,7 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (!object.Equals(Location, other.Location)) return false;
       if (!object.Equals(Position, other.Position)) return false;
-      if (!object.Equals(Rotation, other.Rotation)) return false;
+      if (!object.Equals(CameraDirection, other.CameraDirection)) return false;
       if (SampledAtUs != other.SampledAtUs) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -1137,7 +1138,7 @@ namespace Dreamsleeve.Protocol.Chat {
       int hash = 1;
       if (location_ != null) hash ^= Location.GetHashCode();
       if (position_ != null) hash ^= Position.GetHashCode();
-      if (rotation_ != null) hash ^= Rotation.GetHashCode();
+      if (cameraDirection_ != null) hash ^= CameraDirection.GetHashCode();
       if (SampledAtUs != 0UL) hash ^= SampledAtUs.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -1165,9 +1166,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Position);
       }
-      if (rotation_ != null) {
+      if (cameraDirection_ != null) {
         output.WriteRawTag(26);
-        output.WriteMessage(Rotation);
+        output.WriteMessage(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         output.WriteRawTag(32);
@@ -1191,9 +1192,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(18);
         output.WriteMessage(Position);
       }
-      if (rotation_ != null) {
+      if (cameraDirection_ != null) {
         output.WriteRawTag(26);
-        output.WriteMessage(Rotation);
+        output.WriteMessage(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         output.WriteRawTag(32);
@@ -1215,8 +1216,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (position_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Position);
       }
-      if (rotation_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Rotation);
+      if (cameraDirection_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(SampledAtUs);
@@ -1245,11 +1246,11 @@ namespace Dreamsleeve.Protocol.Chat {
         }
         Position.MergeFrom(other.Position);
       }
-      if (other.rotation_ != null) {
-        if (rotation_ == null) {
-          Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+      if (other.cameraDirection_ != null) {
+        if (cameraDirection_ == null) {
+          CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
         }
-        Rotation.MergeFrom(other.Rotation);
+        CameraDirection.MergeFrom(other.CameraDirection);
       }
       if (other.SampledAtUs != 0UL) {
         SampledAtUs = other.SampledAtUs;
@@ -1288,10 +1289,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 26: {
-            if (rotation_ == null) {
-              Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+            if (cameraDirection_ == null) {
+              CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
             }
-            input.ReadMessage(Rotation);
+            input.ReadMessage(CameraDirection);
             break;
           }
           case 32: {
@@ -1332,10 +1333,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 26: {
-            if (rotation_ == null) {
-              Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+            if (cameraDirection_ == null) {
+              CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
             }
-            input.ReadMessage(Rotation);
+            input.ReadMessage(CameraDirection);
             break;
           }
           case 32: {
@@ -5127,7 +5128,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public MovementPose(MovementPose other) : this() {
       position_ = other.position_ != null ? other.position_.Clone() : null;
-      rotation_ = other.rotation_ != null ? other.rotation_.Clone() : null;
+      cameraDirection_ = other.cameraDirection_ != null ? other.cameraDirection_.Clone() : null;
       sampledAtUs_ = other.sampledAtUs_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
@@ -5150,15 +5151,15 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
-    /// <summary>Field number for the "rotation" field.</summary>
-    public const int RotationFieldNumber = 2;
-    private global::Dreamsleeve.Protocol.Chat.Rotation rotation_;
+    /// <summary>Field number for the "camera_direction" field.</summary>
+    public const int CameraDirectionFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.CameraDirection cameraDirection_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Chat.Rotation Rotation {
-      get { return rotation_; }
+    public global::Dreamsleeve.Protocol.Chat.CameraDirection CameraDirection {
+      get { return cameraDirection_; }
       set {
-        rotation_ = value;
+        cameraDirection_ = value;
       }
     }
 
@@ -5190,7 +5191,7 @@ namespace Dreamsleeve.Protocol.Chat {
         return true;
       }
       if (!object.Equals(Position, other.Position)) return false;
-      if (!object.Equals(Rotation, other.Rotation)) return false;
+      if (!object.Equals(CameraDirection, other.CameraDirection)) return false;
       if (SampledAtUs != other.SampledAtUs) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -5200,7 +5201,7 @@ namespace Dreamsleeve.Protocol.Chat {
     public override int GetHashCode() {
       int hash = 1;
       if (position_ != null) hash ^= Position.GetHashCode();
-      if (rotation_ != null) hash ^= Rotation.GetHashCode();
+      if (cameraDirection_ != null) hash ^= CameraDirection.GetHashCode();
       if (SampledAtUs != 0UL) hash ^= SampledAtUs.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -5224,9 +5225,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(10);
         output.WriteMessage(Position);
       }
-      if (rotation_ != null) {
+      if (cameraDirection_ != null) {
         output.WriteRawTag(18);
-        output.WriteMessage(Rotation);
+        output.WriteMessage(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         output.WriteRawTag(24);
@@ -5246,9 +5247,9 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(10);
         output.WriteMessage(Position);
       }
-      if (rotation_ != null) {
+      if (cameraDirection_ != null) {
         output.WriteRawTag(18);
-        output.WriteMessage(Rotation);
+        output.WriteMessage(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         output.WriteRawTag(24);
@@ -5267,8 +5268,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (position_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Position);
       }
-      if (rotation_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Rotation);
+      if (cameraDirection_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(CameraDirection);
       }
       if (SampledAtUs != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(SampledAtUs);
@@ -5291,11 +5292,11 @@ namespace Dreamsleeve.Protocol.Chat {
         }
         Position.MergeFrom(other.Position);
       }
-      if (other.rotation_ != null) {
-        if (rotation_ == null) {
-          Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+      if (other.cameraDirection_ != null) {
+        if (cameraDirection_ == null) {
+          CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
         }
-        Rotation.MergeFrom(other.Rotation);
+        CameraDirection.MergeFrom(other.CameraDirection);
       }
       if (other.SampledAtUs != 0UL) {
         SampledAtUs = other.SampledAtUs;
@@ -5327,10 +5328,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 18: {
-            if (rotation_ == null) {
-              Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+            if (cameraDirection_ == null) {
+              CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
             }
-            input.ReadMessage(Rotation);
+            input.ReadMessage(CameraDirection);
             break;
           }
           case 24: {
@@ -5364,10 +5365,10 @@ namespace Dreamsleeve.Protocol.Chat {
             break;
           }
           case 18: {
-            if (rotation_ == null) {
-              Rotation = new global::Dreamsleeve.Protocol.Chat.Rotation();
+            if (cameraDirection_ == null) {
+              CameraDirection = new global::Dreamsleeve.Protocol.Chat.CameraDirection();
             }
-            input.ReadMessage(Rotation);
+            input.ReadMessage(CameraDirection);
             break;
           }
           case 24: {

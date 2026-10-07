@@ -16,7 +16,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     WriteKey(*target.mutable_location()->mutable_location_id(), value.location.locationId);
     target.mutable_location()->set_location_name(value.location.locationName);
     WritePosition(*target.mutable_position(), value.position);
-    WriteRotation(*target.mutable_rotation(), value.rotation);
+    WriteCameraDirection(*target.mutable_camera_direction(), value.cameraDirection);
   }
 
   struct ActorValueWriter
@@ -134,11 +134,11 @@ namespace Dreamsleeve::Client::Wire::Detail
     Domain::PlayerLocation result{
         {KeyOf(source.location().location_id()), source.location().location_name()},
         PositionOf(source.position()),
-        RotationOf(source.rotation()),
+        CameraDirectionOf(source.camera_direction()),
         source.sampled_at_us()
     };
     if (!ValidKey(result.location.locationId)) return Invalid("location_id");
-    if (!Finite(result.position) || !Finite(result.rotation)) return Invalid("location");
+    if (!Finite(result.position) || !Finite(result.cameraDirection)) return Invalid("location");
     return result;
   }
 
@@ -304,7 +304,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   void WritePose(P::MovementPose& target, const Domain::MovementPose& value)
   {
     WritePosition(*target.mutable_position(), value.position);
-    WriteRotation(*target.mutable_rotation(), value.rotation);
+    WriteCameraDirection(*target.mutable_camera_direction(), value.cameraDirection);
     target.set_sampled_at_us(value.sampledAtUs);
   }
 
@@ -312,8 +312,8 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     if (source.player_id() == Domain::InvalidId || source.view_revision() == 0 || !source.has_pose()) return Invalid("movement");
     const auto&                pose = source.pose();
-    const Domain::MovementPose value{PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
-    if (!Finite(value.position) || !Finite(value.rotation)) return Invalid("pose");
+    const Domain::MovementPose value{PositionOf(pose.position()), CameraDirectionOf(pose.camera_direction()), pose.sampled_at_us()};
+    if (!Finite(value.position) || !Finite(value.cameraDirection)) return Invalid("pose");
     return PlayerMovementReceived{source.player_id(), source.view_revision(), source.sequence(), value};
   }
 
@@ -326,8 +326,9 @@ namespace Dreamsleeve::Client::Wire::Detail
     {
       if (!space) return Invalid("space");
       const auto& pose = source.pose();
-      location         = Domain::PlayerLocation{*space, PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
-      if (!Finite(location->position) || !Finite(location->rotation)) return Invalid("pose");
+      location =
+        Domain::PlayerLocation{*space, PositionOf(pose.position()), CameraDirectionOf(pose.camera_direction()), pose.sampled_at_us()};
+      if (!Finite(location->position) || !Finite(location->cameraDirection)) return Invalid("pose");
     }
     return PlayerLocationUpdated{source.player_id(), std::move(location), source.view_revision(), source.sequence()};
   }

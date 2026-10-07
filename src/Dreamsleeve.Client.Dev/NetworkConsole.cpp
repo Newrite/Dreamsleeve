@@ -447,7 +447,7 @@ namespace
         std::cout << "No position: send move or location first\n";
         return true;
       }
-      const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, lastLocation->rotation.Z};
+      const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, 0.0f};
       if (line.starts_with("note "))
         command = PlaceGroundNote{*requestId, line.substr(5), placement, ConsoleGameDate};
       else
@@ -609,8 +609,8 @@ namespace
   {
     const auto pose = movement.Sample(id);
     if (pose)
-      std::cout << "pose " << id << ' ' << pose->position.X << ' ' << pose->position.Y << ' ' << pose->position.Z
-                << " yaw=" << pose->rotation.Z << '\n';
+      std::cout << "pose " << id << ' ' << pose->position.X << ' ' << pose->position.Y << ' ' << pose->position.Z << " camera=("
+                << pose->cameraDirection.X << "," << pose->cameraDirection.Y << "," << pose->cameraDirection.Z << ")" << '\n';
     else
       std::cout << "pose " << id << " absent\n";
   }
@@ -726,7 +726,7 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
   // Validated by TryCreate; the view trusts it.
-  auto  movement = MovementView::Create((*application)->Settings().client.movement);
+  auto movement = MovementView::Create((*application)->Settings().client.movement);
   for (const auto& route : (*application)->Routes())
     routeNames.push_back(route.name);
   auto& exchange = (*application)->Exchange();
@@ -848,7 +848,11 @@ int RunNetworkConsole(int argc, char* argv[])
         std::cout << "Usage: color #RRGGBB\n";
       else if (const auto requestId = exchange.NextRequestId(); !requestId)
         std::cout << "Request IDs exhausted\n";
-      else if (exchange.Post({generation, SetNameColor{*requestId, color}}) == CommandPostResult::Queued)
+      else if (
+        exchange.Post({
+            generation,
+            SetNameColor{*requestId, color}
+      }) == CommandPostResult::Queued)
         std::cout << "request " << *requestId << " queued\n";
       else
         std::cout << "Command queue is full or closed\n";

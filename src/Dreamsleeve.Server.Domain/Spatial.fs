@@ -73,47 +73,47 @@ module Position =
         sqrt (distanceSquared left right)
 
 [<Struct>]
-type Rotation = private {
-    x: Radian
-    y: Radian
-    z: Radian
+type CameraDirection = private {
+    x: float32
+    y: float32
+    z: float32
 } with
     member this.X = this.x
     member this.Y = this.y
     member this.Z = this.z
 
 [<RequireQualifiedAccess>]
-module Rotation =
-    /// Preserve native Euler angles in radians without wrapping or clamping.
+module CameraDirection =
+    /// Detached world-space camera forward; zero means unavailable. Scale is immaterial.
     let create (x: float32) (y: float32) (z: float32) =
         if not (Single.IsFinite x) then
-            Error (DomainError.NonFiniteNumber "Rotation.X")
+            Error (DomainError.NonFiniteNumber "CameraDirection.X")
         elif not (Single.IsFinite y) then
-            Error (DomainError.NonFiniteNumber "Rotation.Y")
+            Error (DomainError.NonFiniteNumber "CameraDirection.Y")
         elif not (Single.IsFinite z) then
-            Error (DomainError.NonFiniteNumber "Rotation.Z")
+            Error (DomainError.NonFiniteNumber "CameraDirection.Z")
         else
-            Ok ({ x = LanguagePrimitives.Float32WithMeasure<radian> x
-                  y = LanguagePrimitives.Float32WithMeasure<radian> y
-                  z = LanguagePrimitives.Float32WithMeasure<radian> z }: Rotation)
+            Ok ({ x = x
+                  y = y
+                  z = z }: CameraDirection)
 
-    let zero : Rotation = { x = 0.0f<radian>; y = 0.0f<radian>; z = 0.0f<radian> }
+    let zero : CameraDirection = { x = 0.0f; y = 0.0f; z = 0.0f }
 
 type PlayerLocation = private {
     location: Location
     position: Position
-    rotation: Rotation
+    cameraDirection: CameraDirection
     sampledAtUs: uint64
 } with
     member this.Location = this.location
     member this.Position = this.position
-    member this.Rotation = this.rotation
+    member this.CameraDirection = this.cameraDirection
     member this.SampledAtUs = this.sampledAtUs
 
 [<RequireQualifiedAccess>]
 module PlayerLocation =
-    let create location position rotation : PlayerLocation =
-        { location = location; position = position; rotation = rotation; sampledAtUs = 0UL }
+    let create location position cameraDirection : PlayerLocation =
+        { location = location; position = position; cameraDirection = cameraDirection; sampledAtUs = 0UL }
 
     let withSampleTime sampledAtUs (value: PlayerLocation) =
         { value with sampledAtUs = sampledAtUs }
@@ -141,7 +141,7 @@ module PlayerLocation =
 
 /// An absolute sample within a location established by a reliable command.
 [<Struct>]
-type MovementPose = { Position: Position; Rotation: Rotation; SampledAtUs: uint64 }
+type MovementPose = { Position: Position; CameraDirection: CameraDirection; SampledAtUs: uint64 }
 
 [<Struct>]
 type MovementSample = { ContextRevision: uint64; Sequence: uint64; Pose: MovementPose }
@@ -158,8 +158,8 @@ type VisibilityChange = { PlayerId: PlayerId; ViewRevision: uint64; Sequence: ui
 [<RequireQualifiedAccess>]
 module MovementPose =
     let ofLocation (location: PlayerLocation) =
-        { Position = location.Position; Rotation = location.Rotation; SampledAtUs = location.SampledAtUs }
+        { Position = location.Position; CameraDirection = location.CameraDirection; SampledAtUs = location.SampledAtUs }
 
     let apply (pose: MovementPose) (location: PlayerLocation) =
-        PlayerLocation.create location.Location pose.Position pose.Rotation
+        PlayerLocation.create location.Location pose.Position pose.CameraDirection
         |> PlayerLocation.withSampleTime pose.SampledAtUs

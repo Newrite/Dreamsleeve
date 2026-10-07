@@ -380,7 +380,7 @@ let private identityTests = [
 
             let location =
                 PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
-                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero CameraDirection.zero
             let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
             let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
             let date = GameDate.create 4 201 8 17 2 14 5 |> ok
@@ -455,7 +455,7 @@ let private identityTests = [
             equal ValueNone message.CharacterName
             let location =
                 PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
-                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero CameraDirection.zero
             let! _ = applyUpdate fixture 4UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
             let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)
             let date = GameDate.create 4 201 8 17 2 14 5 |> ok
@@ -785,7 +785,7 @@ let tests = testList "PlayerSession" ([
             let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
             let location = PlayerLocation.create
                                (Location.create form (LocationName.create 128 "Whiterun" |> ok))
-                               (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
+                               (Position.create 1.0f 2.0f 3.0f |> ok) CameraDirection.zero
             let mutable nextRequestId = 2UL
             let update value = task {
                 let requestId = nextRequestId
@@ -836,8 +836,8 @@ let tests = testList "PlayerSession" ([
             let! _, _, _ = ready fixture
             let name = CharacterName.create 128 "Nerevar" |> ok
             let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
-            let location = PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok)) Position.zero Rotation.zero
-            let pose = { Position = Position.create 10.0f 20.0f 30.0f |> ok; Rotation = Rotation.zero; SampledAtUs = 0UL }
+            let location = PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok)) Position.zero CameraDirection.zero
+            let pose = { Position = Position.create 10.0f 20.0f 30.0f |> ok; CameraDirection = CameraDirection.zero; SampledAtUs = 0UL }
             let sample context sequence = PlayerSessionMessage.SampleMovement { ContextRevision = context; Sequence = sequence; Pose = pose }
             do! post fixture.Player (sample 1UL 1UL)
             let! _ = read fixture.Player
@@ -1305,7 +1305,7 @@ let tests = testList "PlayerSession" ([
             do! muted 4UL
             let location =
                 PlayerLocation.create (Location.create (FormKey.create (PluginName.create 64 "Skyrim.esm" |> ok) (LocalFormId.create 60u |> ok))
-                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero Rotation.zero
+                                           (LocationName.create 64 "Whiterun" |> ok)) Position.zero CameraDirection.zero
             let! _ = applyUpdate fixture 5UL (PlayerUpdate.BeginCharacter(CharacterName.create 128 "Indoril" |> ok))
             let! _ = applyUpdate fixture 6UL (PlayerUpdate.SetLocation(1UL, ValueSome location))
             let placement = GroundMarkPlacement.create location.Location.LocationId Position.zero (Radian.create 0.0f |> ok)

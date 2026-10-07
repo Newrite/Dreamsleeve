@@ -18,7 +18,7 @@ module LanePolicy =
     let bulk lane = lane = DeliveryLane.Models || lane = DeliveryLane.Poses
 
 type PhantomOptions = {
-    Enabled: bool; StoragePath: string; DiskBytes: int64; RamBytes: int64; CacheEntries: int; CacheTtlSeconds: int
+    Enabled: bool; CameraCulling: bool; StoragePath: string; DiskBytes: int64; RamBytes: int64; CacheEntries: int; CacheTtlSeconds: int
     Limits: PhantomAssetLimits; Maximum: int; Distance: float32; MaxSources: int; MaxSubscribers: int
     MaxTransfers: int; TransfersPerPlayer: int; ChunkBytes: int; WindowChunks: int; TransferTimeoutMs: int
     PublishCooldownMs: int; PoseIntervalMs: int; PoseTimeoutMs: int; ReplicationIntervalMs: int
@@ -29,7 +29,7 @@ type PhantomOptions = {
 [<RequireQualifiedAccess>]
 module PhantomOptions =
     let defaults = {
-        Enabled = true; StoragePath = "phantoms"; DiskBytes = 4L * 1024L * 1024L * 1024L; RamBytes = 64L * 1024L * 1024L
+        Enabled = true; CameraCulling = true; StoragePath = "phantoms"; DiskBytes = 4L * 1024L * 1024L * 1024L; RamBytes = 64L * 1024L * 1024L
         CacheEntries = 1024; CacheTtlSeconds = 86400
         Limits = { CompressedBytes = 64 * 1024 * 1024; RawBytes = 128 * 1024 * 1024
                    Channels = 4096; PoseBytes = 128 * 1024; RawPoseBytes = 256 * 1024 }

@@ -182,6 +182,13 @@ export namespace Dreamsleeve::Client::Phantom
       Publish(Clock::now());
     }
 
+    void Receive(const Wire::PoseDemand& value)
+    {
+      if (!exchange.PoseDemand(value)) return;
+      latestPose.reset();
+      nextPose = {};
+    }
+
     void Receive(const Wire::Settled& value)
     {
       exchange.Settled(value);
@@ -560,7 +567,8 @@ public:
         latestPose.reset();
         lastPoseSequence = 0;
       }
-      if (outgoing.pose) latestPose = std::move(outgoing.pose);
+      if (outgoing.pose && exchange.PosesRequired()) latestPose = std::move(outgoing.pose);
+      if (!exchange.PosesRequired()) latestPose.reset();
       if (local)
       {
         if (const auto* awaiting = std::get_if<Awaiting>(&local->state); awaiting && now >= awaiting->deadline)

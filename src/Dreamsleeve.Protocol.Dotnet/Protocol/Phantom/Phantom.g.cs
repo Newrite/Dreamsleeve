@@ -39,62 +39,64 @@ namespace Dreamsleeve.Protocol.Phantom {
             "Q2FuY2VsEhMKC3RyYW5zZmVyX2lkGAEgASgEIjQKCFByb2dyZXNzEhMKC3Ry",
             "YW5zZmVyX2lkGAEgASgEEhMKC25leHRfb2Zmc2V0GAIgASgNIkkKCURpc3Bs",
             "YXllZBIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEo",
-            "BBISCgpnZW5lcmF0aW9uGAMgASgEIjcKB1NldHRsZWQSEgoKZ2VuZXJhdGlv",
-            "bhgBIAEoBBIYChBjb250ZXh0X3JldmlzaW9uGAIgASgEIgoKCFdpdGhkcmF3",
-            "IpQEChFDbGllbnRBc3NldFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEg",
-            "ASgNEkAKC3ByZWZlcmVuY2VzGAIgASgLMikuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuUGhhbnRvbS5QcmVmZXJlbmNlc0gAEjgKB3B1Ymxpc2gYAyABKAsyJS5E",
-            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlB1Ymxpc2hIABI0CgVjaHVu",
-            "axgEIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ2h1bmtI",
-            "ABI6Cghkb3dubG9hZBgFIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBo",
-            "YW50b20uRG93bmxvYWRIABI2CgZjYW5jZWwYBiABKAsyJC5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5QaGFudG9tLkNhbmNlbEgAEjoKCHdpdGhkcmF3GAcgASgL",
-            "MiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5XaXRoZHJhd0gAEjoK",
-            "CHByb2dyZXNzGAggASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
-            "bS5Qcm9ncmVzc0gAEjwKCWRpc3BsYXllZBgJIAEoCzInLkRyZWFtc2xlZXZl",
-            "LlByb3RvY29sLlBoYW50b20uRGlzcGxheWVkSABCCQoHcGF5bG9hZCJvCgVP",
-            "ZmZlchIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEo",
-            "BBI8CgVhc3NldBgDIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50",
-            "b20uQXNzZXREZXNjcmlwdG9yIpQBCghUcmFuc2ZlchITCgt0cmFuc2Zlcl9p",
-            "ZBgBIAEoBBI8CgVhc3NldBgCIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LlBoYW50b20uQXNzZXREZXNjcmlwdG9yEhEKCXBsYXllcl9pZBgDIAEoBBIO",
-            "CgZ1cGxvYWQYBCABKAgSEgoKcmVxdWVzdF9pZBgFIAEoBCKkAQoIQ29tcGxl",
-            "dGUSEwoLdHJhbnNmZXJfaWQYASABKAQSEAoIYWNjZXB0ZWQYAiABKAgSDgoG",
-            "cmVhc29uGAMgASgJEhEKCXBsYXllcl9pZBgEIAEoBBISCgpnZW5lcmF0aW9u",
-            "GAUgASgEEhYKDnJldHJ5X2FmdGVyX21zGAYgASgNEg4KBnVwbG9hZBgHIAEo",
-            "CBISCgpyZXF1ZXN0X2lkGAggASgEIjIKBlJlbW92ZRIRCglwbGF5ZXJfaWQY",
-            "ASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBCLbAgoGUG9saWN5Eg8KB2Vu",
-            "YWJsZWQYASABKAgSFwoPcmF3X2Fzc2V0X2J5dGVzGAIgASgNEh4KFmNvbXBy",
-            "ZXNzZWRfYXNzZXRfYnl0ZXMYAyABKA0SEAoIY2hhbm5lbHMYBCABKA0SEgoK",
-            "cG9zZV9ieXRlcxgGIAEoDRIdChVjb21wcmVzc2VkX3Bvc2VfYnl0ZXMYByAB",
-            "KA0SEwoLc2FtcGxlX3JhdGUYCCABKA0SFwoPbWF4aW11bV92aXNpYmxlGAkg",
-            "ASgNEhAKCGRpc3RhbmNlGAogASgCEhUKDXdpbmRvd19jaHVua3MYCyABKA0S",
-            "HAoUY29uY3VycmVudF90cmFuc2ZlcnMYDCABKA0SHgoWbW9kZWxfYnl0ZXNf",
-            "cGVyX3NlY29uZBgNIAEoDRIdChVwb3NlX2J5dGVzX3Blcl9zZWNvbmQYDiAB",
-            "KA1KBAgFEAZSCGdlb21ldHJ5IoIEChFTZXJ2ZXJBc3NldFBhY2tldBIYChBw",
-            "cm90b2NvbF92ZXJzaW9uGAEgASgNEjQKBW9mZmVyGAIgASgLMiMuRHJlYW1z",
-            "bGVldmUuUHJvdG9jb2wuUGhhbnRvbS5PZmZlckgAEjoKCHRyYW5zZmVyGAMg",
-            "ASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5UcmFuc2ZlckgA",
-            "EjQKBWNodW5rGAQgASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
-            "bS5DaHVua0gAEjoKCGNvbXBsZXRlGAUgASgLMiYuRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuUGhhbnRvbS5Db21wbGV0ZUgAEjYKBnJlbW92ZRgGIAEoCzIkLkRy",
-            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUmVtb3ZlSAASOgoIcHJvZ3Jl",
-            "c3MYByABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlByb2dy",
-            "ZXNzSAASNgoGcG9saWN5GAggASgLMiQuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "UGhhbnRvbS5Qb2xpY3lIABI4CgdzZXR0bGVkGAkgASgLMiUuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuUGhhbnRvbS5TZXR0bGVkSABCCQoHcGF5bG9hZCJ0CgpQ",
-            "b3NlU2FtcGxlEhIKCmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZp",
-            "c2lvbhgCIAEoBBIQCghzZXF1ZW5jZRgDIAEoBBIVCg1zYW1wbGVkX2F0X3Vz",
-            "GAQgASgEEg8KB3BheWxvYWQYBSABKAwiqQEKEENsaWVudFBvc2VQYWNrZXQS",
-            "GAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI4CgZzYW1wbGUYAiABKAsyKC5E",
-            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGUSQQoPcHJl",
-            "dmlvdXNfc2FtcGxlGAMgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
-            "bnRvbS5Qb3NlU2FtcGxlItMBChBTZXJ2ZXJQb3NlUGFja2V0EhgKEHByb3Rv",
-            "Y29sX3ZlcnNpb24YASABKA0SEQoJcGxheWVyX2lkGAIgASgEEhUKDXZpZXdf",
-            "cmV2aXNpb24YAyABKAQSOAoGc2FtcGxlGAQgASgLMiguRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuUGhhbnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBs",
-            "ZRgFIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNh",
-            "bXBsZWIGcHJvdG8z"));
+            "BBISCgpnZW5lcmF0aW9uGAMgASgEIjgKClBvc2VEZW1hbmQSGAoQY29udGV4",
+            "dF9yZXZpc2lvbhgBIAEoBBIQCghyZXF1aXJlZBgCIAEoCCI3CgdTZXR0bGVk",
+            "EhIKCmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEo",
+            "BCIKCghXaXRoZHJhdyKUBAoRQ2xpZW50QXNzZXRQYWNrZXQSGAoQcHJvdG9j",
+            "b2xfdmVyc2lvbhgBIAEoDRJACgtwcmVmZXJlbmNlcxgCIAEoCzIpLkRyZWFt",
+            "c2xlZXZlLlByb3RvY29sLlBoYW50b20uUHJlZmVyZW5jZXNIABI4CgdwdWJs",
+            "aXNoGAMgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5QdWJs",
+            "aXNoSAASNAoFY2h1bmsYBCABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5Q",
+            "aGFudG9tLkNodW5rSAASOgoIZG93bmxvYWQYBSABKAsyJi5EcmVhbXNsZWV2",
+            "ZS5Qcm90b2NvbC5QaGFudG9tLkRvd25sb2FkSAASNgoGY2FuY2VsGAYgASgL",
+            "MiQuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5DYW5jZWxIABI6Cgh3",
+            "aXRoZHJhdxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
+            "V2l0aGRyYXdIABI6Cghwcm9ncmVzcxgIIAEoCzImLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLlBoYW50b20uUHJvZ3Jlc3NIABI8CglkaXNwbGF5ZWQYCSABKAsy",
+            "Jy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkRpc3BsYXllZEgAQgkK",
+            "B3BheWxvYWQibwoFT2ZmZXISEQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdf",
+            "cmV2aXNpb24YAiABKAQSPAoFYXNzZXQYAyABKAsyLS5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3JpcHRvciKUAQoIVHJhbnNmZXIS",
+            "EwoLdHJhbnNmZXJfaWQYASABKAQSPAoFYXNzZXQYAiABKAsyLS5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3JpcHRvchIRCglwbGF5",
+            "ZXJfaWQYAyABKAQSDgoGdXBsb2FkGAQgASgIEhIKCnJlcXVlc3RfaWQYBSAB",
+            "KAQipAEKCENvbXBsZXRlEhMKC3RyYW5zZmVyX2lkGAEgASgEEhAKCGFjY2Vw",
+            "dGVkGAIgASgIEg4KBnJlYXNvbhgDIAEoCRIRCglwbGF5ZXJfaWQYBCABKAQS",
+            "EgoKZ2VuZXJhdGlvbhgFIAEoBBIWCg5yZXRyeV9hZnRlcl9tcxgGIAEoDRIO",
+            "CgZ1cGxvYWQYByABKAgSEgoKcmVxdWVzdF9pZBgIIAEoBCIyCgZSZW1vdmUS",
+            "EQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQi2wIK",
+            "BlBvbGljeRIPCgdlbmFibGVkGAEgASgIEhcKD3Jhd19hc3NldF9ieXRlcxgC",
+            "IAEoDRIeChZjb21wcmVzc2VkX2Fzc2V0X2J5dGVzGAMgASgNEhAKCGNoYW5u",
+            "ZWxzGAQgASgNEhIKCnBvc2VfYnl0ZXMYBiABKA0SHQoVY29tcHJlc3NlZF9w",
+            "b3NlX2J5dGVzGAcgASgNEhMKC3NhbXBsZV9yYXRlGAggASgNEhcKD21heGlt",
+            "dW1fdmlzaWJsZRgJIAEoDRIQCghkaXN0YW5jZRgKIAEoAhIVCg13aW5kb3df",
+            "Y2h1bmtzGAsgASgNEhwKFGNvbmN1cnJlbnRfdHJhbnNmZXJzGAwgASgNEh4K",
+            "Fm1vZGVsX2J5dGVzX3Blcl9zZWNvbmQYDSABKA0SHQoVcG9zZV9ieXRlc19w",
+            "ZXJfc2Vjb25kGA4gASgNSgQIBRAGUghnZW9tZXRyeSLDBAoRU2VydmVyQXNz",
+            "ZXRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI0CgVvZmZlchgC",
+            "IAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uT2ZmZXJIABI6",
+            "Cgh0cmFuc2ZlchgDIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50",
+            "b20uVHJhbnNmZXJIABI0CgVjaHVuaxgEIAEoCzIjLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLlBoYW50b20uQ2h1bmtIABI6Cghjb21wbGV0ZRgFIAEoCzImLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ29tcGxldGVIABI2CgZyZW1v",
+            "dmUYBiABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlJlbW92",
+            "ZUgAEjoKCHByb2dyZXNzGAcgASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "UGhhbnRvbS5Qcm9ncmVzc0gAEjYKBnBvbGljeRgIIAEoCzIkLkRyZWFtc2xl",
+            "ZXZlLlByb3RvY29sLlBoYW50b20uUG9saWN5SAASOAoHc2V0dGxlZBgJIAEo",
+            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uU2V0dGxlZEgAEj8K",
+            "C3Bvc2VfZGVtYW5kGAogASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
+            "bnRvbS5Qb3NlRGVtYW5kSABCCQoHcGF5bG9hZCJ0CgpQb3NlU2FtcGxlEhIK",
+            "CmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBIQ",
+            "CghzZXF1ZW5jZRgDIAEoBBIVCg1zYW1wbGVkX2F0X3VzGAQgASgEEg8KB3Bh",
+            "eWxvYWQYBSABKAwiqQEKEENsaWVudFBvc2VQYWNrZXQSGAoQcHJvdG9jb2xf",
+            "dmVyc2lvbhgBIAEoDRI4CgZzYW1wbGUYAiABKAsyKC5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGUSQQoPcHJldmlvdXNfc2FtcGxl",
+            "GAMgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qb3NlU2Ft",
+            "cGxlItMBChBTZXJ2ZXJQb3NlUGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24Y",
+            "ASABKA0SEQoJcGxheWVyX2lkGAIgASgEEhUKDXZpZXdfcmV2aXNpb24YAyAB",
+            "KAQSOAoGc2FtcGxlGAQgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
+            "bnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBsZRgFIAEoCzIoLkRy",
+            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNhbXBsZWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -106,6 +108,7 @@ namespace Dreamsleeve.Protocol.Phantom {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Cancel), global::Dreamsleeve.Protocol.Phantom.Cancel.Parser, new[]{ "TransferId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Progress), global::Dreamsleeve.Protocol.Phantom.Progress.Parser, new[]{ "TransferId", "NextOffset" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Displayed), global::Dreamsleeve.Protocol.Phantom.Displayed.Parser, new[]{ "PlayerId", "ViewRevision", "Generation" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseDemand), global::Dreamsleeve.Protocol.Phantom.PoseDemand.Parser, new[]{ "ContextRevision", "Required" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Settled), global::Dreamsleeve.Protocol.Phantom.Settled.Parser, new[]{ "Generation", "ContextRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Withdraw), global::Dreamsleeve.Protocol.Phantom.Withdraw.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Chunk", "Download", "Cancel", "Withdraw", "Progress", "Displayed" }, new[]{ "Payload" }, null, null, null),
@@ -114,7 +117,7 @@ namespace Dreamsleeve.Protocol.Phantom {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Accepted", "Reason", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Remove), global::Dreamsleeve.Protocol.Phantom.Remove.Parser, new[]{ "PlayerId", "ViewRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "WindowChunks", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy", "Settled" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy", "Settled", "PoseDemand" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseSample), global::Dreamsleeve.Protocol.Phantom.PoseSample.Parser, new[]{ "Generation", "ContextRevision", "Sequence", "SampledAtUs", "Payload" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientPosePacket), global::Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser, new[]{ "ProtocolVersion", "Sample", "PreviousSample" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerPosePacket), global::Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser, new[]{ "ProtocolVersion", "PlayerId", "ViewRevision", "Sample", "PreviousSample" }, null, null, null, null)
@@ -2356,6 +2359,241 @@ namespace Dreamsleeve.Protocol.Phantom {
   /// The publisher may retire its prior bindings and prepare another generation.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class PoseDemand : pb::IMessage<PoseDemand>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<PoseDemand> _parser = new pb::MessageParser<PoseDemand>(() => new PoseDemand());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<PoseDemand> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PoseDemand() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PoseDemand(PoseDemand other) : this() {
+      contextRevision_ = other.contextRevision_;
+      required_ = other.required_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PoseDemand Clone() {
+      return new PoseDemand(this);
+    }
+
+    /// <summary>Field number for the "context_revision" field.</summary>
+    public const int ContextRevisionFieldNumber = 1;
+    private ulong contextRevision_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong ContextRevision {
+      get { return contextRevision_; }
+      set {
+        contextRevision_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "required" field.</summary>
+    public const int RequiredFieldNumber = 2;
+    private bool required_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Required {
+      get { return required_; }
+      set {
+        required_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as PoseDemand);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(PoseDemand other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ContextRevision != other.ContextRevision) return false;
+      if (Required != other.Required) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ContextRevision != 0UL) hash ^= ContextRevision.GetHashCode();
+      if (Required != false) hash ^= Required.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ContextRevision != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ContextRevision);
+      }
+      if (Required != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Required);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ContextRevision != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(ContextRevision);
+      }
+      if (Required != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Required);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ContextRevision != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ContextRevision);
+      }
+      if (Required != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(PoseDemand other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ContextRevision != 0UL) {
+        ContextRevision = other.ContextRevision;
+      }
+      if (other.Required != false) {
+        Required = other.Required;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ContextRevision = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Required = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ContextRevision = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Required = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Settled : pb::IMessage<Settled>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -2370,7 +2608,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2605,7 +2843,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2766,7 +3004,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3415,7 +3653,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3696,7 +3934,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4051,7 +4289,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4511,7 +4749,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4746,7 +4984,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5388,7 +5626,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5433,6 +5671,9 @@ namespace Dreamsleeve.Protocol.Phantom {
           break;
         case PayloadOneofCase.Settled:
           Settled = other.Settled.Clone();
+          break;
+        case PayloadOneofCase.PoseDemand:
+          PoseDemand = other.PoseDemand.Clone();
           break;
       }
 
@@ -5553,6 +5794,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "pose_demand" field.</summary>
+    public const int PoseDemandFieldNumber = 10;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Phantom.PoseDemand PoseDemand {
+      get { return payloadCase_ == PayloadOneofCase.PoseDemand ? (global::Dreamsleeve.Protocol.Phantom.PoseDemand) payload_ : null; }
+      set {
+        payload_ = value;
+        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.PoseDemand;
+      }
+    }
+
     private object payload_;
     /// <summary>Enum of possible cases for the "payload" oneof.</summary>
     public enum PayloadOneofCase {
@@ -5565,6 +5818,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       Progress = 7,
       Policy = 8,
       Settled = 9,
+      PoseDemand = 10,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5604,6 +5858,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (!object.Equals(Progress, other.Progress)) return false;
       if (!object.Equals(Policy, other.Policy)) return false;
       if (!object.Equals(Settled, other.Settled)) return false;
+      if (!object.Equals(PoseDemand, other.PoseDemand)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -5621,6 +5876,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Progress) hash ^= Progress.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Policy) hash ^= Policy.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Settled) hash ^= Settled.GetHashCode();
+      if (payloadCase_ == PayloadOneofCase.PoseDemand) hash ^= PoseDemand.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -5676,6 +5932,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(74);
         output.WriteMessage(Settled);
       }
+      if (payloadCase_ == PayloadOneofCase.PoseDemand) {
+        output.WriteRawTag(82);
+        output.WriteMessage(PoseDemand);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5722,6 +5982,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(74);
         output.WriteMessage(Settled);
       }
+      if (payloadCase_ == PayloadOneofCase.PoseDemand) {
+        output.WriteRawTag(82);
+        output.WriteMessage(PoseDemand);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5758,6 +6022,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (payloadCase_ == PayloadOneofCase.Settled) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Settled);
+      }
+      if (payloadCase_ == PayloadOneofCase.PoseDemand) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(PoseDemand);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -5822,6 +6089,12 @@ namespace Dreamsleeve.Protocol.Phantom {
             Settled = new global::Dreamsleeve.Protocol.Phantom.Settled();
           }
           Settled.MergeFrom(other.Settled);
+          break;
+        case PayloadOneofCase.PoseDemand:
+          if (PoseDemand == null) {
+            PoseDemand = new global::Dreamsleeve.Protocol.Phantom.PoseDemand();
+          }
+          PoseDemand.MergeFrom(other.PoseDemand);
           break;
       }
 
@@ -5920,6 +6193,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Settled = subBuilder;
             break;
           }
+          case 82: {
+            global::Dreamsleeve.Protocol.Phantom.PoseDemand subBuilder = new global::Dreamsleeve.Protocol.Phantom.PoseDemand();
+            if (payloadCase_ == PayloadOneofCase.PoseDemand) {
+              subBuilder.MergeFrom(PoseDemand);
+            }
+            input.ReadMessage(subBuilder);
+            PoseDemand = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -6015,6 +6297,15 @@ namespace Dreamsleeve.Protocol.Phantom {
             Settled = subBuilder;
             break;
           }
+          case 82: {
+            global::Dreamsleeve.Protocol.Phantom.PoseDemand subBuilder = new global::Dreamsleeve.Protocol.Phantom.PoseDemand();
+            if (payloadCase_ == PayloadOneofCase.PoseDemand) {
+              subBuilder.MergeFrom(PoseDemand);
+            }
+            input.ReadMessage(subBuilder);
+            PoseDemand = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -6040,7 +6331,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6390,7 +6681,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6680,7 +6971,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

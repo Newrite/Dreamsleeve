@@ -89,6 +89,8 @@ module PhantomCodec =
             packet.Complete <- value
         | PhantomResponse.Remove(player, revision) -> packet.Remove <- Dreamsleeve.Protocol.Phantom.Remove(PlayerId = PlayerId.value player, ViewRevision = revision)
         | PhantomResponse.Progress(id, offset) -> packet.Progress <- Dreamsleeve.Protocol.Phantom.Progress(TransferId = id.Value, NextOffset = uint32 offset)
+        | PhantomResponse.PoseDemand(context, required) ->
+            packet.PoseDemand <- Dreamsleeve.Protocol.Phantom.PoseDemand(ContextRevision = context, Required = required)
         | PhantomResponse.Settled(generation, context) ->
             packet.Settled <- Dreamsleeve.Protocol.Phantom.Settled(Generation = generation.Value, ContextRevision = context)
         | PhantomResponse.Policy policy ->

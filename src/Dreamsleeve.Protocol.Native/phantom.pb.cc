@@ -183,6 +183,32 @@ struct PoseSampleDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PoseSampleDefaultTypeInternal _PoseSample_default_instance_;
 
+inline constexpr PoseDemand::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        context_revision_{::uint64_t{0u}},
+        required_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR PoseDemand::PoseDemand(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(PoseDemand_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct PoseDemandDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR PoseDemandDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~PoseDemandDefaultTypeInternal() {}
+  union {
+    PoseDemand _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PoseDemandDefaultTypeInternal _PoseDemand_default_instance_;
+
 inline constexpr Policy::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -671,6 +697,13 @@ const ::uint32_t
         1,
         2,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::PoseDemand, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::PoseDemand, _impl_.context_revision_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::PoseDemand, _impl_.required_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Settled, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Settled, _impl_.generation_),
@@ -781,7 +814,7 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_._oneof_case_[0]),
-        14, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
@@ -792,7 +825,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket, _impl_.payload_),
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -848,18 +883,19 @@ static const ::_pbi::MigrationSchema
         {53, sizeof(::Dreamsleeve::Protocol::Phantom::Cancel)},
         {58, sizeof(::Dreamsleeve::Protocol::Phantom::Progress)},
         {65, sizeof(::Dreamsleeve::Protocol::Phantom::Displayed)},
-        {74, sizeof(::Dreamsleeve::Protocol::Phantom::Settled)},
-        {81, sizeof(::Dreamsleeve::Protocol::Phantom::Withdraw)},
-        {82, sizeof(::Dreamsleeve::Protocol::Phantom::ClientAssetPacket)},
-        {105, sizeof(::Dreamsleeve::Protocol::Phantom::Offer)},
-        {114, sizeof(::Dreamsleeve::Protocol::Phantom::Transfer)},
-        {127, sizeof(::Dreamsleeve::Protocol::Phantom::Complete)},
-        {146, sizeof(::Dreamsleeve::Protocol::Phantom::Remove)},
-        {153, sizeof(::Dreamsleeve::Protocol::Phantom::Policy)},
-        {182, sizeof(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket)},
-        {205, sizeof(::Dreamsleeve::Protocol::Phantom::PoseSample)},
-        {218, sizeof(::Dreamsleeve::Protocol::Phantom::ClientPosePacket)},
-        {227, sizeof(::Dreamsleeve::Protocol::Phantom::ServerPosePacket)},
+        {74, sizeof(::Dreamsleeve::Protocol::Phantom::PoseDemand)},
+        {81, sizeof(::Dreamsleeve::Protocol::Phantom::Settled)},
+        {88, sizeof(::Dreamsleeve::Protocol::Phantom::Withdraw)},
+        {89, sizeof(::Dreamsleeve::Protocol::Phantom::ClientAssetPacket)},
+        {112, sizeof(::Dreamsleeve::Protocol::Phantom::Offer)},
+        {121, sizeof(::Dreamsleeve::Protocol::Phantom::Transfer)},
+        {134, sizeof(::Dreamsleeve::Protocol::Phantom::Complete)},
+        {153, sizeof(::Dreamsleeve::Protocol::Phantom::Remove)},
+        {160, sizeof(::Dreamsleeve::Protocol::Phantom::Policy)},
+        {189, sizeof(::Dreamsleeve::Protocol::Phantom::ServerAssetPacket)},
+        {214, sizeof(::Dreamsleeve::Protocol::Phantom::PoseSample)},
+        {227, sizeof(::Dreamsleeve::Protocol::Phantom::ClientPosePacket)},
+        {236, sizeof(::Dreamsleeve::Protocol::Phantom::ServerPosePacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Phantom::_Preferences_default_instance_._instance,
@@ -870,6 +906,7 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Phantom::_Cancel_default_instance_._instance,
     &::Dreamsleeve::Protocol::Phantom::_Progress_default_instance_._instance,
     &::Dreamsleeve::Protocol::Phantom::_Displayed_default_instance_._instance,
+    &::Dreamsleeve::Protocol::Phantom::_PoseDemand_default_instance_._instance,
     &::Dreamsleeve::Protocol::Phantom::_Settled_default_instance_._instance,
     &::Dreamsleeve::Protocol::Phantom::_Withdraw_default_instance_._instance,
     &::Dreamsleeve::Protocol::Phantom::_ClientAssetPacket_default_instance_._instance,
@@ -902,81 +939,84 @@ const char descriptor_table_protodef_phantom_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "d\030\001 \001(\004\"4\n\010Progress\022\023\n\013transfer_id\030\001 \001(\004"
     "\022\023\n\013next_offset\030\002 \001(\r\"I\n\tDisplayed\022\021\n\tpl"
     "ayer_id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\022\022\n\n"
-    "generation\030\003 \001(\004\"7\n\007Settled\022\022\n\ngeneratio"
-    "n\030\001 \001(\004\022\030\n\020context_revision\030\002 \001(\004\"\n\n\010Wit"
-    "hdraw\"\224\004\n\021ClientAssetPacket\022\030\n\020protocol_"
-    "version\030\001 \001(\r\022@\n\013preferences\030\002 \001(\0132).Dre"
-    "amsleeve.Protocol.Phantom.PreferencesH\000\022"
-    "8\n\007publish\030\003 \001(\0132%.Dreamsleeve.Protocol."
-    "Phantom.PublishH\000\0224\n\005chunk\030\004 \001(\0132#.Dream"
-    "sleeve.Protocol.Phantom.ChunkH\000\022:\n\010downl"
-    "oad\030\005 \001(\0132&.Dreamsleeve.Protocol.Phantom"
-    ".DownloadH\000\0226\n\006cancel\030\006 \001(\0132$.Dreamsleev"
-    "e.Protocol.Phantom.CancelH\000\022:\n\010withdraw\030"
-    "\007 \001(\0132&.Dreamsleeve.Protocol.Phantom.Wit"
-    "hdrawH\000\022:\n\010progress\030\010 \001(\0132&.Dreamsleeve."
-    "Protocol.Phantom.ProgressH\000\022<\n\tdisplayed"
-    "\030\t \001(\0132\'.Dreamsleeve.Protocol.Phantom.Di"
-    "splayedH\000B\t\n\007payload\"o\n\005Offer\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\022<\n\005asset"
-    "\030\003 \001(\0132-.Dreamsleeve.Protocol.Phantom.As"
-    "setDescriptor\"\224\001\n\010Transfer\022\023\n\013transfer_i"
-    "d\030\001 \001(\004\022<\n\005asset\030\002 \001(\0132-.Dreamsleeve.Pro"
-    "tocol.Phantom.AssetDescriptor\022\021\n\tplayer_"
-    "id\030\003 \001(\004\022\016\n\006upload\030\004 \001(\010\022\022\n\nrequest_id\030\005"
-    " \001(\004\"\244\001\n\010Complete\022\023\n\013transfer_id\030\001 \001(\004\022\020"
-    "\n\010accepted\030\002 \001(\010\022\016\n\006reason\030\003 \001(\t\022\021\n\tplay"
-    "er_id\030\004 \001(\004\022\022\n\ngeneration\030\005 \001(\004\022\026\n\016retry"
-    "_after_ms\030\006 \001(\r\022\016\n\006upload\030\007 \001(\010\022\022\n\nreque"
-    "st_id\030\010 \001(\004\"2\n\006Remove\022\021\n\tplayer_id\030\001 \001(\004"
-    "\022\025\n\rview_revision\030\002 \001(\004\"\333\002\n\006Policy\022\017\n\007en"
-    "abled\030\001 \001(\010\022\027\n\017raw_asset_bytes\030\002 \001(\r\022\036\n\026"
-    "compressed_asset_bytes\030\003 \001(\r\022\020\n\010channels"
-    "\030\004 \001(\r\022\022\n\npose_bytes\030\006 \001(\r\022\035\n\025compressed"
-    "_pose_bytes\030\007 \001(\r\022\023\n\013sample_rate\030\010 \001(\r\022\027"
-    "\n\017maximum_visible\030\t \001(\r\022\020\n\010distance\030\n \001("
-    "\002\022\025\n\rwindow_chunks\030\013 \001(\r\022\034\n\024concurrent_t"
-    "ransfers\030\014 \001(\r\022\036\n\026model_bytes_per_second"
-    "\030\r \001(\r\022\035\n\025pose_bytes_per_second\030\016 \001(\rJ\004\010"
-    "\005\020\006R\010geometry\"\202\004\n\021ServerAssetPacket\022\030\n\020p"
-    "rotocol_version\030\001 \001(\r\0224\n\005offer\030\002 \001(\0132#.D"
-    "reamsleeve.Protocol.Phantom.OfferH\000\022:\n\010t"
-    "ransfer\030\003 \001(\0132&.Dreamsleeve.Protocol.Pha"
-    "ntom.TransferH\000\0224\n\005chunk\030\004 \001(\0132#.Dreamsl"
-    "eeve.Protocol.Phantom.ChunkH\000\022:\n\010complet"
-    "e\030\005 \001(\0132&.Dreamsleeve.Protocol.Phantom.C"
-    "ompleteH\000\0226\n\006remove\030\006 \001(\0132$.Dreamsleeve."
-    "Protocol.Phantom.RemoveH\000\022:\n\010progress\030\007 "
+    "generation\030\003 \001(\004\"8\n\nPoseDemand\022\030\n\020contex"
+    "t_revision\030\001 \001(\004\022\020\n\010required\030\002 \001(\010\"7\n\007Se"
+    "ttled\022\022\n\ngeneration\030\001 \001(\004\022\030\n\020context_rev"
+    "ision\030\002 \001(\004\"\n\n\010Withdraw\"\224\004\n\021ClientAssetP"
+    "acket\022\030\n\020protocol_version\030\001 \001(\r\022@\n\013prefe"
+    "rences\030\002 \001(\0132).Dreamsleeve.Protocol.Phan"
+    "tom.PreferencesH\000\0228\n\007publish\030\003 \001(\0132%.Dre"
+    "amsleeve.Protocol.Phantom.PublishH\000\0224\n\005c"
+    "hunk\030\004 \001(\0132#.Dreamsleeve.Protocol.Phanto"
+    "m.ChunkH\000\022:\n\010download\030\005 \001(\0132&.Dreamsleev"
+    "e.Protocol.Phantom.DownloadH\000\0226\n\006cancel\030"
+    "\006 \001(\0132$.Dreamsleeve.Protocol.Phantom.Can"
+    "celH\000\022:\n\010withdraw\030\007 \001(\0132&.Dreamsleeve.Pr"
+    "otocol.Phantom.WithdrawH\000\022:\n\010progress\030\010 "
     "\001(\0132&.Dreamsleeve.Protocol.Phantom.Progr"
-    "essH\000\0226\n\006policy\030\010 \001(\0132$.Dreamsleeve.Prot"
-    "ocol.Phantom.PolicyH\000\0228\n\007settled\030\t \001(\0132%"
-    ".Dreamsleeve.Protocol.Phantom.SettledH\000B"
-    "\t\n\007payload\"t\n\nPoseSample\022\022\n\ngeneration\030\001"
-    " \001(\004\022\030\n\020context_revision\030\002 \001(\004\022\020\n\010sequen"
-    "ce\030\003 \001(\004\022\025\n\rsampled_at_us\030\004 \001(\004\022\017\n\007paylo"
-    "ad\030\005 \001(\014\"\251\001\n\020ClientPosePacket\022\030\n\020protoco"
-    "l_version\030\001 \001(\r\0228\n\006sample\030\002 \001(\0132(.Dreams"
-    "leeve.Protocol.Phantom.PoseSample\022A\n\017pre"
-    "vious_sample\030\003 \001(\0132(.Dreamsleeve.Protoco"
-    "l.Phantom.PoseSample\"\323\001\n\020ServerPosePacke"
-    "t\022\030\n\020protocol_version\030\001 \001(\r\022\021\n\tplayer_id"
-    "\030\002 \001(\004\022\025\n\rview_revision\030\003 \001(\004\0228\n\006sample\030"
-    "\004 \001(\0132(.Dreamsleeve.Protocol.Phantom.Pos"
-    "eSample\022A\n\017previous_sample\030\005 \001(\0132(.Dream"
-    "sleeve.Protocol.Phantom.PoseSampleb\006prot"
-    "o3"
+    "essH\000\022<\n\tdisplayed\030\t \001(\0132\'.Dreamsleeve.P"
+    "rotocol.Phantom.DisplayedH\000B\t\n\007payload\"o"
+    "\n\005Offer\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rview_revis"
+    "ion\030\002 \001(\004\022<\n\005asset\030\003 \001(\0132-.Dreamsleeve.P"
+    "rotocol.Phantom.AssetDescriptor\"\224\001\n\010Tran"
+    "sfer\022\023\n\013transfer_id\030\001 \001(\004\022<\n\005asset\030\002 \001(\013"
+    "2-.Dreamsleeve.Protocol.Phantom.AssetDes"
+    "criptor\022\021\n\tplayer_id\030\003 \001(\004\022\016\n\006upload\030\004 \001"
+    "(\010\022\022\n\nrequest_id\030\005 \001(\004\"\244\001\n\010Complete\022\023\n\013t"
+    "ransfer_id\030\001 \001(\004\022\020\n\010accepted\030\002 \001(\010\022\016\n\006re"
+    "ason\030\003 \001(\t\022\021\n\tplayer_id\030\004 \001(\004\022\022\n\ngenerat"
+    "ion\030\005 \001(\004\022\026\n\016retry_after_ms\030\006 \001(\r\022\016\n\006upl"
+    "oad\030\007 \001(\010\022\022\n\nrequest_id\030\010 \001(\004\"2\n\006Remove\022"
+    "\021\n\tplayer_id\030\001 \001(\004\022\025\n\rview_revision\030\002 \001("
+    "\004\"\333\002\n\006Policy\022\017\n\007enabled\030\001 \001(\010\022\027\n\017raw_ass"
+    "et_bytes\030\002 \001(\r\022\036\n\026compressed_asset_bytes"
+    "\030\003 \001(\r\022\020\n\010channels\030\004 \001(\r\022\022\n\npose_bytes\030\006"
+    " \001(\r\022\035\n\025compressed_pose_bytes\030\007 \001(\r\022\023\n\013s"
+    "ample_rate\030\010 \001(\r\022\027\n\017maximum_visible\030\t \001("
+    "\r\022\020\n\010distance\030\n \001(\002\022\025\n\rwindow_chunks\030\013 \001"
+    "(\r\022\034\n\024concurrent_transfers\030\014 \001(\r\022\036\n\026mode"
+    "l_bytes_per_second\030\r \001(\r\022\035\n\025pose_bytes_p"
+    "er_second\030\016 \001(\rJ\004\010\005\020\006R\010geometry\"\303\004\n\021Serv"
+    "erAssetPacket\022\030\n\020protocol_version\030\001 \001(\r\022"
+    "4\n\005offer\030\002 \001(\0132#.Dreamsleeve.Protocol.Ph"
+    "antom.OfferH\000\022:\n\010transfer\030\003 \001(\0132&.Dreams"
+    "leeve.Protocol.Phantom.TransferH\000\0224\n\005chu"
+    "nk\030\004 \001(\0132#.Dreamsleeve.Protocol.Phantom."
+    "ChunkH\000\022:\n\010complete\030\005 \001(\0132&.Dreamsleeve."
+    "Protocol.Phantom.CompleteH\000\0226\n\006remove\030\006 "
+    "\001(\0132$.Dreamsleeve.Protocol.Phantom.Remov"
+    "eH\000\022:\n\010progress\030\007 \001(\0132&.Dreamsleeve.Prot"
+    "ocol.Phantom.ProgressH\000\0226\n\006policy\030\010 \001(\0132"
+    "$.Dreamsleeve.Protocol.Phantom.PolicyH\000\022"
+    "8\n\007settled\030\t \001(\0132%.Dreamsleeve.Protocol."
+    "Phantom.SettledH\000\022\?\n\013pose_demand\030\n \001(\0132("
+    ".Dreamsleeve.Protocol.Phantom.PoseDemand"
+    "H\000B\t\n\007payload\"t\n\nPoseSample\022\022\n\ngeneratio"
+    "n\030\001 \001(\004\022\030\n\020context_revision\030\002 \001(\004\022\020\n\010seq"
+    "uence\030\003 \001(\004\022\025\n\rsampled_at_us\030\004 \001(\004\022\017\n\007pa"
+    "yload\030\005 \001(\014\"\251\001\n\020ClientPosePacket\022\030\n\020prot"
+    "ocol_version\030\001 \001(\r\0228\n\006sample\030\002 \001(\0132(.Dre"
+    "amsleeve.Protocol.Phantom.PoseSample\022A\n\017"
+    "previous_sample\030\003 \001(\0132(.Dreamsleeve.Prot"
+    "ocol.Phantom.PoseSample\"\323\001\n\020ServerPosePa"
+    "cket\022\030\n\020protocol_version\030\001 \001(\r\022\021\n\tplayer"
+    "_id\030\002 \001(\004\022\025\n\rview_revision\030\003 \001(\004\0228\n\006samp"
+    "le\030\004 \001(\0132(.Dreamsleeve.Protocol.Phantom."
+    "PoseSample\022A\n\017previous_sample\030\005 \001(\0132(.Dr"
+    "eamsleeve.Protocol.Phantom.PoseSampleb\006p"
+    "roto3"
 };
 static ::absl::once_flag descriptor_table_phantom_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_phantom_2eproto = {
     false,
     false,
-    3162,
+    3285,
     descriptor_table_protodef_phantom_2eproto,
     "phantom.proto",
     &descriptor_table_phantom_2eproto_once,
     nullptr,
     0,
-    20,
+    21,
     schemas,
     file_default_instances,
     TableStruct_phantom_2eproto::offsets,
@@ -3648,6 +3688,298 @@ void Displayed::InternalSwap(Displayed* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
 }
 
 ::google::protobuf::Metadata Displayed::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class PoseDemand::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<PoseDemand>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_._has_bits_);
+};
+
+PoseDemand::PoseDemand(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PoseDemand_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:Dreamsleeve.Protocol.Phantom.PoseDemand)
+}
+PoseDemand::PoseDemand(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PoseDemand& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PoseDemand_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE PoseDemand::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PoseDemand::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, context_revision_),
+           0,
+           offsetof(Impl_, required_) -
+               offsetof(Impl_, context_revision_) +
+               sizeof(Impl_::required_));
+}
+PoseDemand::~PoseDemand() {
+  // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  SharedDtor(*this);
+}
+inline void PoseDemand::SharedDtor(MessageLite& self) {
+  PoseDemand& this_ = static_cast<PoseDemand&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL PoseDemand::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PoseDemand(arena);
+}
+constexpr auto PoseDemand::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PoseDemand),
+                                            alignof(PoseDemand));
+}
+constexpr auto PoseDemand::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_PoseDemand_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &PoseDemand::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PoseDemand>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PoseDemand::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PoseDemand>(), &PoseDemand::ByteSizeLong,
+              &PoseDemand::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_._cached_size_),
+          false,
+      },
+      &PoseDemand::kDescriptorMethods,
+      &descriptor_table_phantom_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PoseDemand_class_data_ =
+        PoseDemand::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PoseDemand::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PoseDemand_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PoseDemand_class_data_.tc_table);
+  return PoseDemand_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 0, 2>
+PoseDemand::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    PoseDemand_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::PoseDemand>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // bool required = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PoseDemand, _impl_.required_), 1>(),
+     {16, 1, 0,
+      PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.required_)}},
+    // uint64 context_revision = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PoseDemand, _impl_.context_revision_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.context_revision_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint64 context_revision = 1;
+    {PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.context_revision_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    // bool required = 2;
+    {PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.required_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void PoseDemand::Clear() {
+// @@protoc_insertion_point(message_clear_start:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.context_revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.required_) -
+        reinterpret_cast<char*>(&_impl_.context_revision_)) + sizeof(_impl_.required_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PoseDemand::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PoseDemand& this_ = static_cast<const PoseDemand&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PoseDemand::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PoseDemand& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 context_revision = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_context_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_context_revision(), target);
+    }
+  }
+
+  // bool required = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_required() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_required(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PoseDemand::ByteSizeLong(const MessageLite& base) {
+  const PoseDemand& this_ = static_cast<const PoseDemand&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PoseDemand::ByteSizeLong() const {
+  const PoseDemand& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 context_revision = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_context_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_context_revision());
+      }
+    }
+    // bool required = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_required() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PoseDemand::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<PoseDemand*>(&to_msg);
+  auto& from = static_cast<const PoseDemand&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_context_revision() != 0) {
+        _this->_impl_.context_revision_ = from._impl_.context_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_required() != 0) {
+        _this->_impl_.required_ = from._impl_.required_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PoseDemand::CopyFrom(const PoseDemand& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:Dreamsleeve.Protocol.Phantom.PoseDemand)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PoseDemand::InternalSwap(PoseDemand* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.required_)
+      + sizeof(PoseDemand::_impl_.required_)
+      - PROTOBUF_FIELD_OFFSET(PoseDemand, _impl_.context_revision_)>(
+          reinterpret_cast<char*>(&_impl_.context_revision_),
+          reinterpret_cast<char*>(&other->_impl_.context_revision_));
+}
+
+::google::protobuf::Metadata PoseDemand::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -6999,6 +7331,19 @@ void ServerAssetPacket::set_allocated_settled(::Dreamsleeve::Protocol::Phantom::
   }
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.settled)
 }
+void ServerAssetPacket::set_allocated_pose_demand(::Dreamsleeve::Protocol::Phantom::PoseDemand* PROTOBUF_NULLABLE pose_demand) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (pose_demand) {
+    ::google::protobuf::Arena* submessage_arena = pose_demand->GetArena();
+    if (message_arena != submessage_arena) {
+      pose_demand = ::google::protobuf::internal::GetOwnedMessage(message_arena, pose_demand, submessage_arena);
+    }
+    set_has_pose_demand();
+    _impl_.payload_.pose_demand_ = pose_demand;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.pose_demand)
+}
 ServerAssetPacket::ServerAssetPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerAssetPacket_class_data_.base()) {
@@ -7057,6 +7402,9 @@ ServerAssetPacket::ServerAssetPacket(
         break;
       case kSettled:
         _impl_.payload_.settled_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.settled_);
+        break;
+      case kPoseDemand:
+        _impl_.payload_.pose_demand_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.pose_demand_);
         break;
   }
 
@@ -7158,6 +7506,14 @@ void ServerAssetPacket::clear_payload() {
       }
       break;
     }
+    case kPoseDemand: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.pose_demand_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.pose_demand_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -7209,17 +7565,17 @@ ServerAssetPacket::GetClassData() const {
   return ServerAssetPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 9, 8, 0, 2>
+const ::_pbi::TcParseTable<0, 10, 9, 0, 2>
 ServerAssetPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerAssetPacket, _impl_._has_bits_),
     0, // no _extensions_
-    9, 0,  // max_field_number, fast_idx_mask
+    10, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294966784,  // skipmap
+    4294966272,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    9,  // num_field_entries
-    8,  // num_aux_entries
+    10,  // num_field_entries
+    9,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerAssetPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -7253,6 +7609,8 @@ ServerAssetPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerAssetPacket, _impl_.payload_.policy_), _Internal::kOneofCaseOffset + 0, 6, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Phantom.Settled settled = 9;
     {PROTOBUF_FIELD_OFFSET(ServerAssetPacket, _impl_.payload_.settled_), _Internal::kOneofCaseOffset + 0, 7, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Phantom.PoseDemand pose_demand = 10;
+    {PROTOBUF_FIELD_OFFSET(ServerAssetPacket, _impl_.payload_.pose_demand_), _Internal::kOneofCaseOffset + 0, 8, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::Offer>()},
@@ -7263,6 +7621,7 @@ ServerAssetPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::Progress>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::Policy>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::Settled>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::PoseDemand>()},
   }},
   {{
   }},
@@ -7357,6 +7716,12 @@ PROTOBUF_NOINLINE void ServerAssetPacket::Clear() {
           stream);
       break;
     }
+    case kPoseDemand: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          10, *this_._impl_.payload_.pose_demand_, this_._impl_.payload_.pose_demand_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -7440,6 +7805,12 @@ PROTOBUF_NOINLINE void ServerAssetPacket::Clear() {
     case kSettled: {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.settled_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Phantom.PoseDemand pose_demand = 10;
+    case kPoseDemand: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.pose_demand_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -7544,6 +7915,14 @@ void ServerAssetPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.settled_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.settled_);
         } else {
           _this->_impl_.payload_.settled_->MergeFrom(*from._impl_.payload_.settled_);
+        }
+        break;
+      }
+      case kPoseDemand: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.pose_demand_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.pose_demand_);
+        } else {
+          _this->_impl_.payload_.pose_demand_->MergeFrom(*from._impl_.payload_.pose_demand_);
         }
         break;
       }

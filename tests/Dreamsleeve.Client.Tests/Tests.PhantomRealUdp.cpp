@@ -157,7 +157,7 @@ namespace
         space->mutable_location_id()->set_local_form_id(60);
         space->set_location_name("Whiterun");
         location->mutable_position();
-        location->mutable_rotation();
+        location->mutable_camera_direction();
       });
     }
 
@@ -333,7 +333,7 @@ namespace
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {
-  REQUIRE(Dreamsleeve::Client::Wire::Version == 23);
+  REQUIRE(Dreamsleeve::Client::Wire::Version == 24);
   const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
   REQUIRE(portText);
   const auto port = std::stoul(*portText);

@@ -21,7 +21,10 @@ namespace
 
   Player Placed(std::uint32_t generation, std::uint64_t viewRevision, std::uint64_t sequence)
   {
-    Player player{.data = {7, "seven", "Seven"}, .characterGeneration = generation};
+    Player player{
+        .data                = {7, "seven", "Seven"},
+        .characterGeneration = generation
+    };
     player.location         = At({1, 2, 3});
     player.viewRevision     = viewRevision;
     player.movementSequence = sequence;
@@ -44,25 +47,41 @@ TEST_CASE("Checks accept finite numbers, named forms and places, and the Tamriel
   CHECK(Checks::Finite(1.0f, -2.0, 0.0f));
   CHECK_FALSE(Checks::Finite(1.0f, std::numeric_limits<double>::infinity()));
   CHECK_FALSE(Checks::Finite(Position{0, nan, 0}));
-  CHECK_FALSE(Checks::Finite(Rotation{0, 0, -std::numeric_limits<float>::infinity()}));
+  CHECK_FALSE(Checks::Finite(CameraDirection{0, 0, -std::numeric_limits<float>::infinity()}));
 
   CHECK(Checks::ValidKey(Whiterun));
   CHECK_FALSE(Checks::ValidKey({"", 0x1A26F}));
   CHECK_FALSE(Checks::ValidKey({"skyrim.esm", InvalidId}));
-  CHECK(Checks::ValidPlacement({Whiterun, {1, 2, 3}, 1.5f}));
-  CHECK_FALSE(Checks::ValidPlacement({Whiterun, {1, 2, 3}, nan}));
-  CHECK_FALSE(Checks::ValidPlacement({{"", 1}, {1, 2, 3}, 0}));
+  CHECK(
+    Checks::ValidPlacement({
+        Whiterun,
+        {1, 2, 3},
+        1.5f
+  }));
+  CHECK_FALSE(
+    Checks::ValidPlacement({
+        Whiterun,
+        {1, 2, 3},
+        nan
+  }));
+  CHECK_FALSE(
+    Checks::ValidPlacement({
+        {"", 1},
+        {1, 2, 3},
+        0
+  }));
 
   CHECK(Checks::ValidGameDate({4, 201, 8, 17, 2, 14, 5}));
   CHECK(Checks::ValidGameDate({99, 99999, 12, 31, 6, 23, 59}));
-  for (const GameDate date : {
-         GameDate{0, 201, 8, 17, 2, 0, 0},   // no era 0
-         GameDate{4, 201, 2, 29, 0, 0, 0},   // no leap day
-         GameDate{4, 201, 13, 1, 0, 0, 0},   // twelve months
-         GameDate{4, 201, 8, 17, 7, 0, 0},   // seven days of the week
-         GameDate{4, 201, 8, 17, 2, 24, 0},  // no hour 24
-         GameDate{4, 201, 8, 17, 2, 0, 60},
-       })
+  for (
+    const GameDate date : {
+        GameDate{0, 201, 8,  17, 2, 0,  0 }, // no era 0
+        GameDate{4, 201, 2,  29, 0, 0,  0 }, // no leap day
+        GameDate{4, 201, 13, 1,  0, 0,  0 }, // twelve months
+        GameDate{4, 201, 8,  17, 7, 0,  0 }, // seven days of the week
+        GameDate{4, 201, 8,  17, 2, 24, 0 }, // no hour 24
+        GameDate{4, 201, 8,  17, 2, 0,  60},
+  })
     CHECK_FALSE(Checks::ValidGameDate(date));
 }
 
@@ -131,24 +150,22 @@ TEST_CASE("Spatial keeps the nearest items first and hides a shown one only past
   CHECK_FALSE(Spatial::ShownWithin(111, 100, true, 1.1));
 }
 
-TEST_CASE("Motion blends positions straight and angles the short way round")
+TEST_CASE("Motion blends position and retains latest camera telemetry")
 {
-  auto from        = At({0, 0, 0});
-  from.rotation    = {0, 0, 3.0f};
-  from.sampledAtUs = 100;
-  auto to          = At({10, 20, -30}, Whiterun, "Вайтран");
-  to.rotation      = {0, 0, -3.0f};
-  to.sampledAtUs   = 200;
+  auto from            = At({0, 0, 0});
+  from.cameraDirection = {0, 1, 0};
+  from.sampledAtUs     = 100;
+  auto to              = At({10, 20, -30}, Whiterun, "Вайтран");
+  to.cameraDirection   = {0, -1, 0};
+  to.sampledAtUs       = 200;
 
   const auto middle = Motion::Blend(from, to, 0.5);
   CHECK(middle.position == Position{5, 10, -15});
   CHECK(middle.location.locationName == "Вайтран");
   CHECK(middle.sampledAtUs == 0);
-  // From 3.0 to -3.0 the short way crosses pi, not zero.
-  CHECK(std::abs(std::abs(middle.rotation.Z) - std::numbers::pi_v<float>) < 1e-4f);
+  CHECK(middle.cameraDirection == to.cameraDirection);
   CHECK(Motion::Blend(from, to, 0).position == from.position);
   CHECK(Motion::Blend(from, to, 1).position == to.position);
-  CHECK(Motion::BlendAngle(0.0f, 1.0f, 0.25) == doctest::Approx(0.25f));
 }
 
 TEST_CASE("Motion samples replace each other within one context and move a player within its space")
@@ -161,12 +178,12 @@ TEST_CASE("Motion samples replace each other within one context and move a playe
 
   auto         location = At({1, 2, 3});
   MovementPose pose;
-  pose.position    = {4, 5, 6};
-  pose.rotation    = {0, 0, 1};
-  pose.sampledAtUs = 77;
+  pose.position        = {4, 5, 6};
+  pose.cameraDirection = {0, 0, 1};
+  pose.sampledAtUs     = 77;
   Motion::Apply(location, pose);
   CHECK(location.position == Position{4, 5, 6});
-  CHECK(location.rotation == Rotation{0, 0, 1});
+  CHECK(location.cameraDirection == CameraDirection{0, 0, 1});
   CHECK(location.sampledAtUs == 77);
   CHECK(location.location.locationId == Whiterun);
 }

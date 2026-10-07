@@ -20,7 +20,7 @@ let configuration () =
 type private UploadState = { Id: uint64; mutable Acknowledged: int; mutable Sent: int }
 type private DownloadState = { Id: uint64; Hash: IncrementalHash; mutable Offset: int }
 type private PeerState = {
-    mutable Ready: bool; mutable ReadyAt: float; mutable Due: float; mutable Sequence: uint64
+    mutable PoseRequired: bool; mutable Ready: bool; mutable ReadyAt: float; mutable Due: float; mutable Sequence: uint64
     mutable PublishRequest: uint64; mutable PublishDue: float; mutable Upload: UploadState option
     mutable DownloadRequest: uint64; mutable DownloadDue: float; mutable DownloadPending: bool
     mutable Download: DownloadState option; mutable Cached: bool
@@ -39,7 +39,7 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
     let descriptor = AssetDescriptor(Hash = ByteString.CopyFrom hash, Generation = 1UL, FormatVersion = 2u,
                                     CompressedBytes = uint32 model.Length, RawBytes = uint32 config.RawModelBytes, Channels = uint32 config.Channels)
     let peers = Array.init ids.Length (fun _ -> {
-        Ready=false; ReadyAt= -1.; Due=0.; Sequence=0UL; PublishRequest=1000UL; PublishDue=0.; Upload=None
+        PoseRequired=false; Ready=false; ReadyAt= -1.; Due=0.; Sequence=0UL; PublishRequest=1000UL; PublishDue=0.; Upload=None
         DownloadRequest=1000000UL; DownloadDue=0.; DownloadPending=false; Download=None; Cached=config.ClientCacheWarm
         Offers=Dictionary(); Seen=Dictionary(); Sent=0L; Missed=0L })
     let policies = ResizeArray<Policy>()
@@ -130,7 +130,7 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
                     let source = peer.Offers.Keys |> Seq.head
                     peer.DownloadRequest <- peer.DownloadRequest+1UL; peer.DownloadPending <- true
                     asset index (ClientAssetPacket(Download=Download(PlayerId=source,Generation=1UL,RequestId=peer.DownloadRequest))) |> ignore
-                if measuring && peer.Ready && at>=peer.Due then
+                if measuring && peer.Ready && peer.PoseRequired && at>=peer.Due then
                     let interval = 1000./config.Rate
                     let missed = max 0L (int64 (floor ((at-peer.Due)/interval)))
                     peer.Missed <- peer.Missed+missed; peer.Due <- peer.Due+float(missed+1L)*interval
@@ -213,6 +213,10 @@ type Probe(config: Config, allIds: uint64 array, offset: int, stride: int, count
             | _ -> peer.Seen.Remove offer.PlayerId |> ignore
             peer.Offers[offer.PlayerId] <- offer.ViewRevision; offers <- offers+1L
             if peer.Cached then displayed[index][offer.PlayerId] <- offer.ViewRevision
+        | ServerAssetPacket.PayloadOneofCase.PoseDemand ->
+            if packet.PoseDemand.ContextRevision<>1UL then fail "Unexpected demand context"
+            peer.PoseRequired <- packet.PoseDemand.Required
+            peer.Due <- now()
         | ServerAssetPacket.PayloadOneofCase.Settled ->
             if packet.Settled.Generation<>1UL || packet.Settled.ContextRevision<>1UL then fail "Unexpected settled generation"
         | ServerAssetPacket.PayloadOneofCase.Remove ->
