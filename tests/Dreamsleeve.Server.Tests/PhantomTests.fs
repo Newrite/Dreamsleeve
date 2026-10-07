@@ -1017,6 +1017,51 @@ let tests = testList "Phantoms" [
         finally restarted.Dispose().GetAwaiter().GetResult()
     })
 
+    storageCase "cache file lost after initialization can be uploaded again" (fun root config _ -> task {
+        Directory.CreateDirectory root |> ignore
+        let content = [|1uy;2uy;3uy;4uy|]
+        let manifest = asset 1UL content
+        let path = Path.Combine(root, manifest.Hash.Hex + ".zst")
+        File.WriteAllBytes(path, content)
+        let store = PhantomStorage.create config
+        try
+            let! _ = store.StartDownload(PhantomTransferId 1UL, asset 2UL [|5uy|])
+            File.Delete path
+            let! lost = store.StartDownload(PhantomTransferId 2UL, manifest)
+            Expect.isError lost "Cache disappeared before its first verification."
+            let! retry = store.StartUpload(PhantomTransferId 3UL, manifest)
+            Expect.equal retry (Ok false) "The stale entry was evicted; publication can recover."
+            let! completed = store.WriteChunk(PhantomTransferId 3UL, 0, content)
+            Expect.equal completed (Ok true) "Recovered cache content."
+        finally store.Dispose().GetAwaiter().GetResult()
+    })
+
+    storageCase "expected storage failures return errors without first-chance exceptions" (fun _ _ storage -> task {
+        let raised = System.Collections.Concurrent.ConcurrentQueue<string>()
+        let handler = EventHandler<System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs>(fun _ args ->
+            let trace = args.Exception.StackTrace
+            if not (isNull trace) && trace.Contains("PhantomStorage") then raised.Enqueue args.Exception.Message)
+        AppDomain.CurrentDomain.FirstChanceException.AddHandler handler
+        try
+            let manifest = asset 1UL [|1uy;2uy;3uy;4uy|]
+            let! missing = storage.StartDownload(PhantomTransferId 1UL, manifest)
+            Expect.isError missing "Missing cache entry."
+            let! started = storage.StartUpload(PhantomTransferId 2UL, manifest)
+            Expect.equal started (Ok false) "Cold upload."
+            let! duplicate = storage.StartUpload(PhantomTransferId 2UL, manifest)
+            Expect.isError duplicate "Duplicate transfer."
+            let! offset = storage.WriteChunk(PhantomTransferId 2UL, 1, [|1uy|])
+            Expect.isError offset "Bad offset releases reservation."
+            let! restarted = storage.StartUpload(PhantomTransferId 3UL, manifest)
+            Expect.equal restarted (Ok false) "Admission refunded."
+            let! hash = storage.WriteChunk(PhantomTransferId 3UL, 0, [|4uy;3uy;2uy;1uy|])
+            Expect.isError hash "Wrong hash."
+            let! unknown = storage.ReadChunk(PhantomTransferId 99UL, 0, 4)
+            Expect.isError unknown "Unknown download."
+            Expect.isEmpty (raised.ToArray()) "Expected failures must not throw and catch internally."
+        finally AppDomain.CurrentDomain.FirstChanceException.RemoveHandler handler
+    })
+
     storageCase "hash and offset failures delete temporary files and refund admission" (fun root _ storage -> task {
         let manifest = asset 1UL [|1uy;2uy;3uy;4uy|]
         let! _ = storage.StartUpload(PhantomTransferId 1UL, manifest)

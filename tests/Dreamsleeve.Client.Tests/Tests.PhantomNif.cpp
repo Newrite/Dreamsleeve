@@ -247,3 +247,17 @@ TEST_CASE("Native NIF rejects malformed typed links and buffers")
   }
   CHECK_FALSE(P::ValidatedAsset::Parse(std::move(asset)));
 }
+
+TEST_CASE("Native NIF rejects every truncated prefix without throwing")
+{
+  namespace N      = Dreamsleeve::Client::Phantom::Nif;
+  const auto asset = PhantomFixture::Model();
+  REQUIRE(N::Inspect(asset.nif));
+  for (std::size_t size = 0; size < asset.nif.size(); ++size)
+  {
+    CAPTURE(size);
+    Dreamsleeve::Client::Phantom::Result<N::Layout> result;
+    CHECK_NOTHROW(result = N::Inspect(std::span(asset.nif).first(size)));
+    CHECK_FALSE(result);
+  }
+}

@@ -125,83 +125,76 @@ public:
       auto checked = Check(c);
       if (!checked) return std::unexpected(checked.error());
       if (phase != Phase::Waiting) return BuildProgress::Ready;
-      try
+      labelNode = nullptr;
+      nodes.clear();
+      skins.clear();
+      surfaces.clear();
+      root.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto loadStart = std::chrono::steady_clock::now();
+#endif
+      auto loaded = engine.load(asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto loadEnd = std::chrono::steady_clock::now();
+      Dreamsleeve::Client::Diagnostics::Trace::Observe(
+        Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeLoad,
+        std::chrono::duration<double, std::milli>(loadEnd - loadStart).count());
+      Dreamsleeve::Client::Diagnostics::Trace::Span prepareSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ScenePrepare);
+#endif
+      if (!loaded) return std::unexpected(loaded.error());
+      root = std::move(*loaded);
+      if (auto collected = N::Collect(root.get(), nodes); !collected) return std::unexpected(collected.error());
+      const auto& layout = asset.Layout();
+      if (nodes.size() != layout.nodes.size()) return A::Fail(P::Failure::InvalidLink, "scene.tree-size");
+      for (std::size_t i = 0; i < nodes.size(); ++i)
       {
-        labelNode = nullptr;
-        nodes.clear();
-        skins.clear();
-        surfaces.clear();
-        root.reset();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-        const auto loadStart = std::chrono::steady_clock::now();
-#endif
-        auto loaded = engine.load(asset);
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-        const auto loadEnd = std::chrono::steady_clock::now();
-        Dreamsleeve::Client::Diagnostics::Trace::Observe(
-          Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeLoad,
-          std::chrono::duration<double, std::milli>(loadEnd - loadStart).count());
-        Dreamsleeve::Client::Diagnostics::Trace::Span prepareSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ScenePrepare);
-#endif
-        if (!loaded) return std::unexpected(loaded.error());
-        root = std::move(*loaded);
-        N::Collect(root.get(), nodes);
-        const auto& layout = asset.Layout();
-        if (nodes.size() != layout.nodes.size()) return A::Fail(P::Failure::InvalidLink, "scene.tree-size");
-        for (std::size_t i = 0; i < nodes.size(); ++i)
+        auto*       object   = nodes[i];
+        const auto& expected = layout.nodes[i];
+        if ((i && object->parent != nodes[expected.parent]) || bool(object->AsGeometry()) != expected.geometry)
+          return A::Fail(P::Failure::InvalidLink, "scene.tree-links");
+        object->SetUserData(nullptr);
+        object->GetFadeAmount() = 1;
+        object->GetFlags().set(Flag::kIgnoreFade);
+        object->GetFlags().reset(Flag::kHidden);
+        if (auto* geometry = object->AsGeometry())
         {
-          auto*       object   = nodes[i];
-          const auto& expected = layout.nodes[i];
-          if ((i && object->parent != nodes[expected.parent]) || bool(object->AsGeometry()) != expected.geometry)
-            return A::Fail(P::Failure::InvalidLink, "scene.tree-links");
-          object->SetUserData(nullptr);
-          object->GetFadeAmount() = 1;
-          object->GetFlags().set(Flag::kIgnoreFade);
-          object->GetFlags().reset(Flag::kHidden);
-          if (auto* geometry = object->AsGeometry())
+          if (auto ghost = N::Ghostify(*geometry, engine, look); !ghost) return std::unexpected(ghost.error());
+          surfaces.push_back(geometry->lightingShaderProp_cast());
+          if (auto* skin = geometry->GetGeometryRuntimeData().skinInstance.get())
           {
-            N::Ghostify(*geometry, engine, look);
-            surfaces.push_back(geometry->lightingShaderProp_cast());
-            if (auto* skin = geometry->GetGeometryRuntimeData().skinInstance.get())
+            if (!skin->skinData || !skin->rootParent || !skin->bones || !skin->boneWorldTransforms)
+              return A::Fail(P::Failure::InvalidLink, "scene.skin");
+            for (std::uint32_t b = 0; b < skin->skinData->GetBoneCount(); ++b)
             {
-              if (!skin->skinData || !skin->rootParent || !skin->bones || !skin->boneWorldTransforms)
-                return A::Fail(P::Failure::InvalidLink, "scene.skin");
-              for (std::uint32_t b = 0; b < skin->skinData->GetBoneCount(); ++b)
-              {
-                if (!skin->bones[b]) return A::Fail(P::Failure::InvalidLink, "scene.bone");
-                skin->boneWorldTransforms[b] = &skin->bones[b]->world;
-              }
-              if (std::ranges::find(skins, skin) == skins.end()) skins.push_back(skin);
+              if (!skin->bones[b]) return A::Fail(P::Failure::InvalidLink, "scene.bone");
+              skin->boneWorldTransforms[b] = &skin->bones[b]->world;
             }
+            if (std::ranges::find(skins, skin) == skins.end()) skins.push_back(skin);
           }
         }
-        // A cosmetic anchor only: pose binding still uses validated tree indices.
-        // Reject ambiguous names instead of attaching the label to arbitrary gear.
-        for (auto index : layout.requiredChannels)
-          if (auto* node = nodes[index]; node->AsNode() && node->name == "NPC Head [Head]")
+      }
+      // A cosmetic anchor only: pose binding still uses validated tree indices.
+      // Reject ambiguous names instead of attaching the label to arbitrary gear.
+      for (auto index : layout.requiredChannels)
+        if (auto* node = nodes[index]; node->AsNode() && node->name == "NPC Head [Head]")
+        {
+          if (labelNode)
           {
-            if (labelNode)
-            {
-              labelNode = nullptr;
-              break;
-            }
-            labelNode = node;
+            labelNode = nullptr;
+            break;
           }
-        root->GetFlags().set(Flag::kHidden);
-        phase = Phase::Loaded;
+          labelNode = node;
+        }
+      root->GetFlags().set(Flag::kHidden);
+      phase = Phase::Loaded;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        logger::info(
-          "[Phantom stages] generation={} nistream_load_ms={:.3f} scene_prepare_ms={:.3f}",
-          generation.value,
-          std::chrono::duration<double, std::milli>(loadEnd - loadStart).count(),
-          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadEnd).count());
+      logger::info(
+        "[Phantom stages] generation={} nistream_load_ms={:.3f} scene_prepare_ms={:.3f}",
+        generation.value,
+        std::chrono::duration<double, std::milli>(loadEnd - loadStart).count(),
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadEnd).count());
 #endif
-        return BuildProgress::Ready;
-      }
-      catch (const std::exception& e)
-      {
-        return A::Fail(P::Failure::InvalidFormat, e.what());
-      }
+      return BuildProgress::Ready;
     }
 
     P::Result<void> Apply(const P::Snapshot& pose, Context c, FrameBudget& frame)

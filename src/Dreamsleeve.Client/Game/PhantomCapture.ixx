@@ -52,16 +52,19 @@ export namespace Dreamsleeve::Game::PhantomCapture
 
   // Transforms, visibility, parent links and camera state are intentionally
   // absent. A bounded structural audit detects unannounced mesh replacements.
-  inline AppearanceProbe Probe(RE::NiNode& root)
+  inline P::Result<AppearanceProbe> Probe(RE::NiNode& root)
   {
     std::vector<RE::NiAVObject*> nodes;
-    N::Collect(&root, nodes);
+    if (auto collected = N::Collect(&root, nodes); !collected) return std::unexpected(collected.error());
     AppearanceProbe result;
     // Reparenting/reordering the same attachments is not an appearance change.
     std::ranges::sort(nodes, std::less<RE::NiAVObject*>{});
     for (auto* node : nodes)
-      if (auto* g = node->AsGeometry(); g && !N::Auxiliary(*g))
+      if (auto* g = node->AsGeometry())
       {
+        auto auxiliary = N::Auxiliary(*g);
+        if (!auxiliary) return std::unexpected(auxiliary.error());
+        if (*auxiliary) continue;
         auto& d  = g->GetGeometryRuntimeData();
         auto  v  = std::uint64_t(reinterpret_cast<std::uintptr_t>(g));
         v       ^= std::uint64_t(reinterpret_cast<std::uintptr_t>(d.skinInstance.get())) << 7;
@@ -81,7 +84,7 @@ export namespace Dreamsleeve::Game::PhantomCapture
               for (unsigned axis = 0; axis < 3; ++axis)
               {
                 const float f = positions[(std::uint64_t(i) * count / std::min(count, 32u)) * 4 + axis];
-                if (!std::isfinite(f) || std::abs(f) >= 100000) throw std::runtime_error("native.probe-position");
+                if (!std::isfinite(f) || std::abs(f) >= 100000) return A::Fail(P::Failure::InvalidNumber, "native.probe-position");
                 result.positions.push_back(f);
               }
           }
@@ -120,13 +123,13 @@ export namespace Dreamsleeve::Game::PhantomCapture
 
 public:
 
-    Source(Engine e, RE::PlayerCharacter& p, RE::NiNode* r, std::vector<N::Binding> b, P::ValidatedAsset a)
+    Source(Engine e, RE::PlayerCharacter& p, RE::NiNode* r, std::vector<N::Binding> b, P::ValidatedAsset a, AppearanceProbe initial)
         : engine(e),
           player(p.GetHandle()),
           root(r),
           bindings(std::move(b)),
           asset(std::move(a)),
-          appearance(Probe(*r))
+          appearance(std::move(initial))
     {}
 
     bool RebuildDue(std::uint64_t now)
@@ -146,15 +149,10 @@ public:
         change = AppearanceChange::Structure;
         return true;
       }
-      try
-      {
-        change = appearance.Observe(Probe(*root), now);
-        if (appearance.Pending()) nextAudit = now + 250000;
-      }
-      catch (const std::exception&)
-      {
-        change = AppearanceChange::Structure;
-      }  // Open reports the concrete unsupported asset.
+      auto probe = Probe(*root);
+      // Open reports the concrete failure; retain the last usable scene meanwhile.
+      change = probe ? appearance.Observe(*probe, now) : AppearanceChange::Structure;
+      if (probe && appearance.Pending()) nextAudit = now + 250000;
       return change != AppearanceChange::None;
     }
 
@@ -266,41 +264,37 @@ public:
 
   inline P::Result<Opened> Open(Engine engine, RE::PlayerCharacter& player, bool firstPerson, Stamp stamp, const P::Limits& limits = {})
   {
-    try
-    {
-      auto* object = player.Get3D(false);
-      auto* root   = object ? object->AsNode() : nullptr;
-      if (!root || !root->parent) return A::Fail(P::Failure::MissingSource, "native.third-person");
-      auto prepared = N::Prepare(root, engine);
+    auto* object = player.Get3D(false);
+    auto* root   = object ? object->AsNode() : nullptr;
+    if (!root || !root->parent) return A::Fail(P::Failure::MissingSource, "native.third-person");
+    auto prepared = N::Prepare(root, engine);
+    if (!prepared) return std::unexpected(prepared.error());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-      const auto parseStart = std::chrono::steady_clock::now();
+    const auto parseStart = std::chrono::steady_clock::now();
 #endif
-      auto asset = [&] {
+    auto asset = [&] {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-        Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ValidateAsset);
+      Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ValidateAsset);
 #endif
-        return P::ValidatedAsset::Parse(std::move(prepared.asset), limits);
-      }();
+      return P::ValidatedAsset::Parse(std::move(prepared->asset), limits);
+    }();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-      const auto parseEnd = std::chrono::steady_clock::now();
+    const auto parseEnd = std::chrono::steady_clock::now();
 #endif
-      if (!asset) return std::unexpected(asset.error());
-      if (asset->Layout().nodes.size() != prepared.bindings.size()) return A::Fail(P::Failure::InvalidLink, "native.serialized-tree");
-      auto source  = std::make_unique<Source>(engine, player, root, std::move(prepared.bindings), *asset);
-      auto initial = source->Sample(player, firstPerson, stamp);
-      if (!initial) return std::unexpected(initial.error());
+    if (!asset) return std::unexpected(asset.error());
+    if (asset->Layout().nodes.size() != prepared->bindings.size()) return A::Fail(P::Failure::InvalidLink, "native.serialized-tree");
+    auto probe = Probe(*root);
+    if (!probe) return std::unexpected(probe.error());
+    auto source  = std::make_unique<Source>(engine, player, root, std::move(prepared->bindings), *asset, std::move(*probe));
+    auto initial = source->Sample(player, firstPerson, stamp);
+    if (!initial) return std::unexpected(initial.error());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-      logger::info(
-        "[Phantom stages] validate_asset_ms={:.3f} bind_probe_initial_pose_ms={:.3f}",
-        std::chrono::duration<double, std::milli>(parseEnd - parseStart).count(),
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - parseEnd).count());
+    logger::info(
+      "[Phantom stages] validate_asset_ms={:.3f} bind_probe_initial_pose_ms={:.3f}",
+      std::chrono::duration<double, std::milli>(parseEnd - parseStart).count(),
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - parseEnd).count());
 #endif
-      return Opened{std::move(source), std::move(*asset), std::move(*initial)};
-    }
-    catch (const std::exception& error)
-    {
-      return A::Fail(P::Failure::InvalidFormat, error.what());
-    }
+    return Opened{std::move(source), std::move(*asset), std::move(*initial)};
   }
 
 }

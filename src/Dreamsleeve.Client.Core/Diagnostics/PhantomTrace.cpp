@@ -22,12 +22,17 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       std::ofstream         file;
       std::size_t           limit, bytes{};
       std::uint64_t         part{};
+      std::function<void()> failed;
 
       void Open()
       {
-        if (file.is_open()) file.close();
+        if (file.is_open())
+        {
+          file.close();
+          if (!file) failed();
+        }
         file.clear();
-        file.exceptions(std::ios::failbit | std::ios::badbit);
+
         file.open(directory / std::format("trace-{:06}.jsonl", part++), std::ios::binary | std::ios::out);
         bytes = 0;
       }
@@ -36,33 +41,38 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       {
         spdlog::memory_buf_t text;
         formatter_->format(message, text);
-        try
+        if (!file.is_open() || (bytes && bytes + text.size() > limit)) Open();
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        if (!file)
         {
-          if (!file.is_open() || (bytes && bytes + text.size() > limit)) Open();
-          file.write(text.data(), static_cast<std::streamsize>(text.size()));
-          bytes += text.size();
+          // Retry in a new part, retaining the incomplete part for diagnosis.
+          if (file.is_open()) file.close();
+          failed();
+          return;
         }
-        catch (...)
-        {
-          // Retry in a new part when the disk becomes writable; never overwrite a partial part.
-          try
-          {
-            if (file.is_open()) file.close();
-          }
-          catch (...)
-          {}
-          throw;
-        }
+        bytes += text.size();
       }
 
       void flush_() override
       {
-        if (file.is_open()) file.flush();
+        if (file.is_open())
+        {
+          file.flush();
+          if (!file)
+          {
+            file.close();
+            failed();
+          }
+        }
       }
 
   public:
 
-      SessionSink(std::filesystem::path path, std::size_t partBytes) : directory(std::move(path)), limit(partBytes) {}
+      SessionSink(std::filesystem::path path, std::size_t partBytes, std::function<void()> onFailure)
+          : directory(std::move(path)),
+            limit(partBytes),
+            failed(std::move(onFailure))
+      {}
     };
 
     struct Aggregate
@@ -138,10 +148,13 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       if (partBytes < 1024) return false;
       const auto stamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       const auto session = directory / std::format("{}-{}", stamp, GetCurrentProcessId());
-      if (!std::filesystem::create_directories(session)) return false;
+      std::error_code error;
+      if (!std::filesystem::create_directories(session, error) || error) return false;
       auto writer       = std::make_shared<Writer>();
       writer->directory = session;
-      auto sink         = std::make_shared<SessionSink>(session, partBytes);
+      auto sink         = std::make_shared<SessionSink>(session, partBytes, [weak = std::weak_ptr(writer)] {
+        if (auto value = weak.lock()) WriteFailed(*value);
+      });
       // At most 256 bounded packet records (<=34 KiB each), one file owner.
       writer->pool = std::make_shared<spdlog::details::thread_pool>(256, 1);
       writer->logger =
@@ -219,19 +232,43 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     try
     {
       if (hash.size() != 64 || !std::ranges::all_of(hash, [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
-        throw std::runtime_error("invalid trace asset hash");
-      const auto models = writer->directory / "models";
-      std::filesystem::create_directories(models);
+      {
+        WriteFailed(*writer);
+        return;
+      }
+      const auto      models = writer->directory / "models";
+      std::error_code error;
+      std::filesystem::create_directories(models, error);
+      if (error)
+      {
+        WriteFailed(*writer);
+        return;
+      }
       const auto target = models / (std::string(hash) + ".zst");
-      if (std::filesystem::exists(target)) return;
+      if (std::filesystem::exists(target, error)) return;
+      if (error)
+      {
+        WriteFailed(*writer);
+        return;
+      }
       auto partial  = target;
       partial      += ".partial";
       std::ofstream output;
-      output.exceptions(std::ios::failbit | std::ios::badbit);
+
       output.open(partial, std::ios::binary);
       output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
       output.close();
-      std::filesystem::rename(partial, target);
+      if (!output)
+      {
+        WriteFailed(*writer);
+        return;
+      }
+      std::filesystem::rename(partial, target, error);
+      if (error)
+      {
+        WriteFailed(*writer);
+        return;
+      }
       Event("asset", std::format("\"hash\":\"{}\",\"bytes\":{}", hash, bytes.size()));
     }
     catch (...)

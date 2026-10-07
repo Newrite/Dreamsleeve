@@ -11,10 +11,15 @@ namespace Dreamsleeve::Client::Diagnostics
     {
       std::span<const std::uint8_t> bytes;
       std::size_t                   at{};
+      bool                          valid{true};
 
       std::span<const std::uint8_t> Take(std::size_t n)
       {
-        if (n > bytes.size() - at) throw std::runtime_error("archive.truncated-record");
+        if (!valid || n > bytes.size() - at)
+        {
+          valid = false;
+          return {};
+        }
         const auto out  = bytes.subspan(at, n);
         at             += n;
         return out;
@@ -23,28 +28,32 @@ namespace Dreamsleeve::Client::Diagnostics
       template <class T>
       T Get()
       {
-        std::array<std::uint8_t, sizeof(T)> value;
+        std::array<std::uint8_t, sizeof(T)> value{};
         std::ranges::copy(Take(sizeof(T)), value.begin());
         return std::bit_cast<T>(value);
       }
     };
 
-    P::Bytes ReadBytes(std::ifstream& input, std::size_t n)
+    P::Result<P::Bytes> ReadBytes(std::ifstream& input, std::size_t n)
     {
       P::Bytes bytes(n);
-      if (!input.read(reinterpret_cast<char*>(bytes.data()), n)) throw std::runtime_error("archive.truncated-file");
+      if (!input.read(reinterpret_cast<char*>(bytes.data()), n))
+        return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.truncated-file"});
       return bytes;
     }
 
-    void Header(std::ifstream& input)
+    P::Result<void> Header(std::ifstream& input)
     {
-      const auto                        bytes = ReadBytes(input, 20);
-      Cursor                            r{bytes};
+      const auto bytes = ReadBytes(input, 20);
+      if (!bytes) return std::unexpected(bytes.error());
+      Cursor                            r{*bytes};
       const std::array<std::uint8_t, 8> magic{'D', 'L', 'P', 'D', 'I', 'A', 'G', '2'};
-      if (!std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2) throw std::runtime_error("archive.version");
+      if (!std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2)
+        return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
       const auto protocol = r.Get<std::uint32_t>();
       if ((protocol != 22 && protocol != Wire::Version) || r.Get<std::uint32_t>() != P::AssetVersion)
-        throw std::runtime_error("archive.version");
+        return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
+      return {};
     }
 
     struct Record
@@ -52,18 +61,19 @@ namespace Dreamsleeve::Client::Diagnostics
       std::uint32_t kind{}, bytes{};
     };
 
-    std::optional<Record> Next(std::ifstream& input)
+    P::Result<std::optional<Record>> Next(std::ifstream& input)
     {
       if (input.peek() == std::char_traits<char>::eof()) return {};
       const auto bytes = ReadBytes(input, 8);
-      Cursor     r{bytes};
-      Record     record{r.Get<std::uint32_t>(), r.Get<std::uint32_t>()};
+      if (!bytes) return std::unexpected(bytes.error());
+      Cursor r{*bytes};
+      Record record{r.Get<std::uint32_t>(), r.Get<std::uint32_t>()};
       if (record.kind < 1 || record.kind > 6 || record.bytes > P::Limits{}.compressedAssetBytes + 1024ULL)
-        throw std::runtime_error("archive.record-header");
-      return record;
+        return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.record-header"});
+      return std::optional<Record>{record};
     }
 
-    std::filesystem::path SelectArchive(const std::filesystem::path& root, std::uint32_t scenario)
+    P::Result<std::filesystem::path> SelectArchive(const std::filesystem::path& root, std::uint32_t scenario)
     {
       // Offline analysis may select one exact recording; the same Load path
       // still checks its header, every model hash and every production pose.
@@ -81,12 +91,16 @@ namespace Dreamsleeve::Client::Diagnostics
       for (const auto& file : files)
       {
         std::ifstream input(file, std::ios::binary);
-        Header(input);
-        while (auto record = Next(input))
+        if (auto header = Header(input); !header) return std::unexpected(header.error());
+        for (;;)
         {
+          auto next = Next(input);
+          if (!next) return std::unexpected(next.error());
+          if (!*next) break;
+          const auto& record = *next;
           if (record->kind == 2) return file;
           input.seekg(record->bytes, std::ios::cur);
-          if (!input) throw std::runtime_error("archive.seek");
+          if (!input) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.seek"});
         }
       }
       return {};
@@ -113,32 +127,38 @@ namespace Dreamsleeve::Client::Diagnostics
       return cancelled || shutdown;
     }
 
-    void Load()
+    P::Result<void> Load()
     {
       auto file = SelectArchive(root, scenario);
-      if (file.empty() && !fallback.empty()) file = SelectArchive(fallback, scenario);
-      if (file.empty()) throw std::runtime_error("Нет завершённой записи с позами для выбранного сценария");
+      if (!file) return std::unexpected(file.error());
+      if (file->empty() && !fallback.empty()) file = SelectArchive(fallback, scenario);
+      if (!file) return std::unexpected(file.error());
+      if (file->empty())
+        return std::unexpected(P::Error{P::Failure::InvalidFormat, "Нет завершённой записи с позами для выбранного сценария"});
       {
         std::lock_guard lock(mutex);
-        status.directory = file.parent_path().string();
+        status.directory = file->parent_path().string();
       }
-      std::ifstream input(file, std::ios::binary);
-      Header(input);
+      std::ifstream input(*file, std::ios::binary);
+      if (auto header = Header(input); !header) return std::unexpected(header.error());
       std::shared_ptr<const P::ValidatedAsset> asset;
       P::Generation                            generation;
       std::uint64_t                            lastTime = 0, frames = 0;
       while (!Cancelled())
       {
-        auto record = Next(input);
-        if (!record) break;
+        auto next = Next(input);
+        if (!next) return std::unexpected(next.error());
+        if (!*next) break;
+        const auto& record = *next;
         if (record->kind != 1 && record->kind != 2)
         {
           input.seekg(record->bytes, std::ios::cur);
-          if (!input) throw std::runtime_error("archive.seek");
+          if (!input) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.seek"});
           continue;
         }
         const auto bytes = ReadBytes(input, record->bytes);
-        Cursor     r{bytes};
+        if (!bytes) return std::unexpected(bytes.error());
+        Cursor     r{*bytes};
         const auto start = Clock::now();
         if (record->kind == 1)
         {
@@ -146,39 +166,41 @@ namespace Dreamsleeve::Client::Diagnostics
           const auto raw = r.Get<std::uint32_t>(), size = r.Get<std::uint32_t>();
           const auto digest = r.Take(32), compressed = r.Take(size);
           auto       hash = P::Hash(compressed);
-          if (r.at != bytes.size() || !hash || !std::ranges::equal(digest, *hash)) throw std::runtime_error("archive.model-hash");
+          if (!r.valid || r.at != bytes->size() || !hash || !std::ranges::equal(digest, *hash))
+            return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.model-hash"});
           auto decoded = P::ReadAsset(compressed, raw, CaptureLimits());
-          if (!decoded) throw std::runtime_error(decoded.error().field);
+          if (!decoded) return std::unexpected(decoded.error());
           asset = std::make_shared<const P::ValidatedAsset>(std::move(*decoded));
           std::lock_guard lock(mutex);
           ++status.models;
         }
         else
         {
-          if (!asset) throw std::runtime_error("archive.missing-model");
+          if (!asset) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.missing-model"});
           r.Take(57);  // capture timing, camera and actor movement; not a rendering shortcut.
           const auto original = r.Get<std::uint32_t>(), raw = r.Get<std::uint32_t>(), size = r.Get<std::uint32_t>();
           r.Take(original);
           r.Take(raw);
           const auto compressed = r.Take(size);
-          if (r.at != bytes.size()) throw std::runtime_error("archive.sample-length");
+          if (!r.valid || r.at != bytes->size()) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.sample-length"});
           auto decoded = P::ReadRecordedSnapshot(compressed, *asset, CaptureLimits());
-          if (!decoded) throw std::runtime_error(decoded.error().field);
+          if (!decoded) return std::unexpected(decoded.error());
           if (decoded->generation != generation || (frames && decoded->sampledAtUs <= lastTime))
-            throw std::runtime_error("archive.sample-order");
+            return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.sample-order"});
           lastTime                  = decoded->sampledAtUs;
           auto             pose     = std::make_shared<const P::Snapshot>(std::move(*decoded));
           const auto       decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
           std::unique_lock lock(mutex);
           wake.wait(lock, [&] { return cancelled || shutdown || queue.size() < 4; });
-          if (cancelled || shutdown) return;
+          if (cancelled || shutdown) return {};
           queue.push_back({asset, std::move(pose)});
           ++status.frames;
           ++frames;
           status.decodeMs = std::max(status.decodeMs, decodeMs);
         }
       }
-      if (!Cancelled() && !frames) throw std::runtime_error("archive.no-samples");
+      if (!Cancelled() && !frames) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.no-samples"});
+      return {};
     }
 
     void Run()
@@ -194,7 +216,8 @@ namespace Dreamsleeve::Client::Diagnostics
         std::string error;
         try
         {
-          Load();
+          auto loaded = Load();
+          if (!loaded) error = loaded.error().field;
         }
         catch (const std::exception& e)
         {

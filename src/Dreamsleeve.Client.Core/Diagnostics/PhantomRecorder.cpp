@@ -211,25 +211,32 @@ namespace Dreamsleeve::Client::Diagnostics
                                             : now - firstAt >= std::chrono::seconds(seconds);
     }
 
-    bool HasSpace(std::uint64_t bytes) const
+    P::Result<bool> HasSpace(std::uint64_t bytes) const
     {
       // This is real free space on the destination volume, never a quota on
       // previous captures. Only the writer queries the filesystem.
-      const auto available = std::filesystem::space(root).available;
+      std::error_code error;
+      const auto      available = std::filesystem::space(root, error).available;
+      if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
       return available >= budget.freeReserveBytes && bytes <= available - budget.freeReserveBytes;
     }
 
-    void RunSession()
+    P::Result<void> RunSession()
     {
-      std::filesystem::create_directories(root);
-      if (!HasSpace(20)) throw std::runtime_error("disk-space-low");
+      std::error_code error;
+      std::filesystem::create_directories(root, error);
+      if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+      auto space = HasSpace(20);
+      if (!space) return std::unexpected(space.error());
+      if (!*space) return std::unexpected(P::Error{P::Failure::Storage, "disk-space-low"});
       const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       std::filesystem::path directory;
       for (std::uint32_t i = 0; i < 32; ++i)
       {
         directory = root / std::format("{}-{}-{}", stamp, Scenarios[scenario], i);
-        if (std::filesystem::create_directory(directory)) break;
-        if (i == 31) throw std::runtime_error("directory-collision");
+        if (std::filesystem::create_directory(directory, error)) break;
+        if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+        if (i == 31) return std::unexpected(P::Error{P::Failure::Storage, "directory-collision"});
       }
       {
         std::lock_guard lock(mutex);
@@ -237,7 +244,7 @@ namespace Dreamsleeve::Client::Diagnostics
       }
       const auto    partial = directory / "capture.phdiag.partial";
       std::ofstream output(partial, std::ios::binary);
-      output.exceptions(std::ios::badbit | std::ios::failbit);
+
       Writer header;
       header.Data(std::array<std::uint8_t, 8>{'D', 'L', 'P', 'D', 'I', 'A', 'G', '2'});
       header.Put<std::uint32_t>(2);
@@ -245,16 +252,18 @@ namespace Dreamsleeve::Client::Diagnostics
       header.Put(P::AssetVersion);
       std::uint64_t written = header.bytes.size();
       output.write(reinterpret_cast<const char*>(header.bytes.data()), header.bytes.size());
+      if (!output) return std::unexpected(P::Error{P::Failure::Storage, "archive.header-write"});
       std::uint32_t                     records = 0;
       std::unordered_set<std::uint64_t> models;
       std::vector<double>               captures, encodes;
       std::optional<std::uint64_t>      firstSampleUs;
       auto                              write = [&](Kind kind, const P::Bytes& bytes) {
-        if (records >= budget.records || !HasSpace(bytes.size() + 8))
+        auto space = HasSpace(bytes.size() + 8);
+        if (records >= budget.records || !space || !*space)
         {
           std::lock_guard lock(mutex);
           ++status.dropped;
-          StopLocked(records >= budget.records ? "record-limit" : "disk-space-low");
+          StopLocked(records >= budget.records ? "record-limit" : !space ? space.error().field : "disk-space-low");
           return false;
         }
         Writer h;
@@ -262,6 +271,7 @@ namespace Dreamsleeve::Client::Diagnostics
         h.Put(static_cast<std::uint32_t>(bytes.size()));
         output.write(reinterpret_cast<const char*>(h.bytes.data()), h.bytes.size());
         output.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        if (!output) return false;
         written += bytes.size() + 8;
         ++records;
         return true;
@@ -286,9 +296,9 @@ namespace Dreamsleeve::Client::Diagnostics
         {
           if (!models.contains(sample->pose->generation.value))
           {
-            if (models.size() >= budget.models) throw std::runtime_error("model-limit");
+            if (models.size() >= budget.models) return std::unexpected(P::Error{P::Failure::Storage, "model-limit"});
             auto asset = P::Prepare(*sample->asset);
-            if (!asset) throw std::runtime_error("model-codec");
+            if (!asset) return std::unexpected(asset.error());
             Writer w;
             w.Put(sample->pose->generation.value);
             w.Put(asset->rawBytes);
@@ -302,7 +312,8 @@ namespace Dreamsleeve::Client::Diagnostics
           {
             auto raw     = P::SnapshotBytes(*sample->pose, *sample->asset, CaptureLimits());
             auto encoded = P::WriteSnapshot(*sample->pose, *sample->asset, CaptureLimits());
-            if (!raw || !encoded) throw std::runtime_error("sample-codec");
+            if (!raw) return std::unexpected(raw.error());
+            if (!encoded) return std::unexpected(encoded.error());
             Writer original;
             original.Pose(*sample->pose);
             Writer w;
@@ -368,10 +379,13 @@ namespace Dreamsleeve::Client::Diagnostics
             ClearQueue();
           }
         }
+        if (!output) return std::unexpected(P::Error{P::Failure::Storage, "archive.write"});
       }
       output.flush();
       output.close();
-      std::filesystem::rename(partial, directory / "capture.phdiag");
+      if (!output) return std::unexpected(P::Error{P::Failure::Storage, "archive.write"});
+      std::filesystem::rename(partial, directory / "capture.phdiag", error);
+      if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
       auto percentile = [](std::vector<double>& values, double fraction) {
         if (values.empty()) return 0.0;
         std::ranges::sort(values);
@@ -383,7 +397,7 @@ namespace Dreamsleeve::Client::Diagnostics
         result = status;
       }
       std::ofstream summary(directory / "summary.json");
-      summary.exceptions(std::ios::badbit | std::ios::failbit);
+
       summary << std::format(
         "{{\n  \"format\": 2, \"protocol\": {}, \"assetVersion\": {},\n  \"scenario\": {}, \"requestedSeconds\": {}, \"requestedHz\": {},\n" "  \"samples\": {}, \"encoded\": {}, \"sent\": {}, \"movements\": {}, \"captureErrors\": {}, \"dropped\": {},\n" "  \"seconds\": {}, \"sampleHz\": {}, \"archiveBytes\": {}, \"models\": {}, \"reason\": {}, \"lastCaptureError\": {},\n" "  \"omittedGeometry\": {}, \"hiddenGeometry\": {}, \"partialSamples\": {}, \"partialDetail\": {},\n  \"captureMsP50\": {}, \"captureMsP95\": {}, \"encodeMsP50\": {}, \"encodeMsP95\": {}\n}}\n",
         Wire::Version,
@@ -413,10 +427,12 @@ namespace Dreamsleeve::Client::Diagnostics
         percentile(encodes, .95));
       summary.flush();
       summary.close();
+      if (!summary) return std::unexpected(P::Error{P::Failure::Storage, "archive.summary-write"});
       {
         std::lock_guard lock(mutex);
         status.phase = Phase::Complete;
       }
+      return {};
     }
 
     void Run()
@@ -429,16 +445,21 @@ namespace Dreamsleeve::Client::Diagnostics
           if (!requested && shuttingDown) return;
           requested = false;
         }
+        P::Result<void> result;
         try
         {
-          RunSession();
+          result = RunSession();
         }
         catch (const std::exception& e)
+        {
+          result = std::unexpected(P::Error{P::Failure::Storage, e.what()});
+        }
+        if (!result)
         {
           std::lock_guard lock(mutex);
           active.store(false);
           status.phase  = Phase::Failed;
-          status.reason = e.what();
+          status.reason = result.error().field;
           ++status.errors;
           ClearQueue();
         }

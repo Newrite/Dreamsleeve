@@ -167,10 +167,10 @@ namespace Hooks
     }
   };
 
-  auto CreateStream()
+  std::unique_ptr<RE::NiStream, StreamDeleter> CreateStream()
   {
     auto* memory = static_cast<RE::NiStream*>(RE::malloc(0x620));
-    if (!memory) throw std::bad_alloc{};
+    if (!memory) return {};
     auto* stream = REL::Relocation<RE::NiStream*(RE::NiStream*)>{Address::StreamCtor}(memory);
     return std::unique_ptr<RE::NiStream, StreamDeleter>{stream};
   }
@@ -204,6 +204,7 @@ namespace Hooks
     // pass, including skins/properties/data, using the same streamable RTTI
     // (virtual slot 20) that the engine writes into its type catalog.
     auto audit = CreateStream();
+    if (!audit) return std::unexpected{"NiStream allocation failed"};
     SeedStream(*audit, root);
     audit->RegisterObjects();
     if (!audit->objects.size() || audit->objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
@@ -256,6 +257,7 @@ namespace Hooks
     if (!PhantomThread()) return std::unexpected(P::Error{P::Failure::Busy, "native.thread"});
     if (auto audited = AuditPhantom(root); !audited) return std::unexpected(P::Error{P::Failure::InvalidFormat, audited.error()});
     auto stream = CreateStream();
+    if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
     SeedStream(*stream, root);
     char*         output = nullptr;
     std::uint32_t length = 0;
@@ -293,8 +295,9 @@ namespace Hooks
   P::Result<RE::NiPointer<RE::NiNode>> LoadPhantom(const P::ValidatedAsset& asset)
   {
     if (!PhantomThread()) return std::unexpected(P::Error{P::Failure::Busy, "native.thread"});
-    const auto&                                                             bytes  = asset.Value().nif;
-    auto                                                                    stream = CreateStream();
+    const auto& bytes  = asset.Value().nif;
+    auto        stream = CreateStream();
+    if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
     static const REL::Relocation<bool(RE::NiStream*, char*, std::uint32_t)> load{Address::StreamLoad};
     const bool                                                              loaded =
       load(stream.get(), reinterpret_cast<char*>(const_cast<std::uint8_t*>(bytes.data())), static_cast<std::uint32_t>(bytes.size()));
