@@ -15,7 +15,7 @@ module LanePolicy =
         | DeliveryLane.Poses -> LaneReliability.SequencedFragmented
         | lane -> invalidArg "lane" $"Unknown lane {lane}"
     let reliable lane = reliability lane = LaneReliability.Reliable
-    let bulk lane = lane = DeliveryLane.Models || lane = DeliveryLane.Poses
+    let bulk lane = lane = DeliveryLane.Models
 
 type PhantomOptions = {
     Enabled: bool; CameraCulling: bool; StoragePath: string; DiskBytes: int64; RamBytes: int64; CacheEntries: int; CacheTtlSeconds: int

@@ -872,10 +872,12 @@ let tests = testList "Phantoms" [
             let bytes = Array.init (13 * 1024 * 1024 + 7) (fun index -> byte (index % 251))
             let manifest = asset 1UL bytes
             let mutable clock = 2L
+            let elapsed = System.Diagnostics.Stopwatch.StartNew()
             let pump predicate = task {
                 let deadline = Environment.TickCount64 + 15000L
                 while not (predicate()) && Environment.TickCount64 < deadline do
-                    clock <- clock + 100L
+                    // Real filesystem work must not expire against a 100x accelerated clock.
+                    clock <- max clock (2L + elapsed.ElapsedMilliseconds)
                     PhantomAgent.tick state clock
                     do! Task.Delay 1
                 Expect.isTrue (predicate()) "Bounded streaming made progress before test deadline."

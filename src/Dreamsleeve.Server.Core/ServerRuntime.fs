@@ -201,7 +201,7 @@ module ServerRuntime =
         | Ok packets ->
             for bytes in packets do
                 if entry.Phase <> RuntimeSessionPhase.Closing then
-                    match state.Transport.Send(entry.ConnectionId, { Lane = lane; Bytes = bytes }) with
+                    match state.Transport.Send(entry.ConnectionId, { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = bytes }) with
                     | Ok () -> ()
                     | Error _ when lane = DeliveryLane.Realtime -> () // Next period repairs a dropped pose.
                     | Error reason ->

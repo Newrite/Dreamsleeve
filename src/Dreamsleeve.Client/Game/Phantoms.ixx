@@ -451,7 +451,7 @@ namespace Phantoms
         const auto visual    = state.visuals.find(remote.player);
         const auto displayed = visual != state.visuals.end() && visual->second.current ? visual->second.current->generation.value : 0;
         logger::info(
-          "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f}",
+          "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f} target_delay_ms={:.1f} speed={:.3f}",
           remote.player,
           remote.descriptor.generation.value,
           displayed,
@@ -461,7 +461,9 @@ namespace Phantoms
           timing.sourceGapUs / 1000.0,
           timing.arrivalGapUs / 1000.0,
           timing.ageUs / 1000.0,
-          timing.aheadUs / 1000.0);
+          timing.aheadUs / 1000.0,
+          timing.delayUs / 1000.0,
+          timing.speed);
       }
     }
 #endif

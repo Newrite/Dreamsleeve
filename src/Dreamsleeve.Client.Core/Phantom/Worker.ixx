@@ -25,6 +25,13 @@ export namespace Dreamsleeve::Client::Phantom
       std::shared_ptr<const ValidatedAsset> asset;
     };
 
+    struct ModelJob
+    {
+      std::uint64_t  epoch{}, revision{};
+      Generation     generation;
+      ValidatedAsset asset;
+    };
+
     Exchange&                                                  exchange;
     std::filesystem::path                                      directory;
     std::mutex                                                 mutex;
@@ -38,13 +45,14 @@ export namespace Dreamsleeve::Client::Phantom
       Wire::Offer   offer;
     };
 
-    std::vector<Missing>                 missing;
-    std::shared_ptr<const PreparedAsset> local;
-    Generation                           generation, previousGeneration;
-    std::shared_ptr<const PreparedAsset> previous;
-    std::uint64_t                        localEpoch{}, localRevision{};
-    std::optional<std::uint64_t>         cacheBudget;
-    std::jthread                         thread;
+    std::vector<Missing>                                 missing;
+    std::optional<ModelJob>                              model;
+    std::uint64_t                                        assetInFlightBytes{};
+    std::condition_variable                              modelWake;
+    std::function<Result<PreparedAsset>(ValidatedAsset)> prepare;
+    // Only ModelRun touches the filesystem. Exchange owns prepared generations.
+    std::optional<std::uint64_t> cacheBudget;
+    std::jthread                 modelThread, thread;
 
     void Trim(std::uint64_t budget)
     {
@@ -176,69 +184,20 @@ export namespace Dreamsleeve::Client::Phantom
       while (!stop.stop_requested())
       {
         auto work = exchange.TakeWork();
-        if (!directory.empty() && work.settings.diskBytes && cacheBudget != work.settings.diskBytes)
-        {
-          cacheBudget = work.settings.diskBytes;
-          try
-          {
-            Trim(*cacheBudget);
-          }
-          catch (const std::exception&)
-          {
-            exchange.Failed("Не удалось обслужить кеш моделей фантомов", false);
-          }
-        }
-        if (localEpoch != work.epoch || localRevision != work.localRevision || !work.settings.publish)
-        {
-          if (localEpoch != work.epoch || !work.settings.publish)
-            previous.reset();
-          else if (work.previousGeneration == generation)
-          {
-            previous           = local;
-            previousGeneration = generation;
-          }
-          else if (work.generation != previousGeneration && work.previousGeneration != previousGeneration)
-            previous.reset();
-          if (previous && work.generation == previousGeneration)
-          {
-            local      = std::move(previous);
-            generation = previousGeneration;
-            exchange.Prepared(work.epoch, work.localRevision, {generation, local});
-          }
-          else
-          {
-            local.reset();
-            generation = {};
-          }
-          localEpoch    = work.epoch;
-          localRevision = work.localRevision;
-        }
-        if (work.previousGeneration != previousGeneration) previous.reset();
         if (work.capture)
         {
-          local.reset();
-          generation = {};
-          try
-          {
-            auto prepared = Prepare(std::move(work.capture->second));
-            if (prepared)
-            {
-              generation = work.capture->first;
-              local      = std::make_shared<const PreparedAsset>(std::move(*prepared));
-              exchange.Prepared(work.epoch, work.localRevision, {generation, local});
-            }
-            else
-              exchange.PreparationFailed(
-                work.epoch,
-                work.localRevision,
-                "Не удалось подготовить модель фантома: " + prepared.error().field);
-          }
-          catch (const std::exception&)
-          {
-            exchange.PreparationFailed(work.epoch, work.localRevision, "Недостаточно ресурсов для подготовки модели фантома");
-          }
+          std::lock_guard lock(mutex);
+          model.emplace(ModelJob{work.epoch, work.localRevision, work.capture->first, std::move(work.capture->second)});
+          modelWake.notify_one();
         }
-        if (work.snapshot && local && work.snapshot->generation == generation && work.context)
+        // While the next asset is compressed, keep the committed scene moving.
+        if (!work.asset && work.priorAsset)
+        {
+          work.asset      = std::move(work.priorAsset);
+          work.generation = work.previousGeneration;
+          work.snapshot   = std::move(work.previousSnapshot);
+        }
+        if (work.snapshot && work.asset && work.generation == work.snapshot->generation && work.context)
         {
           try
           {
@@ -247,7 +206,7 @@ export namespace Dreamsleeve::Client::Phantom
 #ifdef DREAMSLEEVE_DIAGNOSTICS
             const auto encodingStart = std::chrono::steady_clock::now();
 #endif
-            auto encoded = WriteSnapshot(snapshot, local->asset);
+            auto encoded = WriteSnapshot(snapshot, work.asset->asset);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
             if (encoded)
               Diagnostics::Phantoms().Encoded(
@@ -259,12 +218,12 @@ export namespace Dreamsleeve::Client::Phantom
             {
               Wire::Pose packet{snapshot.generation, snapshot.context, snapshot.sequence, snapshot.sampledAtUs, std::move(*encoded)};
               if (
-                previous && work.previousSnapshot && work.previousSnapshot->generation == previousGeneration &&
+                work.priorAsset && work.previousSnapshot && work.previousGeneration == work.previousSnapshot->generation &&
                 work.previousSnapshot->sampledAtUs == snapshot.sampledAtUs)
               {
                 auto prior    = *work.previousSnapshot;
                 prior.context = work.context;
-                auto bytes    = WriteSnapshot(prior, previous->asset);
+                auto bytes    = WriteSnapshot(prior, work.priorAsset->asset);
                 if (bytes)
                   packet.previous = std::make_shared<const Wire::Pose>(
                     Wire::Pose{prior.generation, prior.context, prior.sequence, prior.sampledAtUs, std::move(*bytes)});
@@ -279,27 +238,10 @@ export namespace Dreamsleeve::Client::Phantom
             exchange.Failed("Недостаточно ресурсов для подготовки позы фантома");
           }
         }
-        std::optional<AssetJob>                                    asset;
         std::map<std::pair<std::uint64_t, std::uint64_t>, PoseJob> batch;
         {
           std::lock_guard lock(mutex);
-          if (!assets.empty())
-          {
-            asset = std::move(assets.front());
-            assets.pop_front();
-          }
           batch.swap(poses);
-        }
-        if (asset)
-        {
-          try
-          {
-            Asset(*asset);
-          }
-          catch (const std::exception&)
-          {
-            exchange.Unavailable(asset->epoch, asset->offer, "Не удалось выделить память для модели фантома");
-          }
         }
         for (const auto& [id, job] : batch)
         {
@@ -320,23 +262,100 @@ export namespace Dreamsleeve::Client::Phantom
           }
         }
         std::unique_lock lock(mutex);
-        wake.wait_for(lock, std::chrono::milliseconds(5), [&] { return stop.stop_requested() || !assets.empty() || !poses.empty(); });
+        wake.wait_for(lock, std::chrono::milliseconds(5), [&] { return stop.stop_requested() || !poses.empty(); });
+      }
+    }
+
+    void ModelRun(std::stop_token stop)
+    {
+      while (!stop.stop_requested())
+      {
+        std::optional<ModelJob> capture;
+        std::optional<AssetJob> remote;
+        {
+          std::unique_lock lock(mutex);
+          modelWake.wait_for(lock, std::chrono::milliseconds(20), [&] { return stop.stop_requested() || model || !assets.empty(); });
+          if (stop.stop_requested()) break;
+          capture = std::exchange(model, {});
+          if (!capture && !assets.empty())
+          {
+            remote = std::move(assets.front());
+            assets.pop_front();
+            assetInFlightBytes = 2ULL * remote->offer.asset.rawBytes + remote->offer.asset.compressedBytes;
+          }
+        }
+        const auto settings = exchange.Settings();
+        if (!directory.empty() && settings.diskBytes && cacheBudget != settings.diskBytes)
+        {
+          cacheBudget = settings.diskBytes;
+          try
+          {
+            Trim(*cacheBudget);
+          }
+          catch (const std::exception&)
+          {
+            exchange.Failed("Не удалось обслужить кеш моделей фантомов", false);
+          }
+        }
+        if (capture && capture->epoch == exchange.Epoch() && exchange.Capturing(capture->generation))
+        {
+          try
+          {
+            auto result = prepare(std::move(capture->asset));
+            if (result)
+              exchange.Prepared(
+                capture->epoch,
+                capture->revision,
+                {capture->generation, std::make_shared<const PreparedAsset>(std::move(*result))});
+            else
+              exchange.PreparationFailed(
+                capture->epoch,
+                capture->revision,
+                "Не удалось подготовить модель фантома: " + result.error().field);
+          }
+          catch (const std::exception&)
+          {
+            exchange.PreparationFailed(capture->epoch, capture->revision, "Недостаточно ресурсов для подготовки модели фантома");
+          }
+        }
+        if (remote)
+        {
+          try
+          {
+            Asset(*remote);
+          }
+          catch (const std::exception&)
+          {
+            exchange.Unavailable(remote->epoch, remote->offer, "Не удалось выделить память для модели фантома");
+          }
+          std::lock_guard lock(mutex);
+          assetInFlightBytes = 0;
+        }
+        wake.notify_one();
       }
     }
 
 public:
 
-    Worker(Exchange& owner, std::filesystem::path cache)
+    Worker(
+      Exchange&                                            owner,
+      std::filesystem::path                                cache,
+      std::function<Result<PreparedAsset>(ValidatedAsset)> prepareModel = [](ValidatedAsset asset) { return Prepare(std::move(asset)); })
         : exchange(owner),
           directory(std::move(cache)),
+          prepare(std::move(prepareModel)),
+          modelThread([this](std::stop_token stop) { ModelRun(stop); }),
           thread([this](std::stop_token stop) { Run(stop); })
     {}
 
     ~Worker()
     {
       thread.request_stop();
+      modelThread.request_stop();
       wake.notify_all();
+      modelWake.notify_all();
       thread.join();
+      modelThread.join();
     }
 
     bool Queue(Wire::Offer offer, std::shared_ptr<const Bytes> bytes = {})
@@ -345,12 +364,12 @@ public:
       const auto      budget = exchange.Settings().memoryBytes;
       std::lock_guard lock(mutex);
       std::erase_if(assets, [&](const auto& job) { return job.epoch != epoch || job.offer.player == offer.player; });
-      std::uint64_t queued = 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes;
+      std::uint64_t queued = assetInFlightBytes + 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes;
       for (const auto& job : assets)
         queued += 2ULL * job.offer.asset.rawBytes + job.offer.asset.compressedBytes;
       if (assets.size() >= 8 || queued > budget) return false;
       assets.push_back({epoch, std::move(offer), std::move(bytes)});
-      wake.notify_one();
+      modelWake.notify_one();
       return true;
     }
 

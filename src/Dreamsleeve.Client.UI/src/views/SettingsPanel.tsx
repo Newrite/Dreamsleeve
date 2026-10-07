@@ -166,7 +166,7 @@ const phantomRanges = [
   ["phantomDrawDistance", "Дальность фантомов", 128, "игр. ед."],
   ["phantomOpacity", "Непрозрачность фантомов", 0.05, ""],
   ["phantomSampleRate", "Частота движения", 1, "Гц"],
-  ["phantomDelayMs", "Задержка сглаживания", 1, "мс"],
+  ["phantomDelayMs", "Минимальная задержка сглаживания", 1, "мс"],
   ["phantomExtrapolationMs", "Продолжение движения без обновлений", 1, "мс"],
   ["phantomTimeoutMs", "Скрывать при отсутствии обновлений", 50, "мс"],
   ["phantomMemoryMiB", "Лимит памяти моделей", 64, "МиБ"],

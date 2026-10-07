@@ -1,7 +1,7 @@
 export module Dreamsleeve.Client.Phantom.Playback;
 
 import std;
-import Dreamsleeve.Client.Domain.Logic;
+import Dreamsleeve.Client.PlayoutClock;
 export import Dreamsleeve.Client.Phantom.Types;
 
 export namespace Dreamsleeve::Client::Phantom
@@ -81,12 +81,14 @@ export namespace Dreamsleeve::Client::Phantom
     };
 
     std::deque<Sample> samples;
+    PlayoutClock       clock;
 
 public:
 
     void Clear()
     {
       samples.clear();
+      clock.Clear();
     }
 
     bool Push(std::shared_ptr<const Snapshot> pose, std::uint64_t arrivalUs, const ViewSettings& settings)
@@ -102,24 +104,11 @@ public:
         else if (pose->sampledAtUs - last.sampledAtUs > 5000000)
           Clear();
       }
-      const Time received{std::chrono::microseconds{arrivalUs}};
-      auto       time = received;
-      if (!samples.empty())
-      {
-        // Reuse movement's source-clock mapping. A faster packet must not
-        // advance the entire interpolation history in one rendered frame.
-        const auto mapped = Domain::Motion::SourceTime(
-          samples.back().time,
-          samples.back().pose->sampledAtUs,
-          pose->sampledAtUs,
-          received,
-          std::chrono::milliseconds{settings.delayMs},
-          std::chrono::milliseconds{5000});
-        if (mapped)
-          time = *mapped;
-        else
-          Clear();
-      }
+      if (!samples.empty() && (arrivalUs < samples.back().arrivalUs || arrivalUs - samples.back().arrivalUs > settings.timeoutMs * 1000ULL))
+        Clear();
+      const auto gap = samples.empty() ? 1 : pose->sequence.value - samples.back().pose->sequence.value;
+      clock.Push(pose->sampledAtUs, arrivalUs, gap, settings.delayMs * 1000ULL, BufferedPoseCount);
+      const Time time{std::chrono::microseconds{pose->sampledAtUs}};
       samples.push_back({std::move(pose), arrivalUs, time});
       while (samples.size() > BufferedPoseCount)
         samples.pop_front();
@@ -131,6 +120,7 @@ public:
       std::size_t   samples{};
       std::uint64_t sequence{}, sourceGapUs{}, arrivalGapUs{}, ageUs{};
       std::int64_t  aheadUs{};
+      double        delayUs{}, speed{1};
     };
 
     // A read-only view of the existing buffer, not another clock/state owner.
@@ -140,7 +130,9 @@ public:
       const auto& last = samples.back();
       Timing      result{samples.size(), last.pose->sequence.value};
       result.ageUs   = nowUs >= last.arrivalUs ? nowUs - last.arrivalUs : 0;
-      result.aheadUs = last.time.time_since_epoch().count() - static_cast<std::int64_t>(nowUs) + settings.delayMs * 1000LL;
+      result.aheadUs = last.time.time_since_epoch().count() - clock.At(nowUs);
+      result.delayUs = clock.DelayUs();
+      result.speed   = clock.Speed();
       for (std::size_t i = 1; i < samples.size(); ++i)
       {
         result.sourceGapUs = std::max(result.sourceGapUs, samples[i].pose->sampledAtUs - samples[i - 1].pose->sampledAtUs);
@@ -154,7 +146,7 @@ public:
     {
       if (samples.empty() || nowUs < samples.back().arrivalUs || nowUs - samples.back().arrivalUs > settings.timeoutMs * 1000ULL)
         return std::nullopt;
-      const Time target{std::chrono::microseconds{nowUs} - std::chrono::milliseconds{settings.delayMs}};
+      const Time target{std::chrono::microseconds{clock.At(nowUs)}};
       if (target <= samples.front().time) return *samples.front().pose;
       for (std::size_t i = 1; i < samples.size(); ++i)
       {
@@ -172,7 +164,22 @@ public:
       const auto  extra = std::min<std::uint64_t>((target - samples.back().time).count(), settings.extrapolationMs * 1000ULL);
       // A teleport is never interpreted as velocity.
       if (Motion::Distance(a.origin, b.origin) > 512) return b;
-      return Motion::Between(a, b, 1 + static_cast<float>(extra) / static_cast<float>(b.sampledAtUs - a.sampledAtUs));
+      // Predict only root translation. Independent bone velocities stretch the
+      // skeleton and detach weapons; retain the newest complete articulation.
+      Snapshot   result = b;
+      const auto ratio  = static_cast<float>(extra) / static_cast<float>(b.sampledAtUs - a.sampledAtUs);
+      const Vec3 delta{(b.origin.x - a.origin.x) * ratio, (b.origin.y - a.origin.y) * ratio, (b.origin.z - a.origin.z) * ratio};
+      const auto move = [&](Vec3& value) {
+        value.x += delta.x;
+        value.y += delta.y;
+        value.z += delta.z;
+      };
+      move(result.origin);
+      for (auto& channel : result.channels)
+        move(channel.world.position);
+      for (auto& bound : result.bounds)
+        move(bound.center);
+      return result;
     }
   };
 

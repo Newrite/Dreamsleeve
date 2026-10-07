@@ -13,7 +13,7 @@ let private config =
                                  Worker = { ServerConfig.defaults.Worker with QueueCapacity = 4 } }
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
-let private packet lane size = { Lane = lane; Bytes = Array.zeroCreate size }
+let private packet lane size = { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = Array.zeroCreate size }
 let private case name run = testCaseAsync name (async { do! run() |> Async.AwaitTask })
 
 let private eventually predicate = task {
@@ -77,7 +77,7 @@ let tests = testList "TransportOwner" [
         use release = new ManualResetEventSlim(false)
         use retrySeen = new ManualResetEventSlim(false)
         use resumeModel = new ManualResetEventSlim(false)
-        let value lane number = { Lane = lane; Bytes = [|byte number|] }
+        let value lane number = { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = [|byte number|] }
         try
             fake.SendPacket <- Some(fun packet ->
                 let number = int packet.Bytes[0]
@@ -114,7 +114,7 @@ let tests = testList "TransportOwner" [
                 if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
                 if number = 1 && not resume.IsSet then Error "Native packet budget exceeded."
                 else delivered.Enqueue number; Ok ())
-            let send id lane number = owner.Send(id, { Lane = lane; Bytes = [|byte number|] }) |> ok
+            let send id lane number = owner.Send(id, { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = [|byte number|] }) |> ok
             send fake.Id DeliveryLane.Control 0
             do! eventually (fun () -> entered.IsSet)
             send fake.Id DeliveryLane.Models 1
@@ -124,10 +124,10 @@ let tests = testList "TransportOwner" [
             send other DeliveryLane.Chat 3
             release.Set()
             do! eventually (fun () -> delivered.Count = 4)
-            Expect.equal (delivered.ToArray()) [|0;3;4;5|] "Other peer's chat, model and pose pass; blocked peer stays FIFO."
+            Expect.equal (delivered.ToArray()) [|0;3;5;4|] "Other peer's chat, model and pose pass; blocked peer stays FIFO."
             resume.Set()
             do! eventually (fun () -> delivered.Count = 6)
-            Expect.equal (delivered.ToArray()) [|0;3;4;5;1;2|] "Only blocked peer retries its first chunk."
+            Expect.equal (delivered.ToArray()) [|0;3;5;4;1;2|] "Only blocked peer retries its first chunk."
         finally release.Set(); resume.Set(); owner.Dispose()
     })
     case "control and chat pass an accepted realtime backlog without reordering realtime itself" (fun () -> task {
@@ -141,7 +141,7 @@ let tests = testList "TransportOwner" [
                 if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
                 delivered.Enqueue number
                 Ok ())
-            let send lane number = owner.Send(fake.Id, { Lane = lane; Bytes = [|byte number|] }) |> ok
+            let send lane number = owner.Send(fake.Id, { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = [|byte number|] }) |> ok
             send DeliveryLane.Realtime 0
             do! eventually (fun () -> entered.IsSet)
             send DeliveryLane.Realtime 1
@@ -153,6 +153,151 @@ let tests = testList "TransportOwner" [
             Expect.equal (delivered.ToArray()) [|0;3;4;1;2|] "High priority lanes pass, and each lane's accepted order remains."
         finally release.Set(); owner.Dispose()
     })
+    case "same-peer poses supersede by source and pass a blocked reliable model" (fun () -> task {
+        let! fake, owner = setup { config with Worker = { config.Worker with QueueCapacity = 16 } }
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        use retry = new ManualResetEventSlim(false)
+        use resume = new ManualResetEventSlim(false)
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                if n = 1 && not resume.IsSet then retry.Set(); Error "Native packet budget exceeded."
+                else delivered.Enqueue n; Ok ())
+            let send lane key n = owner.Send(fake.Id, { Lane = lane; Schedule = (match key with ValueSome source -> PacketSchedule.LatestPose source | _ -> PacketSchedule.Ordered); Bytes = [|byte n|] }) |> ok
+            send DeliveryLane.Control ValueNone 0
+            do! eventually (fun () -> entered.IsSet)
+            send DeliveryLane.Models ValueNone 1
+            send DeliveryLane.Models ValueNone 2
+            for n in 10 .. 40 do send DeliveryLane.Poses (ValueSome 11UL) n
+            send DeliveryLane.Poses (ValueSome 22UL) 50
+            send DeliveryLane.Chat ValueNone 3
+            release.Set()
+            do! eventually (fun () -> retry.IsSet && delivered.Count = 4)
+            Expect.equal (delivered.ToArray()) [|0;3;40;50|] "Both sources arrive; obsolete poses consume no queue slots."
+            resume.Set()
+            do! eventually (fun () -> delivered.Count = 6)
+            Expect.equal (delivered.ToArray()) [|0;3;40;50;1;2|] "Reliable model order survives."
+            Expect.isFalse (observed fake "reset") "Pose traffic does not reset the peer."
+        finally release.Set(); resume.Set(); owner.Dispose()
+    })
+
+    case "replacing pose slots keeps service order and works inside occupied reliable reserve" (fun () -> task {
+        let settings = { config with PeerLimit = 1; MaxOutgoingPacketsPerPeer = 16; MaxOutgoingBytesPerPeer = 64
+                                     Worker = { config.Worker with QueueCapacity = 16; QueueBytes = 64 } }
+        let! fake, owner = setup settings
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        let pose source number size = { Schedule = PacketSchedule.LatestPose source; Lane = DeliveryLane.Poses; Bytes = Array.create size (byte number) }
+        try
+            fake.SendPacket <- Some(fun packet ->
+                if packet.Bytes[0] = 0uy then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                delivered.Enqueue(int packet.Bytes[0]); Ok ())
+            owner.Send(fake.Id, { packet DeliveryLane.Control 1 with Bytes = [|0uy|] }) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            for source in 1UL .. 15UL do owner.Send(fake.Id, pose source (int source) 3) |> ok
+            owner.Send(fake.Id, { packet DeliveryLane.Control 16 with Bytes = Array.create 16 99uy }) |> ok
+            Expect.isOk (owner.Send(fake.Id, pose 1UL 42 3)) "Same-size replacement fits even above the pose count and byte ceilings."
+            Expect.isOk (owner.Send(fake.Id, pose 2UL 43 1)) "Shrinking releases byte accounting."
+            Expect.isError (owner.Send(fake.Id, pose 3UL 44 8)) "Growing still respects the pose budget."
+            release.Set()
+            do! eventually (fun () -> delivered.Count = 17)
+            Expect.equal (delivered.ToArray() |> Array.take 4) [|0;99;42;43|] "Hot slots keep their original fair turn."
+        finally release.Set(); owner.Dispose()
+    })
+
+    case "pose batches give reliable model work a bounded turn" (fun () -> task {
+        let! fake, owner = setup { config with Worker = { config.Worker with QueueCapacity = 64 } }
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                delivered.Enqueue n; Ok ())
+            owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.Ordered; Bytes = [|1uy|] }) |> ok
+            for n in 10 .. 25 do
+                owner.Send(fake.Id, { Lane = DeliveryLane.Poses; Schedule = PacketSchedule.LatestPose(uint64 n); Bytes = [|byte n|] }) |> ok
+            owner.Close fake.Id
+            release.Set()
+            do! eventually (fun () -> delivered.Count = 18 && observed fake "close")
+            let effects = fake.Calls |> Seq.map fst |> Seq.filter (fun call -> call = "send" || call = "close") |> Seq.toArray
+            Expect.equal (Array.findIndex ((=) "close") effects) 18 "Graceful close drains all accepted pose slots."
+            let sent = delivered.ToArray()
+            Expect.isLessThanOrEqual (Array.findIndex ((=) 1) sent) 9 "A model gets a turn after at most eight poses."
+        finally release.Set(); owner.Dispose()
+    })
+
+    case "model notices precede poses without overtaking their own reliable chunks" (fun () -> task {
+        let settings = { config with Worker = { config.Worker with QueueCapacity = 64 } }
+        let! fake, owner = setup settings
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        let notice number = { Lane = DeliveryLane.Models; Schedule = PacketSchedule.ModelNotice 0UL; Bytes = [|byte number|] }
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                delivered.Enqueue n; Ok ())
+            owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, notice 1) |> ok // Offer
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.Ordered; Bytes = [|2uy|] }) |> ok
+            owner.Send(fake.Id, notice 3) |> ok // Complete must follow the chunk.
+            for n in 10 .. 25 do
+                owner.Send(fake.Id, { Lane = DeliveryLane.Poses; Schedule = PacketSchedule.LatestPose(uint64 n); Bytes = [|byte n|] }) |> ok
+            release.Set()
+            do! eventually (fun () -> delivered.Count = 20)
+            let sent = delivered.ToArray()
+            Expect.equal sent[1] 1 "Offer establishes the view before the first pose."
+            let chunk = Array.findIndex ((=) 2) sent
+            Expect.isLessThanOrEqual chunk 10 "Large model chunks still yield to at most eight poses."
+            Expect.equal sent[chunk+1] 3 "Complete gets priority only after the chunk."
+        finally release.Set(); owner.Dispose()
+    })
+
+    case "a pending view notice gates only its source across blocked model work" (fun () -> task {
+        let settings = { config with Worker = { config.Worker with QueueCapacity = 64 } }
+        let! fake, owner = setup settings
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        use retry = new ManualResetEventSlim(false)
+        use resume = new ManualResetEventSlim(false)
+        use noticeRetry = new ManualResetEventSlim(false)
+        use resumeNotice = new ManualResetEventSlim(false)
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                if n = 1 && not resume.IsSet then retry.Set(); Error "Native packet budget exceeded."
+                elif n = 2 && not resumeNotice.IsSet then noticeRetry.Set(); Error "Native packet budget exceeded."
+                else delivered.Enqueue n; Ok ())
+            owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.Ordered; Bytes = [|1uy|] }) |> ok
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.ModelNotice 11UL; Bytes = [|2uy|] }) |> ok
+            owner.Send(fake.Id, { Lane = DeliveryLane.Poses; Schedule = PacketSchedule.LatestPose 11UL; Bytes = [|3uy|] }) |> ok
+            owner.Send(fake.Id, { Lane = DeliveryLane.Poses; Schedule = PacketSchedule.LatestPose 22UL; Bytes = [|4uy|] }) |> ok
+            release.Set()
+            do! eventually (fun () -> retry.IsSet && delivered.Count = 2)
+            Expect.equal (delivered.ToArray()) [|0;4|] "Unrelated existing scene keeps moving while the new view waits."
+            resume.Set()
+            do! eventually (fun () -> noticeRetry.IsSet)
+            Expect.equal (delivered.ToArray()) [|0;4;1|] "Failed notice admission keeps its dependent pose waiting."
+            resumeNotice.Set()
+            do! eventually (fun () -> delivered.Count = 5)
+            Expect.equal (delivered.ToArray()) [|0;4;1;2;3|] "Offer follows its chunk and precedes the dependent pose."
+        finally release.Set(); resume.Set(); resumeNotice.Set(); owner.Dispose()
+    })
+
     case "empty Poses epoch bookkeeping never enters the runtime handoff" (fun () -> task {
         let! fake, owner = setup config
         try

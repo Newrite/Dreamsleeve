@@ -107,7 +107,7 @@ sendBufferBytes = 262144
 
 # Smoothing of other players' movement between samples.
 [interpolation]
-# Players are drawn this far behind the newest sample, milliseconds, >= 0.
+# Minimum playback delay in milliseconds, >= 0; jitter adds a bounded adaptive margin.
 delayMs = 150
 # A longer pause between samples snaps instead of interpolating, milliseconds,
 # greater than delayMs, at most 3600000.

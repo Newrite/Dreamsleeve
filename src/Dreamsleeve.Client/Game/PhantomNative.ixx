@@ -291,6 +291,10 @@ export namespace Dreamsleeve::Game::PhantomNative
   {
     if (!engine.mainThread || !engine.mainThread() || !engine.save || !engine.normalizeBones)
       throw std::runtime_error("native capture outside game thread");
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    using Clock      = std::chrono::steady_clock;
+    const auto start = Clock::now();
+#endif
     std::vector<RE::NiAVObject*> topology;
     Collect(live, topology);
     std::vector<RE::NiAVObject*> required;
@@ -299,8 +303,14 @@ export namespace Dreamsleeve::Game::PhantomNative
       const bool auxiliary = Auxiliary(*source);
       if (source->AsGeometry() && !auxiliary) required.push_back(source);
     }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto cloneStart = Clock::now();
+#endif
     RE::NiPointer<RE::NiObject> holder{live->Clone()};
-    auto*                       clone = holder ? holder->AsNode() : nullptr;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto cloneEnd = Clock::now();
+#endif
+    auto* clone = holder ? holder->AsNode() : nullptr;
     if (!clone) throw std::runtime_error("Не удалось клонировать модель");
     std::vector<RE::NiAVObject*> cloned;
     Collect(clone, cloned);
@@ -422,7 +432,22 @@ export namespace Dreamsleeve::Game::PhantomNative
 
     for (auto* object : cloned)
       if (auto* geometry = object->AsGeometry()) Ghostify(*geometry, engine, {});
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto saveStart = Clock::now();
+#endif
     auto encoded = engine.save(streamRoot.get());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto saveEnd = Clock::now();
+    const auto ms      = [](auto from, auto to) {
+      return std::chrono::duration<double, std::milli>(to - from).count();
+    };
+    logger::info(
+      "[Phantom stages] topology_ms={:.3f} clone_ms={:.3f} normalize_ghost_ms={:.3f} nistream_save_ms={:.3f}",
+      ms(start, cloneStart),
+      ms(cloneStart, cloneEnd),
+      ms(cloneEnd, saveStart),
+      ms(saveStart, saveEnd));
+#endif
     if (!encoded) throw std::runtime_error(encoded.error().field);
     Prepared out{P::Asset{std::move(*encoded)}, {}};
     out.bindings.reserve(cloned.size());

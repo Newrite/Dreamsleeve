@@ -109,7 +109,7 @@ let tests = testSequenced <| testList "ENet transport" [
                 finally if packet.IsCreated then packet.Dispose()
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, data) -> actual = lane && data = bytes | _ -> false)) pump
             let mutable received = None
-            transport.Send(connection, { Lane = DeliveryLane.Poses; Bytes = payload }) |> ok
+            transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Poses; Bytes = payload }) |> ok
             until (fun () -> received.IsSome) (fun () ->
                 transport.Poll() |> ok |> ignore
                 service client (fun event ->
@@ -357,23 +357,23 @@ let tests = testSequenced <| testList "ENet transport" [
             let received = events |> Seq.pick (function ServerTransportEvent.Received(id, lane, payload) -> Some(id, lane, payload) | _ -> None)
             Expect.equal received (connection, DeliveryLane.Control, bytes) "detached exact payload"
 
-            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes }) |> ok
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })) "unacknowledged send still consumes capacity"
+            transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = bytes }) |> ok
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = bytes })) "unacknowledged send still consumes capacity"
             until (fun () -> packets.Count = 1) pump
             let mutable admitted = false
             until (fun () -> admitted) (fun () ->
                 pump ()
-                admitted <- Result.isOk (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })))
+                admitted <- Result.isOk (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = bytes })))
             Expect.isTrue admitted "ACK restores budget"
             transport.Close connection
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = bytes })) "closed connection never reaches reused peer")
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = bytes })) "closed connection never reaches reused peer")
 
     testCase "graceful close delivers the queued reliable reply before disconnect" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ _ connection events packets pump ->
             let reply = [|11uy; 22uy; 33uy|]
-            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = reply }) |> ok
+            transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = reply }) |> ok
             transport.Close connection
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = reply })) "closing route rejects new sends"
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = reply })) "closing route rejects new sends"
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.equal (List.ofSeq packets) [reply] "already queued reply survived close")
 
@@ -387,8 +387,8 @@ let tests = testSequenced <| testList "ENet transport" [
             let next = events |> Seq.pick (function ServerTransportEvent.Connected(id, _) when id <> connection -> Some id | _ -> None)
             transport.Close connection
             transport.Reset connection
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "old route stays invalid"
-            transport.Send(next, { Lane = DeliveryLane.Control; Bytes = [|2uy|] }) |> ok
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "old route stays invalid"
+            transport.Send(next, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = [|2uy|] }) |> ok
             until (fun () -> packets.Count = 1) pump
             Expect.equal packets[0] [|2uy|] "old close/reset cannot affect replacement")
 
@@ -399,7 +399,7 @@ let tests = testSequenced <| testList "ENet transport" [
             finally if packet.IsCreated then packet.Dispose()
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.isFalse (events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) "unreliable packet not dispatched"
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "route reset")
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "route reset")
 
     testCase "chat and realtime use independent channels without reliable-only rejection" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ peer connection events _ pump ->
@@ -411,8 +411,8 @@ let tests = testSequenced <| testList "ENet transport" [
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, _) -> actual = lane | _ -> false)) pump
             Expect.isFalse (events.Contains(ServerTransportEvent.Disconnected connection)) "supported channels retain connection"
             let oversized = Array.zeroCreate<byte> (transport.MaxUnfragmentedPayloadBytes connection + 1)
-            Expect.isError (transport.Send(connection, { Lane = DeliveryLane.Realtime; Bytes = oversized })) "realtime never fragments"
-            transport.Send(connection, { Lane = DeliveryLane.Control; Bytes = oversized }) |> ok)
+            Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Realtime; Bytes = oversized })) "realtime never fragments"
+            transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = oversized }) |> ok)
 
     testCase "a peer negotiating fewer than five channels is not admitted" <| fun _ ->
         let settings = { ServerConfig.defaults with Port = freePort (); ServiceTimeoutMs = 0u }

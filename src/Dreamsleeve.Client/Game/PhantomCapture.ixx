@@ -269,12 +269,24 @@ public:
       auto* root   = object ? object->AsNode() : nullptr;
       if (!root || !root->parent) return A::Fail(P::Failure::MissingSource, "native.third-person");
       auto prepared = N::Prepare(root, engine);
-      auto asset    = P::ValidatedAsset::Parse(std::move(prepared.asset), limits);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto parseStart = std::chrono::steady_clock::now();
+#endif
+      auto asset = P::ValidatedAsset::Parse(std::move(prepared.asset), limits);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto parseEnd = std::chrono::steady_clock::now();
+#endif
       if (!asset) return std::unexpected(asset.error());
       if (asset->Layout().nodes.size() != prepared.bindings.size()) return A::Fail(P::Failure::InvalidLink, "native.serialized-tree");
       auto source  = std::make_unique<Source>(engine, player, root, std::move(prepared.bindings), *asset);
       auto initial = source->Sample(player, firstPerson, stamp);
       if (!initial) return std::unexpected(initial.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      logger::info(
+        "[Phantom stages] validate_asset_ms={:.3f} bind_probe_initial_pose_ms={:.3f}",
+        std::chrono::duration<double, std::milli>(parseEnd - parseStart).count(),
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - parseEnd).count());
+#endif
       return Opened{std::move(source), std::move(*asset), std::move(*initial)};
     }
     catch (const std::exception& error)

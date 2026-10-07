@@ -511,3 +511,21 @@ TEST_CASE("Realtime poses reach the renderer and loading clears them before reen
 }
 
 TEST_SUITE_END();
+
+TEST_CASE("An established movement stream adapts to a persistent delivery delay")
+{
+  MovementFixture fixture;
+  float           previous = 0;
+  for (int i = 0; i < 500; ++i)
+  {
+    const int arrival = i * 100 + (i < 100 ? 100 : 300);
+    fixture.Move(static_cast<float>(i), i * 100, arrival);
+    const auto rendered = fixture.view->Sample(7, At(arrival));
+    REQUIRE(rendered);
+    CHECK(rendered->position.X >= previous);
+    previous = rendered->position.X;
+  }
+  CHECK(fixture.view->HistorySize(7) > 2);
+  CHECK(previous > 496);
+  CHECK(previous < 499);
+}

@@ -157,7 +157,7 @@ describe("phantom settings", () => {
     change(chat, "Непрозрачность фантомов", patch.phantomOpacity);
     change(chat, "Цвет фантомов", patch.phantomColor);
     change(chat, "Частота движения", patch.phantomSampleRate);
-    change(chat, "Задержка сглаживания", patch.phantomDelayMs);
+    change(chat, "Минимальная задержка сглаживания", patch.phantomDelayMs);
     change(
       chat,
       "Продолжение движения без обновлений",
@@ -212,7 +212,7 @@ describe("phantom settings", () => {
       ["phantomDrawDistance", "Дальность фантомов"],
       ["phantomOpacity", "Непрозрачность фантомов"],
       ["phantomSampleRate", "Частота движения"],
-      ["phantomDelayMs", "Задержка сглаживания"],
+      ["phantomDelayMs", "Минимальная задержка сглаживания"],
       ["phantomExtrapolationMs", "Продолжение движения без обновлений"],
       ["phantomTimeoutMs", "Скрывать при отсутствии обновлений"],
       ["phantomMemoryMiB", "Лимит памяти моделей"],

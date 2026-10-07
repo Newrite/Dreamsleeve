@@ -99,7 +99,10 @@ module PhantomCodec =
                 , PoseBytes = uint32 policy.Limits.RawPoseBytes, CompressedPoseBytes = uint32 policy.Limits.PoseBytes, SampleRate = uint32 policy.SampleRate
                 , MaximumVisible = uint32 policy.Maximum, Distance = policy.Distance, WindowChunks = uint32 policy.WindowChunks
                 , ConcurrentTransfers = uint32 policy.ConcurrentTransfers, ModelBytesPerSecond = uint32 policy.ModelBytesPerSecond, PoseBytesPerSecond = uint32 policy.PoseBytesPerSecond)
-        { Lane = DeliveryLane.Models; Bytes = packet.ToByteArray() }
+        // Only view changes gate that source's poses; transfer progress does not.
+        let source = if not (isNull packet.Offer) then packet.Offer.PlayerId elif not (isNull packet.Remove) then packet.Remove.PlayerId else 0UL
+        { Schedule = if isNull packet.Chunk then PacketSchedule.ModelNotice source else PacketSchedule.Ordered
+          Lane = DeliveryLane.Models; Bytes = packet.ToByteArray() }
 
     let private poseSampleSize (value: PhantomPose) =
         4 + CodedOutputStream.ComputeUInt64Size value.Generation.Value + CodedOutputStream.ComputeUInt64Size value.Context
@@ -134,7 +137,7 @@ module PhantomCodec =
         output.WriteTag(4, WireFormat.WireType.LengthDelimited)
         output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(sample)))
         output.CheckNoSpaceLeft()
-        { Lane = DeliveryLane.Poses; Bytes = bytes }
+        { Schedule = PacketSchedule.LatestPose player; Lane = DeliveryLane.Poses; Bytes = bytes }
 
     /// Write the immutable compressed sample directly into the final packet.
     /// Fanout shares this packet among recipients with the same view revision.
@@ -164,4 +167,4 @@ module PhantomCodec =
             output.WriteTag(5, WireFormat.WireType.LengthDelimited)
             output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(encodePoseSample previous))))
         output.CheckNoSpaceLeft()
-        { Lane = DeliveryLane.Poses; Bytes = bytes }
+        { Schedule = PacketSchedule.LatestPose(PlayerId.value player); Lane = DeliveryLane.Poses; Bytes = bytes }

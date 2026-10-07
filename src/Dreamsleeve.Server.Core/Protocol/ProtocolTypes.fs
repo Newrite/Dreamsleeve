@@ -22,7 +22,15 @@ type ProtocolCodecError = {
 type DeliveryLane = Dreamsleeve.Protocol.Network.DeliveryLane
 
 /// A detached encoded packet. Only the transport adapter chooses native flags.
-type TransportPacket = { Lane: DeliveryLane; Bytes: byte array }
+// Local handoff scheduling, never serialized or interpreted by native ENet.
+[<RequireQualifiedAccess>]
+type PacketSchedule = Ordered | ModelNotice of source: uint64 | LatestPose of source: uint64
+
+type TransportPacket =
+    { Lane: DeliveryLane; Bytes: byte array; Schedule: PacketSchedule }
+    member this.PoseStream =
+        match this.Schedule with PacketSchedule.LatestPose source -> ValueSome source | _ -> ValueNone
+
 
 /// A client request to publish into the system channel. The requested
 /// origin cannot be Server; kind admission belongs to the codec.

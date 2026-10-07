@@ -100,6 +100,7 @@ private:
     std::optional<std::pair<Generation, ValidatedAsset>> capture;
     std::shared_ptr<const Snapshot>                      snapshot;
     std::optional<Publication>                           publication;
+    std::shared_ptr<const PreparedAsset>                 localAsset, previousAsset;
     std::optional<Wire::Pose>                            encoded;
     std::unordered_map<std::uint64_t, Remote>            remotes;
     Metrics                                              metrics;
@@ -121,6 +122,8 @@ private:
       capture.reset();
       snapshot.reset();
       publication.reset();
+      localAsset.reset();
+      previousAsset.reset();
       encoded.reset();
       localReservation = 0;
     }
@@ -166,6 +169,7 @@ public:
       std::shared_ptr<const Snapshot>                      snapshot;
       std::optional<Generation>                            generation, previousGeneration;
       std::shared_ptr<const Snapshot>                      previousSnapshot;
+      std::shared_ptr<const PreparedAsset>                 asset, priorAsset;
     };
 
     void Configure(ViewSettings value)
@@ -282,7 +286,9 @@ public:
       {
         previousGeneration  = localGeneration;
         previousReservation = localReservation;
+        previousAsset       = std::move(localAsset);
       }
+      localAsset.reset();
       phase            = PublicationPhase::Preparing;
       localReservation = bytes;
       ++localRevision;
@@ -318,10 +324,12 @@ public:
           poseRevision,
           current,
           std::exchange(capture, {}),
-          std::exchange(snapshot, {}),
+          localAsset ? std::exchange(snapshot, {}) : nullptr,
           localGeneration,
           previousGeneration,
-          std::exchange(previousSnapshot, {})
+          std::exchange(previousSnapshot, {}),
+          localAsset,
+          previousAsset
       };
     }
 
@@ -334,6 +342,7 @@ public:
         // bounded pose work, not another compression reservation indefinitely.
         localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() + 6 * SnapshotWorkingBytes() +
                            Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
+        localAsset       = value.asset;
         publication      = std::move(value);
         if (phase == PublicationPhase::Preparing) phase = PublicationPhase::Pending;
       }
@@ -348,12 +357,13 @@ public:
         {
           ++localRevision;
           localGeneration = previousGeneration;
+          localAsset      = std::move(previousAsset);
           phase           = PublicationPhase::Settled;
           previousGeneration.reset();
           localReservation = std::exchange(previousReservation, 0);
           snapshot         = std::exchange(previousSnapshot, {});
           capture.reset();
-          publication.reset();
+          publication = localAsset ? std::optional<Publication>{{*localGeneration, localAsset}} : std::nullopt;
           encoded.reset();
         }
         else
@@ -397,6 +407,7 @@ public:
       previousGeneration.reset();
       previousSnapshot.reset();
       previousReservation = 0;
+      previousAsset.reset();
     }
 
     void Displayed(Wire::Displayed value)
@@ -413,7 +424,8 @@ public:
     {
       std::lock_guard lock(mutex);
       if (
-        workEpoch == epoch && workPoseRevision == poseRevision && context == value.context && localGeneration == value.generation &&
+        workEpoch == epoch && workPoseRevision == poseRevision && context == value.context &&
+        (localGeneration == value.generation || (phase == PublicationPhase::Preparing && previousGeneration == value.generation)) &&
         settings.publish && DemandAllowsPoses())
       {
         if (!previousGeneration) value.previous.reset();

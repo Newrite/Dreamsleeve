@@ -535,7 +535,8 @@ public:
           Request(Wire::Withdraw{});
         }
         CancelUpload();
-        local.reset();
+        // Keep the committed publication usable during native asset preparation.
+        if (!outgoing.generation || !local || committedGeneration != local->value.generation) local.reset();
         latestPose.reset();
         lastPoseSequence = 0;
         localRevision    = outgoing.localRevision;

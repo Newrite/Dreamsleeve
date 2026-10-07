@@ -795,11 +795,14 @@ TEST_CASE("Preparation rollback resumes the committed model without republishing
   REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
   auto work = exchange.TakeWork();
   stream.Poll();
+  exchange.Encoded(exchange.Epoch(), work.poseRevision, Pose(*model));
+  const auto preparing = stream.Poll(Clock::now() + std::chrono::seconds(1));
+  CHECK(std::ranges::any_of(preparing, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
   exchange.PreparationFailed(work.epoch, work.localRevision, "prepare failed");
   work = exchange.TakeWork();
   exchange.Prepared(work.epoch, work.localRevision, {{1}, model});
   exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
-  const auto resumed = stream.Poll(Clock::now() + std::chrono::seconds(1));
+  const auto resumed = stream.Poll(Clock::now() + std::chrono::seconds(2));
   CHECK(std::ranges::none_of(Models(resumed), [](const auto& p) { return p.has_publish() || p.has_withdraw(); }));
   CHECK(std::ranges::any_of(resumed, [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
 }
@@ -853,4 +856,62 @@ TEST_CASE("Phantom demand survives control and model lane reordering during boot
   CHECK_FALSE(exchange.PosesRequired());
   exchange.PoseDemand({2, true});
   CHECK(exchange.PosesRequired());
+}
+
+TEST_CASE("Model compression cannot stall remote poses or the committed local generation")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  exchange.TakeOutput();
+  exchange.Settled({P::Generation{1}, 1});
+  P::Wire::Offer offer{7, 1, Describe(*model)};
+  REQUIRE(exchange.Offer(offer));
+  auto asset = std::make_shared<const P::ValidatedAsset>(model->asset);
+  exchange.Loaded(exchange.Epoch(), offer, asset, false);
+  {
+    std::promise<void> started, release;
+    auto               wait = release.get_future().share();
+    P::Worker          worker(exchange, {}, [&](P::ValidatedAsset value) {
+      started.set_value();
+      wait.wait();
+      return P::Prepare(std::move(value));
+    });
+
+    // Release before Worker destruction even when a REQUIRE throws.
+    struct Unblock
+    {
+      std::promise<void>& value;
+
+      ~Unblock()
+      {
+        value.set_value();
+      }
+    } unblock{release};
+
+    REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+    REQUIRE(started.get_future().wait_for(std::chrono::seconds(2)) == std::future_status::ready);
+    auto wire = Pose(*model);
+    auto pose = P::ReadSnapshot(wire.payload, model->asset);
+    REQUIRE(pose);
+    auto previous    = std::make_shared<const P::Snapshot>(*pose);
+    pose->generation = {2};
+    exchange.Submit(std::make_shared<const P::Snapshot>(*pose), previous);
+    worker.Queue({7, 1, wire}, asset, 100000);
+    REQUIRE(Until([&] { return exchange.Find(7)->playback.Inspect(100000, exchange.Settings()).samples == 1; }));
+    REQUIRE(Until([&] {
+      auto output = exchange.TakeOutput();
+      return output.pose && output.pose->generation == P::Generation{1};
+    }));
+    SUBCASE("Session reset")
+    {
+      exchange.Reset();
+    }
+    SUBCASE("Native source replaced")
+    {
+      exchange.RestartCapture();
+    }
+  }
+  CHECK_FALSE(exchange.TakeOutput().publication);
+  CHECK_FALSE(exchange.Capturing(P::Generation{2}));
 }

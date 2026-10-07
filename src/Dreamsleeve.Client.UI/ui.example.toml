@@ -184,7 +184,7 @@ phantomColor = "#8CCCCC"
 # Pose sampling rate in Hz, 1..50; 10 by default, 20 for a denser stream.
 # The server may impose a lower rate (Phantoms.PoseIntervalMs).
 phantomSampleRate = 10
-# Playback delay, bounded extrapolation and stale-pose timeout in ms.
+# Minimum playback delay (adaptive jitter margin), bounded extrapolation and stale-pose timeout in ms.
 phantomDelayMs = 100
 phantomExtrapolationMs = 100
 phantomTimeoutMs = 1000

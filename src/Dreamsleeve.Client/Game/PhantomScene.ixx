@@ -127,7 +127,13 @@ public:
         skins.clear();
         surfaces.clear();
         root.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        const auto loadStart = std::chrono::steady_clock::now();
+#endif
         auto loaded = engine.load(asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        const auto loadEnd = std::chrono::steady_clock::now();
+#endif
         if (!loaded) return std::unexpected(loaded.error());
         root = std::move(*loaded);
         N::Collect(root.get(), nodes);
@@ -162,6 +168,13 @@ public:
         }
         root->GetFlags().set(Flag::kHidden);
         phase = Phase::Loaded;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        logger::info(
+          "[Phantom stages] generation={} nistream_load_ms={:.3f} scene_prepare_ms={:.3f}",
+          generation.value,
+          std::chrono::duration<double, std::milli>(loadEnd - loadStart).count(),
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadEnd).count());
+#endif
         return BuildProgress::Ready;
       }
       catch (const std::exception& e)
