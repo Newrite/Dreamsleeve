@@ -324,8 +324,10 @@ namespace
   template <class F>
   void Await(Client& alice, Client& bob, std::string_view phase, F ready)
   {
-    const auto started  = Clock::now();
-    const auto deadline = started + std::chrono::seconds(90);
+    const auto started    = Clock::now();
+    const auto configured = Environment("DREAMSLEEVE_PHANTOM_SMOKE_DEADLINE_SECONDS", 3);
+    const auto seconds    = configured ? std::clamp(std::atoi(configured->c_str()), 1, 600) : 90;
+    const auto deadline   = started + std::chrono::seconds(seconds);
     while (!ready() && Clock::now() < deadline)
     {
       alice.Pump();
@@ -399,7 +401,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   auto       model            = Model();
   const auto expectedChannels = model.Layout().requiredChannels.size();
   const auto expectedBounds   = model.Layout().bounds.size();
-  REQUIRE(alice.exchange.Submit(P::Generation{1}, std::move(model)));
+  REQUIRE(alice.exchange.Submit(10, P::Generation{1}, std::move(model)));
   const auto coldStarted = NowUs();
   Await(alice, bob, "cold native prepare/upload/download/decode", [&] {
     // Exercise control while reliable download fragments are already in flight.
@@ -475,7 +477,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   bob.exchange.Displayed({1, bob.offerRevision, P::Generation{1}});
   Await(alice, bob, "display acknowledgement releases generation bridge", [&] { return alice.exchange.CanReplace(); });
   const auto sent = alice.chunksSent;
-  REQUIRE(alice.exchange.Submit(P::Generation{2}, Model()));
+  REQUIRE(alice.exchange.Submit(10, P::Generation{2}, Model()));
   Await(alice, bob, "warm server publication and native cached generation", [&] { return alice.readyGeneration == 2 && Loaded(bob, 2); });
   CHECK(alice.chunksSent == sent);
   CHECK(bob.downloadedBytes == downloaded);

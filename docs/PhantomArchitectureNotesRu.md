@@ -220,6 +220,11 @@ Exchange — единственный клиентский owner demand и token
 сохраняет hash исходного сжатого объекта при серверной перекомпрессии.
 
 Аудит задержек перед NIF-дельтами07.10.2026: [PhantomOptimizationResearchRu.md](PhantomOptimizationResearchRu.md).
-Разные ENet lanes сейчас не исключают head-of-line blocking в общей bulk FIFO
-одного peer; один Client.Core Worker также последовательно обслуживает assets
-и poses. Это выявленные ограничения текущего кода, а не уже внесённые исправления.
+В состоянии на момент этого аудита разные ENet lanes не исключали блокировку
+поз общей bulk FIFO и последовательным worker. Затем очереди и работа pose/model
+были разделены: [результаты](benchmarks/phantom-algorithms-2026-10-07.md).
+08.10 добавлены отдельное управление flight исходящей модели, context token
+захвата и progress-based bridge: [контракты и ограничения](benchmarks/phantom-delivery-2026-10-08.md).
+Владение остаётся у Exchange (клиентская публикация), Streaming (передача),
+Game (нативный Source) и серверного Selected/Transfer (получатель/доставка).
+Независимые readiness bool в Host/UI не добавлены.

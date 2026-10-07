@@ -153,7 +153,7 @@ TEST_CASE("Phantom exchange clears old work and bounds remote admission")
   exchange.Context(1, true);
   auto a = P::ValidatedAsset::Parse(Triangle());
   REQUIRE(a);
-  CHECK(exchange.Submit(P::Generation{1}, *a));
+  CHECK(exchange.Submit(1, P::Generation{1}, *a));
   auto work = exchange.TakeWork();
   REQUIRE(work.capture);
   P::Wire::Offer offer{
@@ -218,7 +218,7 @@ TEST_CASE("Publication revisions reject stale preparation across a fast off on t
   exchange.Context(1, true);
   auto asset = P::ValidatedAsset::Parse(Triangle());
   REQUIRE(asset);
-  REQUIRE(exchange.Submit(P::Generation{1}, *asset));
+  REQUIRE(exchange.Submit(1, P::Generation{1}, *asset));
   auto work        = exchange.TakeWork();
   auto settings    = exchange.Settings();
   settings.publish = false;
@@ -240,7 +240,7 @@ TEST_CASE("Shrinking phantom RAM releases local preparation and invalidates its 
   raw        = PhantomFixture::Model(2, 60000);
   auto asset = P::ValidatedAsset::Parse(std::move(raw));
   REQUIRE(asset);
-  REQUIRE(exchange.Submit(P::Generation{1}, *asset));
+  REQUIRE(exchange.Submit(1, P::Generation{1}, *asset));
   auto work            = exchange.TakeWork();
   auto settings        = exchange.Settings();
   settings.memoryBytes = 8 * 1024 * 1024;

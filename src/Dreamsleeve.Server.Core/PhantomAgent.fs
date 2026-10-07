@@ -25,7 +25,7 @@ module PhantomAgent =
     let private trace kind player context generation view reason = traceFor 0UL kind player context generation view reason
     type private Credit = { mutable At: int64; mutable Available: double }
     type private View = { Authority: uint64; Distance: double; Facing: double option }
-    type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64; mutable SentGeneration: AppearanceGeneration option; mutable Displayed: AppearanceGeneration option }
+    type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64; mutable SentGeneration: AppearanceGeneration option; mutable Displayed: AppearanceGeneration option; mutable DisplayProgressAt: int64; mutable DisplayProgressBytes: int }
     type private Member = {
         Player: PlayerId; mutable Character: uint64; mutable Context: uint64; mutable Located: bool; mutable Active: bool
         mutable Demand: struct (uint64 * bool) option; mutable Preferences: PhantomPreferences; Views: Dictionary<PlayerId, View>; Selected: Dictionary<PlayerId, Selected>
@@ -45,14 +45,14 @@ module PhantomAgent =
     type private Transfer = {
         Id: PhantomTransferId; Request: PhantomRequestId; Owner: Guid; Source: PlayerId; Manifest: PhantomManifest
         Character: uint64; Context: uint64; View: uint64; Upload: bool
-        mutable Offset: int; mutable Sent: int; mutable Acknowledged: int; mutable Touched: int64; mutable Phase: Phase
+        Flow: ModelFlow.State; mutable Offset: int; mutable Sent: int; mutable Acknowledged: int; mutable Touched: int64; mutable Phase: Phase
     }
     type Snapshot = { Members: int; Sources: int; Subscriptions: int; Transfers: int; LatestPoses: int; PendingIo: int }
     type State = private {
         Options: PhantomOptions; Storage: PhantomStoragePort; Send: Guid * TransportPacket -> Result<unit, string>
         Members: Dictionary<Guid, Member>; Players: Dictionary<PlayerId, Guid>; Transfers: Dictionary<PhantomTransferId, Transfer>
         Audiences: Dictionary<PlayerId, HashSet<Guid>>
-        Cleanup: ResizeArray<Task<unit>>; ModelCredit: Credit; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
+        Cleanup: ResizeArray<Task<unit>>; ModelCredit: Credit; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int; mutable TransferCursor: int
     }
 
     let private credit at rate = { At = at; Available = double rate }
@@ -60,6 +60,10 @@ module PhantomAgent =
         value.Available <- min capacity (value.Available + double (max 0L (at - value.At)) * rate / 1000.0)
         value.At <- at
     let private refill at rate value = refillBounded at (double rate) (double rate) value
+    // The ACK window bounds retained data; send credit bounds new bursts.
+    // Two chunks leave room for transport headers and concurrent realtime data.
+    let private refillModel at rate chunkBytes value =
+        refillBounded at (double (2 * chunkBytes)) (double rate) value
     let private take at rate amount value =
         refill at rate value
         if value.Available < double amount then false
@@ -167,7 +171,7 @@ module PhantomAgent =
                         // the receiver's previous scene until this offer is ready.
                         for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
                             cancel state transfer.Id false "superseded"
-                        let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL; SentGeneration = None }
+                        let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL; SentGeneration = None; DisplayProgressAt = max current.CommittedAt state.LastTick; DisplayProgressBytes = 0 }
                         observer.Selected[player] <- replacement
                         traceFor (uint64 observer.Player) "offer" player current.Context replacement.Asset.Generation.Value replacement.Revision "replacement"
                         emit state id (PhantomResponse.Offer(player, replacement.Revision, replacement.Asset))
@@ -176,7 +180,7 @@ module PhantomAgent =
                 if not (observer.Selected.ContainsKey player) then
                     match source state player with
                     | ValueSome current when current.Ready.IsSome && observer.Views.ContainsKey player ->
-                        let selected = { Revision = nextRevision observer; Asset = current.Ready.Value; Authority = observer.Views[player].Authority; SentSequence = 0UL; SentGeneration = None; Displayed = None }
+                        let selected = { Revision = nextRevision observer; Asset = current.Ready.Value; Authority = observer.Views[player].Authority; SentSequence = 0UL; SentGeneration = None; Displayed = None; DisplayProgressAt = max current.CommittedAt state.LastTick; DisplayProgressBytes = 0 }
                         observer.Selected[player] <- selected
                         let audience =
                             match state.Audiences.TryGetValue player with
@@ -202,7 +206,7 @@ module PhantomAgent =
 
     let create options storage send = {
         Options = options; Storage = storage; Send = send; Members = Dictionary(); Players = Dictionary(); Transfers = Dictionary()
-        Cleanup = ResizeArray(); Audiences = Dictionary(); ModelCredit = credit 0L options.ModelBytesPerSecond; NextTransfer = 0UL; LastTick = 0L; LastDispatch = 0L; Cursor = 0
+        Cleanup = ResizeArray(); Audiences = Dictionary(); ModelCredit = credit 0L options.ModelBytesPerSecond; NextTransfer = 0UL; LastTick = 0L; LastDispatch = 0L; Cursor = 0; TransferCursor = 0
         FanoutCredit = credit 0L options.MaxPoseFanoutPerTick
         OutgoingPoseCredit = credit 0L options.TotalPoseBytesPerSecond
     }
@@ -331,7 +335,7 @@ module PhantomAgent =
             let id = PhantomTransferId state.NextTransfer
             let phase = if upload then StartingUpload(state.Storage.StartUpload(id, manifest)) else StartingDownload(state.Storage.StartDownload(id, manifest))
             state.Transfers[id] <- { Id = id; Request = request; Owner = owner; Source = player; Manifest = manifest; Character = character; Context = context
-                                     View = revision; Upload = upload; Offset = 0; Sent = 0; Acknowledged = 0; Touched = at; Phase = phase }
+                                     View = revision; Upload = upload; Flow = ModelFlow.create state.Options.ChunkBytes state.Options.WindowChunks; Offset = 0; Sent = 0; Acknowledged = 0; Touched = at; Phase = phase }
 
     let handle state at id request =
         match state.Members.TryGetValue id with
@@ -398,8 +402,17 @@ module PhantomAgent =
                                       && offset >= transfer.Acknowledged && offset <= transfer.Sent
                                       && (offset % state.Options.ChunkBytes = 0 || offset = transfer.Manifest.CompressedBytes) ->
                     if offset > transfer.Acknowledged then
+                        ModelFlow.acknowledge offset at transfer.Flow
                         transfer.Acknowledged <- offset
                         transfer.Touched <- at
+                        // Only actual delivery progress extends the display grace.
+                        // Retrying the same prefix in a new transfer is not new progress.
+                        match memberState.Selected.TryGetValue transfer.Source with
+                        | true, selected when selected.Revision = transfer.View && selected.Asset = transfer.Manifest
+                                              && offset > selected.DisplayProgressBytes ->
+                            selected.DisplayProgressBytes <- offset
+                            selected.DisplayProgressAt <- at
+                        | _ -> ()
                 | _ -> deny()
             | PhantomRequest.Chunk(transferId, offset, bytes) ->
                 match state.Transfers.TryGetValue transferId with
@@ -476,6 +489,7 @@ module PhantomAgent =
             | Error _ -> sending <- false
 
     let private settle state at (transfer: Transfer) =
+        let mutable serviced = false
         if not (valid state transfer) then cancel state transfer.Id false "stale transfer"
         elif at - transfer.Touched > int64 state.Options.TransferTimeoutMs then cancel state transfer.Id false "transfer timeout"
         else
@@ -505,11 +519,12 @@ module PhantomAgent =
                 let mutable admitting = true
                 for chunk in queue do
                     if admitting && chunk.Pending.IsNone then
-                        refill at state.Options.PlayerModelBytesPerSecond owner.ModelCredit
-                        refill at state.Options.ModelBytesPerSecond state.ModelCredit
+                        refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes owner.ModelCredit
+                        refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.ModelCredit
                         if owner.ModelCredit.Available >= double chunk.Bytes.Length && state.ModelCredit.Available >= double chunk.Bytes.Length then
                             owner.ModelCredit.Available <- owner.ModelCredit.Available - double chunk.Bytes.Length
                             state.ModelCredit.Available <- state.ModelCredit.Available - double chunk.Bytes.Length
+                            serviced <- true
                             chunk.Pending <- Some(state.Storage.WriteChunk(transfer.Id, chunk.Offset, chunk.Bytes))
                             uploaded.Add(int64 chunk.Bytes.Length)
                         else admitting <- false
@@ -545,9 +560,10 @@ module PhantomAgent =
                         match pending.Result with
                         | Error reason -> cancel state transfer.Id false reason; sending <- false
                         | Ok bytes ->
-                            refill at state.Options.PlayerModelBytesPerSecond owner.ModelCredit
-                            refill at state.Options.ModelBytesPerSecond state.ModelCredit
-                            if owner.ModelCredit.Available < double bytes.Length || state.ModelCredit.Available < double bytes.Length then sending <- false
+                            refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes owner.ModelCredit
+                            refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.ModelCredit
+                            if owner.ModelCredit.Available < double bytes.Length || state.ModelCredit.Available < double bytes.Length
+                               || not (ModelFlow.allows (transfer.Sent - transfer.Acknowledged) bytes.Length transfer.Flow) then sending <- false
                             else
                                 match state.Send(transfer.Owner, PhantomCodec.encode (PhantomResponse.Chunk(transfer.Id, offset, bytes))) with
                                 | Error _ -> sending <- false
@@ -555,7 +571,9 @@ module PhantomAgent =
                                     queue.Dequeue() |> ignore
                                     owner.ModelCredit.Available <- owner.ModelCredit.Available - double bytes.Length
                                     state.ModelCredit.Available <- state.ModelCredit.Available - double bytes.Length
+                                    serviced <- true
                                     transfer.Sent <- transfer.Sent + bytes.Length
+                                    ModelFlow.sent transfer.Sent at transfer.Flow
                                     transfer.Touched <- at
                                     downloaded.Add(int64 bytes.Length)
                     if state.Transfers.ContainsKey transfer.Id then
@@ -567,13 +585,18 @@ module PhantomAgent =
                                 queue.Enqueue(struct (transfer.Offset, state.Storage.ReadChunk(transfer.Id, transfer.Offset, length)))
                                 transfer.Offset <- transfer.Offset + length
             | StartingUpload _ | StartingDownload _ -> ()
+        serviced
 
     let tick state at =
         // Cleanup completions are bounded by admitted transfers, and drained even
         // when publishing is disabled. No file work runs inside this turn.
         state.Cleanup.RemoveAll(Predicate(fun pending -> pending.IsCompleted)) |> ignore
         let transfers = state.Transfers.Values |> Seq.toArray
-        for index in 0 .. transfers.Length - 1 do settle state at transfers[(state.Cursor + index) % transfers.Length]
+        let start = state.TransferCursor
+        for index in 0 .. transfers.Length - 1 do
+            let current = (start + index) % transfers.Length
+            if settle state at transfers[current] then
+                state.TransferCursor <- (current + 1) % transfers.Length
         let period = int64 state.Options.ReplicationIntervalMs
         let replicate = at - state.LastTick >= period
         if replicate then
@@ -589,9 +612,10 @@ module PhantomAgent =
                         | true, audience -> audience |> Seq.exists (fun peer ->
                             match state.Members[peer].Selected.TryGetValue owner.Player with
                             | true, selected -> selected.Displayed <> Some ready.Generation
+                                                && at - selected.DisplayProgressAt < int64 state.Options.TransferTimeoutMs
                             | _ -> false)
                         | _ -> false
-                    if not waiting || at - owner.CommittedAt >= int64 state.Options.TransferTimeoutMs then
+                    if not waiting then
                         owner.Settled <- Some ready.Generation
                         owner.Previous <- None; owner.PreviousSequence <- 0UL
                         owner.Latest <- owner.Latest |> Option.map (fun struct (pose, received) -> struct (PhantomPose.withoutPrevious pose, received))

@@ -107,8 +107,11 @@ namespace Phantoms
     auto& state   = Get();
     auto& runtime = Runtime::Get();
     if (runtime.app)
+    {
+      if (state.source) runtime.app->Exchange().Phantoms().RestartCapture();
       for (const auto& [id, visual] : state.visuals)
         runtime.app->Exchange().Phantoms().SceneMemory(id, 0);
+    }
     state.visuals.clear();
     state.source.reset();
     state.previous.reset();
@@ -206,12 +209,14 @@ namespace Phantoms
   // game's frame update. No actor-update callback touches this state.
   void CapturePlayer(RE::PlayerCharacter& player)
   {
-    auto&      runtime    = Runtime::Get();
-    auto&      state      = Get();
-    const auto now        = Clock::now();
-    auto&      exchange   = runtime.app->Exchange().Phantoms();
-    const auto settings   = exchange.Settings();
-    bool       publishing = exchange.Available() && settings.publish;
+    auto&      runtime        = Runtime::Get();
+    auto&      state          = Get();
+    const auto now            = Clock::now();
+    auto&      exchange       = runtime.app->Exchange().Phantoms();
+    const auto settings       = exchange.Settings();
+    const auto observer       = World::Observe(&player);
+    const auto captureContext = observer ? exchange.CaptureContext(observer->space) : std::nullopt;
+    bool       publishing     = captureContext.has_value() && settings.publish;
     P::Limits  captureLimits;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const bool recording = Dreamsleeve::Client::Diagnostics::Phantoms().Active();
@@ -300,7 +305,7 @@ namespace Phantoms
           asset.MemoryBytes() / 1048576.0,
           std::chrono::duration<double, std::milli>(Clock::now() - now).count(),
           changeReason);
-        if (publishing && !exchange.Submit(nextGeneration, asset)) return false;
+        if (publishing && !exchange.Submit(*captureContext, nextGeneration, asset)) return false;
         if (publishing && state.source && exchange.Capturing(state.generation))
           state.previous = RetainedSource{state.generation, state.sequence, std::move(state.source)};
         state.generation     = nextGeneration;

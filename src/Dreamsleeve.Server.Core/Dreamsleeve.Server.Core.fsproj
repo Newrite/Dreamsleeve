@@ -22,6 +22,7 @@
         <Compile Include="Announcements.fs" />
         <Compile Include="PhantomOptions.fs" />
         <Compile Include="Protocol/PhantomCodec.fs" />
+        <Compile Include="ModelFlow.fs" />
         <Compile Include="PhantomAgent.fs" />
         <Compile Include="GameSettings.fs" />
         <Compile Include="RateLimit.fs" />

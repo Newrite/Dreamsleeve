@@ -171,8 +171,10 @@ let tests = testSequenced <| testList "Phantom protocol24 E2E" [
             Expect.isTrue (bob.Control |> Seq.exists (fun packet -> not (isNull packet.ChatPublished) && packet.ChatPublished.Message.Text = "phantom-e2e-chat")) "Chat remains live during model streaming."
             asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 24u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 201UL)))
             let chunks () = bob.Models |> Seq.filter (fun packet -> not (isNull packet.Chunk)) |> Seq.length
-            wait "Complete download window without application ACK." (fun () -> chunks() >= options.WindowChunks)
-            Expect.equal (chunks()) options.WindowChunks "Download waits for application Progress at the negotiated window."
+            let initialWindow = min 2 options.WindowChunks
+            wait "Initial download flight without application ACK." (fun () -> chunks() >= initialWindow)
+            for _ in 1 .. 100 do pump(); Thread.Sleep 1
+            Expect.equal (chunks()) initialWindow "Without Progress the sender cannot grow its initial flight."
             preferences false
             wait "Receive reduction removes view." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Remove)))
             let removed = bob.Models |> Seq.pick (fun packet -> if isNull packet.Remove then None else Some packet.Remove)

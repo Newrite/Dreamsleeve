@@ -9,7 +9,7 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
-open Microsoft.Extensions.Logging.Abstractions
+open Microsoft.Extensions.Logging
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private ticket (name: string) = name.PadRight(43, '_')
@@ -29,6 +29,10 @@ let private run (arguments: string array) = task {
     let readyFile = Path.GetFullPath(value "--ready-file")
     if port = 0us then invalidArg "--port" "Select a free nonzero loopback port."
     Directory.CreateDirectory directory |> ignore
+    use loggers = LoggerFactory.Create(fun builder ->
+        builder.AddSimpleConsole(fun console -> console.SingleLine <- true) |> ignore
+        builder.SetMinimumLevel(LogLevel.Debug) |> ignore)
+    let logger = loggers.CreateLogger("PhantomSmoke")
     use diagnostics =
         if Environment.GetEnvironmentVariable("DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS") = "1" then
             let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1024L * 1024L)
@@ -61,11 +65,11 @@ let private run (arguments: string array) = task {
     let authentication = { Requests = auth.Ref.TryReliable().Value; Profiles = names.Ref.TryReliable().Value;
                            Moderation = moderation.Ref.TryReliable().Value; Completion = auth.Completion }
     let storage = PhantomStorage.create phantoms
-    let transport = EnetTransport.createWithPhantoms server phantoms NullLogger.Instance |> ok
+    let transport = EnetTransport.createWithPhantoms server phantoms logger |> ok
     use runtime = ServerRuntime.startWithPhantoms storage settings Moderation.empty PseudonymDictionary.builtIn
                       { Loaded = []; NextId = 1UL; Writer = marks.Ref.TryReliable().Value }
                       { Loaded = []; Profiles = []; NextId = 1UL; Writer = guilds.Ref.TryReliable().Value; WriterStopped = guilds.Completion }
-                      authentication transport NullLogger.Instance
+                      authentication transport logger
     try
         Directory.CreateDirectory(Path.GetDirectoryName readyFile) |> ignore
         File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 24; port = int port;

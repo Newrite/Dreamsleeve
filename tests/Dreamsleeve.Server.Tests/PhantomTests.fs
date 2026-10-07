@@ -74,6 +74,30 @@ let private storageCase name run = case name (fun () -> task {
 })
 
 let tests = testList "Phantoms" [
+    testCase "model flow shrinks on delay, ignores duplicate progress and recovers" <| fun _ ->
+        let flow = ModelFlow.create 100 8
+        let mutable at = 0L
+        let mutable offset = 0
+        let acknowledge delay =
+            offset <- offset + 100
+            ModelFlow.sent offset at flow
+            at <- at + delay
+            ModelFlow.acknowledge offset at flow
+        Expect.isTrue (ModelFlow.allows 0 200 flow) "initial two chunks"
+        Expect.isFalse (ModelFlow.allows 0 201 flow) "bounded initial flight"
+        for _ in 1 .. 8 do acknowledge 100L
+        Expect.isTrue (ModelFlow.allows 0 800 flow) "healthy path grows"
+        for _ in 1 .. 12 do acknowledge 300L
+        Expect.isFalse (ModelFlow.allows 0 800 flow) "sustained delay reduces flight"
+        for _ in 1 .. 100 do
+            at <- at + 1000L
+            ModelFlow.acknowledge offset at flow
+        Expect.isFalse (ModelFlow.allows 0 800 flow) "duplicate progress cannot grow"
+        Expect.isTrue (ModelFlow.allows 0 100 flow) "always permits a chunk"
+        for _ in 1 .. 50 do acknowledge 100L
+        Expect.isTrue (ModelFlow.allows 0 800 flow) "recovers after congestion"
+        Expect.isFalse (ModelFlow.allows 0 801 flow) "never exceeds configured window"
+
     testCase "camera sector has near protection hysteresis and unknown fallback" <| fun _ ->
         Expect.isTrue (PhantomPolicy.inView false 100.0 (Some -1.0)) "Near player remains visible."
         Expect.isTrue (PhantomPolicy.inView false 1000000.0 None) "Unknown camera fails open."
@@ -781,6 +805,92 @@ let tests = testList "Phantoms" [
         let received = output |> Seq.choose (fun (id, packet) -> if id = observerId && packet.Lane = DeliveryLane.Poses then Some(Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom packet.Bytes) else None) |> Seq.toArray
         Expect.equal received.Length 1 "New generation starts at sequence one."
         Expect.equal received[0].Sample.Generation 2UL "No mixed-generation fanout."
+
+    testCase "model bridge follows advancing download progress and grants load grace" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        ready state members[0] (asset 1UL [|1uy..8uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId()))
+        PhantomAgent.tick state 6L
+        output.Clear()
+        PhantomAgent.handle state 7L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId()))
+        for at in 7L .. 10L do PhantomAgent.tick state at
+        let id = transfer output
+        output.Clear()
+        PhantomAgent.handle state 29000L (fst members[1]) (PhantomRequest.Progress(id, 4))
+        PhantomAgent.tick state 31000L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Active download outlives the original commit timeout."
+        PhantomAgent.handle state 58000L (fst members[1]) (PhantomRequest.Progress(id, 8))
+        PhantomAgent.tick state 58000L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Final ACK begins native load grace."
+        PhantomAgent.handle state 87999L (fst members[1]) (PhantomRequest.Progress(id, 8))
+        PhantomAgent.tick state 87999L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Load grace remains valid."
+        PhantomAgent.tick state 88000L
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Duplicate ACK cannot extend grace forever."
+
+    testCase "restarted downloads cannot retain bridge by acknowledging the same prefix" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        ready state members[0] (asset 1UL [|1uy..8uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId()))
+        PhantomAgent.tick state 6L
+        let download at =
+            output.Clear()
+            PhantomAgent.handle state at (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId()))
+            for tick in at .. at + 3L do PhantomAgent.tick state tick
+            transfer output
+        let first = download 7L
+        PhantomAgent.handle state 1000L (fst members[1]) (PhantomRequest.Progress(first, 4))
+        let second = download 20000L
+        Expect.notEqual second first "New request starts a new transfer."
+        PhantomAgent.handle state 29000L (fst members[1]) (PhantomRequest.Progress(second, 4))
+        PhantomAgent.tick state 30999L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Original unique prefix still has grace."
+        PhantomAgent.tick state 31000L
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Retry of the same prefix cannot prolong bridge."
+
+    testCase "late offer gets its own display timeout" <| fun _ ->
+        let state, members, output = setup options memoryStorage 3
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        PhantomAgent.handle state 10L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.tick state 11L
+        let offer = models output |> Array.pick (fun p -> if not (isNull p.Offer) && p.Offer.Asset.Generation = 2UL then Some p.Offer else None)
+        view state members[2] members[0] 1UL 1.0
+        PhantomAgent.tick state 29000L
+        output.Clear()
+        PhantomAgent.handle state 30020L (fst members[1]) (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId, offer.ViewRevision, AppearanceGeneration.create 2UL |> ok))
+        PhantomAgent.tick state 30020L
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Late receiver has not exhausted its own grace."
+        PhantomAgent.tick state 59001L
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Inactive late receiver eventually expires."
+
+    testCase "model budget cursor advances on service rather than empty ticks" <| fun _ ->
+        let config = { options with ModelBytesPerSecond = 125; PlayerModelBytesPerSecond = 125 }
+        let state, members, output = setup config memoryStorage 3
+        ready state members[0] (asset 1UL (Array.zeroCreate 256))
+        for n in 1..2 do view state members[n] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        for n in 1..2 do
+            PhantomAgent.handle state 5L (fst members[n]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
+        let received = Collections.Generic.Dictionary<Guid,int>()
+        for tick in 1L..125L do
+            let at = 5L + tick * 16L // One 4-byte chunk every two ticks.
+            output.Clear()
+            PhantomAgent.tick state at
+            for receiver, packet in output |> Seq.toArray do
+                if packet.Lane = DeliveryLane.Models then
+                    let p = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes
+                    if not (isNull p.Chunk) then
+                        let offset = int p.Chunk.Offset + p.Chunk.Data.Length
+                        received[receiver] <- offset
+                        PhantomAgent.handle state at receiver (PhantomRequest.Progress(PhantomTransferId p.Chunk.TransferId, offset))
+        for n in 1..2 do
+            Expect.isTrue (received.ContainsKey(fst members[n]) && received[fst members[n]] >= 100) "Both downloads share the budget without pose traffic."
 
     testCase "replacement bundles keep the old generation moving until display acknowledgement" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,string>>()

@@ -1,6 +1,8 @@
 export module Dreamsleeve.Client.Phantom.Streaming;
 import std;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Client.Domain;
+import Dreamsleeve.Client.Phantom.ModelFlow;
 export import Dreamsleeve.Client.Phantom.Worker;
 
 export namespace Dreamsleeve::Client::Phantom
@@ -22,6 +24,7 @@ export namespace Dreamsleeve::Client::Phantom
       Wire::Transfer    transfer;
       std::uint32_t     sent{}, acknowledged{};
       Clock::time_point touched;
+      ModelFlow         flow;
     };
 
     struct Pending
@@ -237,7 +240,13 @@ export namespace Dreamsleeve::Client::Phantom
           Cancel(value.transfer);
           return;
         }
-        local->state = Upload{value, 0, 0, Clock::now()};
+        local->state = Upload{
+            value,
+            0,
+            0,
+            Clock::now(),
+            ModelFlow{Wire::ChunkBytes, policy->windowChunks}
+        };
         return;
       }
       const auto  plan     = plans.find(value.player);
@@ -275,8 +284,12 @@ export namespace Dreamsleeve::Client::Phantom
         exchange.PublicationRejected(local->value.generation, "Неверное подтверждение модели фантома");
         return;
       }
-      upload->acknowledged = value.nextOffset;
-      upload->touched      = Clock::now();
+      if (value.nextOffset > upload->acknowledged)
+      {
+        upload->touched = Clock::now();
+        upload->flow.Acknowledge(value.nextOffset, upload->touched);
+        upload->acknowledged = value.nextOffset;
+      }
     }
 
     void Receive(const Wire::Chunk& value)
@@ -459,11 +472,12 @@ public:
       nextPose                 = {};
     }
 
-    void Context(std::uint64_t revision, bool ready)
+    void Context(std::uint64_t revision, bool ready, std::optional<Domain::LocationId> location = {})
     {
       if (context != revision || active != ready)
       {
         CancelUpload();
+        if (context != revision) local.reset();
         committedGeneration.reset();
         context          = revision;
         active           = ready;
@@ -489,7 +503,7 @@ public:
             Publish(Clock::now());
         }
       }
-      exchange.Context(revision, ready && policy && policy->enabled);
+      exchange.Context(revision, ready && policy && policy->enabled, std::move(location));
     }
 
     Result<void> ReceiveAsset(std::span<const std::uint8_t> bytes)
@@ -584,8 +598,10 @@ public:
       lastBudget         = now;
       if (policy)
       {
+        // Flight credit is not burst credit. Do not refill a whole unacknowledged
+        // window after idle/late polls: that burst overflows small UDP queues.
         const auto uploadRate = std::min(policy->modelBytesPerSecond, outgoing.settings.uploadBytesPerSecond);
-        modelCredit           = std::min<double>(modelCredit + elapsed * uploadRate, Wire::ChunkBytes * policy->windowChunks);
+        modelCredit           = std::min<double>(modelCredit + elapsed * uploadRate, 2 * Wire::ChunkBytes);
         poseCredit = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, 2ULL * policy->limits.compressedPoseBytes + 1024);
       }
       if (local && policy)
@@ -604,7 +620,8 @@ public:
             for (int i = 0; i < 4 && upload->sent < bytes.size(); ++i)
             {
               const auto count = std::min<std::size_t>(Wire::ChunkBytes, bytes.size() - upload->sent);
-              if (upload->sent - upload->acknowledged + count > Wire::ChunkBytes * policy->windowChunks || modelCredit < count) break;
+              if (!upload->flow.Allows(upload->sent - upload->acknowledged, static_cast<std::uint32_t>(count)) || modelCredit < count)
+                break;
               if (!Request(
                     Wire::Chunk{
                         upload->transfer.transfer,
@@ -613,7 +630,8 @@ public:
                     }))
                 break;
               upload->sent += static_cast<std::uint32_t>(count);
-              modelCredit  -= count;
+              upload->flow.Sent(upload->sent, now);
+              modelCredit -= count;
             }
           }
         }

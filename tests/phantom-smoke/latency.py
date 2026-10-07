@@ -1,4 +1,4 @@
-"""Production UDP smoke through a loopback delay/loss relay (no game assets bundled).
+"""Production UDP smoke through a loopback delay/loss/bounded-link relay (no game assets bundled).
 Build the Release smoke server and native tests first; --model optionally reads a local .zst cache.
 """
 import argparse
@@ -23,9 +23,14 @@ def run():
     parser.add_argument("--rtt-ms", type=float, default=100)
     parser.add_argument("--jitter-ms", type=float, default=0)
     parser.add_argument("--loss-every", type=int, default=0)
+    parser.add_argument("--link-mib", type=float, default=0, help="Per-direction link rate; zero disables shaping")
+    parser.add_argument("--queue-kib", type=float, default=64, help="Tail-drop queue before link serialization")
+    parser.add_argument("--deadline-seconds", type=int, default=90, help="Per-phase deadline for slow shaped links")
     args = parser.parse_args()
-    if args.rtt_ms < 0 or args.jitter_ms < 0 or args.loss_every < 0:
-        parser.error("Network parameters must be non-negative")
+    if not 1 <= args.deadline_seconds <= 600:
+        parser.error("Deadline must be 1..600 seconds")
+    if args.rtt_ms < 0 or args.jitter_ms < 0 or args.loss_every < 0 or args.link_mib < 0 or args.queue_kib <= 0:
+        parser.error("Rates, delay and loss must be non-negative; queue must be positive")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
@@ -35,11 +40,12 @@ def run():
     relay.bind(("127.0.0.1", 0))
     relay.setblocking(False)
     stop = threading.Event()
-    stats = {"datagrams": 0, "dropped": 0, "icmpResets": 0, "rttMs": args.rtt_ms, "jitterMs": args.jitter_ms}
+    stats = {"datagrams": 0, "dropped": 0, "icmpResets": 0, "rttMs": args.rtt_ms, "jitterMs": args.jitter_ms, "linkMiBps": args.link_mib, "queueKiB": args.queue_kib, "overflowDrops": 0}
     errors = []
 
     def forward():
         peers, pending = {}, []
+        departures = {}
         rng = random.Random(73)
         with selectors.DefaultSelector() as selector:
             selector.register(relay, selectors.EVENT_READ, None)
@@ -70,7 +76,19 @@ def run():
                             stats["dropped"] += 1
                             continue
                         delay = max(0, args.rtt_ms / 2 + rng.uniform(-args.jitter_ms, args.jitter_ms)) / 1000
-                        heapq.heappush(pending, (time.monotonic() + delay, serial, target, endpoint, data))
+                        now = time.monotonic()
+                        departure = now
+                        if args.link_mib:
+                            link = (target.fileno(), endpoint)
+                            rate = args.link_mib * 1024**2
+                            departure = max(now, departures.get(link, now))
+                            if (departure - now) * rate + len(data) > args.queue_kib * 1024:
+                                stats["dropped"] += 1
+                                stats["overflowDrops"] += 1
+                                continue
+                            departure += len(data) / rate
+                            departures[link] = departure
+                        heapq.heappush(pending, (departure + delay, serial, target, endpoint, data))
                     while pending and pending[0][0] <= time.monotonic():
                         _, _, target, endpoint, data = heapq.heappop(pending)
                         target.sendto(data, endpoint)
@@ -94,13 +112,14 @@ def run():
             if not ready.exists():
                 raise RuntimeError("Smoke server did not become ready")
             env = dict(os.environ, DREAMSLEEVE_PHANTOM_SMOKE_PORT=str(relay.getsockname()[1]),
-                       DREAMSLEEVE_PHANTOM_SMOKE_STATE=str(output))
+                       DREAMSLEEVE_PHANTOM_SMOKE_STATE=str(output),
+                       DREAMSLEEVE_PHANTOM_SMOKE_DEADLINE_SECONDS=str(args.deadline_seconds))
             env.pop("DREAMSLEEVE_PHANTOM_SMOKE_MODEL", None)
             if args.model:
                 env["DREAMSLEEVE_PHANTOM_SMOKE_MODEL"] = str(args.model.resolve())
             with (output / "client.log").open("w") as client_log:
                 result = subprocess.run([str(args.client.resolve()), "--test-case=Phantom production Streaming real UDP smoke"],
-                                        env=env, stdout=client_log, stderr=subprocess.STDOUT, timeout=150)
+                                        env=env, stdout=client_log, stderr=subprocess.STDOUT, timeout=args.deadline_seconds + 60)
             text = (output / "client.log").read_text()
             print(text)
             sentinel = "PHANTOM_NATIVE_ASSET_UDP_PASS" if args.model else "PHANTOM_NATIVE_UDP_PASS"

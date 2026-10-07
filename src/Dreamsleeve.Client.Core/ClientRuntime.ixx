@@ -180,7 +180,10 @@ public:
       if (phase == SessionPhase::Opening && Clock::now() >= deadline)
         return Fail(DreamNetError::Make(DreamNetErrorCode::ConnectTimeout, "OpenSession timed out"));
 
-      phantoms.Context(contextRevision, phase == SessionPhase::Ready && movementReady && latestMovement.has_value());
+      phantoms.Context(
+        contextRevision,
+        phase == SessionPhase::Ready && movementReady && latestMovement.has_value(),
+        latestMovement ? std::optional{latestMovement->location.locationId} : std::nullopt);
       for (auto& outgoing : phantoms.Poll())
       {
         if (outgoing.lane == Phantom::Wire::PosesLane)

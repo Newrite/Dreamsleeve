@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.Phantom.Exchange;
 
 import std;
+import Dreamsleeve.Client.Domain;
 export import Dreamsleeve.Client.Phantom.Wire;
 export import Dreamsleeve.Client.Phantom.Playback;
 
@@ -91,6 +92,7 @@ private:
     ViewSettings                                         settings;
     std::uint64_t                                        epoch{1}, context{}, localRevision{1}, poseRevision{1};
     std::optional<Generation>                            localGeneration, previousGeneration;
+    std::optional<Domain::LocationId>                    space;
     std::uint64_t                                        previousReservation{};
     std::shared_ptr<const Snapshot>                      previousSnapshot;
     std::vector<Wire::Displayed>                         displayed;
@@ -227,9 +229,11 @@ public:
       metrics.sampleRate = std::min(settings.sampleRate, serverSampleRate);
     }
 
-    void Context(std::uint64_t value, bool ready)
+    void Context(std::uint64_t value, bool ready, std::optional<Domain::LocationId> location = {})
     {
       std::lock_guard lock(mutex);
+      if (value != context) ClearPublication();
+      space = std::move(location);
       if (value != context || available != ready)
       {
         ++poseRevision;
@@ -254,6 +258,7 @@ public:
       ++epoch;
       ++poseRevision;
       poseDemand.reset();
+      space.reset();
       context   = 0;
       available = false;
       changed   = true;
@@ -272,12 +277,12 @@ public:
       changed = true;
     }
 
-    bool Submit(Generation generation, ValidatedAsset asset)
+    bool Submit(std::uint64_t expectedContext, Generation generation, ValidatedAsset asset)
     {
       std::lock_guard lock(mutex);
       const auto bytes = 4 * asset.MemoryBytes() + 6 * SnapshotWorkingBytes() + Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
       if (
-        !available || !settings.publish || capture ||
+        expectedContext != context || !available || !settings.publish || capture ||
         (localGeneration && phase != PublicationPhase::Settled && phase != PublicationPhase::Rejected) ||
         bytes + Reserved() - (phase == PublicationPhase::Rejected ? localReservation : 0) > settings.memoryBytes)
         return false;
@@ -462,6 +467,16 @@ public:
     {
       std::lock_guard lock(mutex);
       return epoch;
+    }
+
+    // Capture and submission share the movement authority's coordinate space.
+    // A game transition may lead or lag the network thread; neither may relabel
+    // a captured model as belonging to a different context.
+    std::optional<std::uint64_t> CaptureContext(const Domain::LocationId& location) const
+    {
+      std::lock_guard lock(mutex);
+      if (!available || !space || *space != location) return {};
+      return context;
     }
 
     bool Available() const

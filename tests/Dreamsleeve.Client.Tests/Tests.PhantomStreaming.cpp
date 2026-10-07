@@ -2,6 +2,8 @@
 #include "phantom.pb.h"
 import std;
 import Dreamsleeve.Client.Phantom.Streaming;
+import Dreamsleeve.Client.Phantom.ModelFlow;
+import Dreamsleeve.Client.Domain;
 import Dreamsleeve.Client.ProtocolCodec;
 
 #include "PhantomFixture.hpp"
@@ -96,10 +98,10 @@ namespace
     return false;
   }
 
-  void PreparePublication(P::Exchange& exchange, std::shared_ptr<const P::PreparedAsset> model)
+  void PreparePublication(P::Exchange& exchange, std::shared_ptr<const P::PreparedAsset> model, std::uint64_t context = 1)
   {
-    exchange.Context(1, true);
-    REQUIRE(exchange.Submit(P::Generation{1}, model->asset));
+    exchange.Context(context, true);
+    REQUIRE(exchange.Submit(context, P::Generation{1}, model->asset));
     auto work = exchange.TakeWork();
     REQUIRE(work.capture);
     exchange.Prepared(work.epoch, work.localRevision, {P::Generation{1}, std::move(model)});
@@ -259,6 +261,9 @@ TEST_CASE("Late phantom admission replies do not cancel a newer context with the
   auto requests = Models(stream.Poll());
   REQUIRE(std::ranges::any_of(requests, [](const auto& p) { return p.has_publish() && p.publish().request_id() == 1; }));
   stream.Context(2, true);
+  requests = Models(stream.Poll());
+  CHECK(std::ranges::none_of(requests, [](const auto& p) { return p.has_publish(); }));
+  PreparePublication(exchange, model, 2);
   requests = Models(stream.Poll());
   REQUIRE(std::ranges::any_of(requests, [](const auto& p) { return p.has_publish() && p.publish().request_id() == 2; }));
   REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
@@ -593,11 +598,11 @@ TEST_CASE("Phantom replacement owns two generations and failed preparation resto
   CHECK_FALSE(exchange.CanReplace());
   exchange.Settled({P::Generation{1}, 1});
   REQUIRE(exchange.CanReplace());
-  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
   auto work = exchange.TakeWork();
   CHECK(work.previousGeneration == P::Generation{1});
   CHECK(exchange.Capturing(P::Generation{1}));
-  CHECK_FALSE(exchange.Submit(P::Generation{3}, model->asset));
+  CHECK_FALSE(exchange.Submit(1, P::Generation{3}, model->asset));
   exchange.PreparationFailed(work.epoch, work.localRevision, "test preparation failure");
   CHECK(exchange.Capturing(P::Generation{1}));
   CHECK_FALSE(exchange.Capturing(P::Generation{2}));
@@ -605,13 +610,13 @@ TEST_CASE("Phantom replacement owns two generations and failed preparation resto
   auto restored = exchange.TakeWork();
   CHECK(restored.generation == P::Generation{1});
   CHECK_FALSE(restored.previousGeneration);
-  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
   exchange.RestartCapture();
   CHECK_FALSE(exchange.Capturing(P::Generation{1}));
   CHECK_FALSE(exchange.Capturing(P::Generation{2}));
   CHECK(exchange.CanReplace());
   CHECK_FALSE(exchange.TakeOutput().generation);
-  REQUIRE(exchange.Submit(P::Generation{3}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{3}, model->asset));
 }
 
 TEST_CASE("Phantom remote replacement retains live previous poses and accounts its memory until display")
@@ -683,7 +688,7 @@ TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a la
   auto        model = std::make_shared<const P::PreparedAsset>(Model());
   PreparePublication(exchange, model);
   exchange.Settled({P::Generation{1}, 1});
-  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
   auto work = exchange.TakeWork();
   exchange.Prepared(work.epoch, work.localRevision, {{2}, model});
   P::Streaming stream(exchange, {});
@@ -724,7 +729,7 @@ TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a la
   CHECK(std::ranges::count_if(stream.Poll(at + std::chrono::milliseconds(110)), [](const auto& p) {
           return p.lane == P::Wire::PosesLane;
         }) == 1);
-  REQUIRE(exchange.Submit(P::Generation{3}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{3}, model->asset));
   const auto next = exchange.TakeWork();
   CHECK(next.previousGeneration == P::Generation{1});
   CHECK_FALSE(exchange.Capturing(P::Generation{2}));
@@ -743,14 +748,14 @@ TEST_CASE("Worker retains the old prepared bridge when rollback is immediately s
       return output.publication && output.publication->generation == generation;
     });
   };
-  REQUIRE(exchange.Submit(P::Generation{1}, model.asset));
+  REQUIRE(exchange.Submit(1, P::Generation{1}, model.asset));
   REQUIRE(prepared({1}));
   exchange.Settled({P::Generation{1}, 1});
-  REQUIRE(exchange.Submit(P::Generation{2}, model.asset));
+  REQUIRE(exchange.Submit(1, P::Generation{2}, model.asset));
   REQUIRE(prepared({2}));
   const auto second = exchange.TakeWork();
   exchange.PreparationFailed(second.epoch, second.localRevision, "rollback before next worker pass");
-  REQUIRE(exchange.Submit(P::Generation{3}, model.asset));
+  REQUIRE(exchange.Submit(1, P::Generation{3}, model.asset));
   REQUIRE(prepared({3}));
   auto pose = P::ReadSnapshot(Pose(model).payload, model.asset);
   REQUIRE(pose);
@@ -792,7 +797,7 @@ TEST_CASE("Preparation rollback resumes the committed model without republishing
     c->set_accepted(true);
   })));
   exchange.Settled({P::Generation{1}, 1});
-  REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
   auto work = exchange.TakeWork();
   stream.Poll();
   exchange.Encoded(exchange.Epoch(), work.poseRevision, Pose(*model));
@@ -812,7 +817,7 @@ TEST_CASE("Phantom audience pause keeps publication and rejects stale encoded wo
   P::Exchange exchange;
   auto        model = std::make_shared<const P::PreparedAsset>(Model());
   exchange.Context(1, true);
-  REQUIRE(exchange.Submit(P::Generation{1}, model->asset));
+  REQUIRE(exchange.Submit(1, P::Generation{1}, model->asset));
   auto work = exchange.TakeWork();
   exchange.PoseDemand({1, false});
   CHECK_FALSE(exchange.PosesRequired());
@@ -889,7 +894,7 @@ TEST_CASE("Model compression cannot stall remote poses or the committed local ge
       }
     } unblock{release};
 
-    REQUIRE(exchange.Submit(P::Generation{2}, model->asset));
+    REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
     REQUIRE(started.get_future().wait_for(std::chrono::seconds(2)) == std::future_status::ready);
     auto wire = Pose(*model);
     auto pose = P::ReadSnapshot(wire.payload, model->asset);
@@ -914,4 +919,65 @@ TEST_CASE("Model compression cannot stall remote poses or the committed local ge
   }
   CHECK_FALSE(exchange.TakeOutput().publication);
   CHECK_FALSE(exchange.Capturing(P::Generation{2}));
+}
+
+TEST_CASE("Capture waits for matching movement space and rejects late capture completion")
+{
+  P::Exchange              exchange;
+  const Domain::LocationId interior{"skyrim.esm", 1}, world{"skyrim.esm", 2};
+  auto                     model = std::make_shared<const P::PreparedAsset>(Model());
+  exchange.Context(1, true, interior);
+  REQUIRE(exchange.CaptureContext(interior) == 1);
+  CHECK_FALSE(exchange.CaptureContext(world));
+  REQUIRE(exchange.Submit(1, P::Generation{1}, model->asset));
+  auto old = exchange.TakeWork();
+  exchange.Context(2, false, world);
+  CHECK_FALSE(exchange.CaptureContext(world));
+  exchange.Prepared(old.epoch, old.localRevision, {P::Generation{1}, model});
+  CHECK_FALSE(exchange.TakeOutput().publication);
+  exchange.Context(2, true, world);
+  CHECK_FALSE(exchange.Submit(1, P::Generation{2}, model->asset));
+  REQUIRE(exchange.CaptureContext(world) == 2);
+  REQUIRE(exchange.Submit(2, P::Generation{3}, model->asset));
+  auto current = exchange.TakeWork();
+  exchange.Context(2, true, world);  // Adjacent exterior CELL, same WRLD.
+  exchange.Prepared(current.epoch, current.localRevision, {P::Generation{3}, model});
+  CHECK(exchange.TakeOutput().publication.has_value());
+  CHECK(exchange.Capturing(P::Generation{3}));
+}
+
+TEST_CASE("Model flight responds to sustained delay without growing on duplicate ACKs")
+{
+  using Clock     = std::chrono::steady_clock;
+  auto         at = Clock::time_point{};
+  P::ModelFlow flow(100, 8);
+  CHECK(flow.Allows(0, 200));
+  CHECK_FALSE(flow.Allows(0, 201));
+  std::uint32_t offset = 0;
+  for (int i = 0; i < 8; ++i)
+  {
+    flow.Sent(offset += 100, at);
+    at += std::chrono::milliseconds(100);
+    flow.Acknowledge(offset, at);
+  }
+  CHECK(flow.Allows(0, 800));
+  for (int i = 0; i < 12; ++i)
+  {
+    flow.Sent(offset += 100, at);
+    at += std::chrono::milliseconds(300);
+    flow.Acknowledge(offset, at);
+  }
+  CHECK_FALSE(flow.Allows(0, 800));
+  for (int i = 0; i < 100; ++i)
+    flow.Acknowledge(offset, at += std::chrono::seconds(1));
+  CHECK_FALSE(flow.Allows(0, 800));
+  CHECK(flow.Allows(0, 100));
+  for (int i = 0; i < 50; ++i)
+  {
+    flow.Sent(offset += 100, at);
+    at += std::chrono::milliseconds(100);
+    flow.Acknowledge(offset, at);
+  }
+  CHECK(flow.Allows(0, 800));
+  CHECK_FALSE(flow.Allows(0, 801));
 }
