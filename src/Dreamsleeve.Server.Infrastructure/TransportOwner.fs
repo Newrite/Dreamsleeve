@@ -157,7 +157,7 @@ module TransportOwner =
                     lock state.Gate (fun () ->
                         state.NativeFailures <- state.NativeFailures + 1L
                         if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L)
-                    if LanePolicy.reliable packet.Lane && not (LanePolicy.bulk packet.Lane) then disconnect state transport id reason
+                    if LanePolicy.reliable packet.Lane then disconnect state transport id reason
                     true
             else true
         | Close id -> transport.Close id; true
@@ -462,12 +462,13 @@ module TransportOwner =
                         match replaced with
                         | Some node -> let struct (command, _) = node.Value in match command with Send(_, old) -> int64 old.Bytes.Length | _ -> 0L
                         | _ -> 0L
+                    let admission = LanePolicy.admissionLane packet
                     let extra = if replaced.IsSome then 0 else 1
                     let size = int64 packet.Bytes.Length - previousBytes
-                    if (extra > 0 && (state.OutgoingPackets + extra > countLimit packet.Lane state.Config.Worker.QueueCapacity state.Config.PeerLimit
-                                      || peer.Packets + extra > countLimit packet.Lane state.Config.MaxOutgoingPacketsPerPeer 1))
-                       || (size > 0L && (size > byteLimit packet.Lane state.Config.Worker.QueueBytes - state.OutgoingBytes
-                                        || size > byteLimit packet.Lane state.Config.MaxOutgoingBytesPerPeer - peer.Bytes)) then
+                    if (extra > 0 && (state.OutgoingPackets + extra > countLimit admission state.Config.Worker.QueueCapacity state.Config.PeerLimit
+                                      || peer.Packets + extra > countLimit admission state.Config.MaxOutgoingPacketsPerPeer 1))
+                       || (size > 0L && (size > byteLimit admission state.Config.Worker.QueueBytes - state.OutgoingBytes
+                                        || size > byteLimit admission state.Config.MaxOutgoingBytesPerPeer - peer.Bytes)) then
                         if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L
                         Error "Outgoing transport handoff budget exceeded."
                     else

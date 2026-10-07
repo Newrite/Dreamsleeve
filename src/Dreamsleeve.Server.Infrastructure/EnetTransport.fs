@@ -258,7 +258,7 @@ module EnetTransport =
                 let started = TransportDiagnostics.BeginSend()
                 let delivery =
                     match LanePolicy.reliability packet.Lane with
-                    | LaneReliability.Reliable when LanePolicy.bulk packet.Lane -> PacketDelivery.ReliableBulk
+                    | LaneReliability.Reliable when LanePolicy.bulk (LanePolicy.admissionLane packet) -> PacketDelivery.ReliableBulk
                     | LaneReliability.Reliable -> PacketDelivery.Reliable
                     | LaneReliability.Sequenced -> PacketDelivery.Sequenced
                     | LaneReliability.SequencedFragmented -> PacketDelivery.SequencedFragmented

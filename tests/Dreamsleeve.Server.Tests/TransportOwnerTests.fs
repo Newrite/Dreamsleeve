@@ -199,7 +199,7 @@ let tests = testList "TransportOwner" [
             owner.Send(fake.Id, { packet DeliveryLane.Control 1 with Bytes = [|0uy|] }) |> ok
             do! eventually (fun () -> entered.IsSet)
             for source in 1UL .. 15UL do owner.Send(fake.Id, pose source (int source) 3) |> ok
-            owner.Send(fake.Id, { packet DeliveryLane.Control 16 with Bytes = Array.create 16 99uy }) |> ok
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.ModelNotice 0UL; Bytes = Array.create 16 99uy }) |> ok
             Expect.isOk (owner.Send(fake.Id, pose 1UL 42 3)) "Same-size replacement fits even above the pose count and byte ceilings."
             Expect.isOk (owner.Send(fake.Id, pose 2UL 43 1)) "Shrinking releases byte accounting."
             Expect.isError (owner.Send(fake.Id, pose 3UL 44 8)) "Growing still respects the pose budget."
@@ -296,6 +296,27 @@ let tests = testList "TransportOwner" [
             do! eventually (fun () -> delivered.Count = 5)
             Expect.equal (delivered.ToArray()) [|0;4;1;2;3|] "Offer follows its chunk and precedes the dependent pose."
         finally release.Set(); resume.Set(); resumeNotice.Set(); owner.Dispose()
+    })
+
+    case "terminal model notice rejection cannot release poses onto an unestablished view" (fun () -> task {
+        let! fake, owner = setup config
+        let attempted = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                attempted.Enqueue n
+                if n = 1 then Error "PeerRejected" else Ok ())
+            owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.ModelNotice 11UL; Bytes = [|1uy|] }) |> ok
+            owner.Send(fake.Id, { Lane = DeliveryLane.Poses; Schedule = PacketSchedule.LatestPose 11UL; Bytes = [|2uy|] }) |> ok
+            release.Set()
+            do! eventually (fun () -> observed fake "reset" && owner.MaxUnfragmentedPayloadBytes fake.Id = 0)
+        finally release.Set(); owner.Dispose()
+        Expect.equal (attempted.ToArray()) [|0;1|] "Terminal native rejection closes the peer instead of losing reliable ordering."
     })
 
     case "empty Poses epoch bookkeeping never enters the runtime handoff" (fun () -> task {

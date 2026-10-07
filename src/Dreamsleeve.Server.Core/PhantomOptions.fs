@@ -16,6 +16,11 @@ module LanePolicy =
         | lane -> invalidArg "lane" $"Unknown lane {lane}"
     let reliable lane = reliability lane = LaneReliability.Reliable
     let bulk lane = lane = DeliveryLane.Models
+    // Queue/native byte quotas use the control reserve for small model notices.
+    // Their wire lane and reliability remain Models/reliable.
+    let admissionLane (packet: TransportPacket) =
+        match packet.Schedule with PacketSchedule.ModelNotice _ -> DeliveryLane.Control | _ -> packet.Lane
+
 
 type PhantomOptions = {
     Enabled: bool; CameraCulling: bool; StoragePath: string; DiskBytes: int64; RamBytes: int64; CacheEntries: int; CacheTtlSeconds: int
