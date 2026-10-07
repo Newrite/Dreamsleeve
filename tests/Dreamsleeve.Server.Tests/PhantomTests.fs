@@ -643,6 +643,20 @@ let tests = testList "Phantoms" [
         let recipients = output |> Seq.choose(fun (id, packet) -> if packet.Lane = DeliveryLane.Poses then Some id else None) |> Set.ofSeq
         Expect.equal recipients.Count 2 "Both observers progress under sustained overload."
 
+    testCase "source replication rate stays bounded when ingress and dispatch are faster" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 1 }
+        let state, members, output = setup config memoryStorage 2
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 100L
+        output.Clear()
+        for at in 101L .. 1100L do
+            PhantomAgent.receive state at (fst members[0]) DeliveryLane.Poses (pose 1UL (uint64 at) 10UL)
+            PhantomAgent.tick state at
+        let count = output |> Seq.filter(fun (_, packet) -> packet.Lane = DeliveryLane.Poses) |> Seq.length
+        Expect.isLessThanOrEqual count 12 "10 Hz plus at most two initial jitter tokens."
+        Expect.isGreaterThanOrEqual count 10 "Fast dispatch still serves the configured source rate."
+
     testCase "partial fanout admits a snapshot once across transient peer pressure" <| fun _ ->
         let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 100 }
         let delivered = ResizeArray<Guid>()

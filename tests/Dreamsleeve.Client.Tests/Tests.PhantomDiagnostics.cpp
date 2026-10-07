@@ -478,6 +478,7 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
   if (output)
   {
     measurements.open(std::filesystem::path(output) / "poses.csv");
+    REQUIRE(measurements.is_open());
     measurements << "generation,sequence,payload,packet,encodeMs,decodeMs\n";
   }
   while (std::chrono::steady_clock::now() < until)
