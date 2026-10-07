@@ -141,6 +141,21 @@
       "downloadMs": 1203.8,
       "chatMs": 109.655,
       "coldMs": 4605.55
+    },
+    "normal-lifecycle": {
+      "network": {
+        "datagrams": 2616,
+        "dropped": 13,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 10.0,
+        "linkMiBps": 0,
+        "queueKiB": 64,
+        "overflowDrops": 0,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "37888c8875ebdef3668bd6632f6b253e17408d52cbfd29470b3391b94d8a3d5a"
     }
   }
 }

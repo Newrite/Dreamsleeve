@@ -1,6 +1,6 @@
 # Передача моделей, контекст и мост поколений — 08.10.2026
 
-Изменения поверх `aae0ff2`, protocol 24, native asset v2 / pose v3.
+Реализация `9b1ed06` поверх `aae0ff2`, protocol 24, native asset v2 / pose v3.
 Измерения на этом Windows-хосте, по одному прогону сценария; это не игровой QA.
 Артефакты: `build/native-nif/delivery-fixes-20261007/`.
 
@@ -77,10 +77,11 @@ Relay моделирует RTT 100 ms, отдельную скорость ка�
 * Сервер: 636 tests PASS, включая восстановление окна после перегрузки,
   отсутствие голодания двух передач на низком общем бюджете, продвижение более
   30 секунд, поздний Offer и grace после последнего ACK.
+* Обычный клиент: 398 tests PASS (3 opt-in tests отдельно).
 * Диагностический клиент: 412 tests PASS (4 opt-in tests отдельно от общего suite).
   Тест контекста отвергает поздний capture и worker completion, ожидает правильное
   пространство и сохраняет публикацию при неизменном WRLD.
-* Настоящий сервер + native Streaming: lifecycle smoke с RTT 100 ms,
+* Настоящий сервер + ordinary и diagnostic native Streaming: lifecycle smoke с RTT 100 ms,
   jitter ±10 ms / loss 1:200 PASS. Проверены потеря фрагментов и следующий полный
   snapshot, unreliable rollover, warm cache без chunks, receive revoke/reentry,
   отображение нового поколения перед освобождением моста.
@@ -89,3 +90,49 @@ Relay моделирует RTT 100 ms, отдельную скорость ка�
 
 Переход интерьер↔мир и длительная смена модели требуют повторного игрового теста
 двух игроков. SE/AE/VR ABI этой частью не менялись; сборка не заменяет игровой QA.
+
+
+## Нагрузка 512 клиентов
+
+Одинаковый moving steady-сценарий: 512 издателей, группы до 25, максимум 4 видимых,
+10 Гц, 30 секунд load, 8 workers, actor values 4 Гц. Общий hash предварительно
+в кеше; model upload/download bytes во время load — 0. Это проверка постоянного
+потока и стоимости actor, а не проверка 512 одновременных cold uploads.
+[Полные метрики и hashes](phantom-delivery-load-2026-10-08.json).
+
+| Версия / прогон | Получено Гц на подписку | CPU, ядра | Tick p99, ms | Queue p99, ms | Peak private, MiB |
+|---|---:|---:|---:|---:|---:|
+| Исторический algorithms-v24 | 9,283 | 1,534 | 10,335 | 81,926 | 136,78 |
+| Текущая, первый | 7,948 | 1,626 | 16,737 | 130,061 | 139,95 |
+| `aae0ff2`, собрана заново из отдельного archive | 8,729 | 1,619 | 12,831 | 116,473 | 143,22 |
+| Текущая, повтор после baseline | 9,184 | 1,569 | 12,424 | 108,569 | 134,02 |
+
+Все прогоны PASS; native-send failures 0. Порядок текущих измерений: current,
+baseline, current. Разброс слишком велик для заявления об ускорении или уверенной
+регрессии этого изменения; лучший результат не заменяет первый. Baseline изолирован
+в build, рабочее дерево к прежней версии не откатывалось.
+
+Для свежего baseline / current repeat: pose upload 19,27 / 19,27 MiB/s,
+pose download 67,03 / 70,87 MiB/s. Весь двусторонний ENet + расчётные IPv4/UDP
+headers (28 bytes/datagram): 129,44 / 132,33 MiB/s. Включены movement/control и
+transport overhead; это не Ethernet packet capture. Рост полученных поз увеличивает
+трафик, размеры pose и модели этим исправлением не меняются.
+
+Allocation rate benchmark-процесса около 610 MiB/s, суммарный GC pause за load
+3,326 s baseline и 2,927 s current repeat (первый current 3,509 s). Это прежняя
+отдельная проблема для profiling, не одна пауза и не измерение игровых FPS.
+Игровые frame-time и NiStream здесь не профилировались.
+
+## Пакет и установка
+
+Полный обычный пакет собран штатным `scripts/package_dist.py --skip-build` после
+normal DLL и `npm run build`: `S:\Programming\Dreamsleeve\dist`, клиент/сервер,
+UI, Plugin ESP и конфиги. Marker диагностики отсутствует в обычной DLL и есть в
+диагностической. В dist нет NIF/записей/IDB/credentials/диагностических payloads.
+
+Диагностическая DLL/PDB установлены в `F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`,
+сервер обновлён в `S:\Dreamsleeve`. Игра и сервер перед копированием не работали.
+11 пользовательских TOML (включая Plugin и Output_SKSE override) сохранены по SHA256.
+Backup, хеши и отчёт установки: `build/native-nif/delivery-fixes-20261007/`.
+Для второго клиента там же `Dreamsleeve-diagnostic-delivery-v24.zip` с DLL.
+Это обновление не требует удаления кеша и не меняет protocol 24.
