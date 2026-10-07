@@ -38,7 +38,7 @@ namespace
 
   P::ValidatedAsset Model()
   {
-    auto raw    = PhantomFixture::Model(NodeCount, 24);
+    auto raw    = PhantomFixture::Model(NodeCount, 64);
     auto parsed = P::ValidatedAsset::Parse(std::move(raw));
     REQUIRE(parsed);
     return std::move(*parsed);

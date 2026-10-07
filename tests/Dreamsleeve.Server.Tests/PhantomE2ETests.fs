@@ -134,14 +134,14 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
                 command client 1UL (fun packet -> packet.OpenSession <- Dreamsleeve.Protocol.Chat.OpenSession(SessionTicket = ticket name))
             wait "Authenticated welcome and Policy." (fun () ->
                 [alice;bob] |> List.forall (fun client -> client.Control |> Seq.exists (fun packet -> not (isNull packet.SessionOpened)) && client.Models.Count > 0))
-            Expect.equal alice.Models[0].Policy.WindowChunks 4u "Policy bootstrap precedes model offers."
+            Expect.equal alice.Models[0].Policy.WindowChunks (uint32 options.WindowChunks) "Policy bootstrap precedes model offers."
             for client in [alice;bob] do
                 command client 2UL (fun packet -> packet.UpdatePlayer <- Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = "E2E")))
                 command client 10UL (fun packet ->
                     packet.UpdatePlayer <- Dreamsleeve.Protocol.Chat.UpdatePlayer(SetLocation = Dreamsleeve.Protocol.Chat.SetPlayerLocation(ContextRevision = 10UL,
                         Location = Dreamsleeve.Protocol.Chat.PlayerLocation(Location = Dreamsleeve.Protocol.Chat.Location(LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.esm", LocalFormId = 60u), LocationName = "Whiterun"), Position = Dreamsleeve.Protocol.Chat.Position(), Rotation = Dreamsleeve.Protocol.Chat.Rotation()))))
             wait "Source movement context admitted." (fun () -> alice.Control |> Seq.exists (fun packet -> packet.RequestId = 10UL && not (isNull packet.PlayerUpdateAccepted)))
-            let bytes = Array.zeroCreate (256 * 1024 + 7)
+            let bytes = Array.zeroCreate (2 * options.WindowChunks * options.ChunkBytes + 7)
             Random(21).NextBytes bytes
             let descriptor = Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom(SHA256.HashData bytes), Generation = 1UL, FormatVersion = 2u,
                                 CompressedBytes = uint32 bytes.Length, RawBytes = uint32 bytes.Length, Channels = 2u)
@@ -170,9 +170,9 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             Expect.equal offer.PlayerId 1UL "Presence-authorized source."
             Expect.isTrue (bob.Control |> Seq.exists (fun packet -> not (isNull packet.ChatPublished) && packet.ChatPublished.Message.Text = "phantom-e2e-chat")) "Chat remains live during model streaming."
             asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 23u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 201UL)))
-            wait "Download window." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Chunk)))
-            let firstWindow = bob.Models |> Seq.filter (fun packet -> not (isNull packet.Chunk)) |> Seq.length
-            Expect.isLessThanOrEqual firstWindow 4 "Download waits for application Progress."
+            let chunks () = bob.Models |> Seq.filter (fun packet -> not (isNull packet.Chunk)) |> Seq.length
+            wait "Complete download window without application ACK." (fun () -> chunks() >= options.WindowChunks)
+            Expect.equal (chunks()) options.WindowChunks "Download waits for application Progress at the negotiated window."
             preferences false
             wait "Receive reduction removes view." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Remove)))
             let removed = bob.Models |> Seq.pick (fun packet -> if isNull packet.Remove then None else Some packet.Remove)
@@ -220,7 +220,7 @@ let tests = testSequenced <| testList "Phantom protocol23 E2E" [
             Expect.equal paired.PreviousSample.Payload.Length 100000 "Complete previous snapshot, no partial fragment."
             Expect.equal (File.ReadAllBytes(Path.Combine(root, Convert.ToHexStringLower(SHA256.HashData bytes) + ".zst"))) bytes "One verified content-addressed file."
             Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "No partial upload after warm reuse."
-            printfn "protocol23 E2E PASS: auth/bootstrap + cold 262151-byte UDP upload/download + ACK windows + chat + fragmented pose + receive revoke/reentry + warm cache"
+            printfn "protocol23 E2E PASS: auth/bootstrap + cold %d-byte UDP upload/download + ACK windows + chat + fragmented pose + receive revoke/reentry + warm cache" bytes.Length
             runtime.PostAsync(ServerRuntimeMessage.Stop).GetAwaiter().GetResult() |> ignore
             wait "Runtime cleanup completes." (fun () -> runtime.Completion.IsCompleted)
             runtime.Completion.GetAwaiter().GetResult()

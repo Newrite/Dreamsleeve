@@ -24,6 +24,50 @@ TESEquipEvent.actor — NiPointer, событие лишь ускоряет по
 в очередь. Hook завершённой ветви добавлен ниже; hooks на намерение не нужны.
 
 
+## Материалы аксессуаров: исправление07.10.2026 после сетевого теста
+
+`Auxiliary` сохраняет skinned BSEffect geometry как часть силуэта. Ранее следующий
+lighting-only guard отвергал её и останавливал публикацию всей модели. Теперь
+после Clone/Pair, до фильтрации клона, такая поверхность получает **новую нативную**
+BSLightingShaderProperty. Оригинальный shader только читается; source geometry,
+skin и buffers не меняются. Engine clone может разделять или пропускать effect
+property — оба случая закрываются этой заменой. Остальные shared required
+lighting properties по-прежнему запрещены. Затем общий Ghostify удаляет внешние
+текстурные зависимости и сохраняет обычный native lighting NIF. Renderer не менялся.
+
+| Native no-arg factory | SE1.5.97 ID / RVA | AE1.6.1170 ID / RVA | VR1.4.15 RVA |
+|---|---|---|---|
+| BSLightingShaderProperty | 99847 /12C4B10 |106492 /14AC610 |1302ED0 |
+| ctor, свидетельство внутри factory |12C50F0 |14ACC20 |13034B0 |
+| allocated bytes |160 |160 |178 |
+
+Значения RVA/layout в таблице hex. Проверка текущих IDB: последовательные
+list_instances/select_instance → server_health → minimal survey → disasm;
+SE дополнительно decompile ctor. Input paths/imagebase/hashes совпадают с
+описанными выше. Factory принимает **ноль аргументов**, возвращает engine object
+pointer через RAX; alloc/ctor принадлежат движку. Ctor ставит default lighting
+material через BSShaderProperty::SetMaterial. Вызов только на уже установленном
+main-loop thread. Результат сразу удерживается NiPointer, затем shaderProperty
+клона; ручных sizeof allocations/free нет. Hooks использует VariantID с **VR RVA**,
+а не третий Address Library ID. CommonLib CreateMaterial (scrap allocator) здесь
+не используется. Операция не добавляет нового vtable callsite.
+
+Отдельно проверен accessor материала BSEffect: vtable из CommonLib
+SE ID304580/RVA185E3D0, AE ID254763/VA141AB76D8, VR RVA18FED40.
+Slot32 getter (hex): SE RVA12D6400, AE14BE9C0, VR1315370; соседний
+slot31 setter:12D6410 /14BE9D0 /1315380. Во всех трёх disasm getter:
+`mov rax,[rcx+78h]; movss xmm0,[rax+54h]; ret`. Подтверждены pointer
+BSShaderProperty.material +78 и float BSEffectShaderMaterial.baseColor.alpha
++54. Setter получает this вRCX, float вXMM1 и пишет тот же DWORD после
+ограничения снизу нулём. Код capture использует inline CommonLib accessor/field,
+не прямой virtual call; численные offsets в Game не добавлены.
+
+Это статическая проверка SE/AE/VR. В присланном логе отказавший mesh называется
+`shades`, но класс shader прежний лог не записывал и source NIF не приложен.
+Поэтому связь именно этого аксессуара с BSEffect — пока гипотеза. Новая ошибка
+содержит RTTI/skin, успешная конверсия — имя поверхности. Игровая проверка
+конкретного аксессуара и AE/VR остаётся открытой.
+
 ## Завершение изменения3D: повторный аудит07.10.2026
 
 SE/AE/VR instances выбраны последовательно через list_instances/select_instance,

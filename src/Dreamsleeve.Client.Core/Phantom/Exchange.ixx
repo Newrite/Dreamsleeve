@@ -535,7 +535,7 @@ public:
       auto* version = remote.descriptor.generation == wire.sample.generation ? static_cast<RemoteVersion*>(&remote)
                     : remote.previous && remote.previous->descriptor.generation == wire.sample.generation ? &*remote.previous
                                                                                                           : nullptr;
-      if (version && !version->playback.Push(std::move(pose), arrivalUs)) ++metrics.dropped;
+      if (version && !version->playback.Push(std::move(pose), arrivalUs, settings)) ++metrics.dropped;
     }
 
     void Failed(std::string error, bool rejected = true)

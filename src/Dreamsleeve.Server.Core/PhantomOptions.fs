@@ -34,7 +34,7 @@ module PhantomOptions =
         Limits = { CompressedBytes = 64 * 1024 * 1024; RawBytes = 128 * 1024 * 1024
                    Channels = 4096; PoseBytes = 128 * 1024; RawPoseBytes = 256 * 1024 }
         Maximum = 4; Distance = 4096.0f; MaxSources = 512; MaxSubscribers = 64
-        MaxTransfers = 64; TransfersPerPlayer = 2; ChunkBytes = 16384; WindowChunks = 4; TransferTimeoutMs = 30000
+        MaxTransfers = 64; TransfersPerPlayer = 2; ChunkBytes = 16384; WindowChunks = 32; TransferTimeoutMs = 30000
         PublishCooldownMs = 1000; PoseIntervalMs = 100; PoseTimeoutMs = 1000; ReplicationIntervalMs = 100
         ModelBytesPerSecond = 5 * 1024 * 1024; PlayerModelBytesPerSecond = 5 * 1024 * 1024; PoseBytesPerSecond = 2 * 1024 * 1024; TotalPoseBytesPerSecond = 128 * 1024 * 1024
         CommandsPerSecond = 128; MaxPoseFanoutPerTick = 2048

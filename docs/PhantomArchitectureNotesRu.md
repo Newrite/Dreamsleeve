@@ -26,6 +26,14 @@ upload rejection не блокирует будущие изменения: ст
 остаётся в Exchange; transport receipt не является отдельной готовностью UI.
 Game выделяет монотонные поколения независимо от отката Source.
 
+После двухклиентского теста ACK/control модели отделены от pose cadence;
+периодическая отправка поз сохраняет сетку времени. Clock mapping movement
+переиспользуется Playback с микросекундным Duration; состояние истории остаётся
+в Exchange. Диагностический Game log читает эту историю, второго clock owner
+нет. Skinned effect shader заменяется native lighting property только на
+отделённой geometry; исключён shared source write. Engine factory находится
+в Hooks, фильтрация/нормализация — в Game, whitelist asset не расширен.
+
 Проблема вне игрового объёма: Sandbox изолированного процесса не даёт тесту Credential Manager
 сохранить временный credential; требуется обычный разрешённый запуск теста.
 Managed FS3511 в старом task-тесте Presence исправлен минимальным переносом

@@ -538,8 +538,12 @@ module PhantomAgent =
         state.Cleanup.RemoveAll(Predicate(fun pending -> pending.IsCompleted)) |> ignore
         let transfers = state.Transfers.Values |> Seq.toArray
         for index in 0 .. transfers.Length - 1 do settle state at transfers[(state.Cursor + index) % transfers.Length]
-        if at - state.LastTick >= int64 state.Options.ReplicationIntervalMs then
-            state.LastTick <- at
+        let period = int64 state.Options.ReplicationIntervalMs
+        let replicate = at - state.LastTick >= period
+        if replicate then
+            // Keep the cadence grid across late runtime ticks; one latest pose,
+            // never a burst of duplicate catch-up snapshots.
+            state.LastTick <- at - (at - state.LastTick) % period
             refresh state
             for KeyValue(id, owner) in state.Members do
                 match owner.Ready with
@@ -557,7 +561,10 @@ module PhantomAgent =
                         owner.Latest <- owner.Latest |> Option.map (fun struct (pose, received) -> struct (PhantomPose.withoutPrevious pose, received))
                         emit state id (PhantomResponse.Settled(ready.Generation, owner.Context))
                 | _ -> ()
-            for KeyValue(id, memberState) in state.Members do flushOutbox state id memberState
+        // Reliable control/ACKs follow IO completion, not the pose cadence.
+        // At 10 Hz, gating a 64 KiB window here limited uploads to 640 KiB/s.
+        for KeyValue(id, memberState) in state.Members do flushOutbox state id memberState
+        if replicate then
             let sources =
                 if state.Options.Enabled then state.Members.Values |> Seq.filter (fun item -> item.Active && item.Latest.IsSome) |> Seq.toArray
                 else [||]

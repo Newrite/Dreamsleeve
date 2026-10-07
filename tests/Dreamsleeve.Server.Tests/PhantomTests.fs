@@ -89,6 +89,38 @@ let tests = testList "Phantoms" [
         Expect.equal policy.PoseBytes (256u * 1024u) "Native raw pose cap."
         Expect.equal policy.CompressedPoseBytes (128u * 1024u) "Native compressed pose cap."
 
+    testCase "reliable transfer progress is independent of the pose tick" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 1000 }
+        let storage = { memoryStorage with StartUpload = fun _ -> result false }
+        let state, members, output = setup config storage 1
+        let owner, snapshot = members[0]
+        PhantomAgent.handle state 2L owner (PhantomRequest.Publish(asset 1UL (Array.zeroCreate 16), snapshot.MovementContext, requestId()))
+        PhantomAgent.tick state 3L
+        let id = transfer output
+        output.Clear()
+        for offset in [0;4] do PhantomAgent.handle state 4L owner (PhantomRequest.Chunk(id, offset, Array.zeroCreate 4))
+        PhantomAgent.tick state 5L
+        let acknowledgements = models output |> Array.choose (fun packet -> if isNull packet.Progress then None else Some packet.Progress.NextOffset)
+        Expect.equal acknowledgements [|8u|] "The durable window is acknowledged before the next 1 Hz pose tick."
+        Expect.isFalse (output |> Seq.exists (fun (_, packet) -> packet.Lane = DeliveryLane.Poses)) "No pose timer was due."
+
+    testCase "late runtime ticks preserve the pose cadence without catch-up bursts" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 100 }
+        let state, members, output = setup config memoryStorage 2
+        view state members[1] members[0] 1UL 10.0
+        ready state members[0] (asset 1UL [|1uy|])
+        for at in 16L .. 16L .. 1008L do
+            PhantomAgent.receive state at (fst members[0]) DeliveryLane.Poses (pose 1UL (uint64 at) 10UL)
+            PhantomAgent.tick state at
+        let delivered () = output |> Seq.filter (fun (_, packet) -> packet.Lane = DeliveryLane.Poses) |> Seq.length
+        Expect.equal (delivered()) 10 "16 ms scheduling steps must not reduce 10 Hz to 9 Hz."
+        output.Clear()
+        PhantomAgent.receive state 2000L (fst members[0]) DeliveryLane.Poses (pose 1UL 2000UL 10UL)
+        PhantomAgent.tick state 2000L
+        PhantomAgent.tick state 2000L
+        PhantomAgent.tick state 2001L
+        Expect.equal (delivered()) 1 "A pause emits the latest snapshot once."
+
     testCase "disabled replication retains membership policy without views or IO" <| fun _ ->
         let disabled = { options with Enabled = false }
         let output = ResizeArray<TransportPacket>()

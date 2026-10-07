@@ -19,6 +19,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     P::Result<std::vector<std::uint8_t>> (*save)(RE::NiNode*){};
     P::Result<RE::NiPointer<RE::NiNode>> (*load)(const P::ValidatedAsset&){};
     RE::NiAlphaProperty*                 (*alpha)(){};
+    RE::BSLightingShaderProperty*        (*lighting)(){};
     void                                 (*normalizeBones)(RE::BSFlattenedBoneTree&){};
   };
   enum class Transform
@@ -198,7 +199,8 @@ export namespace Dreamsleeve::Game::PhantomNative
     surface.name           = name;
     surface.hasShader      = data.shaderProperty != nullptr;
     surface.skinned        = data.skinInstance != nullptr;
-    surface.effectMaterial = netimmerse_cast<RE::BSEffectShaderProperty*>(data.shaderProperty.get()) != nullptr;
+    auto* effect           = netimmerse_cast<RE::BSEffectShaderProperty*>(data.shaderProperty.get());
+    surface.effectMaterial = effect != nullptr;
     if (lit && lit->material)
     {
       surface.shaderAlpha    = lit->alpha;
@@ -206,8 +208,17 @@ export namespace Dreamsleeve::Game::PhantomNative
       surface.dedicatedDecal = lit->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kWeaponBlood);
       surface.decalMaterial  = lit->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kDecal);
     }
+    if (effect && effect->GetMaterial()) surface.materialAlpha = effect->GetMaterial()->baseColor.alpha;
     if (surface.Auxiliary()) return true;
-    if (!lit || !lit->material) throw std::runtime_error("unsupported visible native material: " + std::string(name));
+    // Skinned effect geometry can be part of clothing/body accessories. Keep
+    // its native mesh/skin and replace only the detached clone's shader.
+    if ((!lit || !lit->material) && (!effect || !effect->GetMaterial()))
+      throw std::runtime_error(
+        std::format(
+          "unsupported visible native material: {} (shader={}, skinned={})",
+          name,
+          data.shaderProperty ? data.shaderProperty->GetRTTI()->GetName() : "none",
+          surface.skinned));
     return false;
   }
 
@@ -304,11 +315,32 @@ export namespace Dreamsleeve::Game::PhantomNative
     for (auto* source : required)
       if (!pairs.contains(source)) throw std::runtime_error("clone omitted required native geometry");
     for (const auto& [source, target] : pairs)
-      if (
-        auto* geometry = source->AsGeometry();
-        geometry && target->AsGeometry() && geometry->GetGeometryRuntimeData().shaderProperty &&
-        geometry->GetGeometryRuntimeData().shaderProperty == target->AsGeometry()->GetGeometryRuntimeData().shaderProperty)
+    {
+      auto* geometry = source->AsGeometry();
+      auto* copy     = target->AsGeometry();
+      if (!geometry || !copy || Auxiliary(*source)) continue;
+      const auto& original = geometry->GetGeometryRuntimeData();
+      auto&       detached = copy->GetGeometryRuntimeData();
+      if (const auto* effect = netimmerse_cast<RE::BSEffectShaderProperty*>(original.shaderProperty.get()))
+      {
+        // Effect properties can be shared or omitted by the engine clone.
+        // Replace from source facts before filtering the cloned tree; never
+        // mutate the live property or silently lose this required surface.
+        if (!engine.lighting) throw std::runtime_error("native lighting factory missing");
+        RE::NiPointer<RE::BSLightingShaderProperty> replacement{engine.lighting()};
+        if (!replacement || !replacement->material) throw std::bad_alloc{};
+        using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
+        if (original.skinInstance) replacement->flags.set(Shader::kSkinned);
+        if (effect->flags.all(Shader::kTwoSided)) replacement->flags.set(Shader::kTwoSided);
+        detached.shaderProperty = replacement;
+        logger::info(
+          "[Phantom] converted native effect surface '{}' to ghost lighting (skinned={})",
+          source->name.c_str(),
+          original.skinInstance != nullptr);
+      }
+      if (original.shaderProperty && original.shaderProperty == detached.shaderProperty)
         throw std::runtime_error("clone shares source shader property");
+    }
     // Clone may retain runtime-only metadata (FaceGen model/morph handles,
     // actor animation data, mod extras) which NiStream cannot reconstruct.
     // This is a controller-free visual snapshot, not another live actor.
@@ -374,10 +406,6 @@ export namespace Dreamsleeve::Game::PhantomNative
       node->SetUserData(nullptr);
       node->collisionObject.reset();
       node->controllers.reset();
-      if (
-        node->AsGeometry() &&
-        !netimmerse_cast<RE::BSLightingShaderProperty*>(node->AsGeometry()->GetGeometryRuntimeData().shaderProperty.get()))
-        node->GetFlags().set(Flag::kHidden);
     }
     logger::info("[Phantom] removed {} clone extra-data entries before NiStream Save", strippedExtras);
     // A leaf excluded by the prototype must not retain controllers, lights

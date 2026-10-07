@@ -202,14 +202,14 @@ export namespace Domain::Motion
   // clock restarted or paused beyond maxGap, only one sample is stamped, or
   // the time strays from receipt beyond the interpolation budget (ahead by
   // more than delay, behind by more than maxGap). Ordinary jitter is kept.
-  template <class Clock>
-  std::optional<typename Clock::time_point> SourceTime(
-    typename Clock::time_point previousTime,
-    std::uint64_t              previousStampUs,
-    std::uint64_t              stampUs,
-    typename Clock::time_point receivedAt,
-    std::chrono::milliseconds  delay,
-    std::chrono::milliseconds  maxGap)
+  template <class Clock, class Duration = typename Clock::duration>
+  std::optional<std::chrono::time_point<Clock, Duration>> SourceTime(
+    std::chrono::time_point<Clock, Duration> previousTime,
+    std::uint64_t                            previousStampUs,
+    std::uint64_t                            stampUs,
+    std::chrono::time_point<Clock, Duration> receivedAt,
+    std::chrono::milliseconds                delay,
+    std::chrono::milliseconds                maxGap)
   {
     auto time = receivedAt;
     if (stampUs != 0 && previousStampUs != 0)
@@ -218,7 +218,7 @@ export namespace Domain::Motion
       if (stampUs < previousStampUs) return std::nullopt;
       const auto elapsed = stampUs - previousStampUs;
       if (elapsed > static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(maxGap).count())) return std::nullopt;
-      time = previousTime + std::chrono::duration_cast<typename Clock::duration>(std::chrono::microseconds{elapsed});
+      time = previousTime + std::chrono::duration_cast<Duration>(std::chrono::microseconds{elapsed});
     }
     else if ((stampUs == 0) != (previousStampUs == 0))
       return std::nullopt;

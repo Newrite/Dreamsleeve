@@ -40,11 +40,12 @@ namespace Hooks
     constexpr auto UpdateActor3D = REL::VariantID(38404, 39395, 0x65A140);
     constexpr auto Clear3DFlags  = REL::VariantID(38868, 39909, 0x687870);
 
-    constexpr auto StreamCtor   = REL::VariantID(68971, 70324, 0xC9EC40);
-    constexpr auto StreamDtor   = REL::VariantID(68972, 70325, 0xC9EEA0);
-    constexpr auto StreamLoad   = REL::VariantID(68978, 70331, 0xC9F470);
-    constexpr auto StreamSave   = REL::VariantID(68979, 70332, 0xC9F4C0);
-    constexpr auto AlphaFactory = REL::VariantID(69311, 70684, 0xCADF10);
+    constexpr auto StreamCtor      = REL::VariantID(68971, 70324, 0xC9EC40);
+    constexpr auto StreamDtor      = REL::VariantID(68972, 70325, 0xC9EEA0);
+    constexpr auto StreamLoad      = REL::VariantID(68978, 70331, 0xC9F470);
+    constexpr auto StreamSave      = REL::VariantID(68979, 70332, 0xC9F4C0);
+    constexpr auto AlphaFactory    = REL::VariantID(69311, 70684, 0xCADF10);
+    constexpr auto LightingFactory = REL::VariantID(99847, 106492, 0x1302ED0);
     // Actual string -> no-argument loader registry; the adjacent qword is not it.
     constexpr auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
 
@@ -285,6 +286,13 @@ namespace Hooks
     return REL::Relocation<RE::NiAlphaProperty*()>{Address::AlphaFactory}();
   }
 
+  RE::BSLightingShaderProperty* PhantomLighting()
+  {
+    // Native factory allocates/constructs 0x160 bytes on SE/AE, 0x178 on VR.
+    // It owns a default lighting material; NiPointer takes the returned object.
+    return REL::Relocation<RE::BSLightingShaderProperty*()>{Address::LightingFactory}();
+  }
+
   void Normalize(RE::BSFlattenedBoneTree& tree)
   {
     auto& data = tree.GetRuntimeData();
@@ -324,7 +332,8 @@ namespace Hooks
     }
     ModelCompleted::Install();
     phantomThread = std::this_thread::get_id();
-    const Dreamsleeve::Game::PhantomNative::Engine engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, Normalize};
+    const Dreamsleeve::Game::PhantomNative::Engine
+      engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, PhantomLighting, Normalize};
     Phantoms::Install(engine);
     logger::info("Native NiStream phantom operations bound to Main::Update, runtime {}", version.string());
     return true;

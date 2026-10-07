@@ -71,6 +71,7 @@ namespace Phantoms
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
     bool                                     publishing{};
+    Clock::time_point                        nextNetworkReport{};
 #endif
   };
 
@@ -439,6 +440,30 @@ namespace Phantoms
 #endif
     CapturePlayer(*player);
     auto display = exchange.Read();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (now >= state.nextNetworkReport)
+    {
+      state.nextNetworkReport = now + std::chrono::seconds(5);
+      for (const auto& remote : display.remotes)
+      {
+        const auto timing    = remote.playback.Inspect(Micros(now), settings);
+        const auto visual    = state.visuals.find(remote.player);
+        const auto displayed = visual != state.visuals.end() && visual->second.current ? visual->second.current->generation.value : 0;
+        logger::info(
+          "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f}",
+          remote.player,
+          remote.descriptor.generation.value,
+          displayed,
+          static_cast<int>(remote.State()),
+          timing.samples,
+          timing.sequence,
+          timing.sourceGapUs / 1000.0,
+          timing.arrivalGapUs / 1000.0,
+          timing.ageUs / 1000.0,
+          timing.aheadUs / 1000.0);
+      }
+    }
+#endif
     if (!display.available)
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -570,6 +595,11 @@ namespace Phantoms
                 {
                   visual.current = std::move(visual.candidate);
                   exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
+                  logger::info(
+                    "[Phantom] native scene displayed: player={} generation={} bytes={}",
+                    remote.player,
+                    remote.descriptor.generation.value,
+                    visual.current->scene->MemoryBytes());
                   visual.candidate.reset();
                   visual.look.reset();
                   exchange.SceneMemory(remote.player, visual.MemoryBytes());

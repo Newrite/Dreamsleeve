@@ -87,9 +87,9 @@ TEST_CASE("Phantom playback drops stale samples and bounds extrapolation")
   settings.delayMs         = 50;
   settings.extrapolationMs = 50;
   settings.timeoutMs       = 250;
-  CHECK(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2000000));
-  CHECK(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1050000, 10)), 2050000));
-  CHECK_FALSE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2100000));
+  CHECK(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2000000, settings));
+  CHECK(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1050000, 10)), 2050000, settings));
+  CHECK_FALSE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2100000, settings));
   auto p = playback.At(2075000, settings);
   REQUIRE(p);
   CHECK(p->origin.x == doctest::Approx(5));
@@ -105,6 +105,42 @@ TEST_CASE("Phantom playback drops stale samples and bounds extrapolation")
   },
       {{10, 0, 0}, 3})
       .radius >= 8);
+}
+
+TEST_CASE("A faster arriving phantom sample does not move the playout clock")
+{
+  P::Playback     playback;
+  P::ViewSettings settings;
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2000000, settings));
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1100000, 10)), 2100000, settings));
+  const auto before = playback.At(2150000, settings);
+  REQUIRE(before);
+  CHECK(before->origin.x == doctest::Approx(5));
+  // One packet saves 50 ms of network/server delay. Previously this advanced
+  // every buffered sample by 50 ms and snapped the rendered pose in one frame.
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(3, 1200000, 20)), 2150000, settings));
+  const auto after = playback.At(2150000, settings);
+  REQUIRE(after);
+  CHECK(after->origin.x == doctest::Approx(before->origin.x));
+  CHECK(playback.At(2166000, settings)->origin.x == doctest::Approx(6.6));
+}
+
+TEST_CASE("Phantom clock mapping retains microsecond range and resets after a long receive gap")
+{
+  P::Playback     playback;
+  P::ViewSettings settings;
+  settings.delayMs = 50;
+  const auto end   = P::MaximumSampleTime;
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), end - 100000, settings));
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1100000, 10)), end, settings));
+  const auto sample = playback.At(end, settings);
+  REQUIRE(sample);
+  CHECK(sample->origin.x == doctest::Approx(5));
+  playback.Clear();
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2000000, settings));
+  REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1100000, 10)), 8000000, settings));
+  CHECK(playback.Inspect(8000000, settings).samples == 1);
+  CHECK(playback.At(8000000, settings)->origin.x == doctest::Approx(10));
 }
 
 TEST_CASE("Phantom exchange clears old work and bounds remote admission")
@@ -172,7 +208,7 @@ TEST_CASE("Phantom time arithmetic rejects timestamps outside its signed domain"
   CHECK_FALSE(P::CheckSnapshot(pose, *asset));
   CHECK_FALSE(P::WriteSnapshot(pose, *asset));
   P::Playback playback;
-  CHECK_FALSE(playback.Push(std::make_shared<const P::Snapshot>(pose), 50000));
+  CHECK_FALSE(playback.Push(std::make_shared<const P::Snapshot>(pose), 50000, P::ViewSettings{}));
 }
 
 TEST_CASE("Publication revisions reject stale preparation across a fast off on toggle")

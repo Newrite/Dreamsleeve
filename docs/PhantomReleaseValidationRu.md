@@ -1,3 +1,7 @@
+Исправления по двухклиентской игре07.10.2026 и новые проверки:
+[phantom-two-player-2026-10-07.md](benchmarks/phantom-two-player-2026-10-07.md).
+Протокол23 / asset2 / pose3 не менялись.
+
 Актуальное продолжение protocol23: [обновления, streaming и проверки](benchmarks/phantom-native-streaming-2026-10-07.md).
 Следующие результаты protocol22 сохраняются как история предыдущего выпуска.
 
