@@ -215,7 +215,11 @@ module ServerRuntime =
 
     let private send options state context (entry: SessionTable.Entry) response =
         let budget = state.Transport.MaxUnfragmentedPayloadBytes entry.ConnectionId
-        transmit options state context entry (ProtocolCodec.delivery response).Lane (ProtocolCodec.encode state.Settings.Codec budget response)
+        // The transport owner can remove a peer before its disconnect event reaches
+        // this mailbox. Queued responses must not pass the unavailable budget to the codec.
+        if budget = 0 then close options state context entry
+        else
+            transmit options state context entry (ProtocolCodec.delivery response).Lane (ProtocolCodec.encode state.Settings.Codec budget response)
 
     // The rejection goes back on the lane of the request it answers.
     let private refuse options state context (entry: SessionTable.Entry) lane requestId (rejection: RequestRejection) =

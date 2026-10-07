@@ -7,7 +7,7 @@ open System.Threading.Tasks
 open Google.Protobuf
 open Dreamsleeve.Agent
 open Dreamsleeve.Server.Core
-open Microsoft.Extensions.Logging.Abstractions
+open Microsoft.Extensions.Logging
 open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
@@ -120,6 +120,8 @@ type private Fixture = {
     Phantoms: Channel<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>
     Sent: ConcurrentQueue<DeliveryLane>
     SendFailures: ConcurrentDictionary<DeliveryLane, string>
+    PayloadBudgets: ConcurrentDictionary<Guid, int>
+    Errors: ConcurrentQueue<string>
     Closed: Channel<Guid>
     Authentication: Agent<SessionAuthenticationRequest>
     IgnoreClose: ConcurrentDictionary<Guid, unit>
@@ -139,6 +141,14 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
     let phantomOutput = Channel.CreateUnbounded<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>()
     let sent = ConcurrentQueue<DeliveryLane>()
     let failures = ConcurrentDictionary<DeliveryLane, string>()
+    let budgets = ConcurrentDictionary<Guid, int>()
+    let errors = ConcurrentQueue<string>()
+    let logger =
+        { new ILogger with
+            member _.BeginScope<'T>(_: 'T) = Unchecked.defaultof<IDisposable>
+            member _.IsEnabled _ = true
+            member _.Log<'T>(level, _, state: 'T, error, formatter: Func<'T, exn, string>) =
+                if level >= LogLevel.Error then errors.Enqueue(formatter.Invoke(state, error)) }
     let closed = Channel.CreateUnbounded<Guid>()
     let reset = Channel.CreateUnbounded<Guid>()
     let ignoreClose = ConcurrentDictionary<Guid, unit>()
@@ -152,7 +162,7 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
             events.Add value
         Ok (List.ofSeq events)
     let transport = {
-        MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
+        MaxUnfragmentedPayloadBytes = fun id -> match budgets.TryGetValue id with true, size -> size | _ -> Int32.MaxValue
         SetReadyHandler = fun handler -> ready <- handler
         Poll = poll
         Send = fun (id, packet) ->
@@ -179,8 +189,8 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
         |> GameSettings.withTrustedProxies proxies
     let game = match phantomStorage with Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok | None -> game
     let start = match phantomStorage with Some (options, storage) -> ServerRuntime.startWithPhantoms storage (Dreamsleeve.Server.Infrastructure.PhantomHttp.create options storage) | None -> ServerRuntime.start
-    use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
-    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
+    use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport logger
+    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; PayloadBudgets = budgets; Errors = errors; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -790,6 +800,39 @@ let tests = testList "ServerRuntime" [
             let! reset = receive fixture.Reset
             equal id reset
             do! awaitUnit fixture.Runtime.Completion
+        })
+    }
+
+    testTask "queued movement after peer removal closes without encoding an unavailable budget" {
+        do! withRuntime ServerRuntimeOptions.defaults (fun fixture -> task {
+            let id = connect fixture "alice"
+            let! _ = welcome fixture id
+            let initial target (p: ServerPacket) =
+                target = id && (p.PayloadCase = ServerPacket.PayloadOneofCase.OwnGroundMarks || p.PayloadCase = ServerPacket.PayloadOneofCase.GuildsSnapshot)
+            let! _ = nextWhere fixture initial
+            let! _ = nextWhere fixture initial
+            // Hold the disconnect event until queued responses have been processed.
+            fixture.IgnoreClose[id] <- ()
+            fixture.PayloadBudgets[id] <- 0
+            let change: Dreamsleeve.Server.Domain.MovementChange = {
+                PlayerId = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
+                ViewRevision = 1UL; Sequence = 1UL
+                Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
+                         CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 0UL }
+            }
+            let response = ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|]))
+            do! post fixture.Runtime response
+            do! post fixture.Runtime response
+            let! state = stats fixture
+            fixture.Input.Enqueue(ServerTransportEvent.Disconnected id)
+            do! post fixture.Runtime (tick ())
+            do! empty fixture
+            do! post fixture.Runtime ServerRuntimeMessage.Stop
+            do! awaitUnit fixture.Runtime.Completion
+            equal 0 state.Ready
+            equal 1 state.Closing
+            equal 0 fixture.Movement.Reader.Count
+            Expect.isEmpty fixture.Errors "A removed peer is a lifecycle event, not an encoding failure."
         })
     }
 
