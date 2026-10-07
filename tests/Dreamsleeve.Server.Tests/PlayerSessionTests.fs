@@ -662,7 +662,7 @@ let tests = testList "PlayerSession" ([
             let health current = ActorValueInfo.create name (ActorValueState.resource current 100)
             let neighbour = PlayerData.create (PlayerId.create 9UL |> ok) (Username.create 32 "other" |> ok) (DisplayName.create 64 "Other" |> ok) NameColor.unknown
             let healthy = { playerSnapshot neighbour with ActorValues = Map.ofList [ key, health -5 ] }
-            let opening: ActorValueKinds = { Ids = Map.ofList [ struct (key, name), 3UL ]; Defined = [ { Id = 3UL; Key = key; DisplayName = name } ] }
+            let opening: ActorValueKinds = { Ids = ActorValueKindIndex.Create [ { Id = 3UL; Key = key; DisplayName = name } ]; Defined = [ { Id = 3UL; Key = key; DisplayName = name } ] }
             do! deliver chat.Events (ChatRoomEvent.Joined(snapshot profile))
             do! deliver presence.Events (PresenceEvent.Snapshot([ playerSnapshot profile; healthy ], opening))
             let! activated = receive fixture.Host

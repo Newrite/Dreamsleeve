@@ -43,7 +43,7 @@ let private kindsOf (players: PlayerSnapshot list) : ActorValueKinds =
         |> List.collect (fun player -> [ for KeyValue(key, info) in player.ActorValues -> key, info.DisplayName ])
         |> List.distinct
         |> List.mapi (fun index (key, name) -> ({ Id = uint64 index + 1UL; Key = key; DisplayName = name }: ActorValueKind))
-    { Ids = defined |> List.map (fun kind -> struct (kind.Key, kind.DisplayName), kind.Id) |> Map.ofList; Defined = defined }
+    { Ids = ActorValueKindIndex.Create defined; Defined = defined }
 
 let private joined player = ServerResponse.PresenceChanged({ PresenceChange.empty with Joined = [ player ] }, kindsOf [ player ])
 let private updated player = ServerResponse.PresenceChanged({ PresenceChange.empty with Updated = [ player ] }, kindsOf [ player ])
@@ -107,6 +107,21 @@ let private playerUpdate result =
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
+    testCase "kind index snapshot survives registry replacement and compares by value" <| fun _ ->
+        let original = { Id = 4UL; Key = healthKey; DisplayName = healthName }
+        let renamed = { original with Id = 9UL; DisplayName = ActorValueName.create 64 "Life" |> ok }
+        let registry = ResizeArray [ original ]
+        let first = ActorValueKindIndex.Create registry
+        registry[0] <- renamed
+        let second = ActorValueKindIndex.Create registry
+        Expect.equal first[struct (healthKey, healthName)] 4UL "Published snapshot retains its number."
+        Expect.isFalse (second.ContainsKey(struct (healthKey, healthName))) "New snapshot reflects removal."
+        Expect.equal second[struct (healthKey, renamed.DisplayName)] 9UL "Renamed reading gets its new number."
+        let forward = ActorValueKindIndex.Create [ original; renamed ]
+        let reverse = ActorValueKindIndex.Create [ renamed; original ]
+        Expect.equal forward reverse "Snapshot equality is independent of insertion order."
+        Expect.equal (forward.GetHashCode()) (reverse.GetHashCode()) "Equal snapshots hash equally."
+
     testCase "movement batches split exactly within configured packet limits" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         let packet = Packets.single codec (ServerResponse.PlayersMoved movements) |> ok
@@ -172,7 +187,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let stamina = ActorValueKey.create 128 "skyrim:stamina" |> ok
         let staminaName = ActorValueName.create 64 "Stamina" |> ok
         let kinds: ActorValueKinds = {
-            Ids = Map.ofList [ struct (healthKey, healthName), 4UL; struct (stamina, staminaName), 9UL ]
+            Ids = ActorValueKindIndex.Create [ { Id = 4UL; Key = healthKey; DisplayName = healthName }; { Id = 9UL; Key = stamina; DisplayName = staminaName } ]
             Defined = [ { Id = 9UL; Key = stamina; DisplayName = staminaName } ]
         }
         let activity = PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "Mudcrab") LockDifficulty.Unknown ValueNone |> ok

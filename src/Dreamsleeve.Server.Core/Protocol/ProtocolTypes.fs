@@ -159,16 +159,46 @@ type ClientRequest = {
 /// while some online player publishes that pair and is never given to another.
 type ActorValueKind = { Id: uint64; Key: ActorValueKey; DisplayName: ActorValueName }
 
+/// A detached lookup shared by events until the actor changes its kind registry.
+/// Typed dictionary lookup avoids FSharpMap's boxed struct-key comparisons.
+[<Sealed>]
+type ActorValueKindIndex private (ids: Collections.Generic.Dictionary<struct (ActorValueKey * ActorValueName), uint64>) =
+    static let empty = ActorValueKindIndex(Collections.Generic.Dictionary())
+    static member Empty = empty
+    static member Create(kinds: ActorValueKind seq) =
+        let ids = Collections.Generic.Dictionary<struct (ActorValueKey * ActorValueName), uint64>()
+        for kind in kinds do ids[struct (kind.Key, kind.DisplayName)] <- kind.Id
+        ActorValueKindIndex(ids)
+    member _.ContainsKey key = ids.ContainsKey key
+    member _.Item with get key = ids[key]
+    // Preserve value equality for immutable event snapshots, independently of order.
+    member private _.Entries = ids
+    override this.Equals other =
+        match other with
+        | :? ActorValueKindIndex as value ->
+            Object.ReferenceEquals(this, value) ||
+            (ids.Count = value.Entries.Count &&
+             (ids |> Seq.forall (fun pair ->
+                 match value.Entries.TryGetValue pair.Key with
+                 | true, id -> id = pair.Value
+                 | _ -> false)))
+        | _ -> false
+    override _.GetHashCode() =
+        let mutable hash = 0
+        for KeyValue(struct (key, name), id) in ids do
+            hash <- hash ^^^ HashCode.Combine(key, name, id)
+        hash
+
 /// The kind numbers of one presence event, fixed when presence builds it, and
 /// the kinds its recipient has not been told yet, ascending.
 type ActorValueKinds = {
-    Ids: Map<struct (ActorValueKey * ActorValueName), uint64>
+    Ids: ActorValueKindIndex
     Defined: ActorValueKind list
 }
 
 [<RequireQualifiedAccess>]
 module ActorValueKinds =
-    let none = { Ids = Map.empty; Defined = [] }
+    let none = { Ids = ActorValueKindIndex.Empty; Defined = [] }
 
 /// What changed in one player's actor values and details since the last tick.
 type MetadataPatch = {

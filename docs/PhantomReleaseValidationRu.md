@@ -329,3 +329,14 @@ PASS на обоих builds. 512 игроков: тот же набор 301 по
 На shaped 4 MiB/s остаются переполнения очереди и дорогие reliable retransmits;
 эта часть ещё требует оптимизации. NiStream/ABI и игровой визуал здесь не менялись
 и заново в игре не проверялись. NIF deltas остаются offline экспериментом.
+
+
+## Снижение серверных аллокаций — 08.10.2026
+
+[EventPipe и повторные измерения](benchmarks/phantom-adaptation-allocations-2026-10-08.md):
+642 server tests PASS, 413 diagnostic native PASS. Production ModelFlow сохранён:
+эксперименты с ростом/снижением окна не прошли сравнение всех каналов. Новый
+kind index сохраняет старые снимки и избавляет lookup от boxing; кеш metadata
+не создаёт callback/list на каждом получателе. Аллокации 340–343 против616 MiB/s,
+GC pauses1,81–1,89 против2,93s в 30-секундной фазе, модельный трафик нулевой.
+CPU/задержки имеют разброс. Визуал/ABI/NiStream не менялись. Protocol24.

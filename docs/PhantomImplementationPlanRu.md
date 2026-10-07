@@ -216,3 +216,19 @@ Copy/XOR дельта NIF пока только офлайн измерение 
   compression между C++/сервером, pinning базы и full fallback.
 
 [Проверки и ограничения](benchmarks/phantom-pacing-2026-10-08.md).
+
+
+## Аллокации и адаптация — 08.10.2026
+
+- [x] Снять EventPipe allocation stacks на production server под нагрузкой.
+- [x] Убрать boxed FSharpMap lookup справочника kind; mutable registry принадлежит
+  Presence, detached Dictionary snapshot создаётся только после изменения реестра.
+- [x] Убрать callback на cache hit, временный список ByteString и вложенные
+  замыкания при повторной проверке metadata; 642 server tests PASS.
+- [x] Повторить нагрузку 512/25/4/10Hz без profiler: 340–343 вместо616 MiB/s.
+- [ ] Адаптация к более медленному каналу: два изменения окна отклонены по
+  повторным измерениям; нужна раздельная оценка delivery rate/storage/ACK.
+- [ ] Следующие найденные затраты: сортировка PhantomPolicy.select и копии
+  pose payload. Pooling без установленного владения буфером не вводить.
+
+[Отчёт](benchmarks/phantom-adaptation-allocations-2026-10-08.md).

@@ -229,15 +229,23 @@ module internal PlayerCodec =
 
     /// Every reading of these players and patches has a number in the event.
     let private numbered (kinds: ActorValueKinds) (players: PlayerSnapshot seq) (patches: MetadataPatch seq) =
-        let known kind = Map.containsKey kind kinds.Ids
-        let readings (values: Map<ActorValueKey, ActorValueInfo>) = values |> Map.forall (fun key info -> known (kindOf key info))
-        Seq.forall (fun (player: PlayerSnapshot) -> readings player.ActorValues) players
-        && patches |> Seq.forall (fun patch ->
-            match patch.ActorValues with
-            | ValueNone -> true
-            | ValueSome values ->
-                List.forall known values.Removed && values.Set |> List.forall (fun (key, info) -> known (kindOf key info)))
-        && kinds.Defined |> List.forall (fun kind -> kind.Id <> 0UL)
+        let mutable valid = true
+        for player in players do
+            if valid then
+                for KeyValue(key, info) in player.ActorValues do
+                    if not (kinds.Ids.ContainsKey(kindOf key info)) then valid <- false
+        for patch in patches do
+            if valid then
+                match patch.ActorValues with
+                | ValueNone -> ()
+                | ValueSome values ->
+                    for kind in values.Removed do
+                        if not (kinds.Ids.ContainsKey kind) then valid <- false
+                    for key, info in values.Set do
+                        if not (kinds.Ids.ContainsKey(kindOf key info)) then valid <- false
+        for kind in kinds.Defined do
+            if kind.Id = 0UL then valid <- false
+        valid
 
     let numberedPlayers kinds players = numbered kinds players Seq.empty
 
@@ -246,7 +254,7 @@ module internal PlayerCodec =
             Id = value.Id, Key = ActorValueKey.value value.Key, DisplayName = ActorValueName.value value.DisplayName)
 
     let private actorValue (kinds: ActorValueKinds) (key: ActorValueKey, value: ActorValueInfo) =
-        let entry = Dreamsleeve.Protocol.Chat.ActorValue(Kind = Map.find (kindOf key value) kinds.Ids)
+        let entry = Dreamsleeve.Protocol.Chat.ActorValue(Kind = kinds.Ids[kindOf key value])
 
         ActorValueState.fold
             (fun scalar -> entry.Scalar <- ActorValue.value scalar)
@@ -344,7 +352,7 @@ module internal PlayerCodec =
     let private metadataPatch kinds (patch: MetadataPatch) =
         let result = Dreamsleeve.Protocol.Chat.PlayerMetadataPatch(PlayerId = PlayerId.value patch.PlayerId)
         patch.ActorValues |> ValueOption.iter (fun values ->
-            result.RemovedActorValues.AddRange(values.Removed |> Seq.map (fun kind -> Map.find kind kinds.Ids))
+            result.RemovedActorValues.AddRange(values.Removed |> Seq.map (fun kind -> kinds.Ids[kind]))
             result.ActorValues.AddRange(values.Set |> Seq.map (actorValue kinds)))
         patch.Details |> ValueOption.iter (detailsPatch result)
         result
@@ -380,8 +388,10 @@ module internal PlayerCodec =
     let private encodedPatches = Runtime.CompilerServices.ConditionalWeakTable<MetadataPatch, ByteString>()
 
     let private encodedPatch kinds patch =
-        encodedPatches.GetValue(
-            patch, Runtime.CompilerServices.ConditionalWeakTable<_, _>.CreateValueCallback(fun value -> (metadataPatch kinds value).ToByteString()))
+        match encodedPatches.TryGetValue patch with
+        | true, bytes -> bytes
+        | _ -> encodedPatches.GetValue(
+                   patch, Runtime.CompilerServices.ConditionalWeakTable<_, _>.CreateValueCallback(fun value -> (metadataPatch kinds value).ToByteString()))
 
     let private metadataTag = CodedOutputStream.ComputeTagSize Dreamsleeve.Protocol.Chat.PresenceChanged.MetadataFieldNumber
 
@@ -395,8 +405,11 @@ module internal PlayerCodec =
         change.Space |> ValueOption.iter (fun space -> body.Space <- place space)
         body.Visibility.AddRange(change.Visibility |> Seq.map visibility)
         body.Left.AddRange(change.Left |> Seq.map PlayerId.value)
-        let patches = change.Metadata |> List.map (encodedPatch kinds)
-        let bodySize = body.CalculateSize() + (patches |> List.sumBy (fun bytes -> metadataTag + CodedOutputStream.ComputeBytesSize bytes))
+        // The weak cache already retains each encoded patch through this call.
+        // Two lookups avoid materializing a recipient-local list of the same bytes.
+        let mutable bodySize = body.CalculateSize()
+        for patch in change.Metadata do
+            bodySize <- bodySize + metadataTag + CodedOutputStream.ComputeBytesSize(encodedPatch kinds patch)
         let size =
             CodedOutputStream.ComputeTagSize Dreamsleeve.Protocol.Chat.ServerPacket.ProtocolVersionFieldNumber
             + CodedOutputStream.ComputeUInt32Size version
@@ -410,8 +423,8 @@ module internal PlayerCodec =
         output.WriteLength bodySize
         body.WriteTo output
         // A length-delimited field: an encoded message has the wire form of bytes.
-        for bytes in patches do
+        for patch in change.Metadata do
             output.WriteTag(Dreamsleeve.Protocol.Chat.PresenceChanged.MetadataFieldNumber, WireFormat.WireType.LengthDelimited)
-            output.WriteBytes bytes
+            output.WriteBytes(encodedPatch kinds patch)
         output.CheckNoSpaceLeft()
         result

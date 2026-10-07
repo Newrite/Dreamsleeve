@@ -43,7 +43,8 @@ module PresenceAgent =
         Kinds: Dictionary<struct (ActorValueKey * ActorValueName), KindEntry>
         /// Kinds whose count reached zero in this turn; forgotten at its end.
         Unused: HashSet<struct (ActorValueKey * ActorValueName)>
-        mutable KindIds: Map<struct (ActorValueKey * ActorValueName), uint64>
+        /// Detached event snapshot, rebuilt only after registry membership changes.
+        mutable KindIds: ActorValueKindIndex option
         /// Never reused: even a client renaming every label each tick cannot exhaust it.
         mutable LastKind: uint64
         /// Members removed so far; a tick filters its shared parts only after one.
@@ -109,7 +110,7 @@ module PresenceAgent =
             if not (state.Kinds.ContainsKey kind) then
                 state.LastKind <- state.LastKind + 1UL
                 state.Kinds[kind] <- { Kind = { Id = state.LastKind; Key = key; DisplayName = info.DisplayName }; Uses = 0 }
-                state.KindIds <- Map.add kind state.LastKind state.KindIds
+                state.KindIds <- None
                 state.Unused.Add kind |> ignore
 
     /// Counts one member's published readings in (+1) or out (-1).
@@ -129,7 +130,7 @@ module PresenceAgent =
             match state.Kinds.TryGetValue kind with
             | true, entry when entry.Uses = 0 ->
                 state.Kinds.Remove kind |> ignore
-                state.KindIds <- Map.remove kind state.KindIds
+                state.KindIds <- None
             | true, _ | false, _ -> ()
         state.Unused.Clear()
 
@@ -146,7 +147,14 @@ module PresenceAgent =
                 |> Seq.sortBy _.Id
                 |> List.ofSeq
         recipient.KnownKind <- state.LastKind
-        { Ids = state.KindIds; Defined = defined }
+        let ids =
+            match state.KindIds with
+            | Some snapshot -> snapshot
+            | None ->
+                let snapshot = ActorValueKindIndex.Create(state.Kinds.Values |> Seq.map _.Kind)
+                state.KindIds <- Some snapshot
+                snapshot
+        { Ids = ids; Defined = defined }
 
     let private remove state connectionId =
         match state.Members.TryGetValue connectionId with
@@ -488,7 +496,7 @@ module PresenceAgent =
             Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
             Candidates = HashSet(); Movements = ResizeArray()
             LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
-            Kinds = Dictionary(); Unused = HashSet(); KindIds = Map.empty; LastKind = 0UL; Removals = 0L
+            Kinds = Dictionary(); Unused = HashSet(); KindIds = None; LastKind = 0UL; Removals = 0L
             VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
             Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
             PhantomObservation = mode; PhantomObservations = ResizeArray()

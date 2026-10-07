@@ -54,7 +54,7 @@ let private actorKey value = ActorValueKey.create 128 value |> ok
 let private actorName value = ActorValueName.create 64 value |> ok
 let private reading name current = ActorValueInfo.create (actorName name) (ActorValueState.resource current 100)
 let private kind id key name : ActorValueKind = { Id = id; Key = actorKey key; DisplayName = actorName name }
-let private idsOf (kinds: ActorValueKind list) = kinds |> List.map (fun kind -> struct (kind.Key, kind.DisplayName), kind.Id) |> Map.ofList
+let private idsOf (kinds: ActorValueKind list) = ActorValueKindIndex.Create kinds
 let private valuesPatch playerId removed set : MetadataPatch =
     { PlayerId = playerId; Details = ValueNone; ActorValues = ValueSome { Removed = removed; Set = set } }
 
