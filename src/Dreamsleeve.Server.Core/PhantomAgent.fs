@@ -60,10 +60,13 @@ module PhantomAgent =
         value.Available <- min capacity (value.Available + double (max 0L (at - value.At)) * rate / 1000.0)
         value.At <- at
     let private refill at rate value = refillBounded at (double rate) (double rate) value
-    // The ACK window bounds retained data; send credit bounds new bursts.
-    // Two chunks leave room for transport headers and concurrent realtime data.
-    let private refillModel at rate chunkBytes value =
-        refillBounded at (double (2 * chunkBytes)) (double rate) value
+    // Carry a fractional chunk across polls; do not turn the service interval
+    // into an undocumented bandwidth cap. Flight bounds catch-up after a stall.
+    let private refillModel at rate chunkBytes windowChunks value =
+        if at > value.At then
+            let earned = double (at - value.At) * double rate / 1000.0
+            let capacity = min (double (chunkBytes * windowChunks)) (max (double chunkBytes) (earned + double chunkBytes))
+            refillBounded at capacity (double rate) value
     let private take at rate amount value =
         refill at rate value
         if value.Available < double amount then false
@@ -519,8 +522,8 @@ module PhantomAgent =
                 let mutable admitting = true
                 for chunk in queue do
                     if admitting && chunk.Pending.IsNone then
-                        refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes owner.ModelCredit
-                        refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.ModelCredit
+                        refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks owner.ModelCredit
+                        refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks state.ModelCredit
                         if owner.ModelCredit.Available >= double chunk.Bytes.Length && state.ModelCredit.Available >= double chunk.Bytes.Length then
                             owner.ModelCredit.Available <- owner.ModelCredit.Available - double chunk.Bytes.Length
                             state.ModelCredit.Available <- state.ModelCredit.Available - double chunk.Bytes.Length
@@ -560,8 +563,8 @@ module PhantomAgent =
                         match pending.Result with
                         | Error reason -> cancel state transfer.Id false reason; sending <- false
                         | Ok bytes ->
-                            refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes owner.ModelCredit
-                            refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.ModelCredit
+                            refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks owner.ModelCredit
+                            refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks state.ModelCredit
                             if owner.ModelCredit.Available < double bytes.Length || state.ModelCredit.Available < double bytes.Length
                                || not (ModelFlow.allows (transfer.Sent - transfer.Acknowledged) bytes.Length transfer.Flow) then sending <- false
                             else

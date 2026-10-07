@@ -41,8 +41,7 @@ let private run (arguments: string array) = task {
     if ProtocolCodec.Version <> 24u then failwith "Smoke fixture requires protocol24."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
                                                    DiskBytes = 128L * 1024L * 1024L; RamBytes = 4L * 1024L * 1024L;
-                                                   PublishCooldownMs = 100; ReplicationIntervalMs = 10;
-                                                   PlayerModelBytesPerSecond = 4 * 1024 * 1024; ModelBytesPerSecond = 8 * 1024 * 1024 }
+                                                   PublishCooldownMs = 100; ReplicationIntervalMs = 10 }
     let server = { ServerConfig.defaults with BindAddress = IPAddress.Loopback; Port = port; PeerLimit = 8 }
     let options = { ServerRuntimeOptions.defaults with MaxSessions = 8; Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
     let settings = GameSettings.create server options IdentityOptions.defaults AnnouncementOptions.defaults

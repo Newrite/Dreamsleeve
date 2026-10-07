@@ -109,9 +109,12 @@ namespace
     std::uint64_t                                           chunksSent{}, downloadedBytes{}, uploadId{}, uploadSent{}, uploadAcknowledged{};
     std::uint32_t                                           windowChunks{};
     std::size_t                                             largestPose{};
-    std::uint64_t                     chatSentAt{}, chatReceivedAt{}, firstChunkAt{}, lastChunkAt{}, uploadAcceptedAt{};
-    std::string                       modelHash;
-    std::unordered_set<std::uint64_t> requests;
+    std::uint64_t                                       chatSentAt{}, chatReceivedAt{}, firstChunkAt{}, lastChunkAt{}, uploadAcceptedAt{};
+    std::uint64_t                                       lastPumpUs{}, pumpCount{}, pumpTotalUs{}, pumpMaxUs{}, maxChunkBatch{};
+    std::uint64_t                                       traceAt{}, ackDelayUs{};
+    std::deque<std::pair<std::uint64_t, std::uint64_t>> sentTimes;
+    std::string                                         modelHash;
+    std::unordered_set<std::uint64_t>                   requests;
 
     Client(std::uint16_t port, const std::filesystem::path& cache, bool publish) : stream(exchange, cache)
     {
@@ -202,6 +205,8 @@ namespace
         {
           policy       = true;
           windowChunks = value.policy().window_chunks();
+          std::cout << "PHANTOM_POLICY modelBytesPerSecond=" << value.policy().model_bytes_per_second()
+                    << " windowChunks=" << windowChunks << std::endl;
         }
         if (value.has_transfer())
         {
@@ -217,6 +222,11 @@ namespace
         {
           REQUIRE(value.progress().next_offset() <= uploadSent);
           uploadAcknowledged = value.progress().next_offset();
+          while (!sentTimes.empty() && sentTimes.front().first <= uploadAcknowledged)
+          {
+            ackDelayUs = NowUs() - sentTimes.front().second;
+            sentTimes.pop_front();
+          }
         }
         if (value.has_complete())
         {
@@ -263,7 +273,17 @@ namespace
 
     void Pump()
     {
-      ENetEvent event{};
+      const auto pumpAt = NowUs();
+      if (lastPumpUs)
+      {
+        const auto gap = pumpAt - lastPumpUs;
+        ++pumpCount;
+        pumpTotalUs += gap;
+        pumpMaxUs    = std::max(pumpMaxUs, gap);
+      }
+      lastPumpUs              = pumpAt;
+      const auto beforeChunks = chunksSent;
+      ENetEvent  event{};
       for (int count = 0; count < 128; ++count)
       {
         const auto result = enet_host_service(host.get(), &event, 0);
@@ -303,6 +323,7 @@ namespace
               REQUIRE(request.chunk().transfer_id() == uploadId);
               REQUIRE(request.chunk().offset() == uploadSent);
               uploadSent += request.chunk().data().size();
+              sentTimes.emplace_back(uploadSent, NowUs());
               REQUIRE(uploadSent - uploadAcknowledged <= P::Wire::ChunkBytes * windowChunks);
               ++chunksSent;
             }
@@ -317,7 +338,15 @@ namespace
             Send(value.lane, value.bytes, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
           }
         }
+      maxChunkBatch = std::max(maxChunkBatch, chunksSent - beforeChunks);
       enet_host_flush(host.get());
+      if (uploadId && pumpAt >= traceAt + 1000000)
+      {
+        traceAt = pumpAt;
+        std::cout << "PHANTOM_FLIGHT atUs=" << pumpAt << " sent=" << uploadSent << " ack=" << uploadAcknowledged << " ackUs=" << ackDelayUs
+                  << " nativeFlight=" << peer->reliableDataInTransit << " rtt=" << peer->roundTripTime << " lost=" << peer->packetsLost
+                  << std::endl;
+      }
     }
   };
 
@@ -437,6 +466,8 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
 
   if (Environment("DREAMSLEEVE_PHANTOM_SMOKE_MODEL"))
   {
+    std::cout << "PHANTOM_PUMP meanUs=" << double(alice.pumpTotalUs) / alice.pumpCount << " maxUs=" << alice.pumpMaxUs
+              << " maxChunkBatch=" << alice.maxChunkBatch << '\n';
     std::cout << "PHANTOM_NATIVE_ASSET_UDP_PASS coldBytes=" << bob.downloadedBytes << '\n';
     return;  // The synthetic fixture below separately guarantees multi-fragment poses.
   }

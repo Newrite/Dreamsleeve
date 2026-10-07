@@ -47,6 +47,7 @@
     <Compile Include="GuildTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
     <Compile Include="AdminHttpTests.fs" />
+    <Compile Include="RelayTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -58,4 +59,5 @@
     <PackageReference Include="Expecto" Version="11.1.0" />
     <PackageReference Include="Faqt" Version="5.1.0" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="../Dreamsleeve.Network.Relay/Dreamsleeve.Network.Relay.csproj" /></ItemGroup>
 </Project>

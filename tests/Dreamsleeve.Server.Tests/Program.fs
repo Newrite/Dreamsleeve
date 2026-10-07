@@ -5,6 +5,7 @@ open Expecto
 [<EntryPoint>]
 let main argv =
     testList "Tests" [
+        RelayTests.tests
         ContinuousDiagnosticsTests.tests
         DomainTests.tests
         IdentityTests.tests

@@ -108,7 +108,12 @@ module ServerRuntime =
         Phantoms: PhantomAgent.State option
     }
 
-    let private now () = Environment.TickCount64
+    // TickCount64 advances in ~15.6 ms steps on Windows, turning a 5 MiB/s
+    // budget into ~80 KiB bursts despite a 1 ms service loop. Keep the uptime
+    // epoch for existing deadlines, but measure elapsed time with QPC.
+    let private clockOrigin = Stopwatch.GetTimestamp()
+    let private uptimeOrigin = Environment.TickCount64
+    let private now () = uptimeOrigin + int64 (Stopwatch.GetElapsedTime(clockOrigin).TotalMilliseconds)
 
     // A pseudonym is chosen at random, never from a name.
     let private pick count = Random.Shared.Next count

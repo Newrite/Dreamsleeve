@@ -12,6 +12,7 @@ export namespace Dreamsleeve::Client::Phantom
     std::uint32_t                                           chunk, maximum;
     double                                                  window, baseline{std::numeric_limits<double>::max()}, smoothed{};
     Clock::time_point                                       adjustAt{};
+    bool                                                    probing{true};
     std::deque<std::pair<std::uint32_t, Clock::time_point>> sent;
 
 public:
@@ -41,18 +42,18 @@ public:
         sent.pop_front();
       }
       if (!sample) return;  // Duplicate/partial ACK cannot grow the window.
-      const auto delay   = std::max(1.0, std::chrono::duration<double, std::milli>(at - *sample).count());
-      baseline           = std::min(baseline, delay);
-      const auto target  = std::max(25.0, baseline / 4);
-      const auto bounded = std::min(delay, baseline + 4 * target);
-      smoothed           = smoothed ? smoothed * .875 + bounded * .125 : bounded;
+      const auto delay = std::max(1.0, std::chrono::duration<double, std::milli>(at - *sample).count());
+      baseline         = std::min(baseline, delay);
+      smoothed         = smoothed ? smoothed * .875 + delay * .125 : delay;
       if (at < adjustAt) return;
-      // Leave queue headroom for realtime/control traffic. Change at most once
-      // per baseline RTT; all ACKs from one congested flight are one observation.
-      if (smoothed > baseline + target)
-        window = std::max(double(chunk), window * .75);
-      else
-        window = std::min(double(maximum), window + chunk);
+      // Estimate excess queued bytes from the bandwidth-delay product. A fixed
+      // millisecond threshold can suppress even a one-chunk flight on jitter.
+      const auto queued = window * (smoothed - baseline) / smoothed;
+      if (queued >= chunk) probing = false;
+      if (queued > 2 * chunk)
+        window = std::max(double(chunk), window - chunk);
+      else if (queued < chunk)
+        window = std::min(double(maximum), probing ? window * 2 : window + chunk);
       adjustAt = at + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double, std::milli>(baseline));
     }
   };

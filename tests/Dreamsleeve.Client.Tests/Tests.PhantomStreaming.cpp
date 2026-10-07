@@ -49,7 +49,12 @@ namespace
     return result;
   }
 
-  void Policy(P::Streaming& stream, std::uint32_t concurrent = 2, std::uint32_t window = 4, std::uint32_t visible = 4)
+  void Policy(
+    P::Streaming& stream,
+    std::uint32_t concurrent = 2,
+    std::uint32_t window     = 4,
+    std::uint32_t visible    = 4,
+    std::uint32_t rate       = 1024 * 1024)
   {
     auto packet = Server([&](auto& packet) {
       auto*     p = packet.mutable_policy();
@@ -65,7 +70,7 @@ namespace
       p->set_distance(4096);
       p->set_window_chunks(window);
       p->set_concurrent_transfers(concurrent);
-      p->set_model_bytes_per_second(1024 * 1024);
+      p->set_model_bytes_per_second(rate);
       p->set_pose_bytes_per_second(1024 * 1024);
     });
     REQUIRE(stream.ReceiveAsset(packet));
@@ -980,4 +985,45 @@ TEST_CASE("Model flight responds to sustained delay without growing on duplicate
   }
   CHECK(flow.Allows(0, 800));
   CHECK_FALSE(flow.Allows(0, 801));
+}
+
+TEST_CASE("Bulk pacing wakes the transport at its next chunk deadline")
+{
+  auto parsed = P::ValidatedAsset::Parse(PhantomFixture::Model(2, 60000));
+  REQUIRE(parsed);
+  auto prepared = P::Prepare(std::move(*parsed));
+  REQUIRE(prepared);
+  auto        model = std::make_shared<const P::PreparedAsset>(std::move(*prepared));
+  P::Exchange exchange;
+  PreparePublication(exchange, model);
+  P::Streaming stream(exchange, {});
+  Policy(stream, 2, 32, 4, 5 * 1024 * 1024);
+  auto at = Clock::now();
+  Models(stream.Poll(at));
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* t = p.mutable_transfer();
+    t->set_transfer_id(10);
+    t->set_request_id(1);
+    t->set_player_id(123);
+    t->set_upload(true);
+    Set(Describe(*model), t->mutable_asset());
+  })));
+  CHECK(stream.WaitMs(10, at) <= 4);
+  at                 += std::chrono::milliseconds(10);
+  std::uint32_t sent  = 0;
+  for (const auto& packet : Models(stream.Poll(at)))
+    if (packet.has_chunk()) sent += static_cast<std::uint32_t>(packet.chunk().data().size());
+  REQUIRE(sent == 2 * P::Wire::ChunkBytes);  // Initial flight is full.
+  CHECK(stream.WaitMs(10, at) == 10);        // ACK, not a busy poll, opens the flight.
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    p.mutable_progress()->set_transfer_id(10);
+    p.mutable_progress()->set_next_offset(sent);
+  })));
+  CHECK(stream.WaitMs(10, at) == 0);  // Remaining elapsed-time credit is usable.
+  for (const auto& packet : Models(stream.Poll(at)))
+    if (packet.has_chunk()) sent += static_cast<std::uint32_t>(packet.chunk().data().size());
+  CHECK(sent == 3 * P::Wire::ChunkBytes);
+  const auto wait = stream.WaitMs(10, at);
+  CHECK(wait >= 1);
+  CHECK(wait <= 4);  // Next chunk is due before the ordinary 10 ms transport wait.
 }

@@ -869,6 +869,29 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 59001L
         Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Inactive late receiver eventually expires."
 
+    testCase "model byte rate survives 10 and 16 ms service intervals" <| fun _ ->
+        for interval in [10L; 16L] do
+            let rate = 5 * 1024 * 1024
+            let config = { options with ChunkBytes = 16384; WindowChunks = 32; ModelBytesPerSecond = rate; PlayerModelBytesPerSecond = rate }
+            let state, members, output = setup config memoryStorage 2
+            ready state members[0] (asset 1UL (Array.zeroCreate (32 * 1024 * 1024)))
+            view state members[1] members[0] 1UL 1.0
+            PhantomAgent.tick state 4L
+            PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
+            let mutable received, start = 0, 0
+            for tick in 1L..200L do
+                let at = 5L + tick * interval
+                output.Clear()
+                PhantomAgent.tick state at
+                for packet in models output do
+                    if not (isNull packet.Chunk) then
+                        received <- int packet.Chunk.Offset + packet.Chunk.Data.Length
+                        PhantomAgent.handle state at (fst members[1]) (PhantomRequest.Progress(PhantomTransferId packet.Chunk.TransferId, received))
+                if tick = 100L then start <- received
+            let expected = rate * int interval / 10
+            Expect.isGreaterThanOrEqual (received - start) (expected - config.ChunkBytes) "No fixed per-service byte cap below the configured rate."
+            Expect.isLessThanOrEqual (received - start) (expected + config.ChunkBytes) "Elapsed time is credited only once."
+
     testCase "model budget cursor advances on service rather than empty ticks" <| fun _ ->
         let config = { options with ModelBytesPerSecond = 125; PlayerModelBytesPerSecond = 125 }
         let state, members, output = setup config memoryStorage 3

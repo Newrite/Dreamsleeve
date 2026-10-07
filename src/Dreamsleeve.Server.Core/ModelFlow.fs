@@ -8,12 +8,12 @@ open System.Collections.Generic
 module ModelFlow =
     type State = private {
         Chunk: int; Maximum: int; mutable Window: double
-        mutable Baseline: int64; mutable Smoothed: double; mutable AdjustAt: int64
+        mutable Probing: bool; mutable Baseline: int64; mutable Smoothed: double; mutable AdjustAt: int64
         Sent: Queue<struct (int * int64)>
     }
     let create chunk chunks =
         { Chunk = chunk; Maximum = chunk * chunks; Window = double (chunk * min 2 chunks)
-          Baseline = System.Int64.MaxValue; Smoothed = 0.0; AdjustAt = 0L; Sent = Queue() }
+          Probing = true; Baseline = System.Int64.MaxValue; Smoothed = 0.0; AdjustAt = 0L; Sent = Queue() }
     let allows flight bytes state = double flight + double bytes <= state.Window
     let sent offset at state = state.Sent.Enqueue(struct (offset, at))
     let acknowledge offset at state =
@@ -26,12 +26,14 @@ module ModelFlow =
         | Some sentAt ->
             let delay = max 1L (at - sentAt)
             state.Baseline <- min state.Baseline delay
-            let target = max 25.0 (double state.Baseline / 4.0)
-            let bounded = min (double delay) (double state.Baseline + 4.0 * target)
-            state.Smoothed <- if state.Smoothed = 0.0 then bounded else state.Smoothed * 0.875 + bounded * 0.125
+            state.Smoothed <- if state.Smoothed = 0.0 then double delay else state.Smoothed * 0.875 + double delay * 0.125
             if at >= state.AdjustAt then
-                // Adjust once per baseline RTT, preserving headroom for control/poses.
-                state.Window <-
-                    if state.Smoothed > double state.Baseline + target then max (double state.Chunk) (state.Window * 0.75)
-                    else min (double state.Maximum) (state.Window + double state.Chunk)
+                // Estimate queued bytes, rather than mistaking jitter for a
+                // standing queue even when only one chunk remains in flight.
+                let queued = state.Window * (state.Smoothed - double state.Baseline) / state.Smoothed
+                if queued >= double state.Chunk then state.Probing <- false
+                if queued > 2.0 * double state.Chunk then
+                    state.Window <- max (double state.Chunk) (state.Window - double state.Chunk)
+                elif queued < double state.Chunk then
+                    state.Window <- min (double state.Maximum) (if state.Probing then state.Window * 2.0 else state.Window + double state.Chunk)
                 state.AdjustAt <- at + state.Baseline

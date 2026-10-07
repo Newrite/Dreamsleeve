@@ -535,6 +535,22 @@ public:
       return {};
     }
 
+    // Wake the existing transport owner when the next paced chunk becomes due.
+    // Waiting for the caller's full 10 ms would group ~50 KiB at 5 MiB/s.
+    std::uint32_t WaitMs(std::uint32_t maximum, Clock::time_point now = Clock::now()) const
+    {
+      if (!policy || !local) return maximum;
+      const auto* upload = std::get_if<Upload>(&local->state);
+      if (!upload || upload->sent >= local->value.asset->compressed->size()) return maximum;
+      const auto count =
+        static_cast<std::uint32_t>(std::min<std::size_t>(Wire::ChunkBytes, local->value.asset->compressed->size() - upload->sent));
+      if (!upload->flow.Allows(upload->sent - upload->acknowledged, count)) return maximum;
+      const auto rate = std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond);
+      if (!rate) return maximum;
+      const auto due = std::max(0.0, (count - modelCredit) / rate - std::chrono::duration<double>(now - lastBudget).count());
+      return static_cast<std::uint32_t>(std::min<double>(maximum, std::ceil(due * 1000.0)));
+    }
+
     std::vector<Outbound> Poll(Clock::time_point now = Clock::now())
     {
       std::vector<Outbound> output;
@@ -598,11 +614,14 @@ public:
       lastBudget         = now;
       if (policy)
       {
-        // Flight credit is not burst credit. Do not refill a whole unacknowledged
-        // window after idle/late polls: that burst overflows small UDP queues.
         const auto uploadRate = std::min(policy->modelBytesPerSecond, outgoing.settings.uploadBytesPerSecond);
-        modelCredit           = std::min<double>(modelCredit + elapsed * uploadRate, 2 * Wire::ChunkBytes);
-        poseCredit = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, 2ULL * policy->limits.compressedPoseBytes + 1024);
+        // Preserve the configured rate across ordinary scheduling intervals.
+        // Fractional credit carries over; the negotiated flight bounds catch-up.
+        const auto capacity = std::min<double>(
+          Wire::ChunkBytes * policy->windowChunks,
+          std::max<double>(Wire::ChunkBytes, elapsed * uploadRate + Wire::ChunkBytes));
+        modelCredit = std::min(modelCredit + elapsed * uploadRate, capacity);
+        poseCredit  = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, double(2ULL * policy->limits.compressedPoseBytes + 1024));
       }
       if (local && policy)
       {
@@ -617,7 +636,7 @@ public:
           else
           {
             const auto& bytes = *local->value.asset->compressed;
-            for (int i = 0; i < 4 && upload->sent < bytes.size(); ++i)
+            while (upload->sent < bytes.size())
             {
               const auto count = std::min<std::size_t>(Wire::ChunkBytes, bytes.size() - upload->sent);
               if (!upload->flow.Allows(upload->sent - upload->acknowledged, static_cast<std::uint32_t>(count)) || modelCredit < count)

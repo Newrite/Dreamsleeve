@@ -161,7 +161,7 @@ public:
         waitMs          = left <= 0 ? 0 : std::min(waitMs, static_cast<TimeOutMs>(left));
       }
 
-      auto polled = transport->Poll(events, waitMs);
+      auto polled = transport->Poll(events, phantoms.WaitMs(waitMs));
       // A transport failure invalidates the whole unprocessed batch.
       if (!polled)
       {
