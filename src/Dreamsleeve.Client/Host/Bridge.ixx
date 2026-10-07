@@ -490,8 +490,9 @@ export namespace Dreamsleeve::Host::Bridge
     std::vector<UiPlayer>  players;
     std::string            selfId;
     std::string            serverName;
-    // Same session re-projected (names or ignore list changed): the UI keeps
-    // its pending rows, filters and scroll instead of treating it as new.
+    // The page already shows this session (names, ignore list, or a snapshot
+    // Core sent after its queue overflowed): the UI keeps its pending rows,
+    // channel, filters and scroll instead of treating it as new.
     bool refresh{};
     // The session speaks a protocol with ground marks; the own marks the
     // server listed and the marks it shows nearby.
