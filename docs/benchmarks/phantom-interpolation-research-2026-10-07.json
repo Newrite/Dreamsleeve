@@ -1,0 +1,748 @@
+{
+  "method": "Held-out odd frames from original 20 Hz snapshots; no renderer, mesh error or network loss in recording comparison.",
+  "recordings": [
+    {
+      "recording": "1791317521446-walk-turn-0",
+      "sha256": "ba4c288ac37f55f10b80ce1ee63ee7cacfe19cc8184e1cf4f81328eb92798e79",
+      "frames": 301,
+      "comparisons": 148,
+      "skipped": 2,
+      "visibilityMismatches": 0,
+      "visibilityComparisons": 48248,
+      "errors": {
+        "rootUnits": {
+          "count": 148,
+          "min": 0.0,
+          "mean": 1.263256061690684,
+          "p50": 0.7225294678925276,
+          "p95": 3.8057147320067535,
+          "max": 16.55764449165575
+        },
+        "channelUnits": {
+          "count": 48100,
+          "min": 0.0,
+          "mean": 2.1179508595382788,
+          "p50": 1.4235169299440633,
+          "p95": 6.029982475651881,
+          "max": 33.51253467856505
+        },
+        "rotationNlerpDegrees": {
+          "count": 48100,
+          "min": 0.0,
+          "mean": 2.6568351242176007,
+          "p50": 1.5296757092192055,
+          "p95": 9.906548213089817,
+          "max": 36.27396715366794
+        },
+        "rotationSlerpDegrees": {
+          "count": 48100,
+          "min": 0.0,
+          "mean": 2.657669001780511,
+          "p50": 1.5308191689199866,
+          "p95": 9.90654291768664,
+          "max": 37.487223912286574
+        },
+        "frameMaxChannelUnits": {
+          "count": 148,
+          "min": 0.0,
+          "mean": 5.223960113934779,
+          "p50": 5.145160404939611,
+          "p95": 10.639316906198276,
+          "max": 33.51253467856505
+        },
+        "pairSpanMs": {
+          "count": 148,
+          "min": 70.202,
+          "mean": 99.74426351351352,
+          "p50": 99.32,
+          "p95": 117.099,
+          "max": 123.034
+        }
+      },
+      "captureSteadyMs": {
+        "count": 298,
+        "min": 0.0387,
+        "mean": 0.09344328859060402,
+        "p50": 0.0589,
+        "p95": 0.2655,
+        "max": 0.3466
+      },
+      "captureModelStageMs": {
+        "count": 3,
+        "min": 42.3537,
+        "mean": 50.8317,
+        "p50": 49.0582,
+        "p95": 49.0582,
+        "max": 61.0832
+      }
+    },
+    {
+      "recording": "1791317603796-sprint-0",
+      "sha256": "9065a43ddc6650bca65c3bf7d8db819946b0bd82effecf20b30b12b2e23fb7c0",
+      "frames": 301,
+      "comparisons": 150,
+      "skipped": 0,
+      "visibilityMismatches": 0,
+      "visibilityComparisons": 48900,
+      "errors": {
+        "rootUnits": {
+          "count": 150,
+          "min": 0.0,
+          "mean": 1.3123300743496513,
+          "p50": 0.9574223652238947,
+          "p95": 3.4260593687899723,
+          "max": 15.853113807244902
+        },
+        "channelUnits": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 2.272362058052175,
+          "p50": 1.6239942746876168,
+          "p95": 6.287692771586533,
+          "max": 21.673424362390705
+        },
+        "rotationNlerpDegrees": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 2.815328593673269,
+          "p50": 1.6032298377881804,
+          "p95": 11.124178395780222,
+          "max": 75.90910811486606
+        },
+        "rotationSlerpDegrees": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 2.815932064773405,
+          "p50": 1.6054770786594228,
+          "p95": 11.127264954694242,
+          "max": 75.84911762400326
+        },
+        "frameMaxChannelUnits": {
+          "count": 150,
+          "min": 0.0,
+          "mean": 8.662531931109216,
+          "p50": 8.654812810886748,
+          "p95": 13.243362794855031,
+          "max": 21.673424362390705
+        },
+        "pairSpanMs": {
+          "count": 150,
+          "min": 78.295,
+          "mean": 100.16444666666666,
+          "p50": 103.024,
+          "p95": 107.789,
+          "max": 122.791
+        }
+      },
+      "captureSteadyMs": {
+        "count": 300,
+        "min": 0.039,
+        "mean": 0.09724266666666667,
+        "p50": 0.059,
+        "p95": 0.2747,
+        "max": 0.3731
+      },
+      "captureModelStageMs": {
+        "count": 1,
+        "min": 48.9413,
+        "mean": 48.9413,
+        "p50": 48.9413,
+        "p95": 48.9413,
+        "max": 48.9413
+      }
+    },
+    {
+      "recording": "1791317657992-idle-0",
+      "sha256": "9a7fbeaf10969f05bae7824d57c66f6755b83085f0d555903ea8d870b15da7ef",
+      "frames": 301,
+      "comparisons": 144,
+      "skipped": 6,
+      "visibilityMismatches": 0,
+      "visibilityComparisons": 46944,
+      "errors": {
+        "rootUnits": {
+          "count": 144,
+          "min": 0.0,
+          "mean": 0.00038910125097244317,
+          "p50": 8.458176853309851e-05,
+          "p95": 0.0004929130254822667,
+          "max": 0.02493929161937558
+        },
+        "channelUnits": {
+          "count": 46800,
+          "min": 0.0,
+          "mean": 0.018676589887217352,
+          "p50": 0.004002916546415785,
+          "p95": 0.030909743895255262,
+          "max": 10.657181397742676
+        },
+        "rotationNlerpDegrees": {
+          "count": 46800,
+          "min": 0.0,
+          "mean": 0.08832387825466861,
+          "p50": 0.007818183501245086,
+          "p95": 0.0856041564367502,
+          "max": 47.60440230549483
+        },
+        "rotationSlerpDegrees": {
+          "count": 46800,
+          "min": 0.0,
+          "mean": 0.08833604095611952,
+          "p50": 0.007818183501245086,
+          "p95": 0.0856041564367502,
+          "max": 47.632789027615736
+        },
+        "frameMaxChannelUnits": {
+          "count": 144,
+          "min": 0.0,
+          "mean": 0.09742644705794497,
+          "p50": 0.01201321994348565,
+          "p95": 0.07221869978653199,
+          "max": 10.657181397742676
+        },
+        "pairSpanMs": {
+          "count": 144,
+          "min": 70.566,
+          "mean": 99.92099305555556,
+          "p50": 96.531,
+          "p95": 120.139,
+          "max": 122.299
+        }
+      },
+      "captureSteadyMs": {
+        "count": 294,
+        "min": 0.041,
+        "mean": 0.09847142857142857,
+        "p50": 0.06,
+        "p95": 0.2741,
+        "max": 0.42
+      },
+      "captureModelStageMs": {
+        "count": 7,
+        "min": 44.581,
+        "mean": 46.5025,
+        "p50": 46.7158,
+        "p95": 47.3378,
+        "max": 48.7391
+      }
+    },
+    {
+      "recording": "1791317778002-combat-0",
+      "sha256": "176bc08a6d73cea076ded69c6385305596a63b23d379a11248c64b2017e1d3c8",
+      "frames": 301,
+      "comparisons": 150,
+      "skipped": 0,
+      "visibilityMismatches": 0,
+      "visibilityComparisons": 48900,
+      "errors": {
+        "rootUnits": {
+          "count": 150,
+          "min": 0.0,
+          "mean": 1.2052275498838758,
+          "p50": 0.4690934124929559,
+          "p95": 4.323403427614012,
+          "max": 11.240078513279403
+        },
+        "channelUnits": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 3.565717933501708,
+          "p50": 2.3180135790314607,
+          "p95": 10.92838898509108,
+          "max": 38.504615062606504
+        },
+        "rotationNlerpDegrees": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 5.1887323181196745,
+          "p50": 3.0393456284181837,
+          "p95": 17.340906186096582,
+          "max": 174.38420288882335
+        },
+        "rotationSlerpDegrees": {
+          "count": 48750,
+          "min": 0.0,
+          "mean": 5.1875537388274795,
+          "p50": 3.039210439113852,
+          "p95": 17.308072455621893,
+          "max": 175.1119401502181
+        },
+        "frameMaxChannelUnits": {
+          "count": 150,
+          "min": 0.0,
+          "mean": 11.251534771590034,
+          "p50": 9.63245281766697,
+          "p95": 29.533375778070088,
+          "max": 38.504615062606504
+        },
+        "pairSpanMs": {
+          "count": 150,
+          "min": 75.661,
+          "mean": 100.03368666666667,
+          "p50": 99.743,
+          "p95": 116.034,
+          "max": 124.832
+        }
+      },
+      "captureSteadyMs": {
+        "count": 300,
+        "min": 0.04,
+        "mean": 0.08752333333333333,
+        "p50": 0.0564,
+        "p95": 0.252,
+        "max": 0.3734
+      },
+      "captureModelStageMs": {
+        "count": 1,
+        "min": 46.5934,
+        "mean": 46.5934,
+        "p50": 46.5934,
+        "p95": 46.5934,
+        "max": 46.5934
+      }
+    },
+    {
+      "recording": "1791317824302-camera-0",
+      "sha256": "4924a58eda55fccd5bbcc35345fbed070b4a7f4fdb59119ac38143dc3c23c79f",
+      "frames": 301,
+      "comparisons": 144,
+      "skipped": 6,
+      "visibilityMismatches": 2,
+      "visibilityComparisons": 46944,
+      "errors": {
+        "rootUnits": {
+          "count": 144,
+          "min": 0.0,
+          "mean": 0.8159324965646525,
+          "p50": 0.35008072603955276,
+          "p95": 3.167162769497692,
+          "max": 5.379602831672137
+        },
+        "channelUnits": {
+          "count": 46852,
+          "min": 0.0,
+          "mean": 1.488543754429456,
+          "p50": 0.8344599182614447,
+          "p95": 5.085131882465704,
+          "max": 30.906029769896524
+        },
+        "rotationNlerpDegrees": {
+          "count": 46852,
+          "min": 0.0,
+          "mean": 2.816777297773481,
+          "p50": 0.8748043189239523,
+          "p95": 13.00297059202681,
+          "max": 78.39001381841297
+        },
+        "rotationSlerpDegrees": {
+          "count": 46852,
+          "min": 0.0,
+          "mean": 2.8194790611759966,
+          "p50": 0.8718272423597084,
+          "p95": 12.979197437836905,
+          "max": 78.08739491257774
+        },
+        "frameMaxChannelUnits": {
+          "count": 144,
+          "min": 0.0,
+          "mean": 4.814225631947926,
+          "p50": 3.7812884692542954,
+          "p95": 14.1602402097984,
+          "max": 30.906029769896524
+        },
+        "pairSpanMs": {
+          "count": 144,
+          "min": 70.498,
+          "mean": 99.38238888888888,
+          "p50": 96.097,
+          "p95": 115.376,
+          "max": 119.874
+        }
+      },
+      "captureSteadyMs": {
+        "count": 294,
+        "min": 0.0389,
+        "mean": 0.08496054421768708,
+        "p50": 0.0563,
+        "p95": 0.2558,
+        "max": 0.3113
+      },
+      "captureModelStageMs": {
+        "count": 7,
+        "min": 44.1347,
+        "mean": 48.94191428571428,
+        "p50": 46.9372,
+        "p95": 48.3031,
+        "max": 64.5455
+      }
+    },
+    {
+      "recording": "1791317877512-combat-0",
+      "sha256": "35152ceffb41231812c3a95143e008609e56aa699ea0cdfc1a07c22f8db5e44e",
+      "frames": 301,
+      "comparisons": 146,
+      "skipped": 4,
+      "visibilityMismatches": 0,
+      "visibilityComparisons": 47481,
+      "errors": {
+        "rootUnits": {
+          "count": 146,
+          "min": 0.0,
+          "mean": 1.2183864308776067,
+          "p50": 0.4616107967914041,
+          "p95": 4.6503345672985805,
+          "max": 7.504625830424526
+        },
+        "channelUnits": {
+          "count": 47359,
+          "min": 0.0,
+          "mean": 2.231669016876956,
+          "p50": 1.4351766249603481,
+          "p95": 6.514446491479219,
+          "max": 41.64094256756586
+        },
+        "rotationNlerpDegrees": {
+          "count": 47359,
+          "min": 0.0,
+          "mean": 3.5294664176604824,
+          "p50": 1.694839585749744,
+          "p95": 11.47839160483449,
+          "max": 137.91326159058553
+        },
+        "rotationSlerpDegrees": {
+          "count": 47359,
+          "min": 0.0,
+          "mean": 3.531071151496311,
+          "p50": 1.6859324803073725,
+          "p95": 11.47809405872942,
+          "max": 138.33677125544946
+        },
+        "frameMaxChannelUnits": {
+          "count": 146,
+          "min": 0.0,
+          "mean": 7.715383976575352,
+          "p50": 5.55409109953976,
+          "p95": 21.046385771660507,
+          "max": 41.64094256756586
+        },
+        "pairSpanMs": {
+          "count": 146,
+          "min": 75.258,
+          "mean": 99.919,
+          "p50": 101.734,
+          "p95": 112.346,
+          "max": 122.293
+        }
+      },
+      "captureSteadyMs": {
+        "count": 296,
+        "min": 0.0396,
+        "mean": 0.09231148648648649,
+        "p50": 0.0573,
+        "p95": 0.2777,
+        "max": 0.4698
+      },
+      "captureModelStageMs": {
+        "count": 5,
+        "min": 45.4155,
+        "mean": 47.914519999999996,
+        "p50": 48.3533,
+        "p95": 48.5946,
+        "max": 49.0477
+      }
+    },
+    {
+      "recording": "1791319299286-idle-0",
+      "sha256": "5f6c8424706911912ceb1d24bbb0605b6eb4df574ff901876b26e08654581bbd",
+      "frames": 301,
+      "comparisons": 148,
+      "skipped": 2,
+      "visibilityMismatches": 2,
+      "visibilityComparisons": 48292,
+      "errors": {
+        "rootUnits": {
+          "count": 148,
+          "min": 0.0,
+          "mean": 0.8389531173045132,
+          "p50": 0.040200560879384284,
+          "p95": 3.7441790838219355,
+          "max": 9.454437755338631
+        },
+        "channelUnits": {
+          "count": 48021,
+          "min": 0.0,
+          "mean": 1.8806588810917844,
+          "p50": 0.49956918252238486,
+          "p95": 8.571176351499918,
+          "max": 43.78072282008473
+        },
+        "rotationNlerpDegrees": {
+          "count": 48021,
+          "min": 0.0,
+          "mean": 2.97217048720961,
+          "p50": 0.6092853110781844,
+          "p95": 12.690178664717063,
+          "max": 177.78110174824414
+        },
+        "rotationSlerpDegrees": {
+          "count": 48021,
+          "min": 0.0,
+          "mean": 2.9708137717728946,
+          "p50": 0.6092853110781844,
+          "p95": 12.689976583086194,
+          "max": 177.79318312260597
+        },
+        "frameMaxChannelUnits": {
+          "count": 148,
+          "min": 0.0,
+          "mean": 6.278395659890903,
+          "p50": 3.8875650176201666,
+          "p95": 20.297332204032,
+          "max": 43.78072282008473
+        },
+        "pairSpanMs": {
+          "count": 148,
+          "min": 73.267,
+          "mean": 100.12472297297298,
+          "p50": 101.115,
+          "p95": 111.295,
+          "max": 123.227
+        }
+      },
+      "captureSteadyMs": {
+        "count": 298,
+        "min": 0.0398,
+        "mean": 0.10228322147651006,
+        "p50": 0.0624,
+        "p95": 0.2899,
+        "max": 0.359
+      },
+      "captureModelStageMs": {
+        "count": 3,
+        "min": 42.7079,
+        "mean": 44.6349,
+        "p50": 44.5245,
+        "p95": 44.5245,
+        "max": 46.6723
+      }
+    }
+  ],
+  "syntheticTiming": [
+    {
+      "rate": 10,
+      "delayMs": 100,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 200,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 300,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 100,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 200,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 300,
+      "scenario": "clean",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 100,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 91.96327683615819,
+        "extrapolation": 7.68361581920904,
+        "clamped": 0.3531073446327684,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 200,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 99.64689265536722,
+        "extrapolation": 0.3389830508474576,
+        "clamped": 0.014124293785310734,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 300,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 99.98587570621469,
+        "extrapolation": 0.014124293785310734,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 100,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 99.56214689265536,
+        "extrapolation": 0.4378531073446328,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 200,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 300,
+      "scenario": "jitter20_loss2pct_3fragments",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 100,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 23.757062146892654,
+        "extrapolation": 38.14971751412429,
+        "clamped": 38.09322033898305,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 200,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 61.90677966101695,
+        "extrapolation": 38.09322033898305,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 10,
+      "delayMs": 300,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 100,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 23.79943502824859,
+        "extrapolation": 76.20056497175142,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 200,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    },
+    {
+      "rate": 20,
+      "delayMs": 300,
+      "scenario": "latency_step20_to180ms",
+      "resets": 0,
+      "renderFramePercent": {
+        "interpolation": 100.0,
+        "extrapolation": 0.0,
+        "clamped": 0.0,
+        "waiting": 0.0
+      }
+    }
+  ]
+}

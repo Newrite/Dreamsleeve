@@ -198,3 +198,8 @@ Exchange — единственный клиентский owner demand и token
 сохранить точную идентичность compressed asset, ограничить зависимости базы и
 проверить отмену/смену поколения. Офлайн XOR по блокам raw NIF сам по себе не
 сохраняет hash исходного сжатого объекта при серверной перекомпрессии.
+
+Аудит задержек перед NIF-дельтами07.10.2026: [PhantomOptimizationResearchRu.md](PhantomOptimizationResearchRu.md).
+Разные ENet lanes сейчас не исключают head-of-line blocking в общей bulk FIFO
+одного peer; один Client.Core Worker также последовательно обслуживает assets
+и poses. Это выявленные ограничения текущего кода, а не уже внесённые исправления.
