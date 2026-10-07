@@ -91,6 +91,9 @@ namespace Phantoms
     auto& state = Get();
     if (now < state.nextFailure) return;
     state.nextFailure = now + std::chrono::seconds(5);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Event("failure", std::format("\"code\":{}", static_cast<int>(error.reason)));
+#endif
     logger::warn("Phantom: {} ({})", error.field, static_cast<int>(error.reason));
   }
 
@@ -117,6 +120,8 @@ namespace Phantoms
   export void Clear(std::string_view reason = "game-context-ended")
   {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (Get().source || !Get().visuals.empty())
+      Dreamsleeve::Client::Diagnostics::Trace::Event("clear", std::format("\"reason\":\"{}\"", reason));
     auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
     if (recorder.Active()) logger::info("Phantom recording stopped: {}", reason);
     recorder.Stop(reason);
@@ -131,12 +136,11 @@ namespace Phantoms
   export void StartRecording(std::uint32_t scenario, bool thirtySeconds)
   {
     Dreamsleeve::Game::PhantomReplay::Stop();
-    const auto logs    = SKSE::log::log_directory();
-    auto&      runtime = Runtime::Get();
-    if (!logs || !runtime.app || runtime.context != Runtime::GameContext::Playing) return;
+    auto& runtime = Runtime::Get();
+    if (!runtime.app || runtime.context != Runtime::GameContext::Playing) return;
     if (
       Dreamsleeve::Client::Diagnostics::Phantoms().Start(
-        *logs / "DreamsleevePhantomDiagnostics",
+        runtime.clientPath.parent_path() / "phantom-diagnostics" / "recordings",
         scenario,
         thirtySeconds ? 30 : 15,
         runtime.app->Exchange().Phantoms().Settings().sampleRate))
@@ -151,9 +155,16 @@ namespace Phantoms
 
   export void StartReplay(std::uint32_t scenario)
   {
-    const auto logs = SKSE::log::log_directory();
-    if (!logs || Runtime::Get().context != Runtime::GameContext::Playing || Dreamsleeve::Client::Diagnostics::Phantoms().Active()) return;
-    if (Dreamsleeve::Game::PhantomReplay::Start(*logs / "DreamsleevePhantomDiagnostics", scenario, Get().engine)) ResetResources();
+    if (Runtime::Get().context != Runtime::GameContext::Playing || Dreamsleeve::Client::Diagnostics::Phantoms().Active()) return;
+    const auto directory = Runtime::Get().clientPath.parent_path() / "phantom-diagnostics" / "recordings";
+    const auto logs      = SKSE::log::log_directory();
+    if (
+      Dreamsleeve::Game::PhantomReplay::Start(
+        directory,
+        scenario,
+        Get().engine,
+        logs ? *logs / "DreamsleevePhantomDiagnostics" : std::filesystem::path{}))
+      ResetResources();
   }
 
   void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
@@ -270,6 +281,17 @@ namespace Phantoms
           return false;
         }
         auto asset = std::move(opened->asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Trace::Event(
+          "captured",
+          std::format(
+            "\"generation\":{},\"reason\":\"{}\",\"raw_bytes\":{},\"channels\":{},\"elapsed_ms\":{}",
+            nextGeneration.value,
+            changeReason,
+            asset.Value().nif.size(),
+            asset.Layout().requiredChannels.size(),
+            std::chrono::duration<double, std::milli>(Clock::now() - now).count()));
+#endif
         logger::info(
           "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB native NIF, {:.2f} ms, reason={}",
           nextGeneration.value,
@@ -309,8 +331,16 @@ namespace Phantoms
       state.source.reset();
       return;
     }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto poseStart = Clock::now();
+#endif
     auto pose =
       state.source->Sample(player, firstPerson, {state.generation, P::Sequence{++state.sequence.value}, 1, Micros(now)}, publishing);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::CapturePose,
+      std::chrono::duration<double, std::milli>(Clock::now() - poseStart).count());
+#endif
     if (!pose)
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -375,6 +405,20 @@ namespace Phantoms
 
   export void Tick(Clock::time_point now, Nameplates::Frame& names)
   {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Span tickSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::GameTick);
+    static Clock::time_point                      lastFrame{}, nextTrace{};
+    if (lastFrame != Clock::time_point{})
+      Dreamsleeve::Client::Diagnostics::Trace::Observe(
+        Dreamsleeve::Client::Diagnostics::Trace::Metric::Frame,
+        std::chrono::duration<double, std::milli>(now - lastFrame).count());
+    lastFrame = now;
+    if (now >= nextTrace)
+    {
+      Dreamsleeve::Client::Diagnostics::Trace::FlushMetrics();
+      nextTrace = now + std::chrono::seconds(1);
+    }
+#endif
     auto& runtime = Runtime::Get();
     auto& state   = Get();
     if (!runtime.app || !state.engine.mainThread) return;
@@ -429,6 +473,11 @@ namespace Phantoms
     if (observed == Capture::Context::Observation::Changed)
     {
       logger::info("Phantom coordinate space changed to {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "space",
+        std::format("\"form\":{},\"interior\":{}", space->form->GetFormID(), space->interior));
+#endif
       Clear("space-changed");
       state.context.Observe(Capture::Context::Space{space->form->GetFormID(), space->interior});
     }
@@ -445,11 +494,37 @@ namespace Phantoms
     if (now >= state.nextNetworkReport)
     {
       state.nextNetworkReport = now + std::chrono::seconds(5);
+      const auto stats        = exchange.Stats();
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "exchange",
+        std::format(
+          "\"epoch\":{},\"model_bytes_total\":{},\"pose_bytes_total\":{},\"rejected_total\":{},\"dropped_total\":{},\"cache_hits_total\":{},\"queued\":{},\"sample_rate\":{}",
+          exchange.Epoch(),
+          stats.modelBytes,
+          stats.poseBytes,
+          stats.rejected,
+          stats.dropped,
+          stats.cacheHits,
+          stats.queued,
+          stats.sampleRate));
       for (const auto& remote : display.remotes)
       {
         const auto timing    = remote.playback.Inspect(Micros(now), settings);
         const auto visual    = state.visuals.find(remote.player);
         const auto displayed = visual != state.visuals.end() && visual->second.current ? visual->second.current->generation.value : 0;
+        Dreamsleeve::Client::Diagnostics::Trace::Event(
+          "playback",
+          std::format(
+            "\"player\":{},\"view\":{},\"generation\":{},\"displayed\":{},\"samples\":{},\"sequence\":{},\"age_us\":{},\"ahead_us\":{},\"delay_us\":{}",
+            remote.player,
+            remote.view,
+            remote.descriptor.generation.value,
+            displayed,
+            timing.samples,
+            timing.sequence,
+            timing.ageUs,
+            timing.aheadUs,
+            timing.delayUs));
         logger::info(
           "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f} target_delay_ms={:.1f} speed={:.3f}",
           remote.player,
@@ -596,6 +671,17 @@ namespace Phantoms
               {
                 if (visual.candidate)
                 {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+                  Dreamsleeve::Client::Diagnostics::Trace::Event(
+                    "displayed",
+                    std::format(
+                      "\"player\":{},\"view\":{},\"generation\":{},\"context\":{},\"space\":{}",
+                      remote.player,
+                      remote.view,
+                      remote.descriptor.generation.value,
+                      context.epoch,
+                      context.space.id));
+#endif
                   visual.current = std::move(visual.candidate);
                   exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
                   logger::info(
@@ -655,6 +741,11 @@ namespace Phantoms
     }
     std::erase_if(state.visuals, [&](const auto& entry) {
       if (retained.contains(entry.first)) return false;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "scene_removed",
+        std::format("\"player\":{},\"reason\":\"not-retained\"", entry.first));
+#endif
       exchange.SceneMemory(entry.first, 0);
       return true;
     });

@@ -15,6 +15,14 @@ module PhantomAgent =
     let private uploaded = meter.CreateCounter<int64>("phantom.upload.bytes", "bytes")
     let private downloaded = meter.CreateCounter<int64>("phantom.download.bytes", "bytes")
     let private fanout = meter.CreateCounter<int64>("phantom.pose.fanout")
+    let private lifecycle = meter.CreateCounter<int64>("phantom.lifecycle")
+    let private traceFor receiver kind (player: PlayerId) context generation view reason =
+        if lifecycle.Enabled then
+            let mutable tags = Diagnostics.TagList()
+            tags.Add("receiver", receiver); tags.Add("event", kind); tags.Add("player", uint64 player); tags.Add("context", context)
+            tags.Add("generation", generation); tags.Add("view", view); tags.Add("reason", reason)
+            lifecycle.Add(1L, &tags)
+    let private trace kind player context generation view reason = traceFor 0UL kind player context generation view reason
     type private Credit = { mutable At: int64; mutable Available: double }
     type private View = { Authority: uint64; Distance: double; Facing: double option }
     type private Selected = { Revision: uint64; Asset: PhantomManifest; Authority: uint64; mutable SentSequence: uint64; mutable SentGeneration: AppearanceGeneration option; mutable Displayed: AppearanceGeneration option }
@@ -82,6 +90,7 @@ module PhantomAgent =
     let private cancel state id accepted reason =
         match state.Transfers.TryGetValue id with
         | true, transfer ->
+            trace (if accepted then "transfer_complete" else "transfer_cancel") transfer.Source transfer.Context transfer.Manifest.Generation.Value transfer.View reason
             state.Transfers.Remove id |> ignore
             state.Cleanup.Add(state.Storage.Cancel id)
             let terminal =
@@ -96,6 +105,7 @@ module PhantomAgent =
             emit state transfer.Owner (PhantomResponse.Complete(responseId, accepted, reason, transfer.Request, Some completion))
         | _ -> ()
     let private clearSource state (memberState: Member) =
+        trace "source_clear" memberState.Player memberState.Context (memberState.Ready |> Option.map (fun x -> x.Generation.Value) |> Option.defaultValue 0UL) 0UL ""
         memberState.Ready <- None
         memberState.Previous <- None; memberState.PreviousSequence <- 0UL
         memberState.Settled <- None
@@ -138,6 +148,8 @@ module PhantomAgent =
                     selection.Contains player && observer.Views.ContainsKey player
                     && observer.Views[player].Authority = selected.Authority
                 if not retained then
+                    traceFor (uint64 observer.Player) "view_removed" player observer.Context selected.Asset.Generation.Value selected.Revision
+                        (if not (observer.Views.ContainsKey player) then "aoi-departure" elif observer.Views[player].Authority <> selected.Authority then "authority-changed" else "policy-selection")
                     observer.Selected.Remove player |> ignore
                     match state.Audiences.TryGetValue player with
                     | true, audience ->
@@ -157,6 +169,7 @@ module PhantomAgent =
                             cancel state transfer.Id false "superseded"
                         let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL; SentGeneration = None }
                         observer.Selected[player] <- replacement
+                        traceFor (uint64 observer.Player) "offer" player current.Context replacement.Asset.Generation.Value replacement.Revision "replacement"
                         emit state id (PhantomResponse.Offer(player, replacement.Revision, replacement.Asset))
                     | _ -> ()
             for player in selection do
@@ -172,6 +185,7 @@ module PhantomAgent =
                         audience.Add id |> ignore
                         let count = match subscribers.TryGetValue player with true, count -> count | _ -> 0
                         subscribers[player] <- count + 1
+                        traceFor (uint64 observer.Player) "offer" player current.Context selected.Asset.Generation.Value selected.Revision "subscription"
                         emit state id (PhantomResponse.Offer(player, selected.Revision, selected.Asset))
                     | _ -> ()
 
@@ -234,6 +248,8 @@ module PhantomAgent =
             | true, memberState when memberState.Player = value.Identity.PlayerId ->
                 let characterChanged = memberState.Character <> value.CharacterGeneration
                 let contextChanged = memberState.Context <> value.MovementContext || (memberState.Located && value.Location.IsNone)
+                if characterChanged || contextChanged then
+                    trace "context" memberState.Player value.MovementContext 0UL 0UL (if characterChanged then "character" else "movement")
                 if characterChanged then
                     clearSource state memberState
                     memberState.LastPose <- None
@@ -327,6 +343,7 @@ module PhantomAgent =
                 refresh state
             | PhantomRequest.Withdraw -> clearSource state memberState; refresh state
             | PhantomRequest.Publish(manifest, context, request) ->
+                trace "publish_request" memberState.Player context manifest.Generation.Value 0UL ""
                 let sources = state.Members.Values |> Seq.filter (fun item -> item.Ready.IsSome) |> Seq.length
                 let pendingSources = state.Transfers.Values |> Seq.filter (fun item ->
                     item.Upload && (match source state item.Source with ValueSome current -> current.Ready.IsNone | ValueNone -> false)) |> Seq.length
@@ -359,7 +376,9 @@ module PhantomAgent =
                     refresh state
             | PhantomRequest.Displayed(player, revision, generation) ->
                 match memberState.Selected.TryGetValue player with
-                | true, selected when selected.Revision = revision && selected.Asset.Generation = generation -> selected.Displayed <- Some generation
+                | true, selected when selected.Revision = revision && selected.Asset.Generation = generation ->
+                    traceFor (uint64 memberState.Player) "displayed" player memberState.Context generation.Value revision ""
+                    selected.Displayed <- Some generation
                 | _ -> deny()
             | PhantomRequest.Download(player, generation, request) ->
                 match memberState.Selected.TryGetValue player, source state player with
@@ -466,6 +485,7 @@ module PhantomAgent =
                     // A pose for the pending generation can already be admitted.
                     // Commit must not reopen its sequence floor or discard it.
                     owner.Latest <- owner.Latest |> Option.filter (fun struct (pose, _) -> pose.Generation = transfer.Manifest.Generation)
+                trace "committed" owner.Player owner.Context transfer.Manifest.Generation.Value 0UL ""
                 owner.Ready <- Some transfer.Manifest
                 owner.CommittedAt <- at
                 cancel state transfer.Id true ""

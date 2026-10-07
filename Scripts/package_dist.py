@@ -40,7 +40,7 @@ WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
 # Test, dev and benchmark builds never ship with the server.
 SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
-FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "DreamsleevePhantoms", "DreamsleevePhantomDiagnostics", "captures")
+FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "phantom-diagnostics", "diagnostics", "DreamsleevePhantoms", "DreamsleevePhantomDiagnostics", "captures")
 FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".partial", ".dmp", ".i64", ".idb", ".phdiag")
 # Relative to dist/: user-owned files and folders that a rebuild must not replace.
 PRESERVED = (
@@ -48,11 +48,13 @@ PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/ui.toml",
     "Client/SKSE/Plugins/Dreamsleeve/aliases.toml",
     "Client/SKSE/Plugins/Dreamsleeve/phantom-cache",
+    "Client/SKSE/Plugins/Dreamsleeve/phantom-diagnostics",
     "Server/server.toml",
     "Server/moderation.toml",
     "Server/pseudonyms.toml",
     "Server/data",
     "Server/logs",
+    "Server/diagnostics",
     "Server/phantoms",
 )
 

@@ -122,7 +122,9 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     "maxPendingMovementSamples",
     &T::maxPendingMovementSamples,
     "phantomCacheDirectory",
-    &T::phantomCacheDirectory);
+    &T::phantomCacheDirectory,
+    "phantomDiagnostics",
+    &T::phantomDiagnostics);
 };
 
 namespace Dreamsleeve::Client

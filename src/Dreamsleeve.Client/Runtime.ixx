@@ -13,6 +13,7 @@ export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Bubbles;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+export import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 export import Dreamsleeve.Game.PhantomReplay;
 #endif
 
@@ -288,6 +289,14 @@ export namespace Runtime
       settings->client.phantomCacheDirectory.assign(utf8.begin(), utf8.end());
     }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (settings->client.phantomDiagnostics &&
+        !Dream::Diagnostics::Trace::Start(state.clientPath.parent_path() / "phantom-diagnostics"))
+      logger::warn("Cannot start phantom diagnostics in Data; gameplay continues");
+#else
+    if (settings->client.phantomDiagnostics) logger::warn("phantomDiagnostics requires a diagnostics build");
+#endif
+
     // Before the network starts: the first connection goes by the remembered route.
     if (auto ui = Host::LoadUiFile(state.uiPath))
       state.ui = *ui;
@@ -307,6 +316,9 @@ export namespace Runtime
     if (!app)
     {
       logger::error("Cannot create client application: {}", app.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dream::Diagnostics::Trace::Stop();
+#endif
       return false;
     }
     state.session.ConfigureRoutes(
@@ -348,6 +360,10 @@ export namespace Runtime
     if (state.session.PlayerNames().TakeDirty())
       if (auto saved = SaveUi(); !saved) logger::warn("{}", saved.error());
     if (state.app) state.app->Stop();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dream::Diagnostics::Trace::FlushMetrics();
+    Dream::Diagnostics::Trace::Stop();
+#endif
     logger::info("Client application stopped");
   }
 

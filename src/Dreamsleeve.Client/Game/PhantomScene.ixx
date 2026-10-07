@@ -2,6 +2,9 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.PhantomScene;
 import std;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+#endif
 import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Game.PhantomNative;
 import Dreamsleeve.Game.PhantomMath;
@@ -135,6 +138,10 @@ public:
         auto loaded = engine.load(asset);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
         const auto loadEnd = std::chrono::steady_clock::now();
+        Dreamsleeve::Client::Diagnostics::Trace::Observe(
+          Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeLoad,
+          std::chrono::duration<double, std::milli>(loadEnd - loadStart).count());
+        Dreamsleeve::Client::Diagnostics::Trace::Span prepareSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ScenePrepare);
 #endif
         if (!loaded) return std::unexpected(loaded.error());
         root = std::move(*loaded);
@@ -199,6 +206,9 @@ public:
 
     P::Result<void> Apply(const P::Snapshot& pose, Context c, FrameBudget& frame)
     {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Trace::Span applySpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ApplyPose);
+#endif
       auto checked = Check(c);
       if (!checked) return checked;
       if (phase == Phase::Waiting) return A::Fail(P::Failure::Busy, "scene.loading");

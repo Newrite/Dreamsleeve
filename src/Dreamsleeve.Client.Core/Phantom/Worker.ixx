@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.Phantom.Exchange;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
 
 export namespace Dreamsleeve::Client::Phantom
@@ -159,12 +160,20 @@ export namespace Dreamsleeve::Client::Phantom
         exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверная контрольная сумма");
         return;
       }
-      auto decoded = ReadAsset(*bytes, job.offer.asset.rawBytes);
+      auto decoded = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::AssetDecode);
+#endif
+        return ReadAsset(*bytes, job.offer.asset.rawBytes);
+      }();
       if (!decoded || decoded->Layout().requiredChannels.size() != job.offer.asset.channels)
       {
         exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверный формат");
         return;
       }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Diagnostics::Trace::Asset(Hex(job.offer.asset.hash), *bytes);
+#endif
       exchange.Loaded(job.epoch, job.offer, std::make_shared<const ValidatedAsset>(std::move(*decoded)), !job.bytes);
       if (job.bytes) Save(job.offer.asset, *bytes, exchange.Settings().diskBytes);
     }
@@ -206,7 +215,12 @@ export namespace Dreamsleeve::Client::Phantom
 #ifdef DREAMSLEEVE_DIAGNOSTICS
             const auto encodingStart = std::chrono::steady_clock::now();
 #endif
-            auto encoded = WriteSnapshot(snapshot, work.asset->asset);
+            auto encoded = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+              Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseEncode);
+#endif
+              return WriteSnapshot(snapshot, work.asset->asset);
+            }();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
             if (encoded)
               Diagnostics::Phantoms().Encoded(
@@ -248,7 +262,12 @@ export namespace Dreamsleeve::Client::Phantom
           if (job.epoch != exchange.Epoch()) continue;
           try
           {
-            auto pose = ReadSnapshot(job.pose.sample.payload, *job.asset);
+            auto pose = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+              Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseDecode);
+#endif
+              return ReadSnapshot(job.pose.sample.payload, *job.asset);
+            }();
             if (
               pose && pose->generation == job.pose.sample.generation && pose->context == job.pose.sample.context &&
               pose->sequence == job.pose.sample.sequence && pose->sampledAtUs == job.pose.sample.sampledAtUs)
@@ -301,7 +320,15 @@ export namespace Dreamsleeve::Client::Phantom
         {
           try
           {
-            auto result = prepare(std::move(capture->asset));
+            auto result = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+              Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ModelPrepare);
+#endif
+              return prepare(std::move(capture->asset));
+            }();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+            if (result) Diagnostics::Trace::Asset(Hex(result->hash), *result->compressed);
+#endif
             if (result)
               exchange.Prepared(
                 capture->epoch,

@@ -41,6 +41,7 @@
     <Compile Include="PhantomE2ETests.fs" />
     <Compile Include="TransportOwnerTests.fs" />
     <Compile Include="ConfigurationTests.fs" />
+    <Compile Include="ContinuousDiagnosticsTests.fs" />
     <Compile Include="AnnouncementTests.fs" />
     <Compile Include="GroundMarkTests.fs" />
     <Compile Include="GuildTests.fs" />

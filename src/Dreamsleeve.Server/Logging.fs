@@ -10,12 +10,15 @@ type LoggingSettings = {
     Console: bool
     FilePath: string
     FileSizeLimitBytes: int64
+    DiagnosticsEnabled: bool
+    DiagnosticsFilePath: string
     RetainedFileCount: int
 }
 
 [<RequireQualifiedAccess>]
 module ServerLogging =
     let defaults = {
+        DiagnosticsEnabled = false; DiagnosticsFilePath = "diagnostics/server.jsonl"
         MinimumLevel = "Information"; Console = true; FilePath = "logs/server-.json"
         FileSizeLimitBytes = 10485760L; RetainedFileCount = 14
     }
@@ -28,6 +31,8 @@ module ServerLogging =
             Error "Log file size must be at least 1024 bytes and retained count positive."
         | true, _ when isNull config.FilePath || (not config.Console && String.IsNullOrWhiteSpace config.FilePath) ->
             Error "At least one logging sink must be enabled."
+        | true, _ when config.DiagnosticsEnabled && String.IsNullOrWhiteSpace config.DiagnosticsFilePath ->
+            Error "Logging.DiagnosticsFilePath is required when diagnostics are enabled."
         | true, _ -> Ok ()
 
     let create config =
@@ -41,3 +46,11 @@ module ServerLogging =
                 rollingInterval = RollingInterval.Day, fileSizeLimitBytes = Nullable config.FileSizeLimitBytes,
                 rollOnFileSizeLimit = true, retainedFileCountLimit = Nullable config.RetainedFileCount) |> ignore
         logger.CreateLogger()
+
+    let diagnostics config (log: ILogger) : IDisposable =
+        if not config.DiagnosticsEnabled then { new IDisposable with member _.Dispose() = () }
+        else
+            let file = new Dreamsleeve.Server.Infrastructure.DiagnosticFile(config.DiagnosticsFilePath, config.FileSizeLimitBytes)
+            new Dreamsleeve.Server.Infrastructure.ContinuousDiagnostics(
+                Action<string>(file.Write), Action(file.Dispose),
+                Action<Exception>(fun error -> log.Warning(error, "Continuous diagnostics write failed"))) :> IDisposable

@@ -84,6 +84,8 @@ deathMarkScale = 0.5
 maxPendingMovementSamples = 16384
 # Compressed content-addressed phantom cache; filesystem work stays off the game/network threads.
 phantomCacheDirectory = "phantom-cache"
+# Continuous network/stage trace; diagnostics build required. Full sessions beside client.toml; no auto-delete.
+phantomDiagnostics = false
 
 # ENet host of the client.
 [client.network]

@@ -78,7 +78,7 @@ try {
     if (-not $server.WaitForExit(25000)) { throw 'Server did not finish graceful smoke shutdown.' }
     if ($server.ExitCode -ne 0) { throw "Server fixture failed with exit code $($server.ExitCode)." }
     [IO.File]::WriteAllText((Join-Path $artifactPath 'result.json'), (@{
-        status = 'passed'; protocolVersion = 22; nativeBinary = $nativePath; utc = [DateTime]::UtcNow.ToString('O');
+        status = 'passed'; protocolVersion = $ready.protocolVersion; nativeBinary = $nativePath; utc = [DateTime]::UtcNow.ToString('O');
         test = 'Phantom production Streaming real UDP smoke'; artifacts = $artifactPath
     } | ConvertTo-Json))
     Write-Output "Cross-language smoke passed; artifacts: $artifactPath"

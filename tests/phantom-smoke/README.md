@@ -54,3 +54,5 @@ warm generation replacement. User assets remain local and are not part of the re
 
 No protocol/schema changes are involved in the bounded 512 KiB sender flight
 window. Native bandwidth limits, when explicitly configured, retain ENet's window.
+
+Set `DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS=1` before run.ps1 to record production server meters and phantom lifecycle under the artifact directory. The collector is the same as the production Logging.DiagnosticsEnabled path; every session part is retained.

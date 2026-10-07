@@ -2,6 +2,9 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.PhantomNative;
 import std;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+#endif
 import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Game.PhantomMath;
 import Dreamsleeve.Game.PhantomCaptureRules;
@@ -441,8 +444,11 @@ export namespace Dreamsleeve::Game::PhantomNative
     const auto ms      = [](auto from, auto to) {
       return std::chrono::duration<double, std::milli>(to - from).count();
     };
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Topology, ms(start, cloneStart));
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Clone, ms(cloneStart, cloneEnd));
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Normalize, ms(cloneEnd, saveStart));
     logger::info(
-      "[Phantom stages] topology_ms={:.3f} clone_ms={:.3f} normalize_ghost_ms={:.3f} nistream_save_ms={:.3f}",
+      "[Phantom stages] topology_ms={:.3f} clone_ms={:.3f} normalize_ghost_ms={:.3f} native_export_ms={:.3f}",
       ms(start, cloneStart),
       ms(cloneStart, cloneEnd),
       ms(cloneEnd, saveStart),

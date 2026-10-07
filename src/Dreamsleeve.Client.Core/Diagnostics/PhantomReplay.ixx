@@ -27,7 +27,7 @@ public:
 
     ReplayReader();
     ~ReplayReader();
-    bool                       Start(std::filesystem::path root, std::uint32_t scenario);
+    bool                       Start(std::filesystem::path root, std::uint32_t scenario, std::filesystem::path fallback = {});
     void                       Stop();
     void                       Shutdown();
     ReplayLoadStatus           Read() const;

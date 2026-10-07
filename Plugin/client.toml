@@ -87,6 +87,8 @@ maxPendingMovementSamples = 16384
 # ENet host of the client.
 # Client-local immutable phantom models; relative to SKSE/Plugins/Dreamsleeve.
 phantomCacheDirectory = "phantom-cache"
+# Diagnostic build: complete sessions beside this config, no automatic deletion.
+phantomDiagnostics = false
 
 [client.network]
 # Must be 1: one connection to one server.

@@ -1,3 +1,77 @@
+## Постоянная диагностика клиента и сервера — 07.10.2026
+
+В диагностической DLL включить `[client] phantomDiagnostics = true`.
+Автозапись начинается с запуска приложения и продолжается через смену CELL/WRLD,
+переподключения и смену поколения; ручной запуск записи не нужен, публикация
+не приостанавливается. Файлы: рядом с `client.toml`, в
+`Data/SKSE/Plugins/Dreamsleeve/phantom-diagnostics/<время>-<pid>/trace-000000.jsonl`.
+При MO2 новые файлы обычно окажутся в Output_SKSE/Overwrite, как phantom-cache.
+Обычная DLL принимает настройку, но сообщает, что для записи нужна диагностическая сборка.
+
+На сервере: `[Logging] DiagnosticsEnabled = true`,
+`DiagnosticsFilePath = "diagnostics/server.jsonl"`. Это имя основы для отдельного
+каталога каждого запуска: `S:/Dreamsleeve/diagnostics/server-<время>-<id>/trace-000000.jsonl`.
+Флаг независим от MinimumLevel. Транспорт, actor и игровые callbacks не пишут эти
+файлы: клиент использует отдельный logger worker, сервер — один background collector.
+Состояние публикации/готовности остаётся у существующих владельцев; сборщик лишь наблюдает.
+
+**Сессии не обрезаются по длительности или суммарному размеру.** Клиент делит
+файлы по 64 МиБ, сервер — по `Logging.FileSizeLimitBytes`; это размер части,
+а не квота записи. Старые части и завершённые сессии автоматически не удаляются.
+`RetainedFileCount` относится только к обычному журналу сервера. Номер части
+монотонный; новая сессия получает новый каталог. Поэтому начало с моделью не
+исчезнет от того, что игра длилась дольше ожидаемого. Удалять разобранные сессии
+пока нужно вручную. Все новые каталоги исключены из Git/dist.
+
+Клиент пишет полные логические пакеты каналов моделей/поз (hex-срезы по16КиБ,
+поля id/offset/size/direction), принятые **после** сборки ENet или успешно
+переданные в ENet. Это не UDP-pcap: ретрансляции/UDP overhead здесь не видны,
+неуспешная отправка не считается отправленной. Auth, chat и control payload
+исключены. Каждую секунду — count/sum/max и гистограммы frame interval,
+Phantoms::Tick, topology, clone, normalize, validation, pose capture/apply,
+NiStream audit/Save/copy/dispose, Load/scene preparation и worker codecs.
+Записываются process CPU/memory/page faults, состояние очереди записи и её потери;
+каждые5 секунд — epoch, очередь обмена, cache hits/bytes/drops, view/generation,
+показанное поколение и состояние буфера воспроизведения. Смена пространства,
+сброс, capture reason, показ и удаление сцены имеют отдельные события.
+Frame interval здесь измерен между вызовами Phantoms::Tick, а не через GPU/Present.
+`model_prepare` включает production упаковку/сжатие/хеширование; не является
+изолированным таймером zstd. Старый `nistream_save_ms` переименован в
+`native_export_ms`: прежде он включал аудит, создание/удаление NiStream и копию.
+
+Сервер сохраняет существующие Dreamsleeve Meter: tick/queue/poll durations,
+RTT, inflight/fragmentation/bytes/fanout/rejections, process CPU/private/working
+memory, allocation totals, GC collections/pause totals. Метрики по instruments
+агрегируются без tags; lifecycle отдельно содержит source/receiver/context/
+generation/view/reason. Записываются publish request, commit, offer/replacement,
+view departure, displayed, transfer completion/cancel и context changes.
+`policy-selection` само по себе не доказывает camera culling: это общий исход
+действующей политики выбора. `aoi-departure` и `authority-changed` различаются.
+
+Ограничения **памяти очереди**, а не длины записи: клиент256 сообщений по максимум
+примерно34КиБ, сервер2048 lifecycle событий и256 instruments. Если диск не успевает,
+клиент фиксирует `overrun_total`/`write_errors_total`, сервер —
+`events_dropped_total`/`write_errors_total`; сервер сообщает ошибку обычному logger.
+Такой дамп неполон. Остановка клиента и сервера ждёт диагностический writer не более2 секунд;
+при зависшем IO фоновый поток сохраняет владение файлом до завершения операции. Процесс, завершённый аварийно,
+может оставить незавершённый последний JSON record; анализатор считает его malformed.
+Это не гарантия записи при заполненном/отключённом диске и не основание объявлять
+сессию без ошибок по отсутствующим данным.
+
+Для сводки передать **все части одного клиента или сервера**:
+
+```powershell
+python Scripts/analyze_phantom_trace.py <каталог сессии или полные пути trace-*.jsonl>
+# --packets-dir <новый каталог> извлекает только полностью записанные пакеты
+```
+
+Пакетный дамп сохраняет уже квантованные данные. Для проверки ошибки квантования
+по исходным float остаётся ручной `.phdiag` recorder. Для каждого использованного сжатого asset model worker сохраняет отдельный
+`models/<hash>.zst` в каталоге сессии, включая загрузку из прогретого кеша. Эти
+файлы не удаляются политикой phantom-cache; `asset_dump` измеряет затраты отдельно.
+Полный сетевой дамп содержит тот же asset дополнительно в chunk packets, если
+модель передавалась по сети. При ошибке записи model copy растёт write_errors_total.
+
 Вечерний двухклиентский тест07.10.2026: [доставка NIF и положение ника](benchmarks/phantom-delivery-labels-2026-10-07.md).
 Окно ENet и привязка подписи исправлены; новые игровые проверки ещё открыты.
 
@@ -77,8 +151,7 @@ production-пути и в локальной записи обычно равн�
 Обычная ходьба между наружными CELL одного WRLD продолжает запись; временное
 отсутствие готового cell/3D пропускает кадр, сохраняя источник и запись.
 
-Архив находится рядом с логом SKSE:
-`DreamsleevePhantomDiagnostics/<время>-<сценарий>-<номер>/capture.phdiag`.
+Новые ручные архивы находятся в `Data/SKSE/Plugins/Dreamsleeve/phantom-diagnostics/recordings/<время>-<сценарий>-<номер>/capture.phdiag`. Старый каталог `Documents/.../SKSE/DreamsleevePhantomDiagnostics` используется только как резервный источник чтения старых записей; существующие файлы не изменяются.
 `summary.json` содержит частоту, счётчики, причину завершения, p50/p95 затрат
 capture и production encoder. Сам диагностический worker дополнительно
 кодирует локальные кадры; это имеет цену CPU/IO, поэтому его показатели не
@@ -707,3 +780,16 @@ backup `build/phantom-replay-install-backup-20261007-000455`.
 разрывами и количеством snapshots. Это чтение истории Exchange; отдельного
 диагностического clock/renderer нет. Старые captureMs архивов остаются суммарной
 ценой CapturePlayer и не переименовываются в NiStream или GPU time.
+
+
+Проверки постоянной диагностики07.10.2026: server629/629; diagnostic client409/409,
+включая чтение существующей `1791317877512-combat-0/capture.phdiag` (301 поза,
+5 моделей). Проверены разбиение без удаления старых частей, исключение control
+payloads, полные packet slices, отдельная копия asset, legacy-path replay,
+реальный отказ файловой записи и bounded shutdown серверного writer. Серверный
+UDP smoke с включённым сборщиком записал38 instruments,34 lifecycle события,
+без потерь очереди/ошибок IO/malformed JSON; fragmentation, loss, warm-cache
+reentry и мост поколений проходят. Артефакты локально:
+`build/native-nif/continuous-diagnostics-20261007/`.
+Игровой замер новых раздельных NiStream стадий и влияния полной записи на FPS
+пока не выполнен. Анализ старого visual-test не заменяет этот замер.

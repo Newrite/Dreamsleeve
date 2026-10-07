@@ -570,3 +570,40 @@ Diagnostic build пишет `[Phantom stages]`: topology, clone, normalize/ghost
 NiStream Save; отдельно ValidateAsset и bind/probe/initial pose; при восстановлении
 NiStream Load и scene preparation. Время включает работу именованного блока
 на CPU и возможные ожидания внутри него, не является измерением GPU.
+
+
+## Повторный аудит стоимости NiStream, SE 1.5.97 — 07.10.2026
+
+IDA input `E:/Reverse/SkyrimSE.exe`, IDB `E:/Reverse/SkyrimSE.exe.i64`,
+imagebase `0x140000000`, MD5 `cc3a69467b61093053bb766dd503b229`.
+Проверены health, minimal survey, decompile и инструкции. Таблица offsets SE:
+первая колонка — десятичный Address Library ID, вторая — hex RVA (не VA).
+Новые наблюдения ниже относятся только к этому образу; AE/VR в этой итерации
+не переаудировались, новый runtime hook не установлен.
+
+| Операция | SE ID / RVA | Проверенное поведение |
+|---|---|---|
+| SaveBuffer | 68979 / C59F10 | RCX=NiStream*, RDX=char**, R8=uint32*. Стековый NiMemStream; вызывает vslot04, передаёт владение output через releaseBuffer. |
+| Save(NiBinaryStream*) | 68981 / C59FE0 | this RCX, output RDX; сохраняет output по+2A0, вызывает vslot10, очищает+2A0. |
+| SaveStream | 69021 / C5C040 | bool(AL), this RCX. vslot11 RegisterObjects, заголовок/таблицы, каждый object->vslot1B SaveBinary(object RCX, NiStream RDX), таблица размеров и top objects, освобождение registry/map. |
+| NiMemStream empty ctor | 101030 / 13120B0 | Начальный capacity1024; pointer+20, uint32 position+28/size+2C/capacity+30, флаг+34. |
+| NiMemStream write | 101038 / 1312280 | RCX=stream, RDX=bytes, R8D=count; uint32 result EAX. При недостатке capacity выделяет max(2*capacity,position+count), копирует прежние size bytes, освобождает прежний буфер, затем копирует вход. Подтверждено disasm, включая ширины полей. |
+
+SaveStream действительно повторяет RegisterObjects после нашего отдельного
+AuditPhantom. Поэтому старые35–50мс `nistream_save_ms` из двухклиентского теста
+нельзя целиком называть временем native Save: туда входили оба прохода,
+проверка загрузчиков, служебные операции, копия результата и уничтожение stream.
+Новые таймеры разделяют эти стадии. Рост NiMemStream доказывает наличие копий,
+но не их долю в задержке на конкретной модели. Резервирование output и повторное
+использование регистрации — кандидаты, пока не внедрённые оптимизации; потребуют
+проверки корректного SaveStream/ABI по всем поддержанным runtime и игровых измерений.
+
+Повторно проверен Update3DModel_Impl SE38404/RVA650DF0. Очередная ветвь
+IsTaskPoolRequired только ставит задачу; в завершённой ветви Clear3DFlags
+вызывается поRVA6511F0 (RCX=AIProcess) **после** FaceGen/экипировки, обновления
+NiAVObject и shadow scene. Существующий hook уже отмечает ревизию там, а capture
+позже выполняется после Main::Update. Функция обновляет нативное дерево,
+не выдаёт готовый переносимый NIF. Клонирование прямо внутри callback не уберёт
+стоимость сериализации и удлинит этот callback. Доказательства безопасности
+переноса NiStream/нативных объектов на произвольный worker не получено; detached
+bytes, сжатие и файловые операции остаются у существующих workers.

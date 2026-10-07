@@ -57,12 +57,12 @@ export namespace Dreamsleeve::Game::PhantomReplay
     s.status.stage  = reason;
   }
 
-  bool Start(std::filesystem::path root, std::uint32_t scenario, S::Engine engine)
+  bool Start(std::filesystem::path root, std::uint32_t scenario, S::Engine engine, std::filesystem::path fallback = {})
   {
     auto& s = Get();
     if (s.reader.Read().busy) return false;
     Stop();
-    if (!s.reader.Start(std::move(root), scenario)) return false;
+    if (!s.reader.Start(std::move(root), scenario, std::move(fallback))) return false;
     s.engine        = engine;
     s.status        = {};
     s.status.active = s.status.loading = true;

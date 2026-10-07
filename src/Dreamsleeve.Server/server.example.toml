@@ -325,6 +325,9 @@ MaxTrackedLogins = 1024
 
 # Serilog output. Logs never contain passwords, codes, tokens or chat text.
 [Logging]
+# Continuous tick/transport/GC/resource samples and phantom lifecycle; segmented sessions (no automatic deletion).
+DiagnosticsEnabled = false
+DiagnosticsFilePath = "diagnostics/server.jsonl"
 # Verbose | Debug | Information | Warning | Error | Fatal (case-insensitive).
 MinimumLevel = "Information"
 # Human-readable lines on the console (stdout; journald under systemd).

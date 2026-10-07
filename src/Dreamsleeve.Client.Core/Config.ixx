@@ -75,6 +75,7 @@ export namespace Dreamsleeve::Client
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{16384};
     std::string      phantomCacheDirectory{"phantom-cache"};
+    bool             phantomDiagnostics{false};
 
     // The first invalid setting of the client itself, named as in client.toml;
     // the ENet bounds of network and the timeouts are DreamNetClient::ValidateConfig's.

@@ -197,6 +197,9 @@ namespace Hooks
 
   std::expected<void, std::string> AuditPhantom(RE::NiNode* root)
   {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Span auditSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeAudit);
+#endif
     // SaveStream clears objects after saving. Audit a separate registration
     // pass, including skins/properties/data, using the same streamable RTTI
     // (virtual slot 20) that the engine writes into its type catalog.
@@ -258,13 +261,33 @@ namespace Hooks
     std::uint32_t length = 0;
     // All three verified runtimes use a uint32 length reference, not CommonLib's
     // uint64 declaration. NiMemStream::releaseBuffer transfers RE::malloc storage.
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto nativeStart = std::chrono::steady_clock::now();
+#endif
     const bool saved = REL::Relocation<bool(RE::NiStream*, char*&, std::uint32_t&)>{Address::StreamSave}(stream.get(), output, length);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeSave,
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
+#endif
     std::unique_ptr<char, decltype(&RE::free)> buffer{output, &RE::free};
     if (!saved || !output || !length)
       return std::unexpected(
         P::Error{P::Failure::InvalidFormat, std::format("NiStream Save: {} {}", stream->lastError, stream->lastErrorMessage)});
     if (length > P::Limits{}.assetBytes) return std::unexpected(P::Error{P::Failure::LimitExceeded, "native.raw-bytes"});
-    return std::vector<std::uint8_t>{output, output + length};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto copyStart = std::chrono::steady_clock::now();
+#endif
+    std::vector<std::uint8_t> result{output, output + length};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeCopy,
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - copyStart).count());
+    Dreamsleeve::Client::Diagnostics::Trace::Span disposeSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeDispose);
+#endif
+    buffer.reset();
+    stream.reset();
+    return result;
   }
 
   P::Result<RE::NiPointer<RE::NiNode>> LoadPhantom(const P::ValidatedAsset& asset)

@@ -16,3 +16,6 @@ phantoms/
 phantom-cache/
 DreamsleevePhantoms/
 DreamsleevePhantomDiagnostics/
+
+phantom-diagnostics/
+/diagnostics/

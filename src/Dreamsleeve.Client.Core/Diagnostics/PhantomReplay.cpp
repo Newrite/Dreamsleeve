@@ -89,7 +89,7 @@ namespace Dreamsleeve::Client::Diagnostics
           if (!input) throw std::runtime_error("archive.seek");
         }
       }
-      throw std::runtime_error("Нет завершённой записи с позами для выбранного сценария");
+      return {};
     }
 
   }
@@ -100,7 +100,7 @@ namespace Dreamsleeve::Client::Diagnostics
     std::condition_variable wake;
     ReplayLoadStatus        status;
     std::deque<ReplayFrame> queue;
-    std::filesystem::path   root;
+    std::filesystem::path   root, fallback;
     std::uint32_t           scenario{};
     bool                    requested{}, cancelled{}, shutdown{};
     std::jthread            thread;
@@ -115,7 +115,9 @@ namespace Dreamsleeve::Client::Diagnostics
 
     void Load()
     {
-      const auto file = SelectArchive(root, scenario);
+      auto file = SelectArchive(root, scenario);
+      if (file.empty() && !fallback.empty()) file = SelectArchive(fallback, scenario);
+      if (file.empty()) throw std::runtime_error("Нет завершённой записи с позами для выбранного сценария");
       {
         std::lock_guard lock(mutex);
         status.directory = file.parent_path().string();
@@ -213,7 +215,7 @@ namespace Dreamsleeve::Client::Diagnostics
     Shutdown();
   }
 
-  bool ReplayReader::Start(std::filesystem::path root, std::uint32_t scenario)
+  bool ReplayReader::Start(std::filesystem::path root, std::uint32_t scenario, std::filesystem::path fallback)
   {
     std::lock_guard lock(state_->mutex);
     if (state_->shutdown || state_->status.busy || root.empty() || scenario >= Scenarios.size()) return false;
@@ -221,6 +223,7 @@ namespace Dreamsleeve::Client::Diagnostics
     state_->status      = {};
     state_->status.busy = true;
     state_->root        = std::move(root);
+    state_->fallback    = std::move(fallback);
     state_->scenario    = scenario;
     state_->cancelled   = false;
     state_->requested   = true;

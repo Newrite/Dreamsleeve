@@ -411,6 +411,7 @@ let private configurationView (settings: ApplicationConfig) (pseudonyms: Dreamsl
 
 let private run (settings: ApplicationConfig, game: GameSettings) = task {
     use log = ServerLogging.create settings.Logging
+    use diagnostics = ServerLogging.diagnostics settings.Logging log
     use factory = new SerilogLoggerFactory(log, dispose = false)
     let logger = factory.CreateLogger("Dreamsleeve.Server")
     logger.LogInformation("Dreamsleeve.Server {Version}, protocol {Protocol}", version, ProtocolCodec.Version)

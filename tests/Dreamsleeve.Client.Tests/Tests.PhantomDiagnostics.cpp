@@ -3,6 +3,7 @@
 import std;
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import Dreamsleeve.Client.Diagnostics.PhantomReplay;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 import Dreamsleeve.Client.Phantom.Wire;
 
 #include "PhantomFixture.hpp"
@@ -408,7 +409,7 @@ TEST_CASE("Diagnostic replay decodes archived wire bytes and can cancel a full r
   recorder.Stop();
   REQUIRE(Finished(recorder).samples == 32);
   D::ReplayReader reader;
-  REQUIRE(reader.Start(f.root, 0));
+  REQUIRE(reader.Start(f.root / "new-empty-location", 0, f.root));
   auto frames = Replay(reader);
   REQUIRE(reader.Read().error.empty());
   CHECK(reader.Read().complete);
@@ -532,5 +533,65 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
   CHECK(frames > 0);
   CHECK(frames == reader.Read().frames);
   MESSAGE("Real archive decoded frames: ", frames, ", models: ", reader.Read().models);
+}
+
+TEST_CASE("continuous trace retains packet slices and excludes control payloads")
+{
+  namespace T = Dreamsleeve::Client::Diagnostics::Trace;
+  const auto path =
+    std::filesystem::path("build/phantom-trace-tests") / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+  REQUIRE(T::Start(path, 1024));
+  const std::vector<std::uint8_t> bytes(33000, 0xab);
+  T::Asset(std::string(64, 'a'), bytes);
+  T::Packet(true, 3, bytes);
+  T::Packet(false, 4, std::span(bytes).first(3));
+  T::Packet(false, 0, bytes);
+  T::Observe(T::Metric::CapturePose, 2.5);
+  T::FlushMetrics();
+  T::Stop();
+  CHECK_FALSE(T::Enabled());
+  std::string                        content;
+  std::vector<std::filesystem::path> parts;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(path))
+    if (entry.is_regular_file() && entry.path().extension() == ".jsonl") parts.push_back(entry.path());
+  REQUIRE_FALSE(parts.empty());
+  auto session = parts.front().parent_path();
+  CHECK(std::filesystem::file_size(session / "models" / (std::string(64, 'a') + ".zst")) == bytes.size());
+  std::ranges::sort(parts);
+  CHECK(parts.size() >= 3);
+  for (const auto& part : parts)
+  {
+    std::ifstream input(part);
+    content.append(std::istreambuf_iterator<char>(input), {});
+  }
+  std::istringstream file(content);
+  std::string        line;
+  int                packets = 0, metrics = 0;
+  while (std::getline(file, line))
+  {
+    if (line.find("\"event\":\"packet\"") == std::string::npos)
+    {
+      if (line.find("\"name\":\"capture_pose\"") != std::string::npos)
+      {
+        CHECK(line.find("\"count\":1") != std::string::npos);
+        ++metrics;
+      }
+      continue;
+    }
+    ++packets;
+    CHECK(line.find("\"lane\":0") == std::string::npos);
+    const auto start = line.find("\"hex\":\"") + 7;
+    const auto end   = line.find('"', start);
+    REQUIRE(end != std::string::npos);
+    auto size = end - start;
+    CHECK(size <= 32768);
+    for (std::size_t i = 0; i < size; i += 2)
+      CHECK(line.substr(start + i, 2) == "ab");
+  }
+  CHECK(packets == 4);
+  CHECK(metrics == 1);
+  REQUIRE(T::Start(path));
+  T::Stop();
+  std::filesystem::remove_all(path);
 }
 #endif

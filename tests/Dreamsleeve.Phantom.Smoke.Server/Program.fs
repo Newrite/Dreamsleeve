@@ -29,6 +29,11 @@ let private run (arguments: string array) = task {
     let readyFile = Path.GetFullPath(value "--ready-file")
     if port = 0us then invalidArg "--port" "Select a free nonzero loopback port."
     Directory.CreateDirectory directory |> ignore
+    use diagnostics =
+        if Environment.GetEnvironmentVariable("DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS") = "1" then
+            let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1024L * 1024L)
+            new ContinuousDiagnostics(Action<string>(file.Write), Action(file.Dispose)) :> IDisposable
+        else { new IDisposable with member _.Dispose() = () }
     if ProtocolCodec.Version <> 24u then failwith "Smoke fixture requires protocol24."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
                                                    DiskBytes = 128L * 1024L * 1024L; RamBytes = 4L * 1024L * 1024L;

@@ -2,6 +2,9 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.PhantomCapture;
 import std;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+#endif
 import Dreamsleeve.Client.Phantom.Types;
 import Dreamsleeve.Game.PhantomNative;
 import Dreamsleeve.Game.PhantomMath;
@@ -272,7 +275,12 @@ public:
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       const auto parseStart = std::chrono::steady_clock::now();
 #endif
-      auto asset = P::ValidatedAsset::Parse(std::move(prepared.asset), limits);
+      auto asset = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ValidateAsset);
+#endif
+        return P::ValidatedAsset::Parse(std::move(prepared.asset), limits);
+      }();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       const auto parseEnd = std::chrono::steady_clock::now();
 #endif

@@ -8,6 +8,7 @@ import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Phantom.Streaming;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
 
 export namespace Dreamsleeve::Client
@@ -193,6 +194,7 @@ public:
         auto sent = transport->Send(std::move(*packet), outgoing.lane);
         if (!sent) return Fail(sent.error());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
+        Diagnostics::Trace::Packet(true, outgoing.lane, outgoing.bytes);
         if (outgoing.lane == Phantom::Wire::PosesLane) Diagnostics::Phantoms().Sent(outgoing.bytes);
 #endif
       }
@@ -418,6 +420,9 @@ private:
           (received.channelId == Phantom::Wire::PosesLane && PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
           return Unexpected("phantom.delivery");
         const auto bytes = received.packet.Data();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Diagnostics::Trace::Packet(false, received.channelId, bytes);
+#endif
         const auto now =
           static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
         const auto result =
@@ -1076,7 +1081,12 @@ private:
       ResetMovement();
       latestMovement = command.location;
       Wire::SetLocation transition{++contextRevision, command.location};
-      auto              result = SendPlayerUpdate(generation, transition, true);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Diagnostics::Trace::Event(
+        "movement_context",
+        std::format("\"context\":{},\"located\":{}", contextRevision, command.location.has_value()));
+#endif
+      auto result = SendPlayerUpdate(generation, transition, true);
       if (!result || pendingLocation == Domain::InvalidId) ResetMovement();
       return result;
     }
