@@ -345,3 +345,13 @@ kind index сохраняет старые снимки и избавляет lo
 не создаёт callback/list на каждом получателе. Аллокации 340–343 против616 MiB/s,
 GC pauses1,81–1,89 против2,93s в 30-секундной фазе, модельный трафик нулевой.
 CPU/задержки имеют разброс. Визуал/ABI/NiStream не менялись. Protocol24.
+
+
+## Native output — 08.10.2026
+
+Оптимизация `52aa85d`: общий NiStream для audit/Save и bounded output без итоговой
+копии. Static ABI review SE/AE/VR,397normal/411diagnostic tests,27NIF и боевой replay
+301frame/5models PASS. Полный dist подготовлен, diagnostic DLL установлена в MO2,
+конфиги сохранены. Новый игровой Save/Load/визуал и реальное изменение frame-time
+пока не проверены; detached output benchmark не является измерением engine capture.
+[Результаты, пределы сравнения и хеши сборок](benchmarks/phantom-native-output-2026-10-08.md).

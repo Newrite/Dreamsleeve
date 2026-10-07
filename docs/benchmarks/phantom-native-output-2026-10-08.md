@@ -65,3 +65,34 @@ Benchmark исключён из default target и dist. Машиночитаем
 локальные логи/IDA evidence/fixtures — `build/nif-output`. После игрового теста сравнить
 `native_export_ms`, полный capture/frame-time, `native_audit`, `native_save` и вложенный
 `native_reserve`; событие `native_output` показывает подсказку/размер/capacity.
+
+
+## Сборка и установка
+
+Код `52aa85d`. Обычная и диагностическая DLL собраны MSVC через xmake:
+**397/397** обычных и **411/411** диагностических тестов PASS. Встроенный production
+replay reader дополнительно прочитал боевую запись:301кадр,5моделей,608проверок PASS.
+27 NIF проверены повторно после финальной политики резервирования, ошибок0.
+Это offline codec/replay проверка, не новый игровой визуальный тест.
+
+Полный `S:\Programming\Dreamsleeve\dist` собран `Scripts/package_dist.py --skip-build`
+через прежний wrapper с валидированным примером client.toml; пользовательский
+Plugin/client.toml не заменялся. 179файлов: normal DLL, UI, ESP из Plugin, сервер,
+конфиги; benchmark, игровые NIF/архивы, IDB, базы и trace в пакет не входят.
+5пользовательских конфигов dist сохранены побайтно.
+
+Диагностическая DLL установлена в `F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`:
+игра перед копированием не работала. 4 TOML в установленном клиенте и исходном
+Plugin вместе сохранены побайтно. Серверная логика/протокол не менялись (protocol25).
+Установленный сервер не заменялся, полная свежая серверная публикация есть в dist.
+
+SHA256:
+
+- Normal: `1265296e3a0903327914c92cad0dd683e6bdc4cd200e65c0f83bc353b329ca01`.
+- Diagnostic/installed: `1b21726798be14c6961535c2663ebc9af8449381e58f4e9b923d3818d4a564ce`.
+
+Локальные подтверждения: `build/nif-output/dist-validation.json`, `deployment.json`,
+`fixture-tests.json`, `tests-normal.log`, `tests-diagnostic.log`, `combat-replay.log`.
+Старые DLL/PDB установки сохранены в `build/nif-output/deployment-backup`.
+Вне этой части остаются фактический игровой frame-time/Save→Load и NIF-дельты;
+частота захвата, правила обновления внешности и серверная доставка здесь не менялись.

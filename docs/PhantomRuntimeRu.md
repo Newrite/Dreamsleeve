@@ -1,4 +1,11 @@
-# Дополнение07.10.2026: native NIF production
+# Native NIF runtime
+
+Актуально08.10.2026: production использует `Save1(NiBinaryStream*)`, один NiStream
+для audit/Save и выходной vector без финальной копии. Подробности ABI/владения —
+в разделе «Оптимизация native Save — 08.10.2026» ниже. SaveBuffer/NiMemStream
+в более ранних разделах описывают предыдущую реализацию и исследованные ABI.
+
+## Дополнение07.10.2026: native NIF production
 
 NiStream/Clone/нормализация из разделов прототипа снова используются в
 production. Последующий раздел neutral ниже — **исторический аудит удалённой
