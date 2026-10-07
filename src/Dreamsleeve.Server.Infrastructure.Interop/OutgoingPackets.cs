@@ -16,7 +16,7 @@ public sealed class PacketBudget(int maximumPackets, long maximumBytes, int reli
         // Realtime cannot occupy the reliable headroom. These are admission
         // limits within the existing total budget, not additional memory.
         var reliable = delivery == PacketDelivery.Reliable;
-        var bulk = delivery is PacketDelivery.ReliableBulk or PacketDelivery.SequencedFragmented;
+        var bulk = delivery == PacketDelivery.ReliableBulk;
         var packetLimit = bulk ? Math.Max(1, maximumPackets / 2) : reliable ? maximumPackets
             : maximumPackets - Math.Max(1, Math.Min(maximumPackets, reliablePacketReserve));
         var byteLimit = bulk ? Math.Max(1L, maximumBytes / 2) : reliable ? maximumBytes : maximumBytes - Math.Max(1L, maximumBytes / 4);

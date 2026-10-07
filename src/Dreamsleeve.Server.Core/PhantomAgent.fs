@@ -24,8 +24,9 @@ module PhantomAgent =
         mutable ClearedAuthority: uint64; mutable Revision: uint64; mutable HighManifest: PhantomManifest option
         mutable Ready: PhantomManifest option; mutable Latest: struct (PhantomPose * int64) option
         mutable Previous: AppearanceGeneration option; mutable Settled: AppearanceGeneration option; mutable CommittedAt: int64
+        mutable DispatchedPose: struct (AppearanceGeneration * uint64) option
         mutable PreviousSequence: uint64; mutable LastPose: struct (AppearanceGeneration * uint64) option; mutable NextPublish: int64; mutable PoseCursor: int
-        ModelCredit: Credit; PoseCredit: Credit; PoseSamples: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
+        ModelCredit: Credit; PoseCredit: Credit; PoseSamples: Credit; ReplicationCredit: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
     }
     type private UploadChunk = { Offset: int; Bytes: byte array; mutable Pending: Task<Result<bool, string>> option }
     type private Phase =
@@ -43,13 +44,14 @@ module PhantomAgent =
         Options: PhantomOptions; Storage: PhantomStoragePort; Send: Guid * TransportPacket -> Result<unit, string>
         Members: Dictionary<Guid, Member>; Players: Dictionary<PlayerId, Guid>; Transfers: Dictionary<PhantomTransferId, Transfer>
         Audiences: Dictionary<PlayerId, HashSet<Guid>>
-        Cleanup: ResizeArray<Task<unit>>; ModelCredit: Credit; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable Cursor: int
+        Cleanup: ResizeArray<Task<unit>>; ModelCredit: Credit; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
     }
 
     let private credit at rate = { At = at; Available = double rate }
-    let private refill at rate (value: Credit) =
-        value.Available <- min (double rate) (value.Available + double (max 0L (at - value.At)) * double rate / 1000.0)
+    let private refillBounded at capacity rate (value: Credit) =
+        value.Available <- min capacity (value.Available + double (max 0L (at - value.At)) * rate / 1000.0)
         value.At <- at
+    let private refill at rate value = refillBounded at (double rate) (double rate) value
     let private take at rate amount value =
         refill at rate value
         if value.Available < double amount then false
@@ -186,7 +188,8 @@ module PhantomAgent =
 
     let create options storage send = {
         Options = options; Storage = storage; Send = send; Members = Dictionary(); Players = Dictionary(); Transfers = Dictionary()
-        Cleanup = ResizeArray(); Audiences = Dictionary(); ModelCredit = credit 0L options.ModelBytesPerSecond; NextTransfer = 0UL; LastTick = 0L; Cursor = 0
+        Cleanup = ResizeArray(); Audiences = Dictionary(); ModelCredit = credit 0L options.ModelBytesPerSecond; NextTransfer = 0UL; LastTick = 0L; LastDispatch = 0L; Cursor = 0
+        FanoutCredit = credit 0L options.MaxPoseFanoutPerTick
         OutgoingPoseCredit = credit 0L options.TotalPoseBytesPerSecond
     }
     let observationMode state =
@@ -234,9 +237,11 @@ module PhantomAgent =
                 if characterChanged then
                     clearSource state memberState
                     memberState.LastPose <- None
+                    memberState.DispatchedPose <- None
                 elif contextChanged then
                     memberState.Latest <- None
                     memberState.LastPose <- None
+                    memberState.DispatchedPose <- None
                     memberState.Previous <- None; memberState.PreviousSequence <- 0UL
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Source = memberState.Player) |> Seq.toArray do
                         cancel state transfer.Id false "context changed"
@@ -260,9 +265,9 @@ module PhantomAgent =
                     Located = value.Location.IsSome && value.MovementContext <> 0UL; Active = false
                     Preferences = { Publish = options.Enabled; Receive = options.Enabled; Maximum = options.Maximum; Distance = options.Distance }
                     Demand = None; Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
-                    Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; NextPublish = 0L; PoseCursor = 0
+                    Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; DispatchedPose = None; NextPublish = 0L; PoseCursor = 0
                     ModelCredit = credit 0L options.PlayerModelBytesPerSecond; PoseCredit = credit 0L options.PoseBytesPerSecond
-                    OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = { At = 0L; Available = 2.0 }
+                    OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = credit 0L 2; ReplicationCredit = credit 0L 2
                     Commands = credit 0L options.CommandsPerSecond; Outbox = Queue()
                 }
                 state.Players[value.Identity.PlayerId] <- id
@@ -575,35 +580,47 @@ module PhantomAgent =
         // Reliable control/ACKs follow IO completion, not the pose cadence.
         // At 10 Hz, gating a 64 KiB window here limited uploads to 640 KiB/s.
         for KeyValue(id, memberState) in state.Members do flushOutbox state id memberState
-        if replicate then
+        // Small turns avoid resampling all sources on one 100 ms grid.
+        // Source credit preserves the configured rate with a two-snapshot burst;
+        // Shared send credit preserves aggregate throughput; each turn still has a
+        // bounded inspection budget, including subscriptions already up to date.
+        let dispatchPeriod = max 1L (min 25L (period / 4L))
+        if at - state.LastDispatch >= dispatchPeriod then
+            state.LastDispatch <- at - (at - state.LastDispatch) % dispatchPeriod
+            refillBounded at (double state.Options.MaxPoseFanoutPerTick)
+                (double state.Options.MaxPoseFanoutPerTick * 1000.0 / double period) state.FanoutCredit
             let sources =
                 if state.Options.Enabled then state.Members.Values |> Seq.filter (fun item -> item.Active && item.Latest.IsSome) |> Seq.toArray
                 else [||]
             let mutable budget = state.Options.MaxPoseFanoutPerTick
             let mutable visitedSources = 0
-            while visitedSources < sources.Length && budget > 0 do
+            while visitedSources < sources.Length && budget > 0 && state.FanoutCredit.Available >= 1.0 do
                 let current = sources[(state.Cursor + visitedSources) % sources.Length]
                 visitedSources <- visitedSources + 1
                 let struct (pose, receivedAt) = current.Latest.Value
-                if at - receivedAt <= int64 state.Options.PoseTimeoutMs then
+                let identity = struct (pose.Generation, pose.Sequence.Value)
+                let admitted = current.DispatchedPose = Some identity
+                refillBounded at 2.0 (1000.0 / double period) current.ReplicationCredit
+                if at - receivedAt > int64 state.Options.PoseTimeoutMs then current.Latest <- None
+                elif admitted || current.ReplicationCredit.Available >= 1.0 then
+                    let mutable sent = false
                     let encoded = Dictionary<uint64, TransportPacket>()
                     // Reverse only the selected Presence-authorized subscriptions;
                     // pose fanout never scans unrelated online sessions.
                     let audience = match state.Audiences.TryGetValue current.Player with true, audience -> Seq.toArray audience | _ -> [||]
                     let mutable visited = 0
-                    while visited < audience.Length && budget > 0 do
+                    while visited < audience.Length && budget > 0 && state.FanoutCredit.Available >= 1.0 do
                         let id = audience[(current.PoseCursor + visited) % audience.Length]
                         visited <- visited + 1
-                        // Charge inspected subscriptions too, so a blocked peer or
-                        // byte budget cannot create an unbounded replication turn.
                         budget <- budget - 1
                         let observer = state.Members[id]
                         match observer.Selected.TryGetValue current.Player with
-                        | true, selected when observer.Active && observer.Outbox.Count = 0 && (selected.SentGeneration <> Some pose.Generation || pose.Sequence.Value > selected.SentSequence) ->
+                        | true, selected when observer.Active && (selected.SentGeneration <> Some pose.Generation || pose.Sequence.Value > selected.SentSequence) ->
                             let length = PhantomCodec.posePacketSize current.Player selected.Revision pose
                             refill at state.Options.PoseBytesPerSecond observer.OutgoingPoseCredit
                             refill at state.Options.TotalPoseBytesPerSecond state.OutgoingPoseCredit
-                            if state.OutgoingPoseCredit.Available < double length then
+                            if observer.Outbox.Count > 0 then ()
+                            elif state.OutgoingPoseCredit.Available < double length then
                                 // End this turn at exhaustion. Scanning every remaining
                                 // source would wrap the cursor back to the same prefix,
                                 // letting it consume every refill and starve the tail.
@@ -619,14 +636,18 @@ module PhantomAgent =
                                 | Ok () ->
                                     observer.OutgoingPoseCredit.Available <- observer.OutgoingPoseCredit.Available - double length
                                     state.OutgoingPoseCredit.Available <- state.OutgoingPoseCredit.Available - double length
+                                    state.FanoutCredit.Available <- state.FanoutCredit.Available - 1.0
+                                    sent <- true
                                     selected.SentSequence <- pose.Sequence.Value
                                     selected.SentGeneration <- Some pose.Generation
                                     fanout.Add 1L
                                 | Error _ -> ()
                         | _ -> ()
                     current.PoseCursor <- (current.PoseCursor + visited) % max 1 audience.Length
-                else current.Latest <- None
-            state.Cursor <- (state.Cursor + max 1 visitedSources) % ServerConfig.MaxPeerLimit
+                    if sent && not admitted then
+                        current.ReplicationCredit.Available <- current.ReplicationCredit.Available - 1.0
+                        current.DispatchedPose <- Some identity
+            state.Cursor <- (state.Cursor + visitedSources) % ServerConfig.MaxPeerLimit
 
     let stop state =
         for id in state.Members.Keys |> Seq.toArray do detach state id

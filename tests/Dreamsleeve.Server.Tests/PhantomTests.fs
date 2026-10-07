@@ -610,6 +610,60 @@ let tests = testList "Phantoms" [
             Expect.equal packet.Bytes.Length (PhantomCodec.posePacketSize (PlayerId.create 123UL |> ok) revision value) "Budget size equals actual wire bytes."
             Expect.equal decoded.Sample.Payload (ByteString.CopyFrom value.Payload) "Compressed payload reused unchanged."
             Expect.equal decoded.Sample.ContextRevision 10UL "Complete source envelope retained."
+    testCase "jitter around the replication grid does not halve a ten Hz source" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 100 }
+        let state, members, output = setup config memoryStorage 2
+        ready state members[0] (asset 1UL [|1uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 100L
+        output.Clear()
+        let arrivals = [199L;301L;399L;501L;599L;701L;799L;901L]
+        let mutable sequence = 0UL
+        for at in 101L .. 950L do
+            if List.contains at arrivals then
+                sequence <- sequence + 1UL
+                PhantomAgent.receive state at (fst members[0]) DeliveryLane.Poses (pose 1UL sequence 10UL)
+            PhantomAgent.tick state at
+        let delivered = output |> Seq.choose (fun (_, packet) ->
+            if packet.Lane = DeliveryLane.Poses then Some(Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom(packet.Bytes).Sample.Sequence) else None) |> Seq.toList
+        Expect.equal delivered [1UL..8UL] "Independent 10 Hz clocks with 2 ms jitter must not discard every second full snapshot."
+
+    testCase "small dispatch turns preserve source rate and shared fanout credit" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 1; MaxPoseFanoutPerTick = 1 }
+        let state, members, output = setup config memoryStorage 3
+        ready state members[0] (asset 1UL [|1uy|])
+        for observer in [members[1];members[2]] do view state observer members[0] 1UL 1.0
+        PhantomAgent.tick state 100L
+        output.Clear()
+        for at in 101L .. 1100L do
+            PhantomAgent.receive state at (fst members[0]) DeliveryLane.Poses (pose 1UL (uint64 at) 10UL)
+            PhantomAgent.tick state at
+            let count = output |> Seq.filter (fun (_, packet) -> packet.Lane = DeliveryLane.Poses) |> Seq.length
+            Expect.isLessThanOrEqual count (1 + int ((at - 100L) / 100L)) "Four times as many turns do not multiply the shared operation rate."
+        let recipients = output |> Seq.choose(fun (id, packet) -> if packet.Lane = DeliveryLane.Poses then Some id else None) |> Set.ofSeq
+        Expect.equal recipients.Count 2 "Both observers progress under sustained overload."
+
+    testCase "partial fanout admits a snapshot once across transient peer pressure" <| fun _ ->
+        let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 100 }
+        let delivered = ResizeArray<Guid>()
+        let mutable sentThisTurn = false
+        let state = PhantomAgent.create config memoryStorage (fun (id, packet) ->
+            if packet.Lane <> DeliveryLane.Poses then Ok ()
+            elif sentThisTurn then Error "peer budget"
+            else sentThisTurn <- true; delivered.Add id; Ok ())
+        let members = Array.init 5 (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
+        for id, value in members do
+            PhantomAgent.observe state (PhantomObservation.Member(id, value))
+            PhantomAgent.activate state id
+        ready state members[0] (asset 1UL [|1uy|])
+        for observer in members[1..] do view state observer members[0] 1UL 1.0
+        PhantomAgent.tick state 100L
+        PhantomAgent.receive state 101L (fst members[0]) DeliveryLane.Poses (pose 1UL 1UL 10UL)
+        for at in [125L;150L;175L;200L] do
+            sentThisTurn <- false
+            PhantomAgent.tick state at
+        Expect.equal (Set.ofSeq delivered).Count 4 "All portions of one admitted snapshot finish without paying the source rate token again."
+
     testCase "source flood retains latest only and reuses encoded fanout bytes" <| fun _ ->
         let state, members, output = setup options memoryStorage 3
         ready state members[0] (asset 1UL [|1uy|])

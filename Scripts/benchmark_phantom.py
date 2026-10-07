@@ -35,9 +35,11 @@ parser.add_argument('--model-sha256',help='Optional expected SHA256 of the compr
 parser.add_argument('--raw-model-bytes',type=int)
 parser.add_argument('--channels',type=int)
 parser.add_argument('--pose-file',type=Path,nargs='+',help='Complete compressed production pose payloads, without protobuf envelopes')
+parser.add_argument('--static-positions',action='store_true',help='Keep positions fixed while sending movement at the same rate; isolates queues from nearest-view churn')
 parser.add_argument('--server-overlay',type=Path)
 parser.add_argument('--server-benchmark',type=Path)
 args = parser.parse_args()
+os.environ['DREAMSLEEVE_BENCH_STATIC_POSITIONS']='1' if args.static_positions else '0'
 if not (1 <= args.clients <= 1000 and 1 <= args.seconds <= 300 and 1 <= args.publishers <= args.clients
         and 60 <= args.timeout <= 3600 and 1 <= args.workers <= args.clients and args.clients % args.workers == 0
         and 0 < args.rate <= 20 and 1 <= args.replication_ms <= 1000 and 1 <= args.maximum <= 64 and args.actor_values_hz >= 0):

@@ -528,6 +528,8 @@ PublishCooldownMs = 1000
 # Pose capture/admission period in ms: 100 = 10 Hz; 50 = 20 Hz.
 PoseIntervalMs = 100
 PoseTimeoutMs = 1000
+# Target per-source replication period; two snapshots of jitter headroom.
+# Dispatch uses turns up to 25 ms, without increasing this average rate.
 ReplicationIntervalMs = 100
 # Shared upload/download model budgets, bytes/s: 5 MiB/s total and per player.
 ModelBytesPerSecond = 5242880
@@ -537,6 +539,8 @@ PoseBytesPerSecond = 2097152
 # the measured native poses need about 77 MiB/s before transport overhead.
 TotalPoseBytesPerSecond = 134217728
 CommandsPerSecond = 128
+# Inspection ceiling per dispatch turn, also the shared send-credit capacity.
+# Send credits refill at MaxPoseFanoutPerTick / ReplicationIntervalMs.
 MaxPoseFanoutPerTick = 2048
 
 [Phantoms.Limits]

@@ -152,7 +152,7 @@ let tests = testSequenced <| testList "ENet transport" [
             let mutable state = NativePtr.read channel
             state.outgoingUnreliableSequenceNumber <- UInt16.MaxValue
             NativePtr.write channel state
-            let tight = PacketBudget(1, 1024L * 1024L)
+            let tight = PacketBudget(2, 1024L * 1024L)
             Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), tight, peerBudget, 4uy, PacketDelivery.SequencedFragmented)) PacketSendResult.BudgetExceeded "Marker is counted; pose waits for capacity."
             until (fun () -> tight.Packets = 0) pump
             Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), tight, peerBudget, 4uy, PacketDelivery.SequencedFragmented)) PacketSendResult.Sent "Next pose can use rotated epoch."
@@ -285,12 +285,13 @@ let tests = testSequenced <| testList "ENet transport" [
             Expect.equal (hostBudget.Packets, peerBudget.Packets) (0, 0) "rejected packet freed once")
 
     testCase "realtime leaves native packet headroom at both host and peer admission" <| fun _ ->
-        for hostLimit, peerLimit in [4, 16; 16, 4] do
+        for hostLimit, peerLimit, delivery in [4, 16, PacketDelivery.Sequenced; 16, 4, PacketDelivery.Sequenced;
+                                                4, 16, PacketDelivery.SequencedFragmented; 16, 4, PacketDelivery.SequencedFragmented] do
             withPeers (fun _ peer _ ->
                 let hostBudget = PacketBudget(hostLimit, 64L)
                 let peerBudget = PacketBudget(peerLimit, 64L)
                 let bytes = [|1uy; 2uy; 3uy; 4uy|]
-                let sample () = OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, PacketDelivery.Sequenced)
+                let sample () = OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, delivery)
                 for _ in 1 .. 3 do Expect.equal (sample()) PacketSendResult.Sent "Realtime fits below reserved slot."
                 Expect.equal (sample()) PacketSendResult.BudgetExceeded "Realtime cannot consume last reliable slot."
                 Expect.equal (hostBudget.Packets, peerBudget.Packets) (3, 3) "Refused sample reserves neither budget."

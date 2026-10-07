@@ -298,6 +298,29 @@ let tests = testList "TransportOwner" [
         finally release.Set(); resume.Set(); resumeNotice.Set(); owner.Dispose()
     })
 
+    case "view changes discard unsent poses from the previous subscription" (fun () -> task {
+        let! fake, owner = setup { config with Worker = { config.Worker with QueueCapacity = 64 } }
+        let delivered = ConcurrentQueue<int>()
+        use entered = new ManualResetEventSlim(false)
+        use release = new ManualResetEventSlim(false)
+        let value lane schedule number = { Lane = lane; Schedule = schedule; Bytes = [|byte number|] }
+        try
+            fake.SendPacket <- Some(fun packet ->
+                let n = int packet.Bytes[0]
+                if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
+                delivered.Enqueue n; Ok ())
+            owner.Send(fake.Id, value DeliveryLane.Control PacketSchedule.Ordered 0) |> ok
+            do! eventually (fun () -> entered.IsSet)
+            owner.Send(fake.Id, value DeliveryLane.Poses (PacketSchedule.LatestPose 11UL) 1) |> ok
+            owner.Send(fake.Id, value DeliveryLane.Models (PacketSchedule.ModelNotice 11UL) 2) |> ok
+            owner.Send(fake.Id, value DeliveryLane.Poses (PacketSchedule.LatestPose 22UL) 3) |> ok
+            owner.Close fake.Id
+            release.Set()
+            do! eventually (fun () -> observed fake "close")
+            Expect.equal (delivered.ToArray()) [|0;2;3|] "Removed view sends no stale pose; other source and accounting survive."
+        finally release.Set(); owner.Dispose()
+    })
+
     case "terminal model notice rejection cannot release poses onto an unestablished view" (fun () -> task {
         let! fake, owner = setup config
         let attempted = ConcurrentQueue<int>()

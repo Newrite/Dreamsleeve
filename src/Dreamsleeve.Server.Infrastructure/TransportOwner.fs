@@ -472,6 +472,14 @@ module TransportOwner =
                         if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L
                         Error "Outgoing transport handoff budget exceeded."
                     else
+                        // A new view invalidates any unsent pose from its predecessor.
+                        // Do not release that old pose after the new Offer/Remove.
+                        match packet.Schedule with
+                        | PacketSchedule.ModelNotice source when source <> 0UL ->
+                            match state.PoseSlots.TryGetValue(struct (id, source)) with
+                            | true, node -> removePose state node
+                            | _ -> ()
+                        | _ -> ()
                         let wake = state.Outgoing.Count + state.RealtimeOutgoing.Count + state.PoseOutgoing.Count + state.BulkCommands = 0
                         let command = struct (Send(id, packet), Stopwatch.GetTimestamp())
                         match replaced with

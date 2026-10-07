@@ -9,6 +9,7 @@ open Dreamsleeve.Server.NetworkBenchmarks.Measurements
 // One owner, no actors/locks. All clocks are the generator's monotonic clock.
 type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: float, ids: uint64 array, offset: int, stride: int, count: int, now: unit -> float,
            send: int -> ClientPacket -> bool, sendMovement: int -> ClientMovementPacket -> bool, fail: string -> unit) =
+    let staticPositions = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_STATIC_POSITIONS" = "1"
     let total = ids.Length
     let globalIndex index = offset + index * stride
     let indices = ids |> Array.mapi (fun index id -> id, index) |> dict
@@ -74,7 +75,8 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                 (if (step + index / 25) % 3 = 2 then 1 else 0),
                 (if (step + index / 25) % 2 = 0 then 0.f else 12000.f)
             | _ -> invalidArg "scenario" "Unknown movement scenario"
-        let x = offset + float32 (index % 25) * 4.f + 100.f * float32 (sin ((time - started) / 500.))
+        let displacement = if staticPositions then 0.f else 100.f * float32 (sin ((time - started) / 500.))
+        let x = offset + float32 (index % 25) * 4.f + displacement
         PlayerLocation(
             Location = Location(LocationId = FormKey(PluginName = "skyrim.esm", LocalFormId = uint32 (0x3c + group)), LocationName = "Benchmark"),
             Position = Position(X = x, Y = 0.f, Z = 0.f), CameraDirection = CameraDirection(),
