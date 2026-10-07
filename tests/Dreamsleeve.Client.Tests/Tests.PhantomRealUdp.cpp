@@ -108,6 +108,7 @@ namespace
     std::uint64_t                                           self{}, readyGeneration{}, offerRevision{}, removeRevision{}, poseSequence{};
     std::uint64_t                                           chunksSent{}, downloadedBytes{}, uploadId{}, uploadSent{}, uploadAcknowledged{};
     std::uint32_t                                           windowChunks{};
+    std::uint64_t                                           modelControlBytes{};
     std::size_t                                             largestPose{};
     std::uint64_t                                       chatSentAt{}, chatReceivedAt{}, firstChunkAt{}, lastChunkAt{}, uploadAcceptedAt{};
     std::uint64_t                                       lastPumpUs{}, pumpCount{}, pumpTotalUs{}, pumpMaxUs{}, maxChunkBatch{};
@@ -289,6 +290,8 @@ namespace
         {
           if (value.lane == P::Wire::ModelsLane)
           {
+            modelControlBytes += value.bytes.size();
+            REQUIRE(value.bytes.size() <= P::Wire::MaxAssetPacketBytes);
             Models::ClientAssetPacket request;
             REQUIRE(request.ParseFromArray(value.bytes.data(), static_cast<int>(value.bytes.size())));
             if (request.has_publish())
@@ -438,7 +441,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
             << " downloadMs=" << (bob.lastChunkAt - bob.firstChunkAt) / 1000.0
             << " chatDuringDownloadMs=" << (bob.chatReceivedAt - bob.chatSentAt) / 1000.0 << '\n';
   REQUIRE(alice.uploadSent > 16384);
-  CHECK(alice.exchange.Stats().modelBytes == alice.uploadSent);
+  CHECK(alice.exchange.Stats().modelBytes == alice.uploadSent + alice.modelControlBytes);
   REQUIRE(alice.chunksSent == 0);
   REQUIRE(bob.downloadedBytes == alice.uploadSent);
   CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == expectedChannels);
