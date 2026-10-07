@@ -256,7 +256,7 @@ public:
     {
       needsSnapshot     = true;
       snapshotRequested = false;
-      refreshing        = false;
+      shownGeneration.reset();
       guildsShown       = false;
       // Chat sends, mark, moderator and guild requests lose their view. Death
       // reports have no UI correlation and settle silently either way.
@@ -279,7 +279,6 @@ public:
     {
       needsSnapshot     = true;
       snapshotRequested = false;
-      refreshing        = true;
       guildsShown       = false;
       lastStatus.reset();
     }
@@ -859,8 +858,9 @@ private:
       // Bubbles follow the global channel; retained history sets the floor:
       // only later IDs are live.
       globalChannel      = ChannelOf(Domain::ChatChannelKind::Global);
-      const bool refresh = std::exchange(refreshing, false) && snapshot.generation == refreshGeneration;
-      refreshGeneration  = snapshot.generation;
+      // The page already shows this session: a refresh (settings, ignore list,
+      // or Core recovering from a full queue while the game thread stood still).
+      const bool refresh = shownGeneration == snapshot.generation;
       authors.clear();
       bubbleFloor = 0;
       for (const auto& chat : snapshot.chats)
@@ -884,6 +884,10 @@ private:
         return true;
       });
       frame.playersChanged = false;
+      // Requested: the host asked for it (new page, refresh, missed delta);
+      // otherwise the core sent it on its own (first state, queue overflow).
+      frame.notes.push_back(std::format(
+        "Snapshot applied: generation {}, refresh {}, requested {}, ready {}", generation, refresh, snapshotRequested, ready));
       snapshotRequested    = false;
       if (!ready)
       {
@@ -917,8 +921,9 @@ private:
       event.nearbyMarks          = NearbyMarkList(settings);
       Emit(frame, event);
 
-      frame.snapshot = true;
-      needsSnapshot  = false;
+      frame.snapshot  = true;
+      needsSnapshot   = false;
+      shownGeneration = generation;
     }
 
     void Apply(const ClientStateDelta& delta, const UiSettings& settings, bool, Frame& frame)
@@ -1128,8 +1133,8 @@ private:
     std::uint64_t                    removalsSeen{};
     bool                                                               needsSnapshot{true};
     bool                                                               snapshotRequested{};
-    bool                                                               refreshing{};
-    std::uint64_t                                                      refreshGeneration{};
+    // The session whose snapshot the current page holds; none for a new page.
+    std::optional<std::uint64_t> shownGeneration;
     // Profiles of retained authors, so offline players can be ignored by name.
     static constexpr std::size_t                             MaxKnownAuthors = 2048;
     std::unordered_map<Domain::PlayerId, Domain::PlayerData> authors;

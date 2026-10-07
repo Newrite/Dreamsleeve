@@ -328,7 +328,8 @@ export type HostEvent =
       players: Player[];
       selfId: Id;
       serverName: string;
-      // Same session projected again (names or ignore list changed).
+      // The session the page already shows, projected again (names or ignore
+      // list changed, or Core's state queue overflowed while the game stood still).
       refresh?: boolean;
       // The session can place marks; the player's own marks as the server
       // lists them, and the marks it shows nearby.
