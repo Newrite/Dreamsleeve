@@ -124,3 +124,14 @@ actor values4 Гц. Кеш прогрет, модельный трафик во 
 642 серверных теста PASS, включая новый snapshot regression. Diagnostic native
 413 тестов PASS после возврата исходного ModelFlow. Клиентский production-код
 в итоге не изменён; игровые визуальные проверки здесь не выполнялись.
+
+
+## Сборка
+
+Production code commit: `d583b85`. Полный обычный dist собран штатным packager:
+`S:\Programming\Dreamsleeve\dist` (клиент, ESP, UI, сервер, конфиги).
+Сервер обновлён в `S:\Dreamsleeve` после проверки отсутствия запущенного процесса;
+клиентская DLL не заменялась, её production-код не изменён. SHA256 16 конфигов
+до/после совпали. Server.Core SHA256:
+`abee32a780d4152164cc3ffb0d87dc500394fd71251e0afdec71b632ef16891a`.
+Трассы, .etlx, игровые assets и тестовые инструменты в dist не входят.
