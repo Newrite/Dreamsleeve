@@ -115,7 +115,7 @@
             },
             version = "v7.06"
         },
-        ["zstd#f56260b5"] = {
+        ["zstd 1.5.7#f56260b5"] = {
             repo = {
                 branch = "master",
                 commit = "e97add9a9781124ffc3804f50e5d03a1b5cb4a65",

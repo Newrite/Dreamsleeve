@@ -438,6 +438,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
             << " downloadMs=" << (bob.lastChunkAt - bob.firstChunkAt) / 1000.0
             << " chatDuringDownloadMs=" << (bob.chatReceivedAt - bob.chatSentAt) / 1000.0 << '\n';
   REQUIRE(alice.uploadSent > 16384);
+  CHECK(alice.exchange.Stats().modelBytes == alice.uploadSent);
   REQUIRE(alice.chunksSent == 0);
   REQUIRE(bob.downloadedBytes == alice.uploadSent);
   CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == expectedChannels);

@@ -286,6 +286,13 @@ export namespace Dreamsleeve::Client::Phantom
                                awaiting->request == value.request;
         if (matches || refused)
         {
+          if (matches)
+          {
+            // A commit can arrive between HTTP progress polls. Count its final
+            // persisted bytes before replacing Upload with Ready.
+            if (value.accepted) exchange.Count(upload->transfer.asset.compressedBytes - upload->progress, 0);
+            else http.Cancel(value.transfer);
+          }
           if (value.accepted)
           {
             local->state        = Ready{};
