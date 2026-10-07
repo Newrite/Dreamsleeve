@@ -35,7 +35,7 @@ def run():
     relay.bind(("127.0.0.1", 0))
     relay.setblocking(False)
     stop = threading.Event()
-    stats = {"datagrams": 0, "dropped": 0, "rttMs": args.rtt_ms, "jitterMs": args.jitter_ms}
+    stats = {"datagrams": 0, "dropped": 0, "icmpResets": 0, "rttMs": args.rtt_ms, "jitterMs": args.jitter_ms}
     errors = []
 
     def forward():
@@ -46,7 +46,14 @@ def run():
             try:
                 while not stop.is_set():
                     for key, _ in selector.select(.001):
-                        data, address = key.fileobj.recvfrom(65535)
+                        try:
+                            data, address = key.fileobj.recvfrom(65535)
+                        except ConnectionResetError:
+                            # Windows reports ICMP for delayed packets sent after
+                            # the test client closes. It is not a relay failure;
+                            # a dead endpoint still fails the client's deadline.
+                            stats["icmpResets"] += 1
+                            continue
                         if key.fileobj is relay:
                             if address not in peers:
                                 peer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

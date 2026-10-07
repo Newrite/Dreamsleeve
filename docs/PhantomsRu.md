@@ -118,7 +118,7 @@ movement150 мс) — минимумы. Цель — два интервала �
 Контекст/поколение, телепорт movement и длинный разрыв сбрасывают историю.
 Владелец phantom history — Exchange; movement history — MovementView.
 
-World положение намеренно остаётся в позе. Movement обслуживает AOI и подписи;
+World положение намеренно остаётся в позе. Movement обслуживает AOI и подписи светлячков;
 его последнее значение не подставляется в отдельно пришедшую позу. Временная
 связь потоков для безопасного удаления дублирования пока не определена.
 
@@ -285,3 +285,17 @@ PhantomAgent обновляет selection на прежнем ReplicationInterva
 подписок, включая уже актуальные; сканирование может происходить чаще прежнего,
 но сетевой потолок не умножается. Курсоры не двигаются без доступного общего кредита.
 Проверены phase jitter, transient pressure, sustained overload и fairness.
+
+## Доставка и подпись: исправление вечернего теста07.10.2026
+
+ENet transport owner для fragmented reliable sends поднимает sender flight ceiling
+до512KiB только при unlimited native bandwidth. Это общее окно peer для всех
+каналов, отдельно от прикладного окна32×16KiB на передачу; ACK/sequence windows,
+packetThrottle, rate/lease budgets сохраняются. Явные native bandwidth limits
+не переопределяются. [Замеры с RTT, loss и control](benchmarks/phantom-delivery-labels-2026-10-07.md).
+
+Подпись фантома читает текущий world transform уникальной передаваемой кости
+головы из `PhantomScene`, после интерполяции/Apply. Bounds остаются только для
+отсечения. Кость выбирается при Load и принадлежит корню сцены; неоднозначное
+или отсутствующее имя использует root+120×scale. Общие правила PlayerLabels и
+смещение имени сохраняются; независимой интерполяции/UI-очереди не добавлено.

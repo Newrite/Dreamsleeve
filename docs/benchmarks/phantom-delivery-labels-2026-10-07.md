@@ -54,7 +54,8 @@ Output_SKSE и серверный S:/Dreamsleeve/phantoms. Исходники н
 ## Воспроизводимые проверки
 
 Production Streaming/Worker/codecs/ENet/ServerRuntime/storage через локальный
-UDP relay. Реальный архив `8e4c66ad…` — 13,177,645 compressed bytes; полная
+UDP relay. Указанный RTT — заданная задержка relay; обслуживание сокетов
+и планировщик Windows добавляют собственное время. Реальный архив `8e4c66ad…` — 13,177,645 compressed bytes; полная
 целостность и декодирование проверены. Обе стороны relay имеют RTT100ms.
 В стенде серверный per-player rate4MiB/s и общий8MiB/s; это настройки
 теста, рабочие defaults5MiB/s не менялись. Измеряется время до готового
@@ -84,8 +85,7 @@ FFFF sequence rollover без перехода поз в reliable, receive=false
 и network.json; README содержит команду воспроизведения.
 
 Сервер625/625; диагностические native408/408. Новые тесты проверяют уважение
-явных ENet bandwidth limits на обеих сторонах. Обычная сборка/dist и финальный
-deployment отмечаются ниже после завершения. Limited review выявило именно
+явных ENet bandwidth limits на обеих сторонах. Обычная сборка395/395; обе сборки и полный dist готовы. Limited review выявило именно
 недостаточный control-тест и безусловное переопределение bandwidth; оба
 замечания исправлены.
 
@@ -96,3 +96,31 @@ deployment отмечаются ниже после завершения. Limite
 непроверенными. Новых hooks/ABI не добавлено; SE/AE/VR компиляция не заменяет
 визуальную проверку. Стоимость полного capture/Save осталась прежней;
 дельты NIF, новый skinning/renderer или перенос NiStream на worker не вводились.
+
+## Изолированное сравнение server download и выпуск
+
+Один и тот же новый обычный клиент и реальный архив, заданныйRTT100ms, без
+jitter/loss. В отдельной копии smoke server заменён только transport interop на
+DLL ранее установленного сервера; его API не менялся. В обоих вариантах весь
+asset/control-тест завершился успешно. Это отделяет server download от client upload.
+
+| Server interop | Полный путь | Upload до accepted | Download chunks | Chat во время download |
+|---|---:|---:|---:|---:|
+| Прежний64KiB | 29.452с | 3.516с | 25.625с | 1001ms |
+| Новый512KiB, финальный повтор | 7.034с | 3.535с | 3.189с | 124ms |
+
+Ускорение download около8.04×. Обычный synthetic UDP run с jitter/loss также
+прошёл целиком. В relay отдельно учтён Windows ICMP ConnectionReset после
+закрытия клиента с ещё отложенными datagrams: событие считается, но не объявляет
+успешный тест ошибочным; закрытый до завершения endpoint всё равно не проходит
+дедлайн. Это исправление тестового инструмента, а не клиента или сервера.
+
+Основной коммит4461ff5. Полный обычный dist: `S:/Programming/Dreamsleeve/dist`
+(клиент, сервер, UI, Plugin ESP и конфигурации). Диагностическая DLL/PDB установлена
+в `F:/MO2 - Skyrim - VanillaLike/mods/Dreamsleeve/SKSE/Plugins`, сервер обновлён
+в `S:/Dreamsleeve`. Проверено отсутствие игровых/server процессов перед заменой;
+11 TOML сохранились поSHA256, включая Plugin/client.toml и Output_SKSE overrides.
+Backup, artifact hashes и deployment.json лежат рядом с результатами тестов.
+Архив `Dreamsleeve-diagnostic-delivery-v24.zip` содержит только обновление DLL
+для существующего мода, не перезаписывает конфиги. Кеши/logs/IDB/игровые assets
+в архив и dist не включены. Игровое положение ника после исправления ещё не проверено.
