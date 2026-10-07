@@ -51,7 +51,7 @@ namespace Dreamsleeve::Client::Diagnostics
       if (!std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2)
         return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
       const auto protocol = r.Get<std::uint32_t>();
-      if ((protocol != 22 && protocol != Wire::Version) || r.Get<std::uint32_t>() != P::AssetVersion)
+      if ((protocol != 22 && protocol != 23 && protocol != 24 && protocol != Wire::Version) || r.Get<std::uint32_t>() != P::AssetVersion)
         return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
       return {};
     }

@@ -565,17 +565,6 @@ export class DreamNetPeer
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPeer, "Cannot send packet through invalid DreamNetPeer");
     }
 
-    // ENet's default 64 KiB flight window limits reliable assets to ~0.6 MiB/s
-    // at 100 ms RTT, independently of application pacing. This sender-local
-    // ceiling is not the 16-bit reliable sequence window or a receive credit.
-    // Keep throttle/retransmission and application queue/rate limits intact.
-    // Respect explicit native bandwidth limits; production uses application pacing.
-    // Refresh on bulk sends because a bandwidth-limit command may reset it.
-    if (
-      peer->incomingBandwidth == 0 && peer->host->outgoingBandwidth == 0 && (packet.Native()->flags & ENET_PACKET_FLAG_RELIABLE) &&
-      packet.Native()->dataLength > peer->mtu)
-      peer->windowSize = 512 * 1024;
-
     if (enet_peer_send(Native(), channelId, packet.Native()) < 0)
     {
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedPushPacket, "enet_peer_send returned a negative result");

@@ -13,7 +13,7 @@ open Dreamsleeve.Server.Infrastructure
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let mutable private requestCounter = 0L
 let private requestId () = PhantomRequestId.create (uint64 (System.Threading.Interlocked.Increment &requestCounter)) |> ok
-let private options = { PhantomOptions.defaults with ReplicationIntervalMs = 1; PublishCooldownMs = 0; PoseIntervalMs = 1; ChunkBytes = 4; WindowChunks = 2 }
+let private options = { PhantomOptions.defaults with ReplicationIntervalMs = 1; PublishCooldownMs = 0; PoseIntervalMs = 1; ChunkBytes = 4 }
 let private asset gen (bytes: byte array) =
     PhantomManifest.create options.Limits (AssetHash.create (SHA256.HashData bytes) |> ok)
         (AppearanceGeneration.create gen |> ok) 2u (uint32 bytes.Length) (uint32 bytes.Length) 2u |> ok
@@ -31,13 +31,41 @@ let private memoryStorage : PhantomStoragePort = {
     StartUpload = fun _ -> result true
     WriteChunk = fun _ -> result false
     StartDownload = fun _ -> result ()
-    ReadChunk = fun (_, offset, count) -> result (Array.init count (fun index -> byte (offset + index)))
+    ReadChunk = fun (_, offset, destination) ->
+        for index in 0 .. destination.Length - 1 do destination.Span[index] <- byte (offset + index)
+        result destination.Length
     Cancel = fun _ -> Task.FromResult ()
     Dispose = fun () -> Task.FromResult ()
 }
+let private leases = Runtime.CompilerServices.ConditionalWeakTable<PhantomAgent.State, Collections.Generic.Dictionary<PhantomTransferId, PhantomHttpLease>>()
+let private fakeHttp () =
+    let live = Collections.Generic.Dictionary<PhantomTransferId, PhantomHttpLease>()
+    let port = {
+        Admit = fun (_, id, manifest, _) ->
+            let lease = PhantomHttpLease(String.replicate 64 "a", manifest.CompressedBytes)
+            live[id] <- lease
+            lease
+        Cancel = fun id ->
+            match live.TryGetValue id with true, lease -> lease.Finish(Error "cancelled") | _ -> ()
+            Task.FromResult ()
+        Serve = fun _ -> Task.FromResult(Error "unit test does not handle HTTP")
+        Dispose = fun () -> Task.FromResult ()
+    }
+    port, live
+let private advance state id count at =
+    let live = leases.GetValue(state, fun _ -> failwith "missing HTTP fixture")
+    live[id].Advance count
+    PhantomAgent.tick state at
+let private readChunk (storage: PhantomStoragePort) (id, offset, count) = task {
+    let bytes = Array.zeroCreate<byte> count
+    let! read = storage.ReadChunk(id, offset, bytes.AsMemory())
+    return read |> Result.map (fun count -> bytes[..count-1])
+}
 let private setup config storage count =
     let output = ResizeArray<Guid * TransportPacket>()
-    let state = PhantomAgent.create config storage (fun (id, packet) -> output.Add(id, packet); Ok ())
+    let http, live = fakeHttp()
+    let state = PhantomAgent.create config storage http (fun (id, packet) -> output.Add(id, packet); Ok ())
+    leases.Add(state, live)
     let members = Array.init count (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
     for id, value in members do
         PhantomAgent.observe state (PhantomObservation.Member(id, value))
@@ -74,29 +102,6 @@ let private storageCase name run = case name (fun () -> task {
 })
 
 let tests = testList "Phantoms" [
-    testCase "model flow shrinks on delay, ignores duplicate progress and recovers" <| fun _ ->
-        let flow = ModelFlow.create 100 8
-        let mutable at = 0L
-        let mutable offset = 0
-        let acknowledge delay =
-            offset <- offset + 100
-            ModelFlow.sent offset at flow
-            at <- at + delay
-            ModelFlow.acknowledge offset at flow
-        Expect.isTrue (ModelFlow.allows 0 200 flow) "initial two chunks"
-        Expect.isFalse (ModelFlow.allows 0 201 flow) "bounded initial flight"
-        for _ in 1 .. 8 do acknowledge 100L
-        Expect.isTrue (ModelFlow.allows 0 800 flow) "healthy path grows"
-        for _ in 1 .. 12 do acknowledge 300L
-        Expect.isFalse (ModelFlow.allows 0 800 flow) "sustained delay reduces flight"
-        for _ in 1 .. 100 do
-            at <- at + 1000L
-            ModelFlow.acknowledge offset at flow
-        Expect.isFalse (ModelFlow.allows 0 800 flow) "duplicate progress cannot grow"
-        Expect.isTrue (ModelFlow.allows 0 100 flow) "always permits a chunk"
-        for _ in 1 .. 50 do acknowledge 100L
-        Expect.isTrue (ModelFlow.allows 0 800 flow) "recovers after congestion"
-        Expect.isFalse (ModelFlow.allows 0 801 flow) "never exceeds configured window"
 
     testCase "camera sector has near protection hysteresis and unknown fallback" <| fun _ ->
         Expect.isTrue (PhantomPolicy.inView false 100.0 (Some -1.0)) "Near player remains visible."
@@ -157,20 +162,6 @@ let tests = testList "Phantoms" [
         Expect.equal policy.PoseBytes (256u * 1024u) "Native raw pose cap."
         Expect.equal policy.CompressedPoseBytes (128u * 1024u) "Native compressed pose cap."
 
-    testCase "reliable transfer progress is independent of the pose tick" <| fun _ ->
-        let config = { options with ReplicationIntervalMs = 1000 }
-        let storage = { memoryStorage with StartUpload = fun _ -> result false }
-        let state, members, output = setup config storage 1
-        let owner, snapshot = members[0]
-        PhantomAgent.handle state 2L owner (PhantomRequest.Publish(asset 1UL (Array.zeroCreate 16), snapshot.MovementContext, requestId()))
-        PhantomAgent.tick state 3L
-        let id = transfer output
-        output.Clear()
-        for offset in [0;4] do PhantomAgent.handle state 4L owner (PhantomRequest.Chunk(id, offset, Array.zeroCreate 4))
-        PhantomAgent.tick state 5L
-        let acknowledgements = models output |> Array.choose (fun packet -> if isNull packet.Progress then None else Some packet.Progress.NextOffset)
-        Expect.equal acknowledgements [|8u|] "The durable window is acknowledged before the next 1 Hz pose tick."
-        Expect.isFalse (output |> Seq.exists (fun (_, packet) -> packet.Lane = DeliveryLane.Poses)) "No pose timer was due."
 
     testCase "late runtime ticks preserve the pose cadence without catch-up bursts" <| fun _ ->
         let config = { options with ReplicationIntervalMs = 100 }
@@ -194,7 +185,7 @@ let tests = testList "Phantoms" [
         let output = ResizeArray<TransportPacket>()
         let mutable started = 0
         let storage = { memoryStorage with StartUpload = fun _ -> started <- started + 1; result true }
-        let state = PhantomAgent.create disabled storage (fun (_, packet) -> output.Add packet; Ok ())
+        let state = PhantomAgent.create disabled storage (PhantomHttp.create disabled storage) (fun (_, packet) -> output.Add packet; Ok ())
         Expect.equal (PhantomAgent.observationMode state) PhantomObservationMode.Membership "Bootstrap membership survives disabled replication."
         let id = Guid.NewGuid()
         PhantomAgent.observe state (PhantomObservation.Member(id, player 1UL 10UL))
@@ -226,18 +217,6 @@ let tests = testList "Phantoms" [
         Expect.equal decoded.Sample.Payload (ByteString.CopyFrom payload) "Opaque compressed bytes are unchanged."
         Expect.equal decoded.Sample.SampledAtUs PhantomPose.maximumSampledAtUs "Timestamp bound survives encoding."
 
-    testCase "model chunk encode avoids scratch copy and owns final bytes" <| fun _ ->
-        let payload = Array.init 16384 (fun index -> byte index)
-        let response = PhantomResponse.Chunk(PhantomTransferId 1UL, 16384, payload)
-        PhantomCodec.encode response |> ignore
-        let before = GC.GetAllocatedBytesForCurrentThread()
-        let packet = PhantomCodec.encode response
-        let allocated = GC.GetAllocatedBytesForCurrentThread() - before
-        Expect.isLessThanOrEqual allocated (int64 packet.Bytes.Length + 1024L) "No intermediate ByteString payload copy."
-        payload[0] <- 255uy
-        let decoded = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes
-        Expect.equal decoded.Chunk.Offset 16384u "Offset unchanged."
-        Expect.equal decoded.Chunk.Data[0] 0uy "Synchronous encoding owns the final packet."
 
     testCase "repeated unchanged authority views do not allocate replacements" <| fun _ ->
         let state, members, _ = setup options memoryStorage 2
@@ -255,8 +234,8 @@ let tests = testList "Phantoms" [
         for version, compressed, raw, channels in [ 1u,1u,1u,1u; 2u,0u,1u,1u; 2u,1u,129u*1024u*1024u,1u; 2u,1u,1u,4097u; 2u,1u,1u,0u ] do
             Expect.isError (PhantomManifest.create options.Limits valid.Hash valid.Generation version compressed raw channels) "declared limit"
         let packet = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
-                        Chunk = Dreamsleeve.Protocol.Phantom.Chunk(TransferId = 1UL, Data = ByteString.CopyFrom(Array.zeroCreate 5)))
-        Expect.isError (PhantomCodec.decodeAsset options (packet.ToByteArray())) "chunk bound"
+                        Publish = Dreamsleeve.Protocol.Phantom.Publish())
+        Expect.isError (PhantomCodec.decodeAsset options (packet.ToByteArray())) "missing descriptor"
         packet.ProtocolVersion <- ProtocolCodec.Version - 1u
         Expect.isError (PhantomCodec.decodeAsset options (packet.ToByteArray())) "version"
         Expect.isError (PhantomCodec.decodePose options [|255uy|]) "malformed"
@@ -278,13 +257,12 @@ let tests = testList "Phantoms" [
 
     testCase "policy is first bootstrap message and reports effective limits" <| fun _ ->
         let output = ResizeArray<TransportPacket>()
-        let state = PhantomAgent.create options memoryStorage (fun (_, packet) -> output.Add packet; Ok ())
+        let state = PhantomAgent.create options memoryStorage (PhantomHttp.create options memoryStorage) (fun (_, packet) -> output.Add packet; Ok ())
         let id = Guid.NewGuid()
         PhantomAgent.observe state (PhantomObservation.Member(id, player 1UL 10UL))
         PhantomAgent.activate state id
         PhantomAgent.tick state 1L
         let policy = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom(output[0].Bytes).Policy
-        Expect.equal policy.WindowChunks 2u "window"
         Expect.equal policy.CompressedAssetBytes (uint32 options.Limits.CompressedBytes) "asset cap"
         Expect.equal policy.CompressedPoseBytes 131072u "pose cap"
 
@@ -293,7 +271,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.handle state 2L (Guid.NewGuid()) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "unauthenticated"
         ready state members[0] (asset 2UL [|1uy|])
-        let sent = models output |> Array.pick (fun packet -> if isNull packet.Transfer then None else Some packet.Transfer)
+        let sent = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal sent.PlayerId (PlayerId.value (snd members[0]).Identity.PlayerId) "server source"
         PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|2uy|], 10UL, requestId()))
         PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|2uy|], 9UL, requestId()))
@@ -416,54 +394,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.detach state (fst members[0])
         Expect.equal (PhantomAgent.snapshot state).Members 0 "disconnect"
 
-    testCase "download ACK opens bounded window and cannot be spoofed or acknowledge unsent bytes" <| fun _ ->
-        let state, members, output = setup options memoryStorage 3
-        let manifest = asset 1UL (Array.zeroCreate 20)
-        ready state members[0] manifest
-        view state members[1] members[0] 1UL 1.0
-        PhantomAgent.tick state 4L
-        output.Clear()
-        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, manifest.Generation, requestId()))
-        for at in 5L .. 9L do PhantomAgent.tick state at
-        let chunks () = models output |> Array.filter (fun packet -> not (isNull packet.Chunk)) |> Array.length
-        Expect.equal (chunks()) 2 "one window"
-        let id = transfer output
-        PhantomAgent.handle state 10L (fst members[2]) (PhantomRequest.Progress(id, 8))
-        PhantomAgent.handle state 10L (fst members[1]) (PhantomRequest.Progress(id, 16))
-        PhantomAgent.tick state 10L
-        Expect.equal (chunks()) 2 "spoof and unsent rejected"
-        PhantomAgent.handle state 11L (fst members[1]) (PhantomRequest.Progress(id, 8))
-        PhantomAgent.tick state 11L
-        PhantomAgent.tick state 12L
-        Expect.equal (chunks()) 4 "next window"
-        PhantomAgent.handle state 13L (fst members[1]) (PhantomRequest.Progress(id, 16))
-        PhantomAgent.tick state 13L
-        PhantomAgent.tick state 14L
-        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "final ACK required"
-        PhantomAgent.handle state 15L (fst members[1]) (PhantomRequest.Progress(id, 20))
-        PhantomAgent.tick state 15L
-        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "completion"
 
-    testCase "upload progress follows disk completion and overflow never queues more IO" <| fun _ ->
-        let writes = ResizeArray<TaskCompletionSource<Result<bool,string>>>()
-        let write _ =
-            let pending = TaskCompletionSource<Result<bool,string>>()
-            writes.Add pending
-            pending.Task
-        let storage = { memoryStorage with StartUpload = (fun _ -> result false); WriteChunk = write }
-        let state, members, output = setup options storage 1
-        ready state members[0] (asset 1UL (Array.zeroCreate 16))
-        let id = transfer output
-        for offset in [0;4] do PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Chunk(id, offset, Array.zeroCreate 4))
-        PhantomAgent.tick state 4L
-        Expect.equal (models output |> Array.filter (fun packet -> not (isNull packet.Progress)) |> Array.length) 0 "not written yet"
-        writes[0].SetResult(Ok false)
-        PhantomAgent.tick state 5L
-        Expect.equal (models output |> Array.choose (fun packet -> if isNull packet.Progress then None else Some packet.Progress.NextOffset)) [|4u|] "durable write offset"
-        PhantomAgent.handle state 6L (fst members[0]) (PhantomRequest.Chunk(id, 8, Array.zeroCreate 4))
-        PhantomAgent.handle state 6L (fst members[0]) (PhantomRequest.Chunk(id, 12, Array.zeroCreate 4))
-        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "window exceeded"
-        Expect.equal writes.Count 2 "overflow and cancellation do not queue extra IO"
 
     testCase "cross-context same-generation publication cannot correlate old starting IO with the new request" <| fun _ ->
         let old = TaskCompletionSource<Result<bool,string>>()
@@ -482,7 +413,7 @@ let tests = testList "Phantoms" [
         let accepted = complete |> Array.find (fun value -> value.RequestId = 1002UL)
         Expect.isTrue accepted.Accepted "New same-generation context publication is independent."
         let assigned = models output |> Array.choose (fun packet -> if isNull packet.Transfer then None else Some packet.Transfer)
-        Expect.equal (assigned |> Array.map _.RequestId) [|1002UL|] "No stale Transfer assignment for old request."
+        Expect.isEmpty assigned "Cache hit requires no HTTP body or capability."
         old.SetResult(Ok true)
         output.Clear()
         PhantomAgent.tick state 5L
@@ -499,15 +430,7 @@ let tests = testList "Phantoms" [
         | PhantomRequest.Download(_,_,request) -> Expect.equal request.Value 101UL "Typed request retained."
         | _ -> failtest "Expected download."
 
-    testCase "upload windows and ACKs remain admitted independently of control flood budget" <| fun _ ->
-        let state, members, output = setup { options with CommandsPerSecond = 1 } { memoryStorage with StartUpload = fun _ -> result false } 1
-        let manifest = asset 1UL (Array.zeroCreate 8)
-        ready state members[0] manifest
-        let id = transfer output
-        for offset in [0;4] do
-            let packet = Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version, Chunk = Dreamsleeve.Protocol.Phantom.Chunk(TransferId = id.Value, Offset = uint32 offset, Data = ByteString.CopyFrom(Array.zeroCreate 4)))
-            PhantomAgent.receive state 4L (fst members[0]) DeliveryLane.Models (packet.ToByteArray())
-        Expect.equal (PhantomAgent.snapshot state).PendingIo 2 "Every admitted reliable chunk retained even at low control rate."
+
     testCase "same immutable generation retries IO and cooldown failures; conflicting and lower generations are terminal" <| fun _ ->
         let mutable attempts = 0
         let storage = { memoryStorage with StartUpload = fun _ -> attempts <- attempts + 1; if attempts = 1 then Task.FromResult(Error "storage busy") else result true }
@@ -527,7 +450,7 @@ let tests = testList "Phantoms" [
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Same generation and immutable descriptor retry succeeds."
         let accepted = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.isTrue accepted.Accepted "Cache hit publication accepted."
-        Expect.isGreaterThan accepted.TransferId 0UL "Transfer was announced before accepted Complete."
+        Expect.equal accepted.TransferId 0UL "Cache hit completes the correlated request without HTTP."
         PhantomAgent.observe state (PhantomObservation.Member(fst members[0], { snd members[0] with MovementContext = 11UL }))
         publish 202L manifest 11UL
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Context can republish cached immutable generation."
@@ -568,18 +491,6 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 5L
         let complete = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (complete.TransferId,complete.PlayerId,complete.Generation,complete.Upload,complete.RetryAfterMs) (0UL,1UL,1UL,true,10u) "Starting timeout is retryable without unknown transfer correlation."
-    testCase "bandwidth admission cannot skip an earlier full chunk for a short final chunk" <| fun _ ->
-        let writes = ResizeArray<int>()
-        let storage = { memoryStorage with StartUpload = (fun _ -> result false); WriteChunk = (fun (_, offset, _) -> writes.Add offset; result false) }
-        let state, members, output = setup { options with PlayerModelBytesPerSecond = 5; ModelBytesPerSecond = 5; WindowChunks = 3 } storage 1
-        ready state members[0] (asset 1UL (Array.zeroCreate 9))
-        let id = transfer output
-        for offset, count in [0,4;4,4;8,1] do
-            PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Chunk(id, offset, Array.zeroCreate count))
-        PhantomAgent.tick state 4L
-        Expect.equal (Seq.toArray writes) [|0|] "Final short chunk must not jump over offset four."
-        PhantomAgent.tick state 1004L
-        Expect.equal (Seq.toArray writes) [|0;4;8|] "Resumed writes preserve streaming hash order."
 
     testCase "source quota limits publishers while receivers still get policy" <| fun _ ->
         let state, members, output = setup { options with MaxSources = 1 } memoryStorage 3
@@ -685,7 +596,7 @@ let tests = testList "Phantoms" [
         let config = { options with ReplicationIntervalMs = 100; PoseIntervalMs = 100 }
         let delivered = ResizeArray<Guid>()
         let mutable sentThisTurn = false
-        let state = PhantomAgent.create config memoryStorage (fun (id, packet) ->
+        let state = PhantomAgent.create config memoryStorage (PhantomHttp.create config memoryStorage) (fun (id, packet) ->
             if packet.Lane <> DeliveryLane.Poses then Ok ()
             elif sentThisTurn then Error "peer budget"
             else sentThisTurn <- true; delivered.Add id; Ok ())
@@ -818,13 +729,13 @@ let tests = testList "Phantoms" [
         for at in 7L .. 10L do PhantomAgent.tick state at
         let id = transfer output
         output.Clear()
-        PhantomAgent.handle state 29000L (fst members[1]) (PhantomRequest.Progress(id, 4))
+        advance state id 4 29000L
         PhantomAgent.tick state 31000L
         Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Active download outlives the original commit timeout."
-        PhantomAgent.handle state 58000L (fst members[1]) (PhantomRequest.Progress(id, 8))
+        advance state id 8 58000L
         PhantomAgent.tick state 58000L
         Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Final ACK begins native load grace."
-        PhantomAgent.handle state 87999L (fst members[1]) (PhantomRequest.Progress(id, 8))
+        advance state id 8 87999L
         PhantomAgent.tick state 87999L
         Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Load grace remains valid."
         PhantomAgent.tick state 88000L
@@ -843,10 +754,10 @@ let tests = testList "Phantoms" [
             for tick in at .. at + 3L do PhantomAgent.tick state tick
             transfer output
         let first = download 7L
-        PhantomAgent.handle state 1000L (fst members[1]) (PhantomRequest.Progress(first, 4))
+        advance state first 4 1000L
         let second = download 20000L
         Expect.notEqual second first "New request starts a new transfer."
-        PhantomAgent.handle state 29000L (fst members[1]) (PhantomRequest.Progress(second, 4))
+        advance state second 4 29000L
         PhantomAgent.tick state 30999L
         Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Original unique prefix still has grace."
         PhantomAgent.tick state 31000L
@@ -869,51 +780,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 59001L
         Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Settled))) "Inactive late receiver eventually expires."
 
-    testCase "model byte rate survives 10 and 16 ms service intervals" <| fun _ ->
-        for interval in [10L; 16L] do
-            let rate = 5 * 1024 * 1024
-            let config = { options with ChunkBytes = 16384; WindowChunks = 32; ModelBytesPerSecond = rate; PlayerModelBytesPerSecond = rate }
-            let state, members, output = setup config memoryStorage 2
-            ready state members[0] (asset 1UL (Array.zeroCreate (32 * 1024 * 1024)))
-            view state members[1] members[0] 1UL 1.0
-            PhantomAgent.tick state 4L
-            PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
-            let mutable received, start = 0, 0
-            for tick in 1L..200L do
-                let at = 5L + tick * interval
-                output.Clear()
-                PhantomAgent.tick state at
-                for packet in models output do
-                    if not (isNull packet.Chunk) then
-                        received <- int packet.Chunk.Offset + packet.Chunk.Data.Length
-                        PhantomAgent.handle state at (fst members[1]) (PhantomRequest.Progress(PhantomTransferId packet.Chunk.TransferId, received))
-                if tick = 100L then start <- received
-            let expected = rate * int interval / 10
-            Expect.isGreaterThanOrEqual (received - start) (expected - config.ChunkBytes) "No fixed per-service byte cap below the configured rate."
-            Expect.isLessThanOrEqual (received - start) (expected + config.ChunkBytes) "Elapsed time is credited only once."
 
-    testCase "model budget cursor advances on service rather than empty ticks" <| fun _ ->
-        let config = { options with ModelBytesPerSecond = 125; PlayerModelBytesPerSecond = 125 }
-        let state, members, output = setup config memoryStorage 3
-        ready state members[0] (asset 1UL (Array.zeroCreate 256))
-        for n in 1..2 do view state members[n] members[0] 1UL 1.0
-        PhantomAgent.tick state 4L
-        for n in 1..2 do
-            PhantomAgent.handle state 5L (fst members[n]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
-        let received = Collections.Generic.Dictionary<Guid,int>()
-        for tick in 1L..125L do
-            let at = 5L + tick * 16L // One 4-byte chunk every two ticks.
-            output.Clear()
-            PhantomAgent.tick state at
-            for receiver, packet in output |> Seq.toArray do
-                if packet.Lane = DeliveryLane.Models then
-                    let p = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes
-                    if not (isNull p.Chunk) then
-                        let offset = int p.Chunk.Offset + p.Chunk.Data.Length
-                        received[receiver] <- offset
-                        PhantomAgent.handle state at receiver (PhantomRequest.Progress(PhantomTransferId p.Chunk.TransferId, offset))
-        for n in 1..2 do
-            Expect.isTrue (received.ContainsKey(fst members[n]) && received[fst members[n]] >= 100) "Both downloads share the budget without pose traffic."
 
     testCase "replacement bundles keep the old generation moving until display acknowledgement" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,string>>()
@@ -1063,73 +930,37 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 5L
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "expiry"
 
-    storageCase "cold full model upload and download round trip; warm generation needs no chunks" (fun root config _ -> task {
+    storageCase "cold HTTP body round trip and warm hash reuse" (fun root config _ -> task {
         let config = { config with StoragePath = Path.Combine(root, "streaming"); Limits = PhantomOptions.defaults.Limits
-                                   DiskBytes = 32L * 1024L * 1024L; RamBytes = 16L * 1024L * 1024L
-                                   ChunkBytes = 16384; WindowChunks = 4 }
+                                   DiskBytes = 32L * 1024L * 1024L; RamBytes = 0L; ChunkBytes = 16384 }
         let storage = PhantomStorage.create config
+        let http = PhantomHttp.create config storage
         try
-            let state, members, output = setup config storage 2
-            let bytes = Array.init (13 * 1024 * 1024 + 7) (fun index -> byte (index % 251))
+            let bytes = Array.init (1024 * 1024 + 7) (fun index -> byte (index % 251))
             let manifest = asset 1UL bytes
-            let mutable clock = 2L
-            let elapsed = System.Diagnostics.Stopwatch.StartNew()
-            let pump predicate = task {
-                let deadline = Environment.TickCount64 + 15000L
-                while not (predicate()) && Environment.TickCount64 < deadline do
-                    // Real filesystem work must not expire against a 100x accelerated clock.
-                    clock <- max clock (2L + elapsed.ElapsedMilliseconds)
-                    PhantomAgent.tick state clock
-                    do! Task.Delay 1
-                Expect.isTrue (predicate()) "Bounded streaming made progress before test deadline."
-            }
-            PhantomAgent.handle state clock (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
-            do! pump (fun () -> models output |> Array.exists (fun packet -> not (isNull packet.Transfer)))
-            let uploadId = transfer output
-            let mutable sent = 0
-            let mutable acknowledged = 0
-            while sent < bytes.Length || (PhantomAgent.snapshot state).Sources = 0 do
-                while sent < bytes.Length && sent - acknowledged < config.WindowChunks * config.ChunkBytes do
-                    let count = min config.ChunkBytes (bytes.Length - sent)
-                    PhantomAgent.handle state clock (fst members[0]) (PhantomRequest.Chunk(uploadId, sent, bytes[sent..sent+count-1]))
-                    sent <- sent + count
-                let previous = acknowledged
-                do! pump (fun () ->
-                    acknowledged <- models output |> Array.choose (fun packet -> if isNull packet.Progress then None else Some(int packet.Progress.NextOffset)) |> Array.fold max 0
-                    acknowledged > previous || (PhantomAgent.snapshot state).Sources = 1)
-            Expect.equal acknowledged bytes.Length "Every compressed byte was acknowledged."
-            Expect.equal (File.ReadAllBytes(Path.Combine(config.StoragePath, manifest.Hash.Hex + ".zst"))) bytes "Cold verified file."
-            view state members[1] members[0] 1UL 1.0
-            clock <- clock + 100L
-            PhantomAgent.tick state clock
-            output.Clear()
-            PhantomAgent.handle state clock (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, manifest.Generation, requestId()))
-            do! pump (fun () -> models output |> Array.exists (fun packet -> not (isNull packet.Transfer)))
-            let downloadId = transfer output
-            let received = Array.zeroCreate bytes.Length
-            let mutable next = 0
-            while (PhantomAgent.snapshot state).Transfers > 0 do
-                do! pump (fun () -> models output |> Array.exists (fun packet -> not (isNull packet.Chunk)) || (PhantomAgent.snapshot state).Transfers = 0)
-                for packet in models output do
-                    if not (isNull packet.Chunk) then
-                        let chunk = packet.Chunk
-                        Expect.equal (int chunk.Offset) next "Chunks stay ordered."
-                        let content = chunk.Data.ToByteArray()
-                        Buffer.BlockCopy(content, 0, received, next, content.Length)
-                        next <- next + content.Length
-                        PhantomAgent.handle state clock (fst members[1]) (PhantomRequest.Progress(downloadId, next))
-                output.Clear()
-                clock <- clock + 100L
-                PhantomAgent.tick state clock
-            Expect.equal received bytes "Cold download round trip."
-            output.Clear()
-            let warm = asset 2UL bytes
-            PhantomAgent.handle state clock (fst members[0]) (PhantomRequest.Publish(warm, 10UL, requestId()))
-            do! pump (fun () -> models output |> Array.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.Accepted))
-            Expect.equal (PhantomAgent.snapshot state).Transfers 0 "Warm publication settles without incoming chunks."
-            Expect.equal (Directory.GetFiles(config.StoragePath, "*.tmp").Length) 0 "No partial upload left."
-            PhantomAgent.stop state
-        finally storage.Dispose().GetAwaiter().GetResult()
+            let uploadId, downloadId = PhantomTransferId 1UL, PhantomTransferId 2UL
+            let! initial = storage.StartUpload(uploadId, manifest)
+            Expect.equal initial (Ok false) "Cold file."
+            let upload = http.Admit(Guid.NewGuid(), uploadId, manifest, true)
+            use input = new MemoryStream(bytes, false)
+            let! written = http.Serve { Token = upload.Token; Upload = true; Length = Some(int64 bytes.Length); Body = input
+                                        BeginResponse = ignore; Cancellation = Threading.CancellationToken.None }
+            Expect.equal written (Ok ()) "Complete verified upload."
+            Expect.equal upload.Progress bytes.Length "Monotonic full progress."
+            Expect.equal (File.ReadAllBytes(Path.Combine(config.StoragePath, manifest.Hash.Hex + ".zst"))) bytes "Exact file."
+            let! _ = storage.StartDownload(downloadId, manifest)
+            let download = http.Admit(Guid.NewGuid(), downloadId, manifest, false)
+            use output = new MemoryStream()
+            let! read = http.Serve { Token = download.Token; Upload = false; Length = None; Body = output
+                                     BeginResponse = (fun size -> Expect.equal size bytes.Length "HTTP content length")
+                                     Cancellation = Threading.CancellationToken.None }
+            Expect.equal read (Ok ()) "Download completed."
+            Expect.equal (output.ToArray()) bytes "Exact round trip."
+            let! warm = storage.StartUpload(PhantomTransferId 3UL, asset 2UL bytes)
+            Expect.equal warm (Ok true) "Same hash needs no second upload."
+        finally
+            http.Dispose().GetAwaiter().GetResult()
+            storage.Dispose().GetAwaiter().GetResult()
     })
     storageCase "streaming SHA256 atomic completion and restart deduplication" (fun root config storage -> task {
         let bytes = [|1uy;2uy;3uy;4uy;5uy;6uy;7uy;8uy|]
@@ -1189,7 +1020,7 @@ let tests = testList "Phantoms" [
             Expect.equal restarted (Ok false) "Admission refunded."
             let! hash = storage.WriteChunk(PhantomTransferId 3UL, 0, [|4uy;3uy;2uy;1uy|])
             Expect.isError hash "Wrong hash."
-            let! unknown = storage.ReadChunk(PhantomTransferId 99UL, 0, 4)
+            let! unknown = readChunk storage (PhantomTransferId 99UL, 0, 4)
             Expect.isError unknown "Unknown download."
             Expect.isEmpty (raised.ToArray()) "Expected failures must not throw and catch internally."
         finally AppDomain.CurrentDomain.FirstChanceException.RemoveHandler handler
@@ -1220,7 +1051,7 @@ let tests = testList "Phantoms" [
             Expect.isOk opened "pinned"
             let! refused = store.StartUpload(PhantomTransferId 3UL, second)
             Expect.isError refused "quota protects active read"
-            let! bytes = store.ReadChunk(PhantomTransferId 2UL, 0, 4)
+            let! bytes = readChunk store (PhantomTransferId 2UL, 0, 4)
             Expect.equal (ok bytes) [|1uy;2uy;3uy;4uy|] "RAM read"
             do! store.Cancel(PhantomTransferId 2UL)
             let! admitted = store.StartUpload(PhantomTransferId 4UL, second)
@@ -1249,11 +1080,15 @@ let tests = testList "Phantoms" [
         let! _ = storage.WriteChunk(PhantomTransferId 1UL, 0, bytes)
         let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
         let path = Path.Combine(root, manifest.Hash.Hex + ".zst")
+        do! storage.Cancel(PhantomTransferId 2UL)
         File.WriteAllBytes(path, Array.zeroCreate 32)
-        let! grown = storage.ReadChunk(PhantomTransferId 2UL, 0, 4)
+        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
+        let! grown = readChunk storage (PhantomTransferId 2UL, 0, 4)
         Expect.isError grown "Warm verified entry cannot allocate an unexpectedly grown file."
+        do! storage.Cancel(PhantomTransferId 2UL)
         File.WriteAllBytes(path, bytes)
-        let! recovered = storage.ReadChunk(PhantomTransferId 2UL, 0, 4)
+        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
+        let! recovered = readChunk storage (PhantomTransferId 2UL, 0, 4)
         Expect.equal (ok recovered) bytes "Failed fill did not publish invalid RAM cache."
         do! storage.Cancel(PhantomTransferId 2UL)
     })

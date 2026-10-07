@@ -33,6 +33,7 @@ let main argv =
         ChatRoomAgentTests.tests
         PresenceAgentTests.tests
         PhantomTests.tests
+        PhantomHttpTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
         ServerRuntimeTests.hiddenIdentityTests

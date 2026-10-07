@@ -545,7 +545,7 @@ TEST_CASE("Chat codec serializes directly into a transferable reliable ENet pack
 
 TEST_SUITE_END();
 
-TEST_CASE("DreamNet bulk flight ceiling preserves explicit native bandwidth limits")
+TEST_CASE("DreamNet sends preserve the native reliable flight window")
 {
   for (int limited : {0, 1, 2})
   {
@@ -556,6 +556,6 @@ TEST_CASE("DreamNet bulk flight ceiling preserves explicit native bandwidth limi
     peer->host->outgoingBandwidth = limited == 2 ? 65536 : 0;
     const std::vector<std::uint8_t> payload(16384);
     REQUIRE(connected.clientPeer.PushSpan(std::span{payload}, 0));
-    CHECK(peer->windowSize == (limited ? 4096 : 524288));
+    CHECK(peer->windowSize == 4096);
   }
 }

@@ -64,10 +64,6 @@ class Cancel;
 struct CancelDefaultTypeInternal;
 extern CancelDefaultTypeInternal _Cancel_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull Cancel_class_data_;
-class Chunk;
-struct ChunkDefaultTypeInternal;
-extern ChunkDefaultTypeInternal _Chunk_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull Chunk_class_data_;
 class ClientAssetPacket;
 struct ClientAssetPacketDefaultTypeInternal;
 extern ClientAssetPacketDefaultTypeInternal _ClientAssetPacket_default_instance_;
@@ -108,10 +104,6 @@ class Preferences;
 struct PreferencesDefaultTypeInternal;
 extern PreferencesDefaultTypeInternal _Preferences_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull Preferences_class_data_;
-class Progress;
-struct ProgressDefaultTypeInternal;
-extern ProgressDefaultTypeInternal _Progress_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull Progress_class_data_;
 class Publish;
 struct PublishDefaultTypeInternal;
 extern PublishDefaultTypeInternal _Publish_default_instance_;
@@ -211,7 +203,7 @@ class Withdraw final : public ::google::protobuf::internal::ZeroFieldsBase
     return *reinterpret_cast<const Withdraw*>(
         &_Withdraw_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(Withdraw& a, Withdraw& b) { a.Swap(&b); }
   inline void Swap(Withdraw* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -346,7 +338,7 @@ class Settled final : public ::google::protobuf::Message
     return *reinterpret_cast<const Settled*>(
         &_Settled_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(Settled& a, Settled& b) { a.Swap(&b); }
   inline void Swap(Settled* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -548,7 +540,7 @@ class Remove final : public ::google::protobuf::Message
     return *reinterpret_cast<const Remove*>(
         &_Remove_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(Remove& a, Remove& b) { a.Swap(&b); }
   inline void Swap(Remove* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -693,208 +685,6 @@ class Remove final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull Remove_class_data_;
-// -------------------------------------------------------------------
-
-class Progress final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.Progress) */ {
- public:
-  inline Progress() : Progress(nullptr) {}
-  ~Progress() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(Progress* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(Progress));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR Progress(::google::protobuf::internal::ConstantInitialized);
-
-  inline Progress(const Progress& from) : Progress(nullptr, from) {}
-  inline Progress(Progress&& from) noexcept
-      : Progress(nullptr, ::std::move(from)) {}
-  inline Progress& operator=(const Progress& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline Progress& operator=(Progress&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const Progress& default_instance() {
-    return *reinterpret_cast<const Progress*>(
-        &_Progress_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 6;
-  friend void swap(Progress& a, Progress& b) { a.Swap(&b); }
-  inline void Swap(Progress* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(Progress* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  Progress* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<Progress>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const Progress& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const Progress& from) { Progress::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(Progress* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Phantom.Progress"; }
-
-  explicit Progress(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  Progress(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Progress& from);
-  Progress(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Progress&& from) noexcept
-      : Progress(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kTransferIdFieldNumber = 1,
-    kNextOffsetFieldNumber = 2,
-  };
-  // uint64 transfer_id = 1;
-  void clear_transfer_id() ;
-  ::uint64_t transfer_id() const;
-  void set_transfer_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(::uint64_t value);
-
-  public:
-  // uint32 next_offset = 2;
-  void clear_next_offset() ;
-  ::uint32_t next_offset() const;
-  void set_next_offset(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_next_offset() const;
-  void _internal_set_next_offset(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.Progress)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   0, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const Progress& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t transfer_id_;
-    ::uint32_t next_offset_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_phantom_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataFull Progress_class_data_;
 // -------------------------------------------------------------------
 
 class Preferences final : public ::google::protobuf::Message
@@ -1178,7 +968,7 @@ class PoseSample final : public ::google::protobuf::Message
     return *reinterpret_cast<const PoseSample*>(
         &_PoseSample_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(PoseSample& a, PoseSample& b) { a.Swap(&b); }
   inline void Swap(PoseSample* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1421,7 +1211,7 @@ class PoseDemand final : public ::google::protobuf::Message
     return *reinterpret_cast<const PoseDemand*>(
         &_PoseDemand_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(PoseDemand& a, PoseDemand& b) { a.Swap(&b); }
   inline void Swap(PoseDemand* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1623,7 +1413,7 @@ class Policy final : public ::google::protobuf::Message
     return *reinterpret_cast<const Policy*>(
         &_Policy_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(Policy& a, Policy& b) { a.Swap(&b); }
   inline void Swap(Policy* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1719,7 +1509,6 @@ class Policy final : public ::google::protobuf::Message
     kSampleRateFieldNumber = 8,
     kMaximumVisibleFieldNumber = 9,
     kDistanceFieldNumber = 10,
-    kWindowChunksFieldNumber = 11,
     kConcurrentTransfersFieldNumber = 12,
     kModelBytesPerSecondFieldNumber = 13,
     kPoseBytesPerSecondFieldNumber = 14,
@@ -1814,16 +1603,6 @@ class Policy final : public ::google::protobuf::Message
   void _internal_set_distance(float value);
 
   public:
-  // uint32 window_chunks = 11;
-  void clear_window_chunks() ;
-  ::uint32_t window_chunks() const;
-  void set_window_chunks(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_window_chunks() const;
-  void _internal_set_window_chunks(::uint32_t value);
-
-  public:
   // uint32 concurrent_transfers = 12;
   void clear_concurrent_transfers() ;
   ::uint32_t concurrent_transfers() const;
@@ -1858,7 +1637,7 @@ class Policy final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 13,
+  static const ::google::protobuf::internal::TcParseTable<4, 12,
                                    0, 0,
                                    2>
       _table_;
@@ -1889,7 +1668,6 @@ class Policy final : public ::google::protobuf::Message
     ::uint32_t sample_rate_;
     ::uint32_t maximum_visible_;
     float distance_;
-    ::uint32_t window_chunks_;
     ::uint32_t concurrent_transfers_;
     ::uint32_t model_bytes_per_second_;
     ::uint32_t pose_bytes_per_second_;
@@ -1957,7 +1735,7 @@ class Download final : public ::google::protobuf::Message
     return *reinterpret_cast<const Download*>(
         &_Download_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(Download& a, Download& b) { a.Swap(&b); }
   inline void Swap(Download* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2171,7 +1949,7 @@ class Displayed final : public ::google::protobuf::Message
     return *reinterpret_cast<const Displayed*>(
         &_Displayed_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(Displayed& a, Displayed& b) { a.Swap(&b); }
   inline void Swap(Displayed* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2385,7 +2163,7 @@ class Complete final : public ::google::protobuf::Message
     return *reinterpret_cast<const Complete*>(
         &_Complete_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(Complete& a, Complete& b) { a.Swap(&b); }
   inline void Swap(Complete* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2609,225 +2387,6 @@ class Complete final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull Complete_class_data_;
 // -------------------------------------------------------------------
 
-class Chunk final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.Chunk) */ {
- public:
-  inline Chunk() : Chunk(nullptr) {}
-  ~Chunk() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(Chunk* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(Chunk));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR Chunk(::google::protobuf::internal::ConstantInitialized);
-
-  inline Chunk(const Chunk& from) : Chunk(nullptr, from) {}
-  inline Chunk(Chunk&& from) noexcept
-      : Chunk(nullptr, ::std::move(from)) {}
-  inline Chunk& operator=(const Chunk& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline Chunk& operator=(Chunk&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const Chunk& default_instance() {
-    return *reinterpret_cast<const Chunk*>(
-        &_Chunk_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 3;
-  friend void swap(Chunk& a, Chunk& b) { a.Swap(&b); }
-  inline void Swap(Chunk* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(Chunk* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  Chunk* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<Chunk>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const Chunk& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const Chunk& from) { Chunk::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(Chunk* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Phantom.Chunk"; }
-
-  explicit Chunk(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  Chunk(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Chunk& from);
-  Chunk(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Chunk&& from) noexcept
-      : Chunk(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kDataFieldNumber = 3,
-    kTransferIdFieldNumber = 1,
-    kOffsetFieldNumber = 2,
-  };
-  // bytes data = 3;
-  void clear_data() ;
-  const ::std::string& data() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_data(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_data();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_data();
-  void set_allocated_data(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_data() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_data(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_data();
-
-  public:
-  // uint64 transfer_id = 1;
-  void clear_transfer_id() ;
-  ::uint64_t transfer_id() const;
-  void set_transfer_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(::uint64_t value);
-
-  public:
-  // uint32 offset = 2;
-  void clear_offset() ;
-  ::uint32_t offset() const;
-  void set_offset(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_offset() const;
-  void _internal_set_offset(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.Chunk)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   0, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const Chunk& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr data_;
-    ::uint64_t transfer_id_;
-    ::uint32_t offset_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_phantom_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataFull Chunk_class_data_;
-// -------------------------------------------------------------------
-
 class Cancel final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.Cancel) */ {
  public:
@@ -2883,7 +2442,7 @@ class Cancel final : public ::google::protobuf::Message
     return *reinterpret_cast<const Cancel*>(
         &_Cancel_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(Cancel& a, Cancel& b) { a.Swap(&b); }
   inline void Swap(Cancel* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3328,7 +2887,7 @@ class Transfer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Transfer*>(
         &_Transfer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(Transfer& a, Transfer& b) { a.Swap(&b); }
   inline void Swap(Transfer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3415,12 +2974,28 @@ class Transfer final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
+    kHttpTokenFieldNumber = 6,
     kAssetFieldNumber = 2,
     kTransferIdFieldNumber = 1,
     kPlayerIdFieldNumber = 3,
     kRequestIdFieldNumber = 5,
     kUploadFieldNumber = 4,
   };
+  // string http_token = 6;
+  void clear_http_token() ;
+  const ::std::string& http_token() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_http_token(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_http_token();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_http_token();
+  void set_allocated_http_token(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_http_token() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_http_token(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_http_token();
+
+  public:
   // .Dreamsleeve.Protocol.Phantom.AssetDescriptor asset = 2;
   bool has_asset() const;
   void clear_asset() ;
@@ -3480,8 +3055,8 @@ class Transfer final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 5,
-                                   1, 0,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   1, 56,
                                    2>
       _table_;
 
@@ -3502,6 +3077,7 @@ class Transfer final : public ::google::protobuf::Message
         const Transfer& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr http_token_;
     ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NULLABLE asset_;
     ::uint64_t transfer_id_;
     ::uint64_t player_id_;
@@ -3571,7 +3147,7 @@ class ServerPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ServerPosePacket*>(
         &_ServerPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(ServerPosePacket& a, ServerPosePacket& b) { a.Swap(&b); }
   inline void Swap(ServerPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4038,7 +3614,7 @@ class Offer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Offer*>(
         &_Offer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(Offer& a, Offer& b) { a.Swap(&b); }
   inline void Swap(Offer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4257,7 +3833,7 @@ class ClientPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ClientPosePacket*>(
         &_ClientPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(ClientPosePacket& a, ClientPosePacket& b) { a.Swap(&b); }
   inline void Swap(ClientPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4484,16 +4060,14 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   enum PayloadCase {
     kOffer = 2,
     kTransfer = 3,
-    kChunk = 4,
     kComplete = 5,
     kRemove = 6,
-    kProgress = 7,
     kPolicy = 8,
     kSettled = 9,
     kPoseDemand = 10,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(ServerAssetPacket& a, ServerAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ServerAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4583,10 +4157,8 @@ class ServerAssetPacket final : public ::google::protobuf::Message
     kProtocolVersionFieldNumber = 1,
     kOfferFieldNumber = 2,
     kTransferFieldNumber = 3,
-    kChunkFieldNumber = 4,
     kCompleteFieldNumber = 5,
     kRemoveFieldNumber = 6,
-    kProgressFieldNumber = 7,
     kPolicyFieldNumber = 8,
     kSettledFieldNumber = 9,
     kPoseDemandFieldNumber = 10,
@@ -4639,25 +4211,6 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Phantom::Transfer* PROTOBUF_NONNULL _internal_mutable_transfer();
 
   public:
-  // .Dreamsleeve.Protocol.Phantom.Chunk chunk = 4;
-  bool has_chunk() const;
-  private:
-  bool _internal_has_chunk() const;
-
-  public:
-  void clear_chunk() ;
-  const ::Dreamsleeve::Protocol::Phantom::Chunk& chunk() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE release_chunk();
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL mutable_chunk();
-  void set_allocated_chunk(::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_chunk(::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE unsafe_arena_release_chunk();
-
-  private:
-  const ::Dreamsleeve::Protocol::Phantom::Chunk& _internal_chunk() const;
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL _internal_mutable_chunk();
-
-  public:
   // .Dreamsleeve.Protocol.Phantom.Complete complete = 5;
   bool has_complete() const;
   private:
@@ -4694,25 +4247,6 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   private:
   const ::Dreamsleeve::Protocol::Phantom::Remove& _internal_remove() const;
   ::Dreamsleeve::Protocol::Phantom::Remove* PROTOBUF_NONNULL _internal_mutable_remove();
-
-  public:
-  // .Dreamsleeve.Protocol.Phantom.Progress progress = 7;
-  bool has_progress() const;
-  private:
-  bool _internal_has_progress() const;
-
-  public:
-  void clear_progress() ;
-  const ::Dreamsleeve::Protocol::Phantom::Progress& progress() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE release_progress();
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL mutable_progress();
-  void set_allocated_progress(::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_progress(::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE unsafe_arena_release_progress();
-
-  private:
-  const ::Dreamsleeve::Protocol::Phantom::Progress& _internal_progress() const;
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL _internal_mutable_progress();
 
   public:
   // .Dreamsleeve.Protocol.Phantom.Policy policy = 8;
@@ -4779,18 +4313,16 @@ class ServerAssetPacket final : public ::google::protobuf::Message
   class _Internal;
   void set_has_offer();
   void set_has_transfer();
-  void set_has_chunk();
   void set_has_complete();
   void set_has_remove();
-  void set_has_progress();
   void set_has_policy();
   void set_has_settled();
   void set_has_pose_demand();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 10,
-                                   9, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 8,
+                                   7, 0,
                                    2>
       _table_;
 
@@ -4817,10 +4349,8 @@ class ServerAssetPacket final : public ::google::protobuf::Message
       ::google::protobuf::internal::ConstantInitialized _constinit_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE offer_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE transfer_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE chunk_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE complete_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE remove_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE progress_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE policy_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE settled_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE pose_demand_;
@@ -4893,15 +4423,13 @@ class ClientAssetPacket final : public ::google::protobuf::Message
   enum PayloadCase {
     kPreferences = 2,
     kPublish = 3,
-    kChunk = 4,
     kDownload = 5,
     kCancel = 6,
     kWithdraw = 7,
-    kProgress = 8,
     kDisplayed = 9,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(ClientAssetPacket& a, ClientAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ClientAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4991,11 +4519,9 @@ class ClientAssetPacket final : public ::google::protobuf::Message
     kProtocolVersionFieldNumber = 1,
     kPreferencesFieldNumber = 2,
     kPublishFieldNumber = 3,
-    kChunkFieldNumber = 4,
     kDownloadFieldNumber = 5,
     kCancelFieldNumber = 6,
     kWithdrawFieldNumber = 7,
-    kProgressFieldNumber = 8,
     kDisplayedFieldNumber = 9,
   };
   // uint32 protocol_version = 1;
@@ -5044,25 +4570,6 @@ class ClientAssetPacket final : public ::google::protobuf::Message
   private:
   const ::Dreamsleeve::Protocol::Phantom::Publish& _internal_publish() const;
   ::Dreamsleeve::Protocol::Phantom::Publish* PROTOBUF_NONNULL _internal_mutable_publish();
-
-  public:
-  // .Dreamsleeve.Protocol.Phantom.Chunk chunk = 4;
-  bool has_chunk() const;
-  private:
-  bool _internal_has_chunk() const;
-
-  public:
-  void clear_chunk() ;
-  const ::Dreamsleeve::Protocol::Phantom::Chunk& chunk() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE release_chunk();
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL mutable_chunk();
-  void set_allocated_chunk(::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_chunk(::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE unsafe_arena_release_chunk();
-
-  private:
-  const ::Dreamsleeve::Protocol::Phantom::Chunk& _internal_chunk() const;
-  ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL _internal_mutable_chunk();
 
   public:
   // .Dreamsleeve.Protocol.Phantom.Download download = 5;
@@ -5122,25 +4629,6 @@ class ClientAssetPacket final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Phantom::Withdraw* PROTOBUF_NONNULL _internal_mutable_withdraw();
 
   public:
-  // .Dreamsleeve.Protocol.Phantom.Progress progress = 8;
-  bool has_progress() const;
-  private:
-  bool _internal_has_progress() const;
-
-  public:
-  void clear_progress() ;
-  const ::Dreamsleeve::Protocol::Phantom::Progress& progress() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE release_progress();
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL mutable_progress();
-  void set_allocated_progress(::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_progress(::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE unsafe_arena_release_progress();
-
-  private:
-  const ::Dreamsleeve::Protocol::Phantom::Progress& _internal_progress() const;
-  ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL _internal_mutable_progress();
-
-  public:
   // .Dreamsleeve.Protocol.Phantom.Displayed displayed = 9;
   bool has_displayed() const;
   private:
@@ -5167,17 +4655,15 @@ class ClientAssetPacket final : public ::google::protobuf::Message
   class _Internal;
   void set_has_preferences();
   void set_has_publish();
-  void set_has_chunk();
   void set_has_download();
   void set_has_cancel();
   void set_has_withdraw();
-  void set_has_progress();
   void set_has_displayed();
   inline bool has_payload() const;
   inline void clear_has_payload();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 9,
-                                   8, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 7,
+                                   6, 0,
                                    2>
       _table_;
 
@@ -5204,11 +4690,9 @@ class ClientAssetPacket final : public ::google::protobuf::Message
       ::google::protobuf::internal::ConstantInitialized _constinit_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE preferences_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE publish_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE chunk_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE download_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE cancel_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE withdraw_;
-      ::google::protobuf::Message* PROTOBUF_NULLABLE progress_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE displayed_;
     } payload_;
     ::uint32_t _oneof_case_[1];
@@ -5685,125 +5169,6 @@ inline void Publish::_internal_set_request_id(::uint64_t value) {
 
 // -------------------------------------------------------------------
 
-// Chunk
-
-// uint64 transfer_id = 1;
-inline void Chunk::clear_transfer_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.transfer_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
-}
-inline ::uint64_t Chunk::transfer_id() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Chunk.transfer_id)
-  return _internal_transfer_id();
-}
-inline void Chunk::set_transfer_id(::uint64_t value) {
-  _internal_set_transfer_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Chunk.transfer_id)
-}
-inline ::uint64_t Chunk::_internal_transfer_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.transfer_id_;
-}
-inline void Chunk::_internal_set_transfer_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.transfer_id_ = value;
-}
-
-// uint32 offset = 2;
-inline void Chunk::clear_offset() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.offset_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
-}
-inline ::uint32_t Chunk::offset() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Chunk.offset)
-  return _internal_offset();
-}
-inline void Chunk::set_offset(::uint32_t value) {
-  _internal_set_offset(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Chunk.offset)
-}
-inline ::uint32_t Chunk::_internal_offset() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.offset_;
-}
-inline void Chunk::_internal_set_offset(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.offset_ = value;
-}
-
-// bytes data = 3;
-inline void Chunk::clear_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.data_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
-}
-inline const ::std::string& Chunk::data() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Chunk.data)
-  return _internal_data();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void Chunk::set_data(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.data_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Chunk.data)
-}
-inline ::std::string* PROTOBUF_NONNULL Chunk::mutable_data()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_data();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Chunk.data)
-  return _s;
-}
-inline const ::std::string& Chunk::_internal_data() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.data_.Get();
-}
-inline void Chunk::_internal_set_data(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.data_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL Chunk::_internal_mutable_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.data_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE Chunk::release_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Chunk.data)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.data_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.data_.Set("", GetArena());
-  }
-  return released;
-}
-inline void Chunk::set_allocated_data(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  _impl_.data_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.data_.IsDefault()) {
-    _impl_.data_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Chunk.data)
-}
-
-// -------------------------------------------------------------------
-
 // Download
 
 // uint64 player_id = 1;
@@ -5908,60 +5273,6 @@ inline ::uint64_t Cancel::_internal_transfer_id() const {
 inline void Cancel::_internal_set_transfer_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.transfer_id_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// Progress
-
-// uint64 transfer_id = 1;
-inline void Progress::clear_transfer_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.transfer_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
-}
-inline ::uint64_t Progress::transfer_id() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Progress.transfer_id)
-  return _internal_transfer_id();
-}
-inline void Progress::set_transfer_id(::uint64_t value) {
-  _internal_set_transfer_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Progress.transfer_id)
-}
-inline ::uint64_t Progress::_internal_transfer_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.transfer_id_;
-}
-inline void Progress::_internal_set_transfer_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.transfer_id_ = value;
-}
-
-// uint32 next_offset = 2;
-inline void Progress::clear_next_offset() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.next_offset_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
-}
-inline ::uint32_t Progress::next_offset() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Progress.next_offset)
-  return _internal_next_offset();
-}
-inline void Progress::set_next_offset(::uint32_t value) {
-  _internal_set_next_offset(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Progress.next_offset)
-}
-inline ::uint32_t Progress::_internal_next_offset() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.next_offset_;
-}
-inline void Progress::_internal_set_next_offset(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.next_offset_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -6348,88 +5659,6 @@ inline ::Dreamsleeve::Protocol::Phantom::Publish* PROTOBUF_NONNULL ClientAssetPa
   return _msg;
 }
 
-// .Dreamsleeve.Protocol.Phantom.Chunk chunk = 4;
-inline bool ClientAssetPacket::has_chunk() const {
-  return payload_case() == kChunk;
-}
-inline bool ClientAssetPacket::_internal_has_chunk() const {
-  return payload_case() == kChunk;
-}
-inline void ClientAssetPacket::set_has_chunk() {
-  _impl_._oneof_case_[0] = kChunk;
-}
-inline void ClientAssetPacket::clear_chunk() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (payload_case() == kChunk) {
-    if (GetArena() == nullptr) {
-      delete _impl_.payload_.chunk_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.chunk_);
-    }
-    clear_has_payload();
-  }
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE ClientAssetPacket::release_chunk() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.chunk)
-  if (payload_case() == kChunk) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.payload_.chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Chunk& ClientAssetPacket::_internal_chunk() const {
-  return payload_case() == kChunk ? static_cast<const ::Dreamsleeve::Protocol::Phantom::Chunk&>(*reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::Chunk&>(::Dreamsleeve::Protocol::Phantom::_Chunk_default_instance_);
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Chunk& ClientAssetPacket::chunk() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.chunk)
-  return _internal_chunk();
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE ClientAssetPacket::unsafe_arena_release_chunk() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.chunk)
-  if (payload_case() == kChunk) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-    _impl_.payload_.chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void ClientAssetPacket::unsafe_arena_set_allocated_chunk(
-    ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_payload();
-  if (value) {
-    set_has_chunk();
-    _impl_.payload_.chunk_ = reinterpret_cast<::google::protobuf::Message*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.chunk)
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL ClientAssetPacket::_internal_mutable_chunk() {
-  if (payload_case() != kChunk) {
-    clear_payload();
-    set_has_chunk();
-    _impl_.payload_.chunk_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::Chunk>(GetArena()));
-  }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL ClientAssetPacket::mutable_chunk()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Phantom::Chunk* _msg = _internal_mutable_chunk();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.chunk)
-  return _msg;
-}
-
 // .Dreamsleeve.Protocol.Phantom.Download download = 5;
 inline bool ClientAssetPacket::has_download() const {
   return payload_case() == kDownload;
@@ -6673,88 +5902,6 @@ inline ::Dreamsleeve::Protocol::Phantom::Withdraw* PROTOBUF_NONNULL ClientAssetP
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Phantom::Withdraw* _msg = _internal_mutable_withdraw();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.withdraw)
-  return _msg;
-}
-
-// .Dreamsleeve.Protocol.Phantom.Progress progress = 8;
-inline bool ClientAssetPacket::has_progress() const {
-  return payload_case() == kProgress;
-}
-inline bool ClientAssetPacket::_internal_has_progress() const {
-  return payload_case() == kProgress;
-}
-inline void ClientAssetPacket::set_has_progress() {
-  _impl_._oneof_case_[0] = kProgress;
-}
-inline void ClientAssetPacket::clear_progress() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (payload_case() == kProgress) {
-    if (GetArena() == nullptr) {
-      delete _impl_.payload_.progress_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.progress_);
-    }
-    clear_has_payload();
-  }
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE ClientAssetPacket::release_progress() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.progress)
-  if (payload_case() == kProgress) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.payload_.progress_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Progress& ClientAssetPacket::_internal_progress() const {
-  return payload_case() == kProgress ? static_cast<const ::Dreamsleeve::Protocol::Phantom::Progress&>(*reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::Progress&>(::Dreamsleeve::Protocol::Phantom::_Progress_default_instance_);
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Progress& ClientAssetPacket::progress() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.progress)
-  return _internal_progress();
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE ClientAssetPacket::unsafe_arena_release_progress() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.progress)
-  if (payload_case() == kProgress) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-    _impl_.payload_.progress_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void ClientAssetPacket::unsafe_arena_set_allocated_progress(
-    ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_payload();
-  if (value) {
-    set_has_progress();
-    _impl_.payload_.progress_ = reinterpret_cast<::google::protobuf::Message*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.progress)
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL ClientAssetPacket::_internal_mutable_progress() {
-  if (payload_case() != kProgress) {
-    clear_payload();
-    set_has_progress();
-    _impl_.payload_.progress_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::Progress>(GetArena()));
-  }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL ClientAssetPacket::mutable_progress()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Phantom::Progress* _msg = _internal_mutable_progress();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ClientAssetPacket.progress)
   return _msg;
 }
 
@@ -7011,7 +6158,7 @@ inline void Transfer::clear_transfer_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.transfer_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::uint64_t Transfer::transfer_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.transfer_id)
@@ -7019,7 +6166,7 @@ inline ::uint64_t Transfer::transfer_id() const {
 }
 inline void Transfer::set_transfer_id(::uint64_t value) {
   _internal_set_transfer_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.transfer_id)
 }
 inline ::uint64_t Transfer::_internal_transfer_id() const {
@@ -7033,7 +6180,7 @@ inline void Transfer::_internal_set_transfer_id(::uint64_t value) {
 
 // .Dreamsleeve.Protocol.Phantom.AssetDescriptor asset = 2;
 inline bool Transfer::has_asset() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.asset_ != nullptr);
   return value;
 }
@@ -7041,7 +6188,7 @@ inline void Transfer::clear_asset() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.asset_ != nullptr) _impl_.asset_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000002U);
 }
 inline const ::Dreamsleeve::Protocol::Phantom::AssetDescriptor& Transfer::_internal_asset() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -7060,16 +6207,16 @@ inline void Transfer::unsafe_arena_set_allocated_asset(
   }
   _impl_.asset_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDescriptor*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.Transfer.asset)
 }
 inline ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NULLABLE Transfer::release_asset() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* released = _impl_.asset_;
   _impl_.asset_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -7089,7 +6236,7 @@ inline ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NULLABLE Tran
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Transfer.asset)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* temp = _impl_.asset_;
   _impl_.asset_ = nullptr;
   return temp;
@@ -7104,7 +6251,7 @@ inline ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NONNULL Trans
 }
 inline ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NONNULL Transfer::mutable_asset()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* _msg = _internal_mutable_asset();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Transfer.asset)
   return _msg;
@@ -7121,9 +6268,9 @@ inline void Transfer::set_allocated_asset(::Dreamsleeve::Protocol::Phantom::Asse
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.asset_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDescriptor*>(value);
@@ -7135,7 +6282,7 @@ inline void Transfer::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::uint64_t Transfer::player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.player_id)
@@ -7143,7 +6290,7 @@ inline ::uint64_t Transfer::player_id() const {
 }
 inline void Transfer::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.player_id)
 }
 inline ::uint64_t Transfer::_internal_player_id() const {
@@ -7160,7 +6307,7 @@ inline void Transfer::clear_upload() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.upload_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline bool Transfer::upload() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.upload)
@@ -7168,7 +6315,7 @@ inline bool Transfer::upload() const {
 }
 inline void Transfer::set_upload(bool value) {
   _internal_set_upload(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.upload)
 }
 inline bool Transfer::_internal_upload() const {
@@ -7185,7 +6332,7 @@ inline void Transfer::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::uint64_t Transfer::request_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.request_id)
@@ -7193,7 +6340,7 @@ inline ::uint64_t Transfer::request_id() const {
 }
 inline void Transfer::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.request_id)
 }
 inline ::uint64_t Transfer::_internal_request_id() const {
@@ -7203,6 +6350,71 @@ inline ::uint64_t Transfer::_internal_request_id() const {
 inline void Transfer::_internal_set_request_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = value;
+}
+
+// string http_token = 6;
+inline void Transfer::clear_http_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.http_token_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& Transfer::http_token() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.http_token)
+  return _internal_http_token();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void Transfer::set_http_token(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.http_token_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.http_token)
+}
+inline ::std::string* PROTOBUF_NONNULL Transfer::mutable_http_token()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_http_token();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Transfer.http_token)
+  return _s;
+}
+inline const ::std::string& Transfer::_internal_http_token() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.http_token_.Get();
+}
+inline void Transfer::_internal_set_http_token(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.http_token_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL Transfer::_internal_mutable_http_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.http_token_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE Transfer::release_http_token() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Transfer.http_token)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.http_token_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.http_token_.Set("", GetArena());
+  }
+  return released;
+}
+inline void Transfer::set_allocated_http_token(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.http_token_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.http_token_.IsDefault()) {
+    _impl_.http_token_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Transfer.http_token)
 }
 
 // -------------------------------------------------------------------
@@ -7732,37 +6944,12 @@ inline void Policy::_internal_set_distance(float value) {
   _impl_.distance_ = value;
 }
 
-// uint32 window_chunks = 11;
-inline void Policy::clear_window_chunks() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.window_chunks_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0],
-                  0x00000200U);
-}
-inline ::uint32_t Policy::window_chunks() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.window_chunks)
-  return _internal_window_chunks();
-}
-inline void Policy::set_window_chunks(::uint32_t value) {
-  _internal_set_window_chunks(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.window_chunks)
-}
-inline ::uint32_t Policy::_internal_window_chunks() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.window_chunks_;
-}
-inline void Policy::_internal_set_window_chunks(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.window_chunks_ = value;
-}
-
 // uint32 concurrent_transfers = 12;
 inline void Policy::clear_concurrent_transfers() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.concurrent_transfers_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000400U);
+                  0x00000200U);
 }
 inline ::uint32_t Policy::concurrent_transfers() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.concurrent_transfers)
@@ -7770,7 +6957,7 @@ inline ::uint32_t Policy::concurrent_transfers() const {
 }
 inline void Policy::set_concurrent_transfers(::uint32_t value) {
   _internal_set_concurrent_transfers(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.concurrent_transfers)
 }
 inline ::uint32_t Policy::_internal_concurrent_transfers() const {
@@ -7787,7 +6974,7 @@ inline void Policy::clear_model_bytes_per_second() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.model_bytes_per_second_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000800U);
+                  0x00000400U);
 }
 inline ::uint32_t Policy::model_bytes_per_second() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.model_bytes_per_second)
@@ -7795,7 +6982,7 @@ inline ::uint32_t Policy::model_bytes_per_second() const {
 }
 inline void Policy::set_model_bytes_per_second(::uint32_t value) {
   _internal_set_model_bytes_per_second(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.model_bytes_per_second)
 }
 inline ::uint32_t Policy::_internal_model_bytes_per_second() const {
@@ -7812,7 +6999,7 @@ inline void Policy::clear_pose_bytes_per_second() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pose_bytes_per_second_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00001000U);
+                  0x00000800U);
 }
 inline ::uint32_t Policy::pose_bytes_per_second() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes_per_second)
@@ -7820,7 +7007,7 @@ inline ::uint32_t Policy::pose_bytes_per_second() const {
 }
 inline void Policy::set_pose_bytes_per_second(::uint32_t value) {
   _internal_set_pose_bytes_per_second(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Policy.pose_bytes_per_second)
 }
 inline ::uint32_t Policy::_internal_pose_bytes_per_second() const {
@@ -8025,88 +7212,6 @@ inline ::Dreamsleeve::Protocol::Phantom::Transfer* PROTOBUF_NONNULL ServerAssetP
   return _msg;
 }
 
-// .Dreamsleeve.Protocol.Phantom.Chunk chunk = 4;
-inline bool ServerAssetPacket::has_chunk() const {
-  return payload_case() == kChunk;
-}
-inline bool ServerAssetPacket::_internal_has_chunk() const {
-  return payload_case() == kChunk;
-}
-inline void ServerAssetPacket::set_has_chunk() {
-  _impl_._oneof_case_[0] = kChunk;
-}
-inline void ServerAssetPacket::clear_chunk() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (payload_case() == kChunk) {
-    if (GetArena() == nullptr) {
-      delete _impl_.payload_.chunk_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.chunk_);
-    }
-    clear_has_payload();
-  }
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE ServerAssetPacket::release_chunk() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.chunk)
-  if (payload_case() == kChunk) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.payload_.chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Chunk& ServerAssetPacket::_internal_chunk() const {
-  return payload_case() == kChunk ? static_cast<const ::Dreamsleeve::Protocol::Phantom::Chunk&>(*reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::Chunk&>(::Dreamsleeve::Protocol::Phantom::_Chunk_default_instance_);
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Chunk& ServerAssetPacket::chunk() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.chunk)
-  return _internal_chunk();
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE ServerAssetPacket::unsafe_arena_release_chunk() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.chunk)
-  if (payload_case() == kChunk) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-    _impl_.payload_.chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void ServerAssetPacket::unsafe_arena_set_allocated_chunk(
-    ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_payload();
-  if (value) {
-    set_has_chunk();
-    _impl_.payload_.chunk_ = reinterpret_cast<::google::protobuf::Message*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.chunk)
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL ServerAssetPacket::_internal_mutable_chunk() {
-  if (payload_case() != kChunk) {
-    clear_payload();
-    set_has_chunk();
-    _impl_.payload_.chunk_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::Chunk>(GetArena()));
-  }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Chunk*>(_impl_.payload_.chunk_);
-}
-inline ::Dreamsleeve::Protocol::Phantom::Chunk* PROTOBUF_NONNULL ServerAssetPacket::mutable_chunk()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Phantom::Chunk* _msg = _internal_mutable_chunk();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.chunk)
-  return _msg;
-}
-
 // .Dreamsleeve.Protocol.Phantom.Complete complete = 5;
 inline bool ServerAssetPacket::has_complete() const {
   return payload_case() == kComplete;
@@ -8268,88 +7373,6 @@ inline ::Dreamsleeve::Protocol::Phantom::Remove* PROTOBUF_NONNULL ServerAssetPac
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Phantom::Remove* _msg = _internal_mutable_remove();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.remove)
-  return _msg;
-}
-
-// .Dreamsleeve.Protocol.Phantom.Progress progress = 7;
-inline bool ServerAssetPacket::has_progress() const {
-  return payload_case() == kProgress;
-}
-inline bool ServerAssetPacket::_internal_has_progress() const {
-  return payload_case() == kProgress;
-}
-inline void ServerAssetPacket::set_has_progress() {
-  _impl_._oneof_case_[0] = kProgress;
-}
-inline void ServerAssetPacket::clear_progress() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (payload_case() == kProgress) {
-    if (GetArena() == nullptr) {
-      delete _impl_.payload_.progress_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.progress_);
-    }
-    clear_has_payload();
-  }
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE ServerAssetPacket::release_progress() {
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.progress)
-  if (payload_case() == kProgress) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.payload_.progress_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Progress& ServerAssetPacket::_internal_progress() const {
-  return payload_case() == kProgress ? static_cast<const ::Dreamsleeve::Protocol::Phantom::Progress&>(*reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_))
-                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::Progress&>(::Dreamsleeve::Protocol::Phantom::_Progress_default_instance_);
-}
-inline const ::Dreamsleeve::Protocol::Phantom::Progress& ServerAssetPacket::progress() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.progress)
-  return _internal_progress();
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE ServerAssetPacket::unsafe_arena_release_progress() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.progress)
-  if (payload_case() == kProgress) {
-    clear_has_payload();
-    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-    _impl_.payload_.progress_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void ServerAssetPacket::unsafe_arena_set_allocated_progress(
-    ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_payload();
-  if (value) {
-    set_has_progress();
-    _impl_.payload_.progress_ = reinterpret_cast<::google::protobuf::Message*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.progress)
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL ServerAssetPacket::_internal_mutable_progress() {
-  if (payload_case() != kProgress) {
-    clear_payload();
-    set_has_progress();
-    _impl_.payload_.progress_ = reinterpret_cast<::google::protobuf::Message*>(
-        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::Progress>(GetArena()));
-  }
-  return reinterpret_cast<::Dreamsleeve::Protocol::Phantom::Progress*>(_impl_.payload_.progress_);
-}
-inline ::Dreamsleeve::Protocol::Phantom::Progress* PROTOBUF_NONNULL ServerAssetPacket::mutable_progress()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::Dreamsleeve::Protocol::Phantom::Progress* _msg = _internal_mutable_progress();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.ServerAssetPacket.progress)
   return _msg;
 }
 

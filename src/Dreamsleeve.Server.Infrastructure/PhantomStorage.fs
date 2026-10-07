@@ -9,16 +9,17 @@ open System.Threading.Tasks
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 
-/// Content-addressed opaque compressed files. All filesystem state belongs to
-/// one detached worker; callers retain only bounded chunks and completion tasks.
+/// Content-addressed opaque compressed files. One worker owns registry/cache
+/// metadata; each admitted transfer serializes its own asynchronous file I/O.
 [<RequireQualifiedAccess>]
 module PhantomStorage =
     type private Entry = {
         Path: string; Size: int64; mutable Touched: int64; mutable Pins: int
         mutable Verified: bool; mutable Ram: byte array option
     }
-    type private Upload = { Manifest: PhantomManifest; Path: string; File: FileStream; Hash: IncrementalHash; mutable Offset: int }
-    type private Transfer = Upload of Upload | Download of Entry
+    type private Upload = { Manifest: PhantomManifest; Path: string; File: FileStream; Hash: IncrementalHash; mutable Offset: int; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
+    type private Download = { Entry: Entry; File: FileStream; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
+    type private Transfer = Upload of Upload | Download of Download
 
     let create (options: PhantomOptions) : PhantomStoragePort =
         let directory = Path.GetFullPath options.StoragePath
@@ -29,7 +30,7 @@ module PhantomStorage =
         let mutable ram = 0L
         let mutable initialized = false
         let mutable disposed = false
-        let channel = Channel.CreateBounded<unit -> unit>(BoundedChannelOptions(options.MaxTransfers * (options.WindowChunks + 4) + 16,
+        let channel = Channel.CreateBounded<unit -> unit>(BoundedChannelOptions(options.MaxTransfers * 4 + 16,
                                                         SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait))
         let time () = Environment.TickCount64
         let safeDelete (path: string) =
@@ -95,12 +96,16 @@ module PhantomStorage =
         let cancel id =
             match transfers.TryGetValue id with
             | true, Upload upload ->
+                upload.Closed <- true
                 upload.File.Dispose()
                 upload.Hash.Dispose()
                 transfers.Remove id |> ignore
                 reserved <- reserved - int64 upload.Manifest.CompressedBytes
                 safeDelete upload.Path
-            | true, Download entry ->
+            | true, Download download ->
+                download.Closed <- true
+                download.File.Dispose()
+                let entry = download.Entry
                 entry.Pins <- entry.Pins - 1
                 entry.Touched <- time()
                 transfers.Remove id |> ignore
@@ -138,8 +143,8 @@ module PhantomStorage =
                 | _ when not (makeRoom (int64 manifest.CompressedBytes)) -> Error "disk quota"
                 | _ ->
                     let path = Path.Combine(directory, $"{id.Value}-{Guid.NewGuid():N}.tmp")
-                    let file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, options.ChunkBytes, FileOptions.SequentialScan)
-                    let upload = { Manifest = manifest; Path = path; File = file; Hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256; Offset = 0 }
+                    let file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
+                    let upload = { Manifest = manifest; Path = path; File = file; Hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256; Offset = 0; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
                     transfers[id] <- Upload upload
                     reserved <- reserved + int64 manifest.CompressedBytes
                     Ok false)
@@ -159,31 +164,46 @@ module PhantomStorage =
                     entries[upload.Manifest.Hash] <- { Path = path; Size = int64 upload.Manifest.CompressedBytes; Touched = time(); Pins = 0; Verified = true; Ram = None }
                     used <- used + int64 upload.Manifest.CompressedBytes
                     Ok ()
-        let writeChunk (id, offset, bytes: byte array) = enqueue (fun () ->
-            match transfers.TryGetValue id with
-            | true, Upload upload ->
-                // Filesystem APIs can throw; convert at the boundary and run the
-                // same cleanup for IO failures and ordinary rejected chunks.
-                let outcome =
-                    try
-                        if offset <> upload.Offset || bytes.Length = 0 || bytes.Length > options.ChunkBytes
-                           || bytes.Length > upload.Manifest.CompressedBytes - offset then Error "chunk offset/size"
-                        else
-                            upload.File.Write(bytes, 0, bytes.Length)
-                            upload.Hash.AppendData bytes
-                            upload.Offset <- upload.Offset + bytes.Length
-                            if upload.Offset <> upload.Manifest.CompressedBytes then Ok false
-                            else completeUpload upload |> Result.map (fun () -> true)
-                    with error -> Error error.Message
-                match outcome with
-                | Error _ -> cancel id; outcome
-                | Ok true ->
-                    upload.Hash.Dispose()
-                    reserved <- reserved - int64 upload.Manifest.CompressedBytes
-                    transfers.Remove id |> ignore
-                    outcome
-                | Ok false -> outcome
-            | _ -> Error "unknown upload")
+        let writeChunk (id, offset, bytes: byte array) = task {
+            let! admitted = enqueue (fun () ->
+                match transfers.TryGetValue id with
+                | true, Upload upload -> Ok upload
+                | _ -> Error "unknown upload")
+            match admitted with
+            | Error error -> return Error error
+            | Ok upload ->
+                do! upload.Gate.WaitAsync()
+                try
+                    let! outcome = task {
+                        try
+                            if upload.Closed then return Error "upload closed"
+                            elif offset <> upload.Offset || bytes.Length = 0 || bytes.Length > options.ChunkBytes
+                                 || bytes.Length > upload.Manifest.CompressedBytes - offset then return Error "chunk offset/size"
+                            else
+                                do! upload.File.WriteAsync(bytes.AsMemory())
+                                upload.Hash.AppendData bytes
+                                upload.Offset <- upload.Offset + bytes.Length
+                                if upload.Offset <> upload.Manifest.CompressedBytes then return Ok false
+                                else
+                                    do! upload.File.FlushAsync()
+                                    return! enqueue (fun () -> completeUpload upload |> Result.map (fun () -> true))
+                        with error -> return Error error.Message
+                    }
+                    match outcome with
+                    | Ok false -> return outcome
+                    | _ ->
+                        let! _ = enqueue (fun () ->
+                            match outcome with
+                            | Ok true ->
+                                upload.Closed <- true
+                                upload.Hash.Dispose()
+                                reserved <- reserved - int64 upload.Manifest.CompressedBytes
+                                transfers.Remove id |> ignore
+                            | _ -> cancel id
+                            Ok ())
+                        return outcome
+                finally upload.Gate.Release() |> ignore
+        }
         let startDownload (id, manifest: PhantomManifest) = enqueue (fun () ->
             clean()
             if transfers.ContainsKey id || transfers.Count >= options.MaxTransfers then Error "transfer limit"
@@ -193,8 +213,9 @@ module PhantomStorage =
                     match verify manifest.Hash entry with
                     | Error error -> remove manifest.Hash entry; Error error
                     | Ok () ->
+                        let file = new FileStream(entry.Path, FileMode.Open, FileAccess.Read, FileShare.Read, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
                         entry.Pins <- entry.Pins + 1
-                        transfers[id] <- Download entry
+                        transfers[id] <- Download { Entry = entry; File = file; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
                         Ok ()
                 | _ -> Error "asset unavailable")
         let readFile (entry: Entry) offset count =
@@ -224,23 +245,62 @@ module PhantomStorage =
                 |> Result.map (fun bytes ->
                     entry.Ram <- Some bytes
                     ram <- ram + int64 bytes.Length)
-        let readChunk (id, offset, count) = enqueue (fun () ->
-            match transfers.TryGetValue id with
-            | true, Download entry ->
-                if offset < 0 || count < 1 || count > options.ChunkBytes || int64 offset + int64 count > entry.Size then Error "read bounds"
-                else
-                    entry.Touched <- time()
-                    cache entry |> Result.bind (fun () ->
-                        match entry.Ram with
-                        | Some content ->
-                            let bytes = Array.zeroCreate count
-                            Buffer.BlockCopy(content, offset, bytes, 0, count)
-                            Ok bytes
-                        | None -> readFile entry offset count)
-            | _ -> Error "unknown download")
-        let cancelTask id = task { let! _ = enqueue (fun () -> cancel id; Ok ())
-                                  return () }
+        let readChunk (id, offset, destination: Memory<byte>) = task {
+            let count = destination.Length
+            let! admitted = enqueue (fun () ->
+                match transfers.TryGetValue id with
+                | true, Download download ->
+                    let entry = download.Entry
+                    if offset < 0 || count < 1 || count > options.ChunkBytes || int64 offset + int64 count > entry.Size then Error "read bounds"
+                    else
+                        entry.Touched <- time()
+                        cache entry |> Result.map (fun () -> download, entry.Ram)
+                | _ -> Error "unknown download")
+            match admitted with
+            | Error error -> return Error error
+            | Ok (download, content) ->
+                do! download.Gate.WaitAsync()
+                try
+                    if download.Closed then return Error "download closed"
+                    else
+                        match content with
+                        | Some memory ->
+                            memory.AsMemory(offset, count).CopyTo destination
+                            return Ok count
+                        | None ->
+                            try
+                                if download.File.Length <> download.Entry.Size then return Error "cache size changed"
+                                else
+                                    download.File.Position <- int64 offset
+                                    let mutable read = 0
+                                    let mutable ended = false
+                                    while read < count && not ended do
+                                        let! next = download.File.ReadAsync(destination.Slice(read, count - read))
+                                        if next = 0 then ended <- true else read <- read + next
+                                    return if read = count then Ok read else Error "cache truncated"
+                            with error -> return Error error.Message
+                finally download.Gate.Release() |> ignore
+        }
+        let cancelTask id = task {
+            let! pending = enqueue (fun () ->
+                match transfers.TryGetValue id with
+                | true, Upload upload -> Ok (Some upload.Gate)
+                | true, Download download -> Ok (Some download.Gate)
+                | _ -> Ok None)
+            match pending with
+            | Ok (Some gate) ->
+                do! gate.WaitAsync()
+                try
+                    let! _ = enqueue (fun () -> cancel id; Ok ())
+                    return ()
+                finally gate.Release() |> ignore
+            | _ -> ()
+        }
         let dispose () = task {
+            let! active = enqueue (fun () -> Ok (transfers.Keys |> Seq.toArray))
+            match active with
+            | Ok ids -> for id in ids do do! cancelTask id
+            | Error _ -> ()
             // Async admission for final cleanup; preserves every accepted work item.
             let reply = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
             let finish () =

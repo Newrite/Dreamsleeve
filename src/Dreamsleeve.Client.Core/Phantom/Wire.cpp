@@ -78,13 +78,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
           out->set_context_revision(value.context);
           out->set_request_id(value.request.value);
         }
-        else if constexpr (std::is_same_v<T, Chunk>)
-        {
-          auto* out = packet.mutable_chunk();
-          out->set_transfer_id(value.transfer.value);
-          out->set_offset(value.offset);
-          out->set_data(value.data.data(), value.data.size());
-        }
         else if constexpr (std::is_same_v<T, Download>)
         {
           auto* out = packet.mutable_download();
@@ -101,12 +94,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
         }
         else if constexpr (std::is_same_v<T, Cancel>)
           packet.mutable_cancel()->set_transfer_id(value.transfer.value);
-        else if constexpr (std::is_same_v<T, Progress>)
-        {
-          auto* out = packet.mutable_progress();
-          out->set_transfer_id(value.transfer.value);
-          out->set_next_offset(value.nextOffset);
-        }
         else
           packet.mutable_withdraw();
       },
@@ -125,7 +112,7 @@ namespace Dreamsleeve::Client::Phantom::Wire
 
   Result<Response> DecodeAsset(std::span<const std::uint8_t> data, const Limits& limits)
   {
-    if (data.size() > ChunkBytes + 1024) return std::unexpected(Invalid("asset.packet.size"));
+    if (data.size() > MaxAssetPacketBytes) return std::unexpected(Invalid("asset.packet.size"));
     Proto::ServerAssetPacket packet;
     if (!packet.ParseFromArray(data.data(), static_cast<int>(data.size())) || packet.protocol_version() != Client::Wire::Version)
       return std::unexpected(Invalid("asset.packet"));
@@ -156,22 +143,15 @@ namespace Dreamsleeve::Client::Phantom::Wire
       case Proto::ServerAssetPacket::kTransfer: {
         const auto& v          = packet.transfer();
         auto        descriptor = Get(v.asset(), limits);
-        if (!descriptor || !v.transfer_id() || !v.player_id() || !v.request_id()) return std::unexpected(Invalid("transfer"));
+        if (!descriptor || !v.transfer_id() || !v.player_id() || !v.request_id() || v.http_token().size() != 64 || !std::ranges::all_of(v.http_token(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })) return std::unexpected(Invalid("transfer"));
         return Response{
-            Transfer{TransferId{v.transfer_id()}, *descriptor, v.player_id(), v.upload(), RequestId{v.request_id()}}
-        };
-      }
-      case Proto::ServerAssetPacket::kChunk: {
-        const auto& v = packet.chunk();
-        if (!v.transfer_id() || v.data().empty() || v.data().size() > ChunkBytes) return std::unexpected(Invalid("chunk"));
-        return Response{
-            Chunk{TransferId{v.transfer_id()}, v.offset(), Bytes(v.data().begin(), v.data().end())}
+            Transfer{TransferId{v.transfer_id()}, *descriptor, v.player_id(), v.upload(), RequestId{v.request_id()}, v.http_token()}
         };
       }
       case Proto::ServerAssetPacket::kComplete: {
         const auto& v = packet.complete();
         if (
-          !v.request_id() || (!v.transfer_id() && (v.accepted() || !v.player_id() || !v.generation())) || v.reason().size() > 256 ||
+          !v.request_id() || (!v.transfer_id() && (!v.player_id() || !v.generation())) || v.reason().size() > 256 ||
           v.retry_after_ms() > 60000)
           return std::unexpected(Invalid("complete"));
         return Response{
@@ -194,13 +174,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
             Remove{v.player_id(), v.view_revision()}
         };
       }
-      case Proto::ServerAssetPacket::kProgress: {
-        const auto& v = packet.progress();
-        if (!v.transfer_id()) return std::unexpected(Invalid("progress"));
-        return Response{
-            Progress{TransferId{v.transfer_id()}, v.next_offset()}
-        };
-      }
       case Proto::ServerAssetPacket::kPolicy: {
         const auto& v = packet.policy();
         Policy      policy;
@@ -212,7 +185,6 @@ namespace Dreamsleeve::Client::Phantom::Wire
         policy.limits.compressedPoseBytes  = std::min(limits.compressedPoseBytes, v.compressed_pose_bytes());
         policy.sampleRate                  = std::clamp(v.sample_rate(), 1u, 50u);
         policy.maximumVisible              = std::min(v.maximum_visible(), 16u);
-        policy.windowChunks                = std::clamp(v.window_chunks(), 1u, 64u);
         policy.concurrentTransfers         = std::clamp(v.concurrent_transfers(), 1u, 8u);
         policy.modelBytesPerSecond         = std::min(v.model_bytes_per_second(), 64u * 1024 * 1024);
         policy.poseBytesPerSecond          = std::min(v.pose_bytes_per_second(), 4u * 1024 * 1024);

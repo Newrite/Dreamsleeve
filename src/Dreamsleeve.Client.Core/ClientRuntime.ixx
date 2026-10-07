@@ -57,6 +57,8 @@ public:
       if (transport->State() != ClientState::Disconnecting) DropGuest();
     }
 
+    void UseHttpEndpoint(std::string url, bool insecure) { phantoms.ConfigureHttp(std::move(url), insecure); }
+
     // Where the next connection goes; a guest link elsewhere is dropped. now:
     // the guest connects at once rather than after its retry wait.
     void UseEndpoint(std::string host, Port port, bool now)
@@ -161,7 +163,7 @@ public:
         waitMs          = left <= 0 ? 0 : std::min(waitMs, static_cast<TimeOutMs>(left));
       }
 
-      auto polled = transport->Poll(events, phantoms.WaitMs(waitMs));
+      auto polled = transport->Poll(events, waitMs);
       // A transport failure invalidates the whole unprocessed batch.
       if (!polled)
       {

@@ -2,7 +2,7 @@ export module Dreamsleeve.Client.Phantom.Streaming;
 import std;
 import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Domain;
-import Dreamsleeve.Client.Phantom.ModelFlow;
+import Dreamsleeve.Client.Phantom.Http;
 export import Dreamsleeve.Client.Phantom.Worker;
 
 export namespace Dreamsleeve::Client::Phantom
@@ -22,9 +22,9 @@ export namespace Dreamsleeve::Client::Phantom
     struct Upload
     {
       Wire::Transfer    transfer;
-      std::uint32_t     sent{}, acknowledged{};
+      std::uint32_t     progress{};
       Clock::time_point touched;
-      ModelFlow         flow;
+
     };
 
     struct Pending
@@ -72,12 +72,13 @@ export namespace Dreamsleeve::Client::Phantom
       std::shared_ptr<Bytes> bytes;
       Clock::time_point      touched;
       RequestId              request;
-      std::uint32_t          acknowledged{};
-      double                 credit{};
+      std::uint32_t          progress{};
+      std::optional<Wire::Complete> receipt;
     };
 
     Exchange&                   exchange;
     Worker                      worker;
+    Http                        http;
     std::optional<Wire::Policy> policy;
     std::optional<Local>        local;
     // Last server commit receipt. A local preparation rollback does not republish
@@ -91,7 +92,7 @@ export namespace Dreamsleeve::Client::Phantom
     RequestId                                       lastRequest;
     bool                                            active{};
     Clock::time_point                               lastBudget{Clock::now()}, nextPose{};
-    double                                          modelCredit{}, poseCredit{};
+    double                                          poseCredit{};
 
     bool Request(Wire::Request request)
     {
@@ -112,11 +113,7 @@ export namespace Dreamsleeve::Client::Phantom
 
     void Cancel(TransferId id)
     {
-      std::erase_if(requests, [&](const auto& request) {
-        const auto* chunk    = std::get_if<Wire::Chunk>(&request);
-        const auto* progress = std::get_if<Wire::Progress>(&request);
-        return (chunk && chunk->transfer == id) || (progress && progress->transfer == id);
-      });
+      http.Cancel(id);
       Request(Wire::Cancel{id});
     }
 
@@ -240,13 +237,13 @@ export namespace Dreamsleeve::Client::Phantom
           Cancel(value.transfer);
           return;
         }
-        local->state = Upload{
-            value,
-            0,
-            0,
-            Clock::now(),
-            ModelFlow{Wire::ChunkBytes, policy->windowChunks}
-        };
+        if (!http.Start(value, local->value.asset->compressed, std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond)))
+        {
+          Cancel(value.transfer);
+          local->state = Pending{Clock::now() + std::chrono::seconds(1)};
+          return;
+        }
+        local->state = Upload{value, 0, Clock::now()};
         return;
       }
       const auto  plan     = plans.find(value.player);
@@ -260,7 +257,7 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       auto bytes = std::make_shared<Bytes>();
-      bytes->reserve(value.asset.compressedBytes);
+
       const auto [entry, inserted] =
         downloads.emplace(value.transfer.value, Download{plan->second.offer, std::move(bytes), Clock::now(), value.request});
       if (!inserted)
@@ -269,45 +266,12 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       plan->second.state = Receiving{value.transfer};
-    }
-
-    void Receive(const Wire::Progress& value)
-    {
-      if (!local) return;
-      auto* upload = std::get_if<Upload>(&local->state);
-      if (!upload || upload->transfer.transfer != value.transfer) return;
-      if (value.nextOffset < upload->acknowledged || value.nextOffset > upload->sent)
+      if (!http.Start(value, {}, std::min(policy->modelBytesPerSecond, exchange.Settings().downloadBytesPerSecond)))
       {
         Cancel(value.transfer);
-        local->state     = Rejected{};
-        lastPoseSequence = 0;
-        exchange.PublicationRejected(local->value.generation, "Неверное подтверждение модели фантома");
-        return;
+        downloads.erase(value.transfer.value);
+        plan->second.state = Pending{Clock::now() + std::chrono::seconds(1)};
       }
-      if (value.nextOffset > upload->acknowledged)
-      {
-        upload->touched = Clock::now();
-        upload->flow.Acknowledge(value.nextOffset, upload->touched);
-        upload->acknowledged = value.nextOffset;
-      }
-    }
-
-    void Receive(const Wire::Chunk& value)
-    {
-      const auto found = downloads.find(value.transfer.value);
-      if (found == downloads.end()) return;
-      auto& download = found->second;
-      if (value.offset != download.bytes->size() || value.data.size() > download.offer.asset.compressedBytes - download.bytes->size())
-      {
-        Cancel(value.transfer);
-        exchange.Unavailable(exchange.Epoch(), download.offer, "Неверный блок модели фантома");
-        plans.erase(download.offer.player);
-        downloads.erase(found);
-        return;
-      }
-      download.bytes->insert(download.bytes->end(), value.data.begin(), value.data.end());
-      download.touched = Clock::now();
-      exchange.Count(value.data.size(), 0);
     }
 
     void Receive(const Wire::Complete& value)
@@ -360,6 +324,12 @@ export namespace Dreamsleeve::Client::Phantom
       const auto found = downloads.find(value.transfer.value);
       if (found == downloads.end()) return;
       if (found->second.request != value.request) return;
+      if (value.accepted && found->second.bytes->size() != found->second.offer.asset.compressedBytes)
+      {
+        found->second.receipt = value;
+        return;
+      }
+      if (!value.accepted) http.Cancel(value.transfer);
       auto download = std::move(found->second);
       downloads.erase(found);
       if (!value.accepted && value.retryAfterMs)
@@ -454,8 +424,11 @@ public:
 
     Streaming(Exchange& owner, std::filesystem::path cache) : exchange(owner), worker(owner, std::move(cache)) {}
 
+    void ConfigureHttp(std::string url, bool insecure) { http.Configure(std::move(url), insecure); }
+
     void Reset()
     {
+      http.Reset();
       exchange.Reset();
       policy.reset();
       committedGeneration.reset();
@@ -467,7 +440,7 @@ public:
       context          = 0;
       active           = false;
       lastPoseSequence = localRevision = 0;
-      modelCredit = poseCredit = 0;
+      poseCredit = 0;
       lastBudget               = Clock::now();
       nextPose                 = {};
     }
@@ -535,24 +508,62 @@ public:
       return {};
     }
 
-    // Wake the existing transport owner when the next paced chunk becomes due.
-    // Waiting for the caller's full 10 ms would group ~50 KiB at 5 MiB/s.
-    std::uint32_t WaitMs(std::uint32_t maximum, Clock::time_point now = Clock::now()) const
+    void PollHttp(Clock::time_point now)
     {
-      if (!policy || !local) return maximum;
-      const auto* upload = std::get_if<Upload>(&local->state);
-      if (!upload || upload->sent >= local->value.asset->compressed->size()) return maximum;
-      const auto count =
-        static_cast<std::uint32_t>(std::min<std::size_t>(Wire::ChunkBytes, local->value.asset->compressed->size() - upload->sent));
-      if (!upload->flow.Allows(upload->sent - upload->acknowledged, count)) return maximum;
-      const auto rate = std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond);
-      if (!rate) return maximum;
-      const auto due = std::max(0.0, (count - modelCredit) / rate - std::chrono::duration<double>(now - lastBudget).count());
-      return static_cast<std::uint32_t>(std::min<double>(maximum, std::ceil(due * 1000.0)));
+      if (local)
+        if (auto* upload = std::get_if<Upload>(&local->state))
+        {
+          auto progress = http.Progress(upload->transfer.transfer, upload->transfer.request);
+          if (progress > upload->progress)
+          {
+            exchange.Count(progress - upload->progress, 0);
+            upload->progress = progress; upload->touched = now;
+          }
+          if (now - upload->touched > Timeout)
+          {
+            Cancel(upload->transfer.transfer);
+            local->state = Pending{now + std::chrono::seconds(1)};
+          }
+        }
+      for (auto& [id, download] : downloads)
+      {
+        const auto progress = http.Progress(TransferId{id}, download.request);
+        if (progress > download.progress)
+        {
+          exchange.Count(progress - download.progress, 0);
+          download.progress = progress; download.touched = now;
+        }
+      }
+      for (auto& done : http.Poll())
+      {
+        const auto& transfer = done.transfer;
+        const auto* upload = local ? std::get_if<Upload>(&local->state) : nullptr;
+        const auto remote = downloads.find(transfer.transfer.value);
+        if (transfer.upload ? (!upload || upload->transfer.request != transfer.request || upload->transfer.transfer != transfer.transfer)
+                            : (remote == downloads.end() || remote->second.request != transfer.request)) continue;
+        if (done.error)
+        {
+          Request(Wire::Cancel{transfer.transfer});
+          Receive(Wire::Complete{transfer.transfer, false, *done.error, transfer.player, transfer.asset.generation, 1000, transfer.upload, transfer.request});
+        }
+        else if (!transfer.upload)
+        {
+          const auto found = downloads.find(transfer.transfer.value);
+          if (found == downloads.end() || found->second.request != transfer.request) continue;
+          found->second.bytes = std::move(done.bytes);
+          found->second.touched = now;
+          if (found->second.receipt)
+          {
+            const auto receipt = *found->second.receipt;
+            Receive(receipt);
+          }
+        }
+      }
     }
 
     std::vector<Outbound> Poll(Clock::time_point now = Clock::now())
     {
+      PollHttp(now);
       std::vector<Outbound> output;
       auto                  outgoing = exchange.TakeOutput();
       for (const auto& ready : outgoing.displayed)
@@ -614,70 +625,10 @@ public:
       lastBudget         = now;
       if (policy)
       {
-        const auto uploadRate = std::min(policy->modelBytesPerSecond, outgoing.settings.uploadBytesPerSecond);
-        // Preserve the configured rate across ordinary scheduling intervals.
-        // Fractional credit carries over; the negotiated flight bounds catch-up.
-        const auto capacity = std::min<double>(
-          Wire::ChunkBytes * policy->windowChunks,
-          std::max<double>(Wire::ChunkBytes, elapsed * uploadRate + Wire::ChunkBytes));
-        modelCredit = std::min(modelCredit + elapsed * uploadRate, capacity);
         poseCredit  = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, double(2ULL * policy->limits.compressedPoseBytes + 1024));
       }
-      if (local && policy)
-      {
-        if (auto* upload = std::get_if<Upload>(&local->state))
-        {
-          if (now - upload->touched > Timeout)
-          {
-            Cancel(upload->transfer.transfer);
-            local->state = Pending{now + std::chrono::seconds(1)};
-            exchange.Failed("Таймаут передачи модели фантома");
-          }
-          else
-          {
-            const auto& bytes = *local->value.asset->compressed;
-            while (upload->sent < bytes.size())
-            {
-              const auto count = std::min<std::size_t>(Wire::ChunkBytes, bytes.size() - upload->sent);
-              if (!upload->flow.Allows(upload->sent - upload->acknowledged, static_cast<std::uint32_t>(count)) || modelCredit < count)
-                break;
-              if (!Request(
-                    Wire::Chunk{
-                        upload->transfer.transfer,
-                        upload->sent,
-                        Bytes(bytes.begin() + upload->sent, bytes.begin() + upload->sent + count)
-                    }))
-                break;
-              upload->sent += static_cast<std::uint32_t>(count);
-              upload->flow.Sent(upload->sent, now);
-              modelCredit -= count;
-            }
-          }
-        }
-      }
-      const auto downloadCount = downloads.size();
       for (auto it = downloads.begin(); it != downloads.end();)
       {
-        // Release a chunk-aligned prefix as credit permits, rather than waiting
-        // for a whole window. Keep the divisor fixed if a transfer is removed.
-        auto& download = it->second;
-        if (policy)
-        {
-          const auto rate = std::min(policy->modelBytesPerSecond, outgoing.settings.downloadBytesPerSecond);
-          download.credit = std::min<double>(download.credit + elapsed * rate / downloadCount, Wire::ChunkBytes * policy->windowChunks);
-        }
-        const auto received       = static_cast<std::uint32_t>(download.bytes->size());
-        const auto unacknowledged = received - download.acknowledged;
-        const auto available      = std::min(unacknowledged, static_cast<std::uint32_t>(download.credit));
-        auto       nextOffset     = download.acknowledged + available;
-        if (nextOffset != download.offer.asset.compressedBytes) nextOffset -= nextOffset % Wire::ChunkBytes;
-        const auto acknowledged = nextOffset - download.acknowledged;
-        if (acknowledged && Request(Wire::Progress{TransferId{it->first}, nextOffset}))
-        {
-          download.credit       -= acknowledged;
-          download.acknowledged  = nextOffset;
-          download.touched       = now;
-        }
         if (now - it->second.touched > Timeout)
         {
           Cancel(TransferId{it->first});

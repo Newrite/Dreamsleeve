@@ -1,7 +1,7 @@
 syntax = "proto3";
 package Dreamsleeve.Protocol.Phantom;
 
-// Bulk control and chunks share the reliable Models lane. Pose samples use Poses.
+// Reliable Models carries lifecycle/capabilities only; opaque bodies use HTTP. Poses use Poses.
 message Preferences { bool publish = 1; bool receive = 2; uint32 maximum = 3; float distance = 4; }
 message AssetDescriptor {
   bytes hash = 1; uint64 generation = 2; uint32 format_version = 3;
@@ -10,10 +10,8 @@ message AssetDescriptor {
   reserved 7; reserved "geometry";
 }
 message Publish { AssetDescriptor asset = 1; uint64 context_revision = 2; uint64 request_id = 3; }
-message Chunk { uint64 transfer_id = 1; uint32 offset = 2; bytes data = 3; }
 message Download { uint64 player_id = 1; uint64 generation = 2; uint64 request_id = 3; }
 message Cancel { uint64 transfer_id = 1; }
-message Progress { uint64 transfer_id = 1; uint32 next_offset = 2; }
 // Sent only after a native scene has applied its first pose and become visible.
 message Displayed { uint64 player_id = 1; uint64 view_revision = 2; uint64 generation = 3; }
 // The publisher may retire its prior bindings and prepare another generation.
@@ -22,14 +20,15 @@ message PoseDemand { uint64 context_revision = 1; bool required = 2; }
 message Settled { uint64 generation = 1; uint64 context_revision = 2; }
 message Withdraw {}
 message ClientAssetPacket {
+  reserved 4, 8; reserved "chunk", "progress";
   uint32 protocol_version = 1;
   oneof payload {
-    Preferences preferences = 2; Publish publish = 3; Chunk chunk = 4;
-    Download download = 5; Cancel cancel = 6; Withdraw withdraw = 7; Progress progress = 8; Displayed displayed = 9;
+    Preferences preferences = 2; Publish publish = 3;
+    Download download = 5; Cancel cancel = 6; Withdraw withdraw = 7; Displayed displayed = 9;
   }
 }
 message Offer { uint64 player_id = 1; uint64 view_revision = 2; AssetDescriptor asset = 3; }
-message Transfer { uint64 transfer_id = 1; AssetDescriptor asset = 2; uint64 player_id = 3; bool upload = 4; uint64 request_id = 5; }
+message Transfer { uint64 transfer_id = 1; AssetDescriptor asset = 2; uint64 player_id = 3; bool upload = 4; uint64 request_id = 5; string http_token = 6; }
 message Complete {
   uint64 transfer_id = 1;
   bool accepted = 2;
@@ -47,12 +46,14 @@ message Policy {
   reserved 5; reserved "geometry";
   uint32 channels = 4; uint32 pose_bytes = 6; uint32 compressed_pose_bytes = 7;
   uint32 sample_rate = 8; uint32 maximum_visible = 9; float distance = 10;
-  uint32 window_chunks = 11; uint32 concurrent_transfers = 12;
+  reserved 11; reserved "window_chunks";
+  uint32 concurrent_transfers = 12;
   uint32 model_bytes_per_second = 13; uint32 pose_bytes_per_second = 14;
 }
 message ServerAssetPacket {
+  reserved 4, 7; reserved "chunk", "progress";
   uint32 protocol_version = 1;
-  oneof payload { Offer offer = 2; Transfer transfer = 3; Chunk chunk = 4; Complete complete = 5; Remove remove = 6; Progress progress = 7; Policy policy = 8; Settled settled = 9;
+  oneof payload { Offer offer = 2; Transfer transfer = 3; Complete complete = 5; Remove remove = 6; Policy policy = 8; Settled settled = 9;
     PoseDemand pose_demand = 10; }
 }
 // The payload is the bounded independently compressed Dreamsleeve pose format.

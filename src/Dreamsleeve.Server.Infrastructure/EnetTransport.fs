@@ -176,7 +176,7 @@ module EnetTransport =
             elif event.ChannelId > byte DeliveryLane.Poses || unsequenced
                || (event.ChannelId <= byte DeliveryLane.Poses && LanePolicy.reliable lane <> reliable)
                || packet.DataLength > unativeint state.Config.MaxPacketBytes
-               || (lane = DeliveryLane.Models && packet.DataLength > unativeint (state.Phantoms.ChunkBytes + 512))
+               || (lane = DeliveryLane.Models && packet.DataLength > unativeint PhantomAssetLimits.assetPacketBytes)
                || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (PhantomAssetLimits.posePacketBytes state.Phantoms.Limits))
                || (event.ChannelId = byte DeliveryLane.Realtime
                    && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then

@@ -52,7 +52,7 @@ try {
         Start-Sleep -Milliseconds 25
     }
     $ready = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
-    if ($ready.protocolVersion -ne 24 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
+    if ($ready.protocolVersion -ne 25 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
     $nativeInfo = New-ChildInfo $nativePath @('--test-case=Phantom production Streaming real UDP smoke', '--no-colors=true')
     # Per-child environment; invoking shell and normal native tests stay unchanged.
     $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_PORT'] = [string]$port
@@ -70,7 +70,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $artifactPath 'native.stderr.log'), $nativeErr.GetAwaiter().GetResult())
     Write-Output $output
     if ($native.ExitCode -ne 0) { throw "Native smoke failed with exit code $($native.ExitCode). See $artifactPath" }
-    if ($output -notmatch 'PHANTOM_NATIVE_UDP_PASS') { throw 'Selected binary did not execute the opt-in native smoke (missing success sentinel).' }
+    if ($output -notmatch 'PHANTOM_NATIVE_(ASSET_)?UDP_PASS') { throw 'Selected binary did not execute the opt-in native smoke (missing success sentinel).' }
     if ($server.HasExited) { throw 'Server exited before graceful smoke shutdown.' }
     $stopRequested = $true
     $server.StandardInput.WriteLine('stop')

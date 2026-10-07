@@ -46,13 +46,43 @@ type ServerTransport = {
     Dispose: unit -> unit
 }
 
+/// One admitted HTTP body. The actor owns admission/cancellation; the HTTP
+/// operation owns bytes and publishes monotonic progress plus one completion.
+type PhantomHttpLease(token: string, size: int) =
+    let mutable progress = 0
+    let completion = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+    member _.Token = token
+    member _.Size = size
+    member _.Progress = Threading.Volatile.Read(&progress)
+    member _.Completion = completion.Task
+    member _.Advance(count) = Threading.Volatile.Write(&progress, count)
+    member _.Finish(result) = completion.TrySetResult result |> ignore
+
+type PhantomHttpRequest = {
+    Token: string
+    Upload: bool
+    Length: int64 option
+    Body: IO.Stream
+    BeginResponse: int -> unit
+    Cancellation: Threading.CancellationToken
+}
+
+/// HTTP handling never reads or changes actor state. Admission gives a scoped
+/// single-use capability, and cancellation revokes both waiting and active I/O.
+type PhantomHttpPort = {
+    Admit: Guid * PhantomTransferId * PhantomManifest * bool -> PhantomHttpLease
+    Cancel: PhantomTransferId -> Task<unit>
+    Serve: PhantomHttpRequest -> Task<Result<unit, string>>
+    Dispose: unit -> Task<unit>
+}
+
 /// Operations are detached and serialized by the storage worker. A completed
 /// upload is a verified compressed file; false means more bytes are required.
 type PhantomStoragePort = {
     StartUpload: PhantomTransferId * PhantomManifest -> Task<Result<bool, string>>
     WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, string>>
     StartDownload: PhantomTransferId * PhantomManifest -> Task<Result<unit, string>>
-    ReadChunk: PhantomTransferId * int * int -> Task<Result<byte array, string>>
+    ReadChunk: PhantomTransferId * int * Memory<byte> -> Task<Result<int, string>>
     Cancel: PhantomTransferId -> Task<unit>
     Dispose: unit -> Task<unit>
 }

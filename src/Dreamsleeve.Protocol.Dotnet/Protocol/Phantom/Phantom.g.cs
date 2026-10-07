@@ -33,91 +33,84 @@ namespace Dreamsleeve.Protocol.Phantom {
             "SgQIBxAIUghnZW9tZXRyeSJ1CgdQdWJsaXNoEjwKBWFzc2V0GAEgASgLMi0u",
             "RHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Bc3NldERlc2NyaXB0b3IS",
             "GAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBISCgpyZXF1ZXN0X2lkGAMgASgE",
-            "IjoKBUNodW5rEhMKC3RyYW5zZmVyX2lkGAEgASgEEg4KBm9mZnNldBgCIAEo",
-            "DRIMCgRkYXRhGAMgASgMIkUKCERvd25sb2FkEhEKCXBsYXllcl9pZBgBIAEo",
-            "BBISCgpnZW5lcmF0aW9uGAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAQiHQoG",
-            "Q2FuY2VsEhMKC3RyYW5zZmVyX2lkGAEgASgEIjQKCFByb2dyZXNzEhMKC3Ry",
-            "YW5zZmVyX2lkGAEgASgEEhMKC25leHRfb2Zmc2V0GAIgASgNIkkKCURpc3Bs",
-            "YXllZBIRCglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEo",
-            "BBISCgpnZW5lcmF0aW9uGAMgASgEIjgKClBvc2VEZW1hbmQSGAoQY29udGV4",
-            "dF9yZXZpc2lvbhgBIAEoBBIQCghyZXF1aXJlZBgCIAEoCCI3CgdTZXR0bGVk",
-            "EhIKCmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEo",
-            "BCIKCghXaXRoZHJhdyKUBAoRQ2xpZW50QXNzZXRQYWNrZXQSGAoQcHJvdG9j",
-            "b2xfdmVyc2lvbhgBIAEoDRJACgtwcmVmZXJlbmNlcxgCIAEoCzIpLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLlBoYW50b20uUHJlZmVyZW5jZXNIABI4CgdwdWJs",
-            "aXNoGAMgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5QdWJs",
-            "aXNoSAASNAoFY2h1bmsYBCABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5Q",
-            "aGFudG9tLkNodW5rSAASOgoIZG93bmxvYWQYBSABKAsyJi5EcmVhbXNsZWV2",
-            "ZS5Qcm90b2NvbC5QaGFudG9tLkRvd25sb2FkSAASNgoGY2FuY2VsGAYgASgL",
-            "MiQuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5DYW5jZWxIABI6Cgh3",
-            "aXRoZHJhdxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
-            "V2l0aGRyYXdIABI6Cghwcm9ncmVzcxgIIAEoCzImLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLlBoYW50b20uUHJvZ3Jlc3NIABI8CglkaXNwbGF5ZWQYCSABKAsy",
-            "Jy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkRpc3BsYXllZEgAQgkK",
-            "B3BheWxvYWQibwoFT2ZmZXISEQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdf",
-            "cmV2aXNpb24YAiABKAQSPAoFYXNzZXQYAyABKAsyLS5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3JpcHRvciKUAQoIVHJhbnNmZXIS",
-            "EwoLdHJhbnNmZXJfaWQYASABKAQSPAoFYXNzZXQYAiABKAsyLS5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkFzc2V0RGVzY3JpcHRvchIRCglwbGF5",
-            "ZXJfaWQYAyABKAQSDgoGdXBsb2FkGAQgASgIEhIKCnJlcXVlc3RfaWQYBSAB",
-            "KAQipAEKCENvbXBsZXRlEhMKC3RyYW5zZmVyX2lkGAEgASgEEhAKCGFjY2Vw",
-            "dGVkGAIgASgIEg4KBnJlYXNvbhgDIAEoCRIRCglwbGF5ZXJfaWQYBCABKAQS",
-            "EgoKZ2VuZXJhdGlvbhgFIAEoBBIWCg5yZXRyeV9hZnRlcl9tcxgGIAEoDRIO",
-            "CgZ1cGxvYWQYByABKAgSEgoKcmVxdWVzdF9pZBgIIAEoBCIyCgZSZW1vdmUS",
-            "EQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQi2wIK",
-            "BlBvbGljeRIPCgdlbmFibGVkGAEgASgIEhcKD3Jhd19hc3NldF9ieXRlcxgC",
-            "IAEoDRIeChZjb21wcmVzc2VkX2Fzc2V0X2J5dGVzGAMgASgNEhAKCGNoYW5u",
-            "ZWxzGAQgASgNEhIKCnBvc2VfYnl0ZXMYBiABKA0SHQoVY29tcHJlc3NlZF9w",
-            "b3NlX2J5dGVzGAcgASgNEhMKC3NhbXBsZV9yYXRlGAggASgNEhcKD21heGlt",
-            "dW1fdmlzaWJsZRgJIAEoDRIQCghkaXN0YW5jZRgKIAEoAhIVCg13aW5kb3df",
-            "Y2h1bmtzGAsgASgNEhwKFGNvbmN1cnJlbnRfdHJhbnNmZXJzGAwgASgNEh4K",
-            "Fm1vZGVsX2J5dGVzX3Blcl9zZWNvbmQYDSABKA0SHQoVcG9zZV9ieXRlc19w",
-            "ZXJfc2Vjb25kGA4gASgNSgQIBRAGUghnZW9tZXRyeSLDBAoRU2VydmVyQXNz",
-            "ZXRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRI0CgVvZmZlchgC",
-            "IAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uT2ZmZXJIABI6",
-            "Cgh0cmFuc2ZlchgDIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50",
-            "b20uVHJhbnNmZXJIABI0CgVjaHVuaxgEIAEoCzIjLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLlBoYW50b20uQ2h1bmtIABI6Cghjb21wbGV0ZRgFIAEoCzImLkRy",
-            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQ29tcGxldGVIABI2CgZyZW1v",
-            "dmUYBiABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlJlbW92",
-            "ZUgAEjoKCHByb2dyZXNzGAcgASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
-            "UGhhbnRvbS5Qcm9ncmVzc0gAEjYKBnBvbGljeRgIIAEoCzIkLkRyZWFtc2xl",
-            "ZXZlLlByb3RvY29sLlBoYW50b20uUG9saWN5SAASOAoHc2V0dGxlZBgJIAEo",
-            "CzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uU2V0dGxlZEgAEj8K",
-            "C3Bvc2VfZGVtYW5kGAogASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
-            "bnRvbS5Qb3NlRGVtYW5kSABCCQoHcGF5bG9hZCJ0CgpQb3NlU2FtcGxlEhIK",
-            "CmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEoBBIQ",
-            "CghzZXF1ZW5jZRgDIAEoBBIVCg1zYW1wbGVkX2F0X3VzGAQgASgEEg8KB3Bh",
-            "eWxvYWQYBSABKAwiqQEKEENsaWVudFBvc2VQYWNrZXQSGAoQcHJvdG9jb2xf",
-            "dmVyc2lvbhgBIAEoDRI4CgZzYW1wbGUYAiABKAsyKC5EcmVhbXNsZWV2ZS5Q",
-            "cm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGUSQQoPcHJldmlvdXNfc2FtcGxl",
-            "GAMgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qb3NlU2Ft",
-            "cGxlItMBChBTZXJ2ZXJQb3NlUGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24Y",
-            "ASABKA0SEQoJcGxheWVyX2lkGAIgASgEEhUKDXZpZXdfcmV2aXNpb24YAyAB",
-            "KAQSOAoGc2FtcGxlGAQgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhh",
-            "bnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBsZRgFIAEoCzIoLkRy",
-            "ZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNhbXBsZWIGcHJvdG8z"));
+            "IkUKCERvd25sb2FkEhEKCXBsYXllcl9pZBgBIAEoBBISCgpnZW5lcmF0aW9u",
+            "GAIgASgEEhIKCnJlcXVlc3RfaWQYAyABKAQiHQoGQ2FuY2VsEhMKC3RyYW5z",
+            "ZmVyX2lkGAEgASgEIkkKCURpc3BsYXllZBIRCglwbGF5ZXJfaWQYASABKAQS",
+            "FQoNdmlld19yZXZpc2lvbhgCIAEoBBISCgpnZW5lcmF0aW9uGAMgASgEIjgK",
+            "ClBvc2VEZW1hbmQSGAoQY29udGV4dF9yZXZpc2lvbhgBIAEoBBIQCghyZXF1",
+            "aXJlZBgCIAEoCCI3CgdTZXR0bGVkEhIKCmdlbmVyYXRpb24YASABKAQSGAoQ",
+            "Y29udGV4dF9yZXZpc2lvbhgCIAEoBCIKCghXaXRoZHJhdyK/AwoRQ2xpZW50",
+            "QXNzZXRQYWNrZXQSGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRJACgtwcmVm",
+            "ZXJlbmNlcxgCIAEoCzIpLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20u",
+            "UHJlZmVyZW5jZXNIABI4CgdwdWJsaXNoGAMgASgLMiUuRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuUGhhbnRvbS5QdWJsaXNoSAASOgoIZG93bmxvYWQYBSABKAsy",
+            "Ji5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkRvd25sb2FkSAASNgoG",
+            "Y2FuY2VsGAYgASgLMiQuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5D",
+            "YW5jZWxIABI6Cgh3aXRoZHJhdxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLlBoYW50b20uV2l0aGRyYXdIABI8CglkaXNwbGF5ZWQYCSABKAsyJy5E",
+            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLkRpc3BsYXllZEgAQgkKB3Bh",
+            "eWxvYWRKBAgEEAVKBAgIEAlSBWNodW5rUghwcm9ncmVzcyJvCgVPZmZlchIR",
+            "CglwbGF5ZXJfaWQYASABKAQSFQoNdmlld19yZXZpc2lvbhgCIAEoBBI8CgVh",
+            "c3NldBgDIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQXNz",
+            "ZXREZXNjcmlwdG9yIqgBCghUcmFuc2ZlchITCgt0cmFuc2Zlcl9pZBgBIAEo",
+            "BBI8CgVhc3NldBgCIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50",
+            "b20uQXNzZXREZXNjcmlwdG9yEhEKCXBsYXllcl9pZBgDIAEoBBIOCgZ1cGxv",
+            "YWQYBCABKAgSEgoKcmVxdWVzdF9pZBgFIAEoBBISCgpodHRwX3Rva2VuGAYg",
+            "ASgJIqQBCghDb21wbGV0ZRITCgt0cmFuc2Zlcl9pZBgBIAEoBBIQCghhY2Nl",
+            "cHRlZBgCIAEoCBIOCgZyZWFzb24YAyABKAkSEQoJcGxheWVyX2lkGAQgASgE",
+            "EhIKCmdlbmVyYXRpb24YBSABKAQSFgoOcmV0cnlfYWZ0ZXJfbXMYBiABKA0S",
+            "DgoGdXBsb2FkGAcgASgIEhIKCnJlcXVlc3RfaWQYCCABKAQiMgoGUmVtb3Zl",
+            "EhEKCXBsYXllcl9pZBgBIAEoBBIVCg12aWV3X3JldmlzaW9uGAIgASgEItkC",
+            "CgZQb2xpY3kSDwoHZW5hYmxlZBgBIAEoCBIXCg9yYXdfYXNzZXRfYnl0ZXMY",
+            "AiABKA0SHgoWY29tcHJlc3NlZF9hc3NldF9ieXRlcxgDIAEoDRIQCghjaGFu",
+            "bmVscxgEIAEoDRISCgpwb3NlX2J5dGVzGAYgASgNEh0KFWNvbXByZXNzZWRf",
+            "cG9zZV9ieXRlcxgHIAEoDRITCgtzYW1wbGVfcmF0ZRgIIAEoDRIXCg9tYXhp",
+            "bXVtX3Zpc2libGUYCSABKA0SEAoIZGlzdGFuY2UYCiABKAISHAoUY29uY3Vy",
+            "cmVudF90cmFuc2ZlcnMYDCABKA0SHgoWbW9kZWxfYnl0ZXNfcGVyX3NlY29u",
+            "ZBgNIAEoDRIdChVwb3NlX2J5dGVzX3Blcl9zZWNvbmQYDiABKA1KBAgFEAZK",
+            "BAgLEAxSCGdlb21ldHJ5Ug13aW5kb3dfY2h1bmtzIu4DChFTZXJ2ZXJBc3Nl",
+            "dFBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEjQKBW9mZmVyGAIg",
+            "ASgLMiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5PZmZlckgAEjoK",
+            "CHRyYW5zZmVyGAMgASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
+            "bS5UcmFuc2ZlckgAEjoKCGNvbXBsZXRlGAUgASgLMiYuRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuUGhhbnRvbS5Db21wbGV0ZUgAEjYKBnJlbW92ZRgGIAEoCzIk",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUmVtb3ZlSAASNgoGcG9s",
+            "aWN5GAggASgLMiQuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qb2xp",
+            "Y3lIABI4CgdzZXR0bGVkGAkgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "UGhhbnRvbS5TZXR0bGVkSAASPwoLcG9zZV9kZW1hbmQYCiABKAsyKC5EcmVh",
+            "bXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBvc2VEZW1hbmRIAEIJCgdwYXls",
+            "b2FkSgQIBBAFSgQIBxAIUgVjaHVua1IIcHJvZ3Jlc3MidAoKUG9zZVNhbXBs",
+            "ZRISCgpnZW5lcmF0aW9uGAEgASgEEhgKEGNvbnRleHRfcmV2aXNpb24YAiAB",
+            "KAQSEAoIc2VxdWVuY2UYAyABKAQSFQoNc2FtcGxlZF9hdF91cxgEIAEoBBIP",
+            "CgdwYXlsb2FkGAUgASgMIqkBChBDbGllbnRQb3NlUGFja2V0EhgKEHByb3Rv",
+            "Y29sX3ZlcnNpb24YASABKA0SOAoGc2FtcGxlGAIgASgLMiguRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuUGhhbnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3Nh",
+            "bXBsZRgDIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9z",
+            "ZVNhbXBsZSLTAQoQU2VydmVyUG9zZVBhY2tldBIYChBwcm90b2NvbF92ZXJz",
+            "aW9uGAEgASgNEhEKCXBsYXllcl9pZBgCIAEoBBIVCg12aWV3X3JldmlzaW9u",
+            "GAMgASgEEjgKBnNhbXBsZRgEIAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LlBoYW50b20uUG9zZVNhbXBsZRJBCg9wcmV2aW91c19zYW1wbGUYBSABKAsy",
+            "KC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGViBnBy",
+            "b3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Preferences), global::Dreamsleeve.Protocol.Phantom.Preferences.Parser, new[]{ "Publish", "Receive", "Maximum", "Distance" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.AssetDescriptor), global::Dreamsleeve.Protocol.Phantom.AssetDescriptor.Parser, new[]{ "Hash", "Generation", "FormatVersion", "CompressedBytes", "RawBytes", "Channels" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Publish), global::Dreamsleeve.Protocol.Phantom.Publish.Parser, new[]{ "Asset", "ContextRevision", "RequestId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Chunk), global::Dreamsleeve.Protocol.Phantom.Chunk.Parser, new[]{ "TransferId", "Offset", "Data" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Download), global::Dreamsleeve.Protocol.Phantom.Download.Parser, new[]{ "PlayerId", "Generation", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Cancel), global::Dreamsleeve.Protocol.Phantom.Cancel.Parser, new[]{ "TransferId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Progress), global::Dreamsleeve.Protocol.Phantom.Progress.Parser, new[]{ "TransferId", "NextOffset" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Displayed), global::Dreamsleeve.Protocol.Phantom.Displayed.Parser, new[]{ "PlayerId", "ViewRevision", "Generation" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseDemand), global::Dreamsleeve.Protocol.Phantom.PoseDemand.Parser, new[]{ "ContextRevision", "Required" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Settled), global::Dreamsleeve.Protocol.Phantom.Settled.Parser, new[]{ "Generation", "ContextRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Withdraw), global::Dreamsleeve.Protocol.Phantom.Withdraw.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Chunk", "Download", "Cancel", "Withdraw", "Progress", "Displayed" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Download", "Cancel", "Withdraw", "Displayed" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Offer), global::Dreamsleeve.Protocol.Phantom.Offer.Parser, new[]{ "PlayerId", "ViewRevision", "Asset" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Transfer), global::Dreamsleeve.Protocol.Phantom.Transfer.Parser, new[]{ "TransferId", "Asset", "PlayerId", "Upload", "RequestId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Transfer), global::Dreamsleeve.Protocol.Phantom.Transfer.Parser, new[]{ "TransferId", "Asset", "PlayerId", "Upload", "RequestId", "HttpToken" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Accepted", "Reason", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Remove), global::Dreamsleeve.Protocol.Phantom.Remove.Parser, new[]{ "PlayerId", "ViewRevision" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "WindowChunks", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Chunk", "Complete", "Remove", "Progress", "Policy", "Settled", "PoseDemand" }, new[]{ "Payload" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Complete", "Remove", "Policy", "Settled", "PoseDemand" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.PoseSample), global::Dreamsleeve.Protocol.Phantom.PoseSample.Parser, new[]{ "Generation", "ContextRevision", "Sequence", "SampledAtUs", "Payload" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientPosePacket), global::Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser, new[]{ "ProtocolVersion", "Sample", "PreviousSample" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerPosePacket), global::Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser, new[]{ "ProtocolVersion", "PlayerId", "ViewRevision", "Sample", "PreviousSample" }, null, null, null, null)
@@ -128,7 +121,7 @@ namespace Dreamsleeve.Protocol.Phantom {
   }
   #region Messages
   /// <summary>
-  /// Bulk control and chunks share the reliable Models lane. Pose samples use Poses.
+  /// Reliable Models carries lifecycle/capabilities only; opaque bodies use HTTP. Poses use Poses.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Preferences : pb::IMessage<Preferences>
@@ -1104,278 +1097,6 @@ namespace Dreamsleeve.Protocol.Phantom {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class Chunk : pb::IMessage<Chunk>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<Chunk> _parser = new pb::MessageParser<Chunk>(() => new Chunk());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<Chunk> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[3]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Chunk() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Chunk(Chunk other) : this() {
-      transferId_ = other.transferId_;
-      offset_ = other.offset_;
-      data_ = other.data_;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Chunk Clone() {
-      return new Chunk(this);
-    }
-
-    /// <summary>Field number for the "transfer_id" field.</summary>
-    public const int TransferIdFieldNumber = 1;
-    private ulong transferId_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ulong TransferId {
-      get { return transferId_; }
-      set {
-        transferId_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "offset" field.</summary>
-    public const int OffsetFieldNumber = 2;
-    private uint offset_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint Offset {
-      get { return offset_; }
-      set {
-        offset_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "data" field.</summary>
-    public const int DataFieldNumber = 3;
-    private pb::ByteString data_ = pb::ByteString.Empty;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pb::ByteString Data {
-      get { return data_; }
-      set {
-        data_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as Chunk);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(Chunk other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (TransferId != other.TransferId) return false;
-      if (Offset != other.Offset) return false;
-      if (Data != other.Data) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (TransferId != 0UL) hash ^= TransferId.GetHashCode();
-      if (Offset != 0) hash ^= Offset.GetHashCode();
-      if (Data.Length != 0) hash ^= Data.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (TransferId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(TransferId);
-      }
-      if (Offset != 0) {
-        output.WriteRawTag(16);
-        output.WriteUInt32(Offset);
-      }
-      if (Data.Length != 0) {
-        output.WriteRawTag(26);
-        output.WriteBytes(Data);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (TransferId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(TransferId);
-      }
-      if (Offset != 0) {
-        output.WriteRawTag(16);
-        output.WriteUInt32(Offset);
-      }
-      if (Data.Length != 0) {
-        output.WriteRawTag(26);
-        output.WriteBytes(Data);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (TransferId != 0UL) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TransferId);
-      }
-      if (Offset != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Offset);
-      }
-      if (Data.Length != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Data);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(Chunk other) {
-      if (other == null) {
-        return;
-      }
-      if (other.TransferId != 0UL) {
-        TransferId = other.TransferId;
-      }
-      if (other.Offset != 0) {
-        Offset = other.Offset;
-      }
-      if (other.Data.Length != 0) {
-        Data = other.Data;
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 8: {
-            TransferId = input.ReadUInt64();
-            break;
-          }
-          case 16: {
-            Offset = input.ReadUInt32();
-            break;
-          }
-          case 26: {
-            Data = input.ReadBytes();
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 8: {
-            TransferId = input.ReadUInt64();
-            break;
-          }
-          case 16: {
-            Offset = input.ReadUInt32();
-            break;
-          }
-          case 26: {
-            Data = input.ReadBytes();
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Download : pb::IMessage<Download>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -1390,7 +1111,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1662,7 +1383,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1845,241 +1566,6 @@ namespace Dreamsleeve.Protocol.Phantom {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class Progress : pb::IMessage<Progress>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<Progress> _parser = new pb::MessageParser<Progress>(() => new Progress());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<Progress> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[6]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Progress() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Progress(Progress other) : this() {
-      transferId_ = other.transferId_;
-      nextOffset_ = other.nextOffset_;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public Progress Clone() {
-      return new Progress(this);
-    }
-
-    /// <summary>Field number for the "transfer_id" field.</summary>
-    public const int TransferIdFieldNumber = 1;
-    private ulong transferId_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ulong TransferId {
-      get { return transferId_; }
-      set {
-        transferId_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "next_offset" field.</summary>
-    public const int NextOffsetFieldNumber = 2;
-    private uint nextOffset_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint NextOffset {
-      get { return nextOffset_; }
-      set {
-        nextOffset_ = value;
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as Progress);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(Progress other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (TransferId != other.TransferId) return false;
-      if (NextOffset != other.NextOffset) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (TransferId != 0UL) hash ^= TransferId.GetHashCode();
-      if (NextOffset != 0) hash ^= NextOffset.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (TransferId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(TransferId);
-      }
-      if (NextOffset != 0) {
-        output.WriteRawTag(16);
-        output.WriteUInt32(NextOffset);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (TransferId != 0UL) {
-        output.WriteRawTag(8);
-        output.WriteUInt64(TransferId);
-      }
-      if (NextOffset != 0) {
-        output.WriteRawTag(16);
-        output.WriteUInt32(NextOffset);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (TransferId != 0UL) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TransferId);
-      }
-      if (NextOffset != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NextOffset);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(Progress other) {
-      if (other == null) {
-        return;
-      }
-      if (other.TransferId != 0UL) {
-        TransferId = other.TransferId;
-      }
-      if (other.NextOffset != 0) {
-        NextOffset = other.NextOffset;
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 8: {
-            TransferId = input.ReadUInt64();
-            break;
-          }
-          case 16: {
-            NextOffset = input.ReadUInt32();
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 8: {
-            TransferId = input.ReadUInt64();
-            break;
-          }
-          case 16: {
-            NextOffset = input.ReadUInt32();
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
   /// <summary>
   /// Sent only after a native scene has applied its first pose and become visible.
   /// </summary>
@@ -2098,7 +1584,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2373,7 +1859,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2608,7 +2094,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2843,7 +2329,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3004,7 +2490,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3032,9 +2518,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         case PayloadOneofCase.Publish:
           Publish = other.Publish.Clone();
           break;
-        case PayloadOneofCase.Chunk:
-          Chunk = other.Chunk.Clone();
-          break;
         case PayloadOneofCase.Download:
           Download = other.Download.Clone();
           break;
@@ -3043,9 +2526,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           break;
         case PayloadOneofCase.Withdraw:
           Withdraw = other.Withdraw.Clone();
-          break;
-        case PayloadOneofCase.Progress:
-          Progress = other.Progress.Clone();
           break;
         case PayloadOneofCase.Displayed:
           Displayed = other.Displayed.Clone();
@@ -3097,18 +2577,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "chunk" field.</summary>
-    public const int ChunkFieldNumber = 4;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Phantom.Chunk Chunk {
-      get { return payloadCase_ == PayloadOneofCase.Chunk ? (global::Dreamsleeve.Protocol.Phantom.Chunk) payload_ : null; }
-      set {
-        payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Chunk;
-      }
-    }
-
     /// <summary>Field number for the "download" field.</summary>
     public const int DownloadFieldNumber = 5;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3145,18 +2613,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "progress" field.</summary>
-    public const int ProgressFieldNumber = 8;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Phantom.Progress Progress {
-      get { return payloadCase_ == PayloadOneofCase.Progress ? (global::Dreamsleeve.Protocol.Phantom.Progress) payload_ : null; }
-      set {
-        payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Progress;
-      }
-    }
-
     /// <summary>Field number for the "displayed" field.</summary>
     public const int DisplayedFieldNumber = 9;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3175,11 +2631,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       None = 0,
       Preferences = 2,
       Publish = 3,
-      Chunk = 4,
       Download = 5,
       Cancel = 6,
       Withdraw = 7,
-      Progress = 8,
       Displayed = 9,
     }
     private PayloadOneofCase payloadCase_ = PayloadOneofCase.None;
@@ -3214,11 +2668,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (ProtocolVersion != other.ProtocolVersion) return false;
       if (!object.Equals(Preferences, other.Preferences)) return false;
       if (!object.Equals(Publish, other.Publish)) return false;
-      if (!object.Equals(Chunk, other.Chunk)) return false;
       if (!object.Equals(Download, other.Download)) return false;
       if (!object.Equals(Cancel, other.Cancel)) return false;
       if (!object.Equals(Withdraw, other.Withdraw)) return false;
-      if (!object.Equals(Progress, other.Progress)) return false;
       if (!object.Equals(Displayed, other.Displayed)) return false;
       if (PayloadCase != other.PayloadCase) return false;
       return Equals(_unknownFields, other._unknownFields);
@@ -3231,11 +2683,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (ProtocolVersion != 0) hash ^= ProtocolVersion.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Preferences) hash ^= Preferences.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Publish) hash ^= Publish.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.Chunk) hash ^= Chunk.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Download) hash ^= Download.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Cancel) hash ^= Cancel.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Withdraw) hash ^= Withdraw.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.Progress) hash ^= Progress.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Displayed) hash ^= Displayed.GetHashCode();
       hash ^= (int) payloadCase_;
       if (_unknownFields != null) {
@@ -3268,10 +2718,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(26);
         output.WriteMessage(Publish);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Download) {
         output.WriteRawTag(42);
         output.WriteMessage(Download);
@@ -3283,10 +2729,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Withdraw) {
         output.WriteRawTag(58);
         output.WriteMessage(Withdraw);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        output.WriteRawTag(66);
-        output.WriteMessage(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Displayed) {
         output.WriteRawTag(74);
@@ -3314,10 +2756,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(26);
         output.WriteMessage(Publish);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Download) {
         output.WriteRawTag(42);
         output.WriteMessage(Download);
@@ -3329,10 +2767,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Withdraw) {
         output.WriteRawTag(58);
         output.WriteMessage(Withdraw);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        output.WriteRawTag(66);
-        output.WriteMessage(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Displayed) {
         output.WriteRawTag(74);
@@ -3357,9 +2791,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Publish) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Publish);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Download) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Download);
       }
@@ -3368,9 +2799,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (payloadCase_ == PayloadOneofCase.Withdraw) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Withdraw);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Displayed) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Displayed);
@@ -3403,12 +2831,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           Publish.MergeFrom(other.Publish);
           break;
-        case PayloadOneofCase.Chunk:
-          if (Chunk == null) {
-            Chunk = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-          }
-          Chunk.MergeFrom(other.Chunk);
-          break;
         case PayloadOneofCase.Download:
           if (Download == null) {
             Download = new global::Dreamsleeve.Protocol.Phantom.Download();
@@ -3426,12 +2848,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Withdraw = new global::Dreamsleeve.Protocol.Phantom.Withdraw();
           }
           Withdraw.MergeFrom(other.Withdraw);
-          break;
-        case PayloadOneofCase.Progress:
-          if (Progress == null) {
-            Progress = new global::Dreamsleeve.Protocol.Phantom.Progress();
-          }
-          Progress.MergeFrom(other.Progress);
           break;
         case PayloadOneofCase.Displayed:
           if (Displayed == null) {
@@ -3482,15 +2898,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Publish = subBuilder;
             break;
           }
-          case 34: {
-            global::Dreamsleeve.Protocol.Phantom.Chunk subBuilder = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-            if (payloadCase_ == PayloadOneofCase.Chunk) {
-              subBuilder.MergeFrom(Chunk);
-            }
-            input.ReadMessage(subBuilder);
-            Chunk = subBuilder;
-            break;
-          }
           case 42: {
             global::Dreamsleeve.Protocol.Phantom.Download subBuilder = new global::Dreamsleeve.Protocol.Phantom.Download();
             if (payloadCase_ == PayloadOneofCase.Download) {
@@ -3516,15 +2923,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             }
             input.ReadMessage(subBuilder);
             Withdraw = subBuilder;
-            break;
-          }
-          case 66: {
-            global::Dreamsleeve.Protocol.Phantom.Progress subBuilder = new global::Dreamsleeve.Protocol.Phantom.Progress();
-            if (payloadCase_ == PayloadOneofCase.Progress) {
-              subBuilder.MergeFrom(Progress);
-            }
-            input.ReadMessage(subBuilder);
-            Progress = subBuilder;
             break;
           }
           case 74: {
@@ -3577,15 +2975,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Publish = subBuilder;
             break;
           }
-          case 34: {
-            global::Dreamsleeve.Protocol.Phantom.Chunk subBuilder = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-            if (payloadCase_ == PayloadOneofCase.Chunk) {
-              subBuilder.MergeFrom(Chunk);
-            }
-            input.ReadMessage(subBuilder);
-            Chunk = subBuilder;
-            break;
-          }
           case 42: {
             global::Dreamsleeve.Protocol.Phantom.Download subBuilder = new global::Dreamsleeve.Protocol.Phantom.Download();
             if (payloadCase_ == PayloadOneofCase.Download) {
@@ -3611,15 +3000,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             }
             input.ReadMessage(subBuilder);
             Withdraw = subBuilder;
-            break;
-          }
-          case 66: {
-            global::Dreamsleeve.Protocol.Phantom.Progress subBuilder = new global::Dreamsleeve.Protocol.Phantom.Progress();
-            if (payloadCase_ == PayloadOneofCase.Progress) {
-              subBuilder.MergeFrom(Progress);
-            }
-            input.ReadMessage(subBuilder);
-            Progress = subBuilder;
             break;
           }
           case 74: {
@@ -3653,7 +3033,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3934,7 +3314,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3959,6 +3339,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       playerId_ = other.playerId_;
       upload_ = other.upload_;
       requestId_ = other.requestId_;
+      httpToken_ = other.httpToken_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -4028,6 +3409,18 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
+    /// <summary>Field number for the "http_token" field.</summary>
+    public const int HttpTokenFieldNumber = 6;
+    private string httpToken_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string HttpToken {
+      get { return httpToken_; }
+      set {
+        httpToken_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -4048,6 +3441,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (PlayerId != other.PlayerId) return false;
       if (Upload != other.Upload) return false;
       if (RequestId != other.RequestId) return false;
+      if (HttpToken != other.HttpToken) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -4060,6 +3454,7 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
       if (Upload != false) hash ^= Upload.GetHashCode();
       if (RequestId != 0UL) hash ^= RequestId.GetHashCode();
+      if (HttpToken.Length != 0) hash ^= HttpToken.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -4098,6 +3493,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(40);
         output.WriteUInt64(RequestId);
       }
+      if (HttpToken.Length != 0) {
+        output.WriteRawTag(50);
+        output.WriteString(HttpToken);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -4128,6 +3527,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(40);
         output.WriteUInt64(RequestId);
       }
+      if (HttpToken.Length != 0) {
+        output.WriteRawTag(50);
+        output.WriteString(HttpToken);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -4152,6 +3555,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (RequestId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(RequestId);
+      }
+      if (HttpToken.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(HttpToken);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -4182,6 +3588,9 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (other.RequestId != 0UL) {
         RequestId = other.RequestId;
+      }
+      if (other.HttpToken.Length != 0) {
+        HttpToken = other.HttpToken;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -4223,6 +3632,10 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 40: {
             RequestId = input.ReadUInt64();
+            break;
+          }
+          case 50: {
+            HttpToken = input.ReadString();
             break;
           }
         }
@@ -4267,6 +3680,10 @@ namespace Dreamsleeve.Protocol.Phantom {
             RequestId = input.ReadUInt64();
             break;
           }
+          case 50: {
+            HttpToken = input.ReadString();
+            break;
+          }
         }
       }
     }
@@ -4289,7 +3706,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[12]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4749,7 +4166,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[13]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4984,7 +4401,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5013,7 +4430,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       sampleRate_ = other.sampleRate_;
       maximumVisible_ = other.maximumVisible_;
       distance_ = other.distance_;
-      windowChunks_ = other.windowChunks_;
       concurrentTransfers_ = other.concurrentTransfers_;
       modelBytesPerSecond_ = other.modelBytesPerSecond_;
       poseBytesPerSecond_ = other.poseBytesPerSecond_;
@@ -5134,18 +4550,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "window_chunks" field.</summary>
-    public const int WindowChunksFieldNumber = 11;
-    private uint windowChunks_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint WindowChunks {
-      get { return windowChunks_; }
-      set {
-        windowChunks_ = value;
-      }
-    }
-
     /// <summary>Field number for the "concurrent_transfers" field.</summary>
     public const int ConcurrentTransfersFieldNumber = 12;
     private uint concurrentTransfers_;
@@ -5206,7 +4610,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (SampleRate != other.SampleRate) return false;
       if (MaximumVisible != other.MaximumVisible) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Distance, other.Distance)) return false;
-      if (WindowChunks != other.WindowChunks) return false;
       if (ConcurrentTransfers != other.ConcurrentTransfers) return false;
       if (ModelBytesPerSecond != other.ModelBytesPerSecond) return false;
       if (PoseBytesPerSecond != other.PoseBytesPerSecond) return false;
@@ -5226,7 +4629,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (SampleRate != 0) hash ^= SampleRate.GetHashCode();
       if (MaximumVisible != 0) hash ^= MaximumVisible.GetHashCode();
       if (Distance != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Distance);
-      if (WindowChunks != 0) hash ^= WindowChunks.GetHashCode();
       if (ConcurrentTransfers != 0) hash ^= ConcurrentTransfers.GetHashCode();
       if (ModelBytesPerSecond != 0) hash ^= ModelBytesPerSecond.GetHashCode();
       if (PoseBytesPerSecond != 0) hash ^= PoseBytesPerSecond.GetHashCode();
@@ -5283,10 +4685,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (Distance != 0F) {
         output.WriteRawTag(85);
         output.WriteFloat(Distance);
-      }
-      if (WindowChunks != 0) {
-        output.WriteRawTag(88);
-        output.WriteUInt32(WindowChunks);
       }
       if (ConcurrentTransfers != 0) {
         output.WriteRawTag(96);
@@ -5346,10 +4744,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(85);
         output.WriteFloat(Distance);
       }
-      if (WindowChunks != 0) {
-        output.WriteRawTag(88);
-        output.WriteUInt32(WindowChunks);
-      }
       if (ConcurrentTransfers != 0) {
         output.WriteRawTag(96);
         output.WriteUInt32(ConcurrentTransfers);
@@ -5399,9 +4793,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (Distance != 0F) {
         size += 1 + 4;
       }
-      if (WindowChunks != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(WindowChunks);
-      }
       if (ConcurrentTransfers != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ConcurrentTransfers);
       }
@@ -5449,9 +4840,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
       if (other.Distance != 0F) {
         Distance = other.Distance;
-      }
-      if (other.WindowChunks != 0) {
-        WindowChunks = other.WindowChunks;
       }
       if (other.ConcurrentTransfers != 0) {
         ConcurrentTransfers = other.ConcurrentTransfers;
@@ -5517,10 +4905,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Distance = input.ReadFloat();
             break;
           }
-          case 88: {
-            WindowChunks = input.ReadUInt32();
-            break;
-          }
           case 96: {
             ConcurrentTransfers = input.ReadUInt32();
             break;
@@ -5588,10 +4972,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Distance = input.ReadFloat();
             break;
           }
-          case 88: {
-            WindowChunks = input.ReadUInt32();
-            break;
-          }
           case 96: {
             ConcurrentTransfers = input.ReadUInt32();
             break;
@@ -5626,7 +5006,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5654,17 +5034,11 @@ namespace Dreamsleeve.Protocol.Phantom {
         case PayloadOneofCase.Transfer:
           Transfer = other.Transfer.Clone();
           break;
-        case PayloadOneofCase.Chunk:
-          Chunk = other.Chunk.Clone();
-          break;
         case PayloadOneofCase.Complete:
           Complete = other.Complete.Clone();
           break;
         case PayloadOneofCase.Remove:
           Remove = other.Remove.Clone();
-          break;
-        case PayloadOneofCase.Progress:
-          Progress = other.Progress.Clone();
           break;
         case PayloadOneofCase.Policy:
           Policy = other.Policy.Clone();
@@ -5722,18 +5096,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "chunk" field.</summary>
-    public const int ChunkFieldNumber = 4;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Phantom.Chunk Chunk {
-      get { return payloadCase_ == PayloadOneofCase.Chunk ? (global::Dreamsleeve.Protocol.Phantom.Chunk) payload_ : null; }
-      set {
-        payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Chunk;
-      }
-    }
-
     /// <summary>Field number for the "complete" field.</summary>
     public const int CompleteFieldNumber = 5;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5755,18 +5117,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       set {
         payload_ = value;
         payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Remove;
-      }
-    }
-
-    /// <summary>Field number for the "progress" field.</summary>
-    public const int ProgressFieldNumber = 7;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Dreamsleeve.Protocol.Phantom.Progress Progress {
-      get { return payloadCase_ == PayloadOneofCase.Progress ? (global::Dreamsleeve.Protocol.Phantom.Progress) payload_ : null; }
-      set {
-        payload_ = value;
-        payloadCase_ = value == null ? PayloadOneofCase.None : PayloadOneofCase.Progress;
       }
     }
 
@@ -5812,10 +5162,8 @@ namespace Dreamsleeve.Protocol.Phantom {
       None = 0,
       Offer = 2,
       Transfer = 3,
-      Chunk = 4,
       Complete = 5,
       Remove = 6,
-      Progress = 7,
       Policy = 8,
       Settled = 9,
       PoseDemand = 10,
@@ -5852,10 +5200,8 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (ProtocolVersion != other.ProtocolVersion) return false;
       if (!object.Equals(Offer, other.Offer)) return false;
       if (!object.Equals(Transfer, other.Transfer)) return false;
-      if (!object.Equals(Chunk, other.Chunk)) return false;
       if (!object.Equals(Complete, other.Complete)) return false;
       if (!object.Equals(Remove, other.Remove)) return false;
-      if (!object.Equals(Progress, other.Progress)) return false;
       if (!object.Equals(Policy, other.Policy)) return false;
       if (!object.Equals(Settled, other.Settled)) return false;
       if (!object.Equals(PoseDemand, other.PoseDemand)) return false;
@@ -5870,10 +5216,8 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (ProtocolVersion != 0) hash ^= ProtocolVersion.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Offer) hash ^= Offer.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Transfer) hash ^= Transfer.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.Chunk) hash ^= Chunk.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Complete) hash ^= Complete.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Remove) hash ^= Remove.GetHashCode();
-      if (payloadCase_ == PayloadOneofCase.Progress) hash ^= Progress.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Policy) hash ^= Policy.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.Settled) hash ^= Settled.GetHashCode();
       if (payloadCase_ == PayloadOneofCase.PoseDemand) hash ^= PoseDemand.GetHashCode();
@@ -5908,10 +5252,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(26);
         output.WriteMessage(Transfer);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Complete) {
         output.WriteRawTag(42);
         output.WriteMessage(Complete);
@@ -5919,10 +5259,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Remove) {
         output.WriteRawTag(50);
         output.WriteMessage(Remove);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        output.WriteRawTag(58);
-        output.WriteMessage(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Policy) {
         output.WriteRawTag(66);
@@ -5958,10 +5294,6 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(26);
         output.WriteMessage(Transfer);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Complete) {
         output.WriteRawTag(42);
         output.WriteMessage(Complete);
@@ -5969,10 +5301,6 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Remove) {
         output.WriteRawTag(50);
         output.WriteMessage(Remove);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        output.WriteRawTag(58);
-        output.WriteMessage(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Policy) {
         output.WriteRawTag(66);
@@ -6005,17 +5333,11 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (payloadCase_ == PayloadOneofCase.Transfer) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Transfer);
       }
-      if (payloadCase_ == PayloadOneofCase.Chunk) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Chunk);
-      }
       if (payloadCase_ == PayloadOneofCase.Complete) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Complete);
       }
       if (payloadCase_ == PayloadOneofCase.Remove) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Remove);
-      }
-      if (payloadCase_ == PayloadOneofCase.Progress) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Progress);
       }
       if (payloadCase_ == PayloadOneofCase.Policy) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Policy);
@@ -6054,12 +5376,6 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           Transfer.MergeFrom(other.Transfer);
           break;
-        case PayloadOneofCase.Chunk:
-          if (Chunk == null) {
-            Chunk = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-          }
-          Chunk.MergeFrom(other.Chunk);
-          break;
         case PayloadOneofCase.Complete:
           if (Complete == null) {
             Complete = new global::Dreamsleeve.Protocol.Phantom.Complete();
@@ -6071,12 +5387,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Remove = new global::Dreamsleeve.Protocol.Phantom.Remove();
           }
           Remove.MergeFrom(other.Remove);
-          break;
-        case PayloadOneofCase.Progress:
-          if (Progress == null) {
-            Progress = new global::Dreamsleeve.Protocol.Phantom.Progress();
-          }
-          Progress.MergeFrom(other.Progress);
           break;
         case PayloadOneofCase.Policy:
           if (Policy == null) {
@@ -6139,15 +5449,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Transfer = subBuilder;
             break;
           }
-          case 34: {
-            global::Dreamsleeve.Protocol.Phantom.Chunk subBuilder = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-            if (payloadCase_ == PayloadOneofCase.Chunk) {
-              subBuilder.MergeFrom(Chunk);
-            }
-            input.ReadMessage(subBuilder);
-            Chunk = subBuilder;
-            break;
-          }
           case 42: {
             global::Dreamsleeve.Protocol.Phantom.Complete subBuilder = new global::Dreamsleeve.Protocol.Phantom.Complete();
             if (payloadCase_ == PayloadOneofCase.Complete) {
@@ -6164,15 +5465,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             }
             input.ReadMessage(subBuilder);
             Remove = subBuilder;
-            break;
-          }
-          case 58: {
-            global::Dreamsleeve.Protocol.Phantom.Progress subBuilder = new global::Dreamsleeve.Protocol.Phantom.Progress();
-            if (payloadCase_ == PayloadOneofCase.Progress) {
-              subBuilder.MergeFrom(Progress);
-            }
-            input.ReadMessage(subBuilder);
-            Progress = subBuilder;
             break;
           }
           case 66: {
@@ -6243,15 +5535,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             Transfer = subBuilder;
             break;
           }
-          case 34: {
-            global::Dreamsleeve.Protocol.Phantom.Chunk subBuilder = new global::Dreamsleeve.Protocol.Phantom.Chunk();
-            if (payloadCase_ == PayloadOneofCase.Chunk) {
-              subBuilder.MergeFrom(Chunk);
-            }
-            input.ReadMessage(subBuilder);
-            Chunk = subBuilder;
-            break;
-          }
           case 42: {
             global::Dreamsleeve.Protocol.Phantom.Complete subBuilder = new global::Dreamsleeve.Protocol.Phantom.Complete();
             if (payloadCase_ == PayloadOneofCase.Complete) {
@@ -6268,15 +5551,6 @@ namespace Dreamsleeve.Protocol.Phantom {
             }
             input.ReadMessage(subBuilder);
             Remove = subBuilder;
-            break;
-          }
-          case 58: {
-            global::Dreamsleeve.Protocol.Phantom.Progress subBuilder = new global::Dreamsleeve.Protocol.Phantom.Progress();
-            if (payloadCase_ == PayloadOneofCase.Progress) {
-              subBuilder.MergeFrom(Progress);
-            }
-            input.ReadMessage(subBuilder);
-            Progress = subBuilder;
             break;
           }
           case 66: {
@@ -6331,7 +5605,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6681,7 +5955,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6971,7 +6245,7 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Dreamsleeve.Protocol.Phantom.PhantomReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

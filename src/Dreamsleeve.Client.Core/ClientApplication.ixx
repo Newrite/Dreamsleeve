@@ -162,6 +162,7 @@ private:
           exchange(std::move(boundary)),
           runtime(std::move(client))
     {
+      runtime->UseHttpEndpoint(settings.authUrl, settings.allowInsecureRemoteAuth);
       // One server for the application's lifetime: its credential scope keys the device hash too.
       if (auto scope = Auth::CredentialTarget(settings.authUrl, settings.allowInsecureRemoteAuth)) device = Device::Identify(*scope);
     }
@@ -208,6 +209,7 @@ private:
       active       = index;
       routeReached = false;
       runtime->UseEndpoint(routes[index].serverHost, routes[index].serverPort, now);
+      runtime->UseHttpEndpoint(routes[index].authUrl, settings.allowInsecureRemoteAuth);
       exchange->PublishRoute(index, false);
       RefreshMethods();
     }

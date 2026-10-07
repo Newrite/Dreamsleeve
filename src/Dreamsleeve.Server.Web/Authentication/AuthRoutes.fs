@@ -316,10 +316,16 @@ module AuthRoutes =
     ]
 
     /// The caller starts and stops this host and owns the account service.
-    let build listener settings moderation ports (logger: ILogger) =
+    let private buildWithContent content httpRequestsPerMinute listener settings moderation ports (logger: ILogger) =
         let limits = { MaxBodyBytes = MaxBodyBytes; MaxConnections = settings.MaxConnections; RequestTimeoutSeconds = settings.RequestTimeoutSeconds }
-        let rule (_: HttpContext) = { Bucket = "auth"; PermitsPerMinute = settings.RequestsPerMinute }
+        let rule (context: HttpContext) =
+            if context.Request.Path = PathString("/phantoms/content") then { Bucket = "phantoms"; PermitsPerMinute = httpRequestsPerMinute }
+            else { Bucket = "auth"; PermitsPerMinute = settings.RequestsPerMinute }
         let rejected (_: HttpContext) = WebHost.error 429 "rate_limited" "Too many authentication requests. Try again later."
         let app = WebHost.create listener limits rule rejected logger
-        app.UseFalco(endpoints settings moderation ports logger) |> ignore
+        app.UseFalco(content @ endpoints settings moderation ports logger) |> ignore
         app
+
+    let build listener settings moderation ports logger = buildWithContent [] 128 listener settings moderation ports logger
+    let buildWithPhantoms current httpRequestsPerMinute listener settings moderation ports logger =
+        buildWithContent (PhantomRoutes.endpoints current) httpRequestsPerMinute listener settings moderation ports logger

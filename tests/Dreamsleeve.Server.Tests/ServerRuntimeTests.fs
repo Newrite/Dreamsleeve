@@ -178,7 +178,7 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
         Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
         |> GameSettings.withTrustedProxies proxies
     let game = match phantomStorage with Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok | None -> game
-    let start = match phantomStorage with Some (_, storage) -> ServerRuntime.startWithPhantoms storage | None -> ServerRuntime.start
+    let start = match phantomStorage with Some (options, storage) -> ServerRuntime.startWithPhantoms storage (Dreamsleeve.Server.Infrastructure.PhantomHttp.create options storage) | None -> ServerRuntime.start
     use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport NullLogger.Instance
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
@@ -256,7 +256,7 @@ let tests = testList "ServerRuntime" [
             StartUpload = fun _ -> started <- started + 1; success true
             WriteChunk = fun _ -> success false
             StartDownload = fun _ -> success ()
-            ReadChunk = fun (_, _, count) -> success (Array.zeroCreate count)
+            ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
         }
@@ -290,7 +290,7 @@ let tests = testList "ServerRuntime" [
             StartUpload = fun _ -> uploads <- uploads + 1; success true
             WriteChunk = fun _ -> success false
             StartDownload = fun _ -> success ()
-            ReadChunk = fun (_, _, count) -> success (Array.zeroCreate count)
+            ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
         }

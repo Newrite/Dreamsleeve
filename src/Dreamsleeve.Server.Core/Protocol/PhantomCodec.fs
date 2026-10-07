@@ -22,7 +22,7 @@ module PhantomCodec =
             | Error error, _ | _, Error error -> Error error
 
     let decodeAsset options bytes =
-        parse (options.ChunkBytes + 512) bytes Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser (fun packet ->
+        parse PhantomAssetLimits.assetPacketBytes bytes Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser (fun packet ->
             if packet.ProtocolVersion <> ProtocolCodec.Version then Error "protocol version"
             else
                 match packet.PayloadCase with
@@ -34,17 +34,11 @@ module PhantomCodec =
                     match manifest options packet.Publish.Asset, PhantomRequestId.create packet.Publish.RequestId with
                     | Ok value, Ok request when packet.Publish.ContextRevision <> 0UL -> Ok (PhantomRequest.Publish(value, packet.Publish.ContextRevision, request))
                     | _ -> Error "publish descriptor/context/request"
-                | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Chunk ->
-                    let value = packet.Chunk
-                    if value.TransferId = 0UL || value.Offset > uint32 Int32.MaxValue || value.Data.Length = 0 || value.Data.Length > options.ChunkBytes then Error "chunk"
-                    else Ok (PhantomRequest.Chunk(PhantomTransferId value.TransferId, int value.Offset, value.Data.ToByteArray()))
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Download ->
                     match PlayerId.create packet.Download.PlayerId, AppearanceGeneration.create packet.Download.Generation, PhantomRequestId.create packet.Download.RequestId with
                     | Ok player, Ok generation, Ok request -> Ok (PhantomRequest.Download(player, generation, request))
                     | _ -> Error "download"
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Cancel when packet.Cancel.TransferId <> 0UL -> Ok (PhantomRequest.Cancel(PhantomTransferId packet.Cancel.TransferId))
-                | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Progress when packet.Progress.TransferId <> 0UL && packet.Progress.NextOffset <= uint32 Int32.MaxValue ->
-                    Ok (PhantomRequest.Progress(PhantomTransferId packet.Progress.TransferId, int packet.Progress.NextOffset))
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Displayed ->
                     let value = packet.Displayed
                     match PlayerId.create value.PlayerId, AppearanceGeneration.create value.Generation with
@@ -77,8 +71,7 @@ module PhantomCodec =
         let packet = Dreamsleeve.Protocol.Phantom.ServerAssetPacket(ProtocolVersion = ProtocolCodec.Version)
         match response with
         | PhantomResponse.Offer(player, revision, value) -> packet.Offer <- Dreamsleeve.Protocol.Phantom.Offer(PlayerId = PlayerId.value player, ViewRevision = revision, Asset = descriptor value)
-        | PhantomResponse.Transfer(id, value, player, upload, request) -> packet.Transfer <- Dreamsleeve.Protocol.Phantom.Transfer(TransferId = id.Value, Asset = descriptor value, PlayerId = PlayerId.value player, Upload = upload, RequestId = request.Value)
-        | PhantomResponse.Chunk(id, offset, bytes) -> packet.Chunk <- Dreamsleeve.Protocol.Phantom.Chunk(TransferId = id.Value, Offset = uint32 offset, Data = UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(bytes)))
+        | PhantomResponse.Transfer(id, value, player, upload, request, token) -> packet.Transfer <- Dreamsleeve.Protocol.Phantom.Transfer(TransferId = id.Value, Asset = descriptor value, PlayerId = PlayerId.value player, Upload = upload, RequestId = request.Value, HttpToken = token)
         | PhantomResponse.Complete(id, accepted, reason, request, target) ->
             let value = Dreamsleeve.Protocol.Phantom.Complete(TransferId = id.Value, Accepted = accepted, Reason = reason, RequestId = request.Value)
             target |> Option.iter (fun completion ->
@@ -88,7 +81,6 @@ module PhantomCodec =
                 value.RetryAfterMs <- uint32 completion.RetryAfterMs)
             packet.Complete <- value
         | PhantomResponse.Remove(player, revision) -> packet.Remove <- Dreamsleeve.Protocol.Phantom.Remove(PlayerId = PlayerId.value player, ViewRevision = revision)
-        | PhantomResponse.Progress(id, offset) -> packet.Progress <- Dreamsleeve.Protocol.Phantom.Progress(TransferId = id.Value, NextOffset = uint32 offset)
         | PhantomResponse.PoseDemand(context, required) ->
             packet.PoseDemand <- Dreamsleeve.Protocol.Phantom.PoseDemand(ContextRevision = context, Required = required)
         | PhantomResponse.Settled(generation, context) ->
@@ -97,11 +89,11 @@ module PhantomCodec =
             packet.Policy <- Dreamsleeve.Protocol.Phantom.Policy(Enabled = policy.Enabled, RawAssetBytes = uint32 policy.Limits.RawBytes
                 , CompressedAssetBytes = uint32 policy.Limits.CompressedBytes, Channels = uint32 policy.Limits.Channels
                 , PoseBytes = uint32 policy.Limits.RawPoseBytes, CompressedPoseBytes = uint32 policy.Limits.PoseBytes, SampleRate = uint32 policy.SampleRate
-                , MaximumVisible = uint32 policy.Maximum, Distance = policy.Distance, WindowChunks = uint32 policy.WindowChunks
+                , MaximumVisible = uint32 policy.Maximum, Distance = policy.Distance
                 , ConcurrentTransfers = uint32 policy.ConcurrentTransfers, ModelBytesPerSecond = uint32 policy.ModelBytesPerSecond, PoseBytesPerSecond = uint32 policy.PoseBytesPerSecond)
         // Only view changes gate that source's poses; transfer progress does not.
         let source = if not (isNull packet.Offer) then packet.Offer.PlayerId elif not (isNull packet.Remove) then packet.Remove.PlayerId else 0UL
-        { Schedule = if isNull packet.Chunk then PacketSchedule.ModelNotice source else PacketSchedule.Ordered
+        { Schedule = PacketSchedule.ModelNotice source
           Lane = DeliveryLane.Models; Bytes = packet.ToByteArray() }
 
     let private poseSampleSize (value: PhantomPose) =

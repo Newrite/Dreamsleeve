@@ -220,7 +220,7 @@ let private stopWriter (logger: ILogger) (what: string) (writer: Agent<'Write>) 
 /// their writers, the ENet transport and the runtime. HTTP, accounts and the panel
 /// outlive it. Completion comes once the transport and the writers are released,
 /// so the next instance binds the port again and loads everything the last one wrote.
-let private startGame settings (game: GameSettings) moderation pseudonyms (authentication: Agent<AuthMessage>) (logger: ILogger)
+let private startGame publishHttp settings (game: GameSettings) moderation pseudonyms (authentication: Agent<AuthMessage>) (logger: ILogger)
                       (_: CancellationToken) : Task<SupervisedChild<Agent<ServerRuntimeMessage>>> = task {
     let! loaded = loadGroundMarks settings moderation logger
     let records, nextId =
@@ -243,13 +243,15 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
         return raise (InvalidOperationException $"ENet startup failed: {error}")
     | Ok transport ->
         let phantomStorage = PhantomStorage.create game.Phantoms
+        let phantomHttp = PhantomHttp.create game.Phantoms phantomStorage
+        publishHttp (Some phantomHttp)
         let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
         let guildStorage = {
             Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
             Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion
         }
         let runtime =
-            ServerRuntime.startWithPhantoms phantomStorage game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
+            ServerRuntime.startWithPhantoms phantomStorage phantomHttp game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
         let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
         let completion = task {
             let! outcome = task {
@@ -261,6 +263,8 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
             if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
             try transport.Dispose()
             with error -> logger.LogError(error, "ENet transport disposal failed")
+            publishHttp None
+            do! phantomHttp.Dispose()
             try do! phantomStorage.Dispose()
             with error -> logger.LogError(error, "Phantom storage disposal failed")
             try do! stopWriter logger "Ground mark" writer
@@ -301,12 +305,16 @@ let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSou
         logger.LogCritical("Game runtime failed {Failures} times within {WindowSeconds} s; stopping the server", failures, recovery.WindowSeconds)
         firstStart.TrySetResult false |> ignore
 
-let private serve settings game moderation configuration pseudonyms authentication admin (logger: ILogger) (log: Serilog.ILogger) = task {
+let private serve settings (game: GameSettings) moderation configuration pseudonyms authentication admin (logger: ILogger) (log: Serilog.ILogger) = task {
     let steam = settings.Authentication.Steam
     if steam.Enabled then
         let key = not (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable WebPorts.SteamKeyVariable))
         log.Information("Steam sign-in returns browsers to {PublicUrl}; Web API key {Key}", steam.PublicUrl, (if key then "set" else "not set"))
-    let web = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
+    let contentGate = obj()
+    let mutable content = None
+    let currentContent () = lock contentGate (fun () -> content)
+    let publishContent value = lock contentGate (fun () -> content <- value)
+    let web = AuthRoutes.buildWithPhantoms currentContent game.Phantoms.HttpRequestsPerMinute (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
     let describer = SessionDescriber.start 64
     let mutable panel = None
     let supervisor = ref None
@@ -340,7 +348,7 @@ let private serve settings game moderation configuration pseudonyms authenticati
                 let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
                 let running =
                     AgentSupervisor.start "game-supervisor" (Configuration.restartPolicy settings.Recovery)
-                        (startGame settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
+                        (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
                 supervisor.Value <- Some running
                 let! started = firstStart.Task
                 if started then do! waitForStop settings authentication admin current running.Completion canceled.Task

@@ -34,25 +34,23 @@ module PhantomAgent =
         mutable Previous: AppearanceGeneration option; mutable Settled: AppearanceGeneration option; mutable CommittedAt: int64
         mutable DispatchedPose: struct (AppearanceGeneration * uint64) option
         mutable PreviousSequence: uint64; mutable LastPose: struct (AppearanceGeneration * uint64) option; mutable NextPublish: int64; mutable PoseCursor: int
-        ModelCredit: Credit; PoseCredit: Credit; PoseSamples: Credit; ReplicationCredit: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
+        PoseCredit: Credit; PoseSamples: Credit; ReplicationCredit: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
     }
-    type private UploadChunk = { Offset: int; Bytes: byte array; mutable Pending: Task<Result<bool, string>> option }
     type private Phase =
         | StartingUpload of Task<Result<bool, string>>
-        | Uploading of Queue<UploadChunk>
         | StartingDownload of Task<Result<unit, string>>
-        | Downloading of Queue<struct (int * Task<Result<byte array, string>>)>
+        | StreamingHttp of PhantomHttpLease
     type private Transfer = {
         Id: PhantomTransferId; Request: PhantomRequestId; Owner: Guid; Source: PlayerId; Manifest: PhantomManifest
         Character: uint64; Context: uint64; View: uint64; Upload: bool
-        Flow: ModelFlow.State; mutable Offset: int; mutable Sent: int; mutable Acknowledged: int; mutable Touched: int64; mutable Phase: Phase
+        mutable Progress: int; mutable Touched: int64; mutable Phase: Phase
     }
     type Snapshot = { Members: int; Sources: int; Subscriptions: int; Transfers: int; LatestPoses: int; PendingIo: int }
     type State = private {
-        Options: PhantomOptions; Storage: PhantomStoragePort; Send: Guid * TransportPacket -> Result<unit, string>
+        Options: PhantomOptions; Storage: PhantomStoragePort; Http: PhantomHttpPort; Send: Guid * TransportPacket -> Result<unit, string>
         Members: Dictionary<Guid, Member>; Players: Dictionary<PlayerId, Guid>; Transfers: Dictionary<PhantomTransferId, Transfer>
         Audiences: Dictionary<PlayerId, HashSet<Guid>>
-        Cleanup: ResizeArray<Task<unit>>; ModelCredit: Credit; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int; mutable TransferCursor: int
+        Cleanup: ResizeArray<Task<unit>>; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
     }
 
     let private credit at rate = { At = at; Available = double rate }
@@ -60,13 +58,6 @@ module PhantomAgent =
         value.Available <- min capacity (value.Available + double (max 0L (at - value.At)) * rate / 1000.0)
         value.At <- at
     let private refill at rate value = refillBounded at (double rate) (double rate) value
-    // Carry a fractional chunk across polls; do not turn the service interval
-    // into an undocumented bandwidth cap. Flight bounds catch-up after a stall.
-    let private refillModel at rate chunkBytes windowChunks value =
-        if at > value.At then
-            let earned = double (at - value.At) * double rate / 1000.0
-            let capacity = min (double (chunkBytes * windowChunks)) (max (double chunkBytes) (earned + double chunkBytes))
-            refillBounded at capacity (double rate) value
     let private take at rate amount value =
         refill at rate value
         if value.Available < double amount then false
@@ -99,7 +90,10 @@ module PhantomAgent =
         | true, transfer ->
             trace (if accepted then "transfer_complete" else "transfer_cancel") transfer.Source transfer.Context transfer.Manifest.Generation.Value transfer.View reason
             state.Transfers.Remove id |> ignore
-            state.Cleanup.Add(state.Storage.Cancel id)
+            state.Cleanup.Add(task {
+                do! state.Http.Cancel id
+                do! state.Storage.Cancel id
+            })
             let terminal =
                 match reason with
                 | "source changed" | "context changed" | "view removed" | "disconnected" | "cancelled" | "chunk admission"
@@ -207,9 +201,9 @@ module PhantomAgent =
                 if not required then memberState.Latest <- None
                 emit state id (PhantomResponse.PoseDemand(memberState.Context, required))
 
-    let create options storage send = {
-        Options = options; Storage = storage; Send = send; Members = Dictionary(); Players = Dictionary(); Transfers = Dictionary()
-        Cleanup = ResizeArray(); Audiences = Dictionary(); ModelCredit = credit 0L options.ModelBytesPerSecond; NextTransfer = 0UL; LastTick = 0L; LastDispatch = 0L; Cursor = 0; TransferCursor = 0
+    let create options storage http send = {
+        Options = options; Storage = storage; Http = http; Send = send; Members = Dictionary(); Players = Dictionary(); Transfers = Dictionary()
+        Cleanup = ResizeArray(); Audiences = Dictionary(); NextTransfer = 0UL; LastTick = 0L; LastDispatch = 0L; Cursor = 0
         FanoutCredit = credit 0L options.MaxPoseFanoutPerTick
         OutgoingPoseCredit = credit 0L options.TotalPoseBytesPerSecond
     }
@@ -219,7 +213,7 @@ module PhantomAgent =
         Members = state.Members.Count; Sources = state.Members.Values |> Seq.filter (fun item -> item.Ready.IsSome) |> Seq.length
         Subscriptions = state.Members.Values |> Seq.sumBy (fun item -> item.Selected.Count); Transfers = state.Transfers.Count
         LatestPoses = state.Members.Values |> Seq.filter (fun item -> item.Latest.IsSome) |> Seq.length
-        PendingIo = state.Transfers.Values |> Seq.sumBy (fun item -> match item.Phase with Uploading queue -> queue.Count | Downloading queue -> queue.Count | _ -> 1)
+        PendingIo = state.Transfers.Count
     }
     let detach state id =
         match state.Members.TryGetValue id with
@@ -289,7 +283,7 @@ module PhantomAgent =
                     Preferences = { Publish = options.Enabled; Receive = options.Enabled; Maximum = options.Maximum; Distance = options.Distance }
                     Demand = None; Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
                     Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; DispatchedPose = None; NextPublish = 0L; PoseCursor = 0
-                    ModelCredit = credit 0L options.PlayerModelBytesPerSecond; PoseCredit = credit 0L options.PoseBytesPerSecond
+                    PoseCredit = credit 0L options.PoseBytesPerSecond
                     OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = credit 0L 2; ReplicationCredit = credit 0L 2
                     Commands = credit 0L options.CommandsPerSecond; Outbox = Queue()
                 }
@@ -338,7 +332,7 @@ module PhantomAgent =
             let id = PhantomTransferId state.NextTransfer
             let phase = if upload then StartingUpload(state.Storage.StartUpload(id, manifest)) else StartingDownload(state.Storage.StartDownload(id, manifest))
             state.Transfers[id] <- { Id = id; Request = request; Owner = owner; Source = player; Manifest = manifest; Character = character; Context = context
-                                     View = revision; Upload = upload; Flow = ModelFlow.create state.Options.ChunkBytes state.Options.WindowChunks; Offset = 0; Sent = 0; Acknowledged = 0; Touched = at; Phase = phase }
+                                     View = revision; Upload = upload; Progress = 0; Touched = at; Phase = phase }
 
     let handle state at id request =
         match state.Members.TryGetValue id with
@@ -399,38 +393,6 @@ module PhantomAgent =
                 match state.Transfers.TryGetValue transferId with
                 | true, transfer when transfer.Owner = id -> cancel state transferId false "cancelled"
                 | _ -> deny()
-            | PhantomRequest.Progress(transferId, offset) ->
-                match state.Transfers.TryGetValue transferId with
-                | true, transfer when transfer.Owner = id && not transfer.Upload && valid state transfer
-                                      && offset >= transfer.Acknowledged && offset <= transfer.Sent
-                                      && (offset % state.Options.ChunkBytes = 0 || offset = transfer.Manifest.CompressedBytes) ->
-                    if offset > transfer.Acknowledged then
-                        ModelFlow.acknowledge offset at transfer.Flow
-                        transfer.Acknowledged <- offset
-                        transfer.Touched <- at
-                        // Only actual delivery progress extends the display grace.
-                        // Retrying the same prefix in a new transfer is not new progress.
-                        match memberState.Selected.TryGetValue transfer.Source with
-                        | true, selected when selected.Revision = transfer.View && selected.Asset = transfer.Manifest
-                                              && offset > selected.DisplayProgressBytes ->
-                            selected.DisplayProgressBytes <- offset
-                            selected.DisplayProgressAt <- at
-                        | _ -> ()
-                | _ -> deny()
-            | PhantomRequest.Chunk(transferId, offset, bytes) ->
-                match state.Transfers.TryGetValue transferId with
-                | true, transfer when transfer.Owner = id && transfer.Upload && valid state transfer ->
-                    match transfer.Phase with
-                    | Uploading queue when queue.Count < state.Options.WindowChunks && offset = transfer.Offset
-                                           && bytes.Length > 0 && bytes.Length <= state.Options.ChunkBytes
-                                           && bytes.Length <= transfer.Manifest.CompressedBytes - offset
-                                           && int64 offset + int64 bytes.Length - int64 transfer.Acknowledged <= int64 state.Options.WindowChunks * int64 state.Options.ChunkBytes
-                                           ->
-                        queue.Enqueue { Offset = offset; Bytes = bytes; Pending = None }
-                        transfer.Offset <- transfer.Offset + bytes.Length
-                        transfer.Touched <- at
-                    | _ -> cancel state transferId false "chunk admission"; deny()
-                | _ -> deny()
         | _ -> deny()
 
     /// Large poses are admitted before protobuf allocation. Model data uses the
@@ -474,9 +436,6 @@ module PhantomAgent =
                 else deny()
             elif lane = DeliveryLane.Models then
                 match PhantomCodec.decodeAsset state.Options bytes with
-                // Transfer windows and byte credits govern chunks/ACKs. Control
-                // request bursts must not drop an admitted reliable data window.
-                | Ok (PhantomRequest.Chunk _ as request) | Ok (PhantomRequest.Progress _ as request) -> handle state at id request
                 | Ok request when memberState.Outbox.Count < 8 && takeCommand at state.Options.CommandsPerSecond memberState.Commands -> handle state at id request
                 | Ok _ -> deny()
                 | Error _ -> deny()
@@ -492,7 +451,6 @@ module PhantomAgent =
             | Error _ -> sending <- false
 
     let private settle state at (transfer: Transfer) =
-        let mutable serviced = false
         if not (valid state transfer) then cancel state transfer.Id false "stale transfer"
         elif at - transfer.Touched > int64 state.Options.TransferTimeoutMs then cancel state transfer.Id false "transfer timeout"
         else
@@ -506,100 +464,46 @@ module PhantomAgent =
                 owner.Ready <- Some transfer.Manifest
                 owner.CommittedAt <- at
                 cancel state transfer.Id true ""
+            let beginHttp () =
+                let lease = state.Http.Admit(transfer.Owner, transfer.Id, transfer.Manifest, transfer.Upload)
+                transfer.Phase <- StreamingHttp lease
+                emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, transfer.Upload, transfer.Request, lease.Token))
             match transfer.Phase with
             | StartingUpload pending when pending.IsCompleted ->
                 match pending.Result with
                 | Error reason -> cancel state transfer.Id false reason
-                | Ok cached ->
-                    transfer.Phase <- Uploading(Queue())
-                    emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, true, transfer.Request))
-                    if cached then ready()
-            | Uploading queue ->
-                let owner = state.Members[transfer.Owner]
-                // A full network window is retained, but IO and ACKs are paced by
-                // shared traffic credits. Temporary bandwidth contention cannot
-                // discard an otherwise valid reliable upload.
-                let mutable admitting = true
-                for chunk in queue do
-                    if admitting && chunk.Pending.IsNone then
-                        refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks owner.ModelCredit
-                        refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks state.ModelCredit
-                        if owner.ModelCredit.Available >= double chunk.Bytes.Length && state.ModelCredit.Available >= double chunk.Bytes.Length then
-                            owner.ModelCredit.Available <- owner.ModelCredit.Available - double chunk.Bytes.Length
-                            state.ModelCredit.Available <- state.ModelCredit.Available - double chunk.Bytes.Length
-                            serviced <- true
-                            chunk.Pending <- Some(state.Storage.WriteChunk(transfer.Id, chunk.Offset, chunk.Bytes))
-                            uploaded.Add(int64 chunk.Bytes.Length)
-                        else admitting <- false
-                let mutable checking = true
-                let mutable progress = -1
-                while checking && queue.Count > 0 && (queue.Peek().Pending |> Option.exists _.IsCompleted) && state.Transfers.ContainsKey transfer.Id do
-                    let chunk = queue.Dequeue()
-                    let offset = chunk.Offset + chunk.Bytes.Length
-                    match chunk.Pending.Value.Result with
-                    | Error reason -> cancel state transfer.Id false reason; checking <- false
-                    | Ok complete ->
-                        transfer.Acknowledged <- offset
-                        transfer.Touched <- at
-                        progress <- offset
-                        if complete then
-                            emit state transfer.Owner (PhantomResponse.Progress(transfer.Id, offset))
-                            progress <- -1
-                            ready()
-                            checking <- false
-                if progress >= 0 then emit state transfer.Owner (PhantomResponse.Progress(transfer.Id, progress))
+                | Ok true -> ready()
+                | Ok false -> beginHttp()
             | StartingDownload pending when pending.IsCompleted ->
                 match pending.Result with
                 | Error reason -> cancel state transfer.Id false reason
-                | Ok () ->
-                    emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, false, transfer.Request))
-                    transfer.Phase <- Downloading(Queue())
-            | Downloading queue ->
-                let owner = state.Members[transfer.Owner]
-                if owner.Outbox.Count = 0 then
-                    let mutable sending = true
-                    while sending && queue.Count > 0 && (let struct (_, pending) = queue.Peek() in pending.IsCompleted) do
-                        let struct (offset, pending) = queue.Peek()
-                        match pending.Result with
-                        | Error reason -> cancel state transfer.Id false reason; sending <- false
-                        | Ok bytes ->
-                            refillModel at state.Options.PlayerModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks owner.ModelCredit
-                            refillModel at state.Options.ModelBytesPerSecond state.Options.ChunkBytes state.Options.WindowChunks state.ModelCredit
-                            if owner.ModelCredit.Available < double bytes.Length || state.ModelCredit.Available < double bytes.Length
-                               || not (ModelFlow.allows (transfer.Sent - transfer.Acknowledged) bytes.Length transfer.Flow) then sending <- false
-                            else
-                                match state.Send(transfer.Owner, PhantomCodec.encode (PhantomResponse.Chunk(transfer.Id, offset, bytes))) with
-                                | Error _ -> sending <- false
-                                | Ok () ->
-                                    queue.Dequeue() |> ignore
-                                    owner.ModelCredit.Available <- owner.ModelCredit.Available - double bytes.Length
-                                    state.ModelCredit.Available <- state.ModelCredit.Available - double bytes.Length
-                                    serviced <- true
-                                    transfer.Sent <- transfer.Sent + bytes.Length
-                                    ModelFlow.sent transfer.Sent at transfer.Flow
-                                    transfer.Touched <- at
-                                    downloaded.Add(int64 bytes.Length)
-                    if state.Transfers.ContainsKey transfer.Id then
-                        if transfer.Acknowledged = transfer.Manifest.CompressedBytes then cancel state transfer.Id true ""
-                        else
-                            while queue.Count < state.Options.WindowChunks && transfer.Offset < transfer.Manifest.CompressedBytes
-                                  && int64 transfer.Offset - int64 transfer.Acknowledged < int64 state.Options.WindowChunks * int64 state.Options.ChunkBytes do
-                                let length = min state.Options.ChunkBytes (transfer.Manifest.CompressedBytes - transfer.Offset)
-                                queue.Enqueue(struct (transfer.Offset, state.Storage.ReadChunk(transfer.Id, transfer.Offset, length)))
-                                transfer.Offset <- transfer.Offset + length
+                | Ok () -> beginHttp()
+            | StreamingHttp lease ->
+                let progress = lease.Progress
+                if progress > transfer.Progress then
+                    let count = int64 (progress - transfer.Progress)
+                    if transfer.Upload then uploaded.Add count else downloaded.Add count
+                    transfer.Progress <- progress
+                    transfer.Touched <- at
+                    if not transfer.Upload then
+                        match state.Members[transfer.Owner].Selected.TryGetValue transfer.Source with
+                        | true, selected when selected.Revision = transfer.View && progress > selected.DisplayProgressBytes ->
+                            selected.DisplayProgressBytes <- progress
+                            selected.DisplayProgressAt <- at
+                        | _ -> ()
+                if lease.Completion.IsCompleted then
+                    match lease.Completion.Result with
+                    | Error reason -> cancel state transfer.Id false reason
+                    | Ok () when transfer.Upload -> ready()
+                    | Ok () -> cancel state transfer.Id true ""
             | StartingUpload _ | StartingDownload _ -> ()
-        serviced
 
     let tick state at =
         // Cleanup completions are bounded by admitted transfers, and drained even
         // when publishing is disabled. No file work runs inside this turn.
         state.Cleanup.RemoveAll(Predicate(fun pending -> pending.IsCompleted)) |> ignore
         let transfers = state.Transfers.Values |> Seq.toArray
-        let start = state.TransferCursor
-        for index in 0 .. transfers.Length - 1 do
-            let current = (start + index) % transfers.Length
-            if settle state at transfers[current] then
-                state.TransferCursor <- (current + 1) % transfers.Length
+        for transfer in transfers do settle state at transfer
         let period = int64 state.Options.ReplicationIntervalMs
         let replicate = at - state.LastTick >= period
         if replicate then

@@ -143,12 +143,32 @@ GPU-only правки сторонних модов остаются огран�
 
 ## Передача и жизненный цикл
 
-Models — reliable lane3, chunks16384 байт, окно по умолчанию32 части (512 КиБ)
-и ограниченное число передач. Reliable control/ACK отправляется после завершений
-IO на каждом runtime tick, независимо от частоты поз. Окно не увеличивает лимит
-5 MiB/s; при64 передачах только chunk payload окна может занимать до32 MiB
-(это не весь resident budget). Серверный pose tick сохраняет сетку периода:
-поздний вызов пропускает интервалы и отправляет только последний снимок.
+В protocol25 Models — reliable lane3 только для небольших уведомлений,
+допуска HTTP-передачи и завершения. Сжатый NIF передаётся PUT/GET на
+`/phantoms/content` того же Kestrel/auth origin. Отдельный сервис, порт и nginx
+не требуются. Сервер проверяет целый SHA-256 и публикует файл атомарно.
+
+PhantomAgent владеет допуском, session/AOI/generation и Ready/Latest; HTTP registry
+владеет одноразовым ключом, отменой и ходом I/O. Эти состояния не дублируют
+готовность модели. Actor опрашивает прогресс/результат lease, не читает диск.
+На Windows Http владеет ограниченными async WinHTTP jobs; callback только
+сигнализирует владельцу задачи. Буферы живут до HANDLE_CLOSING. Streaming
+совмещает HTTP тело и accepted ENet Complete по request/transfer identity;
+после этого обычный Worker проверяет hash, декодирует и наполняет кеш.
+
+Серверные ModelBytesPerSecond и PlayerModelBytesPerSecond (оба по умолчанию
+5 MiB/s) ограничивают суммарные тела upload+download: первый для всего сервера,
+второй для одного peer. Клиентские upload/download budgets отдельные, общие
+для передач соответствующего направления, тоже 5 MiB/s. ChunkBytes теперь
+только размер переиспользуемого файлового буфера; WindowChunks удалён из
+конфига. Ограничения concurrency/storage/RAM сохранены. HttpRequestsPerMinute
+(128 по умолчанию на IP) относится к числу файловых запросов, не к частям
+тела и не к авторизации. Его следует настроить для многих игроков за одним NAT.
+
+TCP управляет congestion/retransmission; собственное ENet ACK-окно/ModelFlow
+и принудительное изменение ENet flight window удалены. Скорость не зависит
+от фиксированного кредита на одном runtime tick. Server pose tick сохраняет
+сетку периода: поздний вызов пропускает интервалы и отправляет последний снимок.
 Poses — unreliable sequenced lane4 с `UNRELIABLE_FRAGMENT`. При rolloverFFFF
 пустой reliable marker меняет транспортную эпоху; полезная поза остаётся
 unreliable. Приложение получает только полностью собранный снимок. Control/chat
@@ -251,13 +271,13 @@ TransportOwner хранит reliable Models FIFO по peer отдельно от
 полный пакет и время поступления, учитывает только прирост байтов. Старее200 мс
 пакет отбрасывается до ENet. Control/chat и обычный Realtime сохраняют приоритет;
 после8 poses готовая model очередь получает ход. Blocked model peer не блокирует
-его позы. Wire contract и delivery policy не менялись: protocol24, asset2, pose3,
+его позы. На момент этого исправления использовался protocol24, asset2, pose3,
 ENet unreliable sequenced fragmentation. `TransportPacket.Schedule` — локальная
 метка очереди, не поле protobuf. Новый histogram `outgoing.pose.age` измеряет
 ожидание каждого отправляемого/просроченного pose slot отдельно от model.
 
 Уведомления модели имеют приоритет только на голове существующей per-peer FIFO:
-Complete не перескакивает через свои Chunk. Для Offer/Remove очередь хранит счётчик
+В protocol25 эта FIFO содержит только уведомления, без Chunk. Для Offer/Remove очередь хранит счётчик
 ещё не переданных уведомлений recipient/source; соответствующий latest pose ждёт
 успешного ENet admission. Остальные источники продолжают отправляться даже при
 blocked model. Это зависимость принятых команд очереди, не копия готовности сцены
@@ -273,7 +293,7 @@ reliable Send завершает peer, budget pressure остаётся повт
 При принятии нового Offer/Remove TransportOwner удаляет ещё не отправленный pose
 slot предыдущего view того же recipient/source. Это устраняет отправку старой позы
 сразу после нового уведомления. Фрагментированные poses используют realtime-квоту
-и в managed handoff, и в native PacketBudget; chunks сохраняют bulk-квоту.
+и в managed handoff, и в native PacketBudget; тела моделей идут через HTTP.
 
 PhantomAgent обновляет selection на прежнем ReplicationIntervalMs, но отправляет
 позы малыми turns до25 мс. Per-source credit допускает два снимка для компенсации
@@ -288,7 +308,8 @@ PhantomAgent обновляет selection на прежнем ReplicationInterva
 
 ## Доставка и подпись: исправление вечернего теста07.10.2026
 
-ENet transport owner для fragmented reliable sends поднимает sender flight ceiling
+Историческая реализация protocol24 (удалена при переходе на HTTP в25):
+ENet transport owner для fragmented reliable sends поднимал sender flight ceiling
 до512KiB только при unlimited native bandwidth. Это общее окно peer для всех
 каналов, отдельно от прикладного окна32×16KiB на передачу; ACK/sequence windows,
 packetThrottle, rate/lease budgets сохраняются. Явные native bandwidth limits

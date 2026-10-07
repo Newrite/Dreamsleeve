@@ -47,6 +47,9 @@ type PhantomAssetLimits = {
 
 [<RequireQualifiedAccess>]
 module PhantomAssetLimits =
+    [<Literal>]
+    let assetPacketBytes = 4096
+
     // Two independently decodable snapshots plus both protobuf envelopes.
     let posePacketBytes (limits: PhantomAssetLimits) = 2 * limits.PoseBytes + 256
 
@@ -108,17 +111,15 @@ module PhantomPose =
 type PhantomRequest =
     | Preferences of PhantomPreferences
     | Publish of PhantomManifest * context: uint64 * PhantomRequestId
-    | Chunk of PhantomTransferId * offset: int * byte array
     | Download of PlayerId * AppearanceGeneration * PhantomRequestId
     | Cancel of PhantomTransferId
-    | Progress of PhantomTransferId * nextOffset: int
     | Withdraw
     | Displayed of PlayerId * viewRevision: uint64 * AppearanceGeneration
 
 [<RequireQualifiedAccess>]
 type PhantomServerPolicy = {
     Enabled: bool; Limits: PhantomAssetLimits; SampleRate: int; Maximum: int; Distance: float32
-    WindowChunks: int; ConcurrentTransfers: int; ModelBytesPerSecond: int; PoseBytesPerSecond: int
+    ConcurrentTransfers: int; ModelBytesPerSecond: int; PoseBytesPerSecond: int
 }
 
 [<Struct>]
@@ -129,11 +130,9 @@ type PhantomCompletion = { Target: PhantomTarget; Upload: bool; RetryAfterMs: in
 [<RequireQualifiedAccess>]
 type PhantomResponse =
     | Offer of PlayerId * viewRevision: uint64 * PhantomManifest
-    | Transfer of PhantomTransferId * PhantomManifest * PlayerId * upload: bool * PhantomRequestId
-    | Chunk of PhantomTransferId * offset: int * byte array
+    | Transfer of PhantomTransferId * PhantomManifest * PlayerId * upload: bool * PhantomRequestId * token: string
     | Complete of PhantomTransferId * accepted: bool * reason: string * PhantomRequestId * PhantomCompletion option
     | Remove of PlayerId * viewRevision: uint64
-    | Progress of PhantomTransferId * nextOffset: int
     | Policy of PhantomServerPolicy
     | Settled of AppearanceGeneration * context: uint64
     | PoseDemand of context: uint64 * required: bool

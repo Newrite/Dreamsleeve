@@ -10,6 +10,8 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 open Microsoft.Extensions.Logging
+open Dreamsleeve.Server.Web
+open Falco
 
 let private ok = function Ok value -> value | Error error -> failwithf "%A" error
 let private ticket (name: string) = name.PadRight(43, '_')
@@ -35,12 +37,12 @@ let private run (arguments: string array) = task {
     let logger = loggers.CreateLogger("PhantomSmoke")
     use diagnostics =
         if Environment.GetEnvironmentVariable("DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS") = "1" then
-            let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1024L * 1024L)
+            let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1025L * 1025L)
             new ContinuousDiagnostics(Action<string>(file.Write), Action(file.Dispose)) :> IDisposable
         else { new IDisposable with member _.Dispose() = () }
-    if ProtocolCodec.Version <> 24u then failwith "Smoke fixture requires protocol24."
+    if ProtocolCodec.Version <> 25u then failwith "Smoke fixture requires protocol25."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
-                                                   DiskBytes = 128L * 1024L * 1024L; RamBytes = 4L * 1024L * 1024L;
+                                                   DiskBytes = 128L * 1025L * 1025L; RamBytes = 4L * 1025L * 1025L;
                                                    PublishCooldownMs = 100; ReplicationIntervalMs = 10 }
     let server = { ServerConfig.defaults with BindAddress = IPAddress.Loopback; Port = port; PeerLimit = 8 }
     let options = { ServerRuntimeOptions.defaults with MaxSessions = 8; Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
@@ -64,16 +66,23 @@ let private run (arguments: string array) = task {
     let authentication = { Requests = auth.Ref.TryReliable().Value; Profiles = names.Ref.TryReliable().Value;
                            Moderation = moderation.Ref.TryReliable().Value; Completion = auth.Completion }
     let storage = PhantomStorage.create phantoms
+    let http = PhantomHttp.create phantoms storage
+    let listener = { ListenUrl = $"http://127.0.0.1:{port}"; CertificatePath = ""; CertificatePasswordVariable = ""; TrustForwardedHeaders = false; TrustedProxies = [] }
+    use webLog = (new Serilog.LoggerConfiguration()).CreateLogger()
+    let web = WebHost.create listener { MaxBodyBytes = 4096; MaxConnections = 64; RequestTimeoutSeconds = 30 }
+                  (fun _ -> { Bucket = "smoke"; PermitsPerMinute = 10000 }) (fun _ -> WebHost.error 429 "rate" "rate") webLog
+    web.UseFalco(PhantomRoutes.endpoints (fun () -> Some http)) |> ignore
+    do! web.StartAsync()
     let transport = EnetTransport.createWithPhantoms server phantoms logger |> ok
-    use runtime = ServerRuntime.startWithPhantoms storage settings Moderation.empty PseudonymDictionary.builtIn
+    use runtime = ServerRuntime.startWithPhantoms storage http settings Moderation.empty PseudonymDictionary.builtIn
                       { Loaded = []; NextId = 1UL; Writer = marks.Ref.TryReliable().Value }
                       { Loaded = []; Profiles = []; NextId = 1UL; Writer = guilds.Ref.TryReliable().Value; WriterStopped = guilds.Completion }
                       authentication transport logger
     try
         Directory.CreateDirectory(Path.GetDirectoryName readyFile) |> ignore
-        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 24; port = int port;
+        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 25; port = int port;
             stateDirectory = directory; aliceTicket = ticket "alice"; bobTicket = ticket "bob" |}))
-        printfn "PHANTOM_SMOKE_READY protocol24 127.0.0.1:%d" port
+        printfn "PHANTOM_SMOKE_READY protocol25 127.0.0.1:%d" port
         let input = task {
             if not (Array.contains "--self-check" arguments) then
                 let mutable running = true
@@ -91,6 +100,9 @@ let private run (arguments: string array) = task {
         try runtime.Completion.GetAwaiter().GetResult()
         finally
             transport.Dispose()
+            web.StopAsync().GetAwaiter().GetResult()
+            web.DisposeAsync().AsTask().GetAwaiter().GetResult()
+            http.Dispose().GetAwaiter().GetResult()
             storage.Dispose().GetAwaiter().GetResult()
 }
 

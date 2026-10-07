@@ -829,7 +829,7 @@ module ServerRuntime =
             Transport = transport; Logger = logger
             Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
             AddressBans = []
-            Phantoms = storage |> Option.map (fun storage -> PhantomAgent.create settings.Phantoms storage transport.Send)
+            Phantoms = storage |> Option.map (fun (storage, http) -> PhantomAgent.create settings.Phantoms storage http transport.Send)
         }
         let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
         let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
@@ -839,5 +839,5 @@ module ServerRuntime =
     let start settings moderation pseudonyms persistence guilds authenticator transport logger =
         startWithStorage None settings moderation pseudonyms persistence guilds authenticator transport logger
 
-    let startWithPhantoms storage settings moderation pseudonyms persistence guilds authenticator transport logger =
-        startWithStorage (Some storage) settings moderation pseudonyms persistence guilds authenticator transport logger
+    let startWithPhantoms storage http settings moderation pseudonyms persistence guilds authenticator transport logger =
+        startWithStorage (Some (storage, http)) settings moderation pseudonyms persistence guilds authenticator transport logger

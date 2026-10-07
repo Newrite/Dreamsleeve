@@ -9,7 +9,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   constexpr auto          ModelsLane = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Models);
   constexpr auto          PosesLane  = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Poses);
-  constexpr std::uint32_t ChunkBytes = 16384;
+  constexpr std::uint32_t MaxAssetPacketBytes = 4096;
 
   struct Descriptor
   {
@@ -40,13 +40,6 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     RequestId     request;
   };
 
-  struct Chunk
-  {
-    TransferId    transfer;
-    std::uint32_t offset{};
-    Bytes         data;
-  };
-
   struct Download
   {
     std::uint64_t player{};
@@ -62,19 +55,13 @@ export namespace Dreamsleeve::Client::Phantom::Wire
   struct Withdraw
   {};
 
-  struct Progress
-  {
-    TransferId    transfer;
-    std::uint32_t nextOffset{};
-  };
-
   struct Displayed
   {
     std::uint64_t player{}, view{};
     Generation    generation;
   };
 
-  using Request = std::variant<Preferences, Publish, Chunk, Download, Cancel, Withdraw, Progress, Displayed>;
+  using Request = std::variant<Preferences, Publish, Download, Cancel, Withdraw, Displayed>;
 
   struct Offer
   {
@@ -89,6 +76,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     std::uint64_t player{};
     bool          upload{};
     RequestId     request;
+    std::string   httpToken;
   };
 
   struct Complete
@@ -112,7 +100,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
   {
     bool          enabled{};
     Limits        limits;
-    std::uint32_t sampleRate{}, maximumVisible{}, windowChunks{}, concurrentTransfers{}, modelBytesPerSecond{}, poseBytesPerSecond{};
+    std::uint32_t sampleRate{}, maximumVisible{}, concurrentTransfers{}, modelBytesPerSecond{}, poseBytesPerSecond{};
     float         distance{};
   };
 
@@ -128,7 +116,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     std::uint64_t context{};
   };
 
-  using Response = std::variant<Offer, Transfer, Chunk, Complete, Remove, Progress, Policy, Settled, PoseDemand>;
+  using Response = std::variant<Offer, Transfer, Complete, Remove, Policy, Settled, PoseDemand>;
 
   struct Pose
   {

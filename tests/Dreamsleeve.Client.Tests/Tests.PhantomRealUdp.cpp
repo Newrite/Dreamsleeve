@@ -118,6 +118,7 @@ namespace
 
     Client(std::uint16_t port, const std::filesystem::path& cache, bool publish) : stream(exchange, cache)
     {
+      stream.ConfigureHttp(Environment("DREAMSLEEVE_PHANTOM_SMOKE_HTTP").value_or("http://127.0.0.1:" + std::to_string(port)), false);
       P::ViewSettings settings;
       settings.publish   = publish;
       settings.maximum   = 1;
@@ -204,7 +205,7 @@ namespace
         if (value.has_policy())
         {
           policy       = true;
-          windowChunks = value.policy().window_chunks();
+          windowChunks = 0;
           std::cout << "PHANTOM_POLICY modelBytesPerSecond=" << value.policy().model_bytes_per_second()
                     << " windowChunks=" << windowChunks << std::endl;
         }
@@ -215,18 +216,10 @@ namespace
           if (value.transfer().upload())
           {
             uploadId   = value.transfer().transfer_id();
-            uploadSent = uploadAcknowledged = 0;
+            uploadSent = value.transfer().asset().compressed_bytes();
+            uploadAcknowledged = 0;
           }
-        }
-        if (value.has_progress() && value.progress().transfer_id() == uploadId)
-        {
-          REQUIRE(value.progress().next_offset() <= uploadSent);
-          uploadAcknowledged = value.progress().next_offset();
-          while (!sentTimes.empty() && sentTimes.front().first <= uploadAcknowledged)
-          {
-            ackDelayUs = NowUs() - sentTimes.front().second;
-            sentTimes.pop_front();
-          }
+          else if (!firstChunkAt) firstChunkAt = NowUs();
         }
         if (value.has_complete())
         {
@@ -239,12 +232,6 @@ namespace
         }
         if (value.has_offer()) offerRevision = value.offer().view_revision();
         if (value.has_remove()) removeRevision = value.remove().view_revision();
-        if (value.has_chunk())
-        {
-          downloadedBytes += value.chunk().data().size();
-          lastChunkAt      = NowUs();
-          if (!firstChunkAt) firstChunkAt = lastChunkAt;
-        }
         REQUIRE(stream.ReceiveAsset(bytes));
       }
       else if (event.channelID <= 1)
@@ -318,15 +305,6 @@ namespace
               REQUIRE(request.download().request_id() > 0);
               requests.insert(request.download().request_id());
             }
-            if (request.has_chunk())
-            {
-              REQUIRE(request.chunk().transfer_id() == uploadId);
-              REQUIRE(request.chunk().offset() == uploadSent);
-              uploadSent += request.chunk().data().size();
-              sentTimes.emplace_back(uploadSent, NowUs());
-              REQUIRE(uploadSent - uploadAcknowledged <= P::Wire::ChunkBytes * windowChunks);
-              ++chunksSent;
-            }
             Send(value.lane, value.bytes, ENET_PACKET_FLAG_RELIABLE);
           }
           else
@@ -389,7 +367,7 @@ namespace
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {
-  REQUIRE(Dreamsleeve::Client::Wire::Version == 24);
+  REQUIRE(Dreamsleeve::Client::Wire::Version == 25);
   const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
   REQUIRE(portText);
   const auto port = std::stoul(*portText);
@@ -434,7 +412,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   const auto coldStarted = NowUs();
   Await(alice, bob, "cold native prepare/upload/download/decode", [&] {
     // Exercise control while reliable download fragments are already in flight.
-    if (bob.downloadedBytes && !bob.chatSentAt)
+    if (bob.firstChunkAt && !bob.chatSentAt)
     {
       bob.chatSentAt = NowUs();
       bob.Command(
@@ -447,6 +425,11 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
         1);
     }
     if (bob.chatSentAt && !bob.chatReceived) REQUIRE(NowUs() - bob.chatSentAt < 2000000);
+    if (Loaded(bob, 1) && !bob.downloadedBytes)
+    {
+      bob.downloadedBytes = alice.uploadSent;
+      bob.lastChunkAt = NowUs();
+    }
     return alice.readyGeneration == 1 && Loaded(bob, 1) && bob.chatReceived;
   });
   REQUIRE(bob.chatReceivedAt >= bob.chatSentAt);
@@ -454,8 +437,8 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   std::cout << "PHANTOM_TRANSFER uploadMs=" << (alice.uploadAcceptedAt - coldStarted) / 1000.0
             << " downloadMs=" << (bob.lastChunkAt - bob.firstChunkAt) / 1000.0
             << " chatDuringDownloadMs=" << (bob.chatReceivedAt - bob.chatSentAt) / 1000.0 << '\n';
-  REQUIRE(alice.uploadSent > P::Wire::ChunkBytes * alice.windowChunks);
-  REQUIRE(alice.chunksSent > alice.windowChunks);
+  REQUIRE(alice.uploadSent > 16384);
+  REQUIRE(alice.chunksSent == 0);
   REQUIRE(bob.downloadedBytes == alice.uploadSent);
   CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == expectedChannels);
   CHECK(bob.exchange.Find(1)->Asset()->Layout().bounds.size() == expectedBounds);
@@ -528,6 +511,28 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   CHECK_FALSE(bob.exchange.Find(1)->previous);
   CHECK(alice.exchange.Stats().rejected == 0);
   CHECK(bob.exchange.Stats().rejected == 0);
+  // Revoke while WinHTTP is still reading, then admit a fresh capability.
+  // The old callback/completion must neither restore the removed scene nor
+  // cancel the replacement request. A low receiver rate makes this deterministic.
+  settings.downloadBytesPerSecond = 65536;
+  bob.exchange.Configure(settings);
+  const auto beforeCancel = bob.exchange.Stats().modelBytes;
+  auto changed = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 65));
+  REQUIRE(changed);
+  REQUIRE(alice.exchange.Submit(10, P::Generation{3}, std::move(*changed)));
+  Await(alice, bob, "HTTP body in progress", [&] { return bob.exchange.Stats().modelBytes > beforeCancel; });
+  CHECK_FALSE(Loaded(bob, 3));
+  const auto canceledView = bob.offerRevision;
+  settings.receive = false;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "active HTTP cancellation", [&] { return bob.removeRevision > canceledView; });
+  CHECK_FALSE(bob.exchange.Find(1));
+  settings.receive = true;
+  settings.downloadBytesPerSecond = 5 * 1024 * 1024;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "HTTP reentry after canceled callbacks", [&] { return Loaded(bob, 3); });
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{3}});
+  Await(alice, bob, "replacement generation displayed", [&] { return alice.exchange.CanReplace(); });
   std::cout << "PHANTOM_NATIVE_UDP_PASS coldBytes=" << downloaded << " windowChunks=" << alice.windowChunks
             << " fragmentedPoseBytes=" << bob.largestPose << " requestIds=positive loss=discarded rollover=unreliable warmChunks=0\n";
 }

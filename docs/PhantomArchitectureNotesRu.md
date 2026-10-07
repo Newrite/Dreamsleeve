@@ -1,8 +1,15 @@
-# Актуальные изменения07.10.2026
+# Актуальные изменения08.10.2026
+
+В25 model bulk переведён в HTTP того же Kestrel/auth origin. PhantomAgent
+сохраняет доменные переходы; Infrastructure.PhantomHttp владеет capability и
+I/O, PhantomStorage — файлами/cache pins. Client Http владеет WinHTTP callbacks,
+Streaming — корреляцией тела и ENet receipt, Exchange — публикацией/сценой.
+Удалены оба ModelFlow, Chunk/Progress, WindowChunks и override ENet flight.
+См. [контракт/измерения HTTP](benchmarks/phantom-http-2026-10-08.md).
 
 Текущая карта владельцев и инвариантов — [PhantomsRu.md](PhantomsRu.md).
 Из старой реализации переиспользованы Exchange/Worker/Streaming, AOI, request
-correlation, epoch и ACK pacing, UI/privacy и lane delivery policy.
+correlation, epoch, UI/privacy и lane delivery policy.
 Удалены PhantomAsset/Graphics/Mesh/VertexStream/Recovery, Masks и neutral
 geometry/skin/material schema. Нативные Capture/Scene больше не обновляют GPU
 буферы самостоятельно. Server больше не имеет geometry cap или поля manifest.

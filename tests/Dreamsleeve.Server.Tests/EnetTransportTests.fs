@@ -10,6 +10,7 @@ open System.Threading
 open Enet
 open Expecto
 open Microsoft.Extensions.Logging.Abstractions
+open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 open Dreamsleeve.Server.Infrastructure.Interop
@@ -103,7 +104,7 @@ let tests = testSequenced <| testList "ENet transport" [
         withAdapter ServerConfig.defaults (fun _ transport client peer connection events _ pump ->
             let payload = Array.init 20000 (fun index -> byte (index % 251))
             for lane, flags in [DeliveryLane.Models, EnetPacketFlag.Reliable; DeliveryLane.Poses, EnetPacketFlag.UnreliableFragment] do
-                let bytes = if lane = DeliveryLane.Models then payload[0..16383] else payload
+                let bytes = if lane = DeliveryLane.Models then payload[0..PhantomAssetLimits.assetPacketBytes-1] else payload
                 let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>(bytes), flags)
                 try Expect.isTrue (peer.TrySend(byte lane, &packet)) "native send"
                 finally if packet.IsCreated then packet.Dispose()
@@ -236,7 +237,7 @@ let tests = testSequenced <| testList "ENet transport" [
                         PacketSendResult.Sent "Boundary and fragmented packet are both accepted."
                 until (fun () -> budget.Packets = 0) pump)
 
-    testCase "bulk flight window respects explicit ENet bandwidth limits" <| fun _ ->
+    testCase "sends preserve the native ENet flight window" <| fun _ ->
         withPeers (fun _ peer pump ->
             let budget = PacketBudget(16, 1024L * 1024L)
             let peerBudget = PacketBudget(16, 1024L * 1024L)
@@ -247,7 +248,7 @@ let tests = testSequenced <| testList "ENet transport" [
                 NativePtr.write (peer.GetInner()) inner
                 Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(Array.zeroCreate 16384), budget, peerBudget,
                                                      3uy, PacketDelivery.ReliableBulk)) PacketSendResult.Sent "Bulk admitted."
-                Expect.equal peer.WindowSize (if limited then 4096u else 524288u) "Only unlimited native bandwidth expands."
+                Expect.equal peer.WindowSize 4096u "The transport preserves the native window."
                 until (fun () -> budget.Packets = 0) pump)
 
     testCase "adapter exposes a payload budget only for live connections" <| fun _ ->

@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <Compile Include="WebHost.fs" />
+        <Compile Include="PhantomRoutes.fs" />
         <Compile Include="Authentication/AuthRoutes.fs" />
         <Compile Include="Admin/AdminPorts.fs" />
         <Compile Include="Admin/AdminModels.fs" />

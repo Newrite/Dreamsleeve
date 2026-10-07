@@ -51,7 +51,7 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
     // The host exactly as Program builds it: the same settings mapping and ports.
     let ports = WebPorts.auth settings auth
     let ports = match steam with Some steam -> { ports with Steam = steam } | None -> ports
-    let app = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
+    let app = AuthRoutes.buildWithPhantoms (fun () -> None) 128 (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
     let! outcome = task {
         try
             do! app.StartAsync()

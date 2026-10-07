@@ -6,6 +6,6 @@
   </PropertyGroup>
   <ItemGroup><Compile Include="Program.fs" /></ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Dreamsleeve.Server.Infrastructure/Dreamsleeve.Server.Infrastructure.fsproj" />
+    <ProjectReference Include="../../src/Dreamsleeve.Server.Web/Dreamsleeve.Server.Web.fsproj" />
   </ItemGroup>
 </Project>

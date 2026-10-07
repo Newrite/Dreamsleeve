@@ -2,7 +2,6 @@
 #include "phantom.pb.h"
 import std;
 import Dreamsleeve.Client.Phantom.Streaming;
-import Dreamsleeve.Client.Phantom.ModelFlow;
 import Dreamsleeve.Client.Domain;
 import Dreamsleeve.Client.ProtocolCodec;
 
@@ -68,7 +67,7 @@ namespace
       p->set_sample_rate(20);
       p->set_maximum_visible(visible);
       p->set_distance(4096);
-      p->set_window_chunks(window);
+      (void)window;
       p->set_concurrent_transfers(concurrent);
       p->set_model_bytes_per_second(rate);
       p->set_pose_bytes_per_second(1024 * 1024);
@@ -152,29 +151,11 @@ TEST_CASE("Phantom upload retries correlated admission and sends poses only afte
   })));
   CHECK(std::ranges::none_of(stream.Poll(), [](const auto& p) { return p.lane == P::Wire::PosesLane; }));
   REQUIRE(Until([&] { return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_publish(); }); }));
-  const auto descriptor = Describe(*model);
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(10);
-    t->set_request_id(2);
-    t->set_player_id(123);
-    t->set_upload(true);
-    Set(descriptor, t->mutable_asset());
-  })));
-  P::Bytes received;
-  REQUIRE(Until([&] {
-    for (const auto& p : Models(stream.Poll()))
-      if (p.has_chunk())
-      {
-        CHECK(p.chunk().offset() == received.size());
-        received.insert(received.end(), p.chunk().data().begin(), p.chunk().data().end());
-      }
-    return received.size() == model->compressed->size();
-  }));
-  CHECK(received == *model->compressed);
   REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
     p.mutable_complete()->set_request_id(2);
-    p.mutable_complete()->set_transfer_id(10);
+    p.mutable_complete()->set_player_id(123);
+    p.mutable_complete()->set_generation(1);
+    p.mutable_complete()->set_upload(true);
     p.mutable_complete()->set_accepted(true);
   })));
   const auto ready = stream.Poll();
@@ -186,75 +167,6 @@ TEST_CASE("Phantom upload retries correlated admission and sends poses only afte
   CHECK(std::ranges::any_of(Models(stopped), [](const auto& p) { return p.has_withdraw(); }));
 }
 
-TEST_CASE("Phantom downloads validate complete bytes and stale worker completion cannot restore a removed view")
-{
-  P::Exchange  exchange;
-  P::Streaming stream(exchange, {});
-  Policy(stream);
-  stream.Poll();
-  auto       model      = Model();
-  const auto descriptor = Describe(model);
-  auto       offer      = Server([&](auto& p) {
-    auto* o = p.mutable_offer();
-    o->set_player_id(9);
-    o->set_view_revision(1);
-    Set(descriptor, o->mutable_asset());
-  });
-  REQUIRE(stream.ReceiveAsset(offer));
-  REQUIRE(Until([&] { return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_download(); }); }));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(20);
-    t->set_request_id(1);
-    t->set_player_id(9);
-    Set(descriptor, t->mutable_asset());
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* c = p.mutable_chunk();
-    c->set_transfer_id(20);
-    c->set_data(model.compressed->data(), model.compressed->size());
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
-    p.mutable_complete()->set_request_id(1);
-    p.mutable_complete()->set_transfer_id(20);
-    p.mutable_complete()->set_accepted(true);
-  })));
-  REQUIRE(Until([&] {
-    const auto remote = exchange.Find(9);
-    return remote && remote->Asset();
-  }));
-  CHECK(exchange.Find(9)->Asset()->Layout().requiredChannels.size() == 2);
-  REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
-    auto* r = p.mutable_remove();
-    r->set_player_id(9);
-    r->set_view_revision(2);
-  })));
-  CHECK_FALSE(exchange.Find(9));
-  REQUIRE(stream.ReceiveAsset(offer));
-  REQUIRE(Until([&] { return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_download(); }); }));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(21);
-    t->set_request_id(2);
-    t->set_player_id(9);
-    Set(descriptor, t->mutable_asset());
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* c = p.mutable_chunk();
-    c->set_transfer_id(21);
-    c->set_data(model.compressed->data(), model.compressed->size() - 1);
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
-    p.mutable_complete()->set_request_id(2);
-    p.mutable_complete()->set_transfer_id(21);
-    p.mutable_complete()->set_accepted(true);
-  })));
-  CHECK_FALSE(exchange.Find(9)->Asset());
-  CHECK(exchange.Find(9)->State() == P::Representation::Unavailable);
-  stream.Reset();
-  std::this_thread::sleep_for(std::chrono::milliseconds(20));
-  CHECK(exchange.Read().remotes.empty());
-}
 
 TEST_CASE("Late phantom admission replies do not cancel a newer context with the same model")
 {
@@ -279,18 +191,12 @@ TEST_CASE("Late phantom admission replies do not cancel a newer context with the
     c->set_upload(true);
     c->set_reason("context changed");
   })));
-  const auto descriptor = Describe(*model);
   REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_request_id(2);
-    t->set_transfer_id(30);
-    t->set_player_id(123);
-    t->set_upload(true);
-    Set(descriptor, t->mutable_asset());
+    auto* c = p.mutable_complete();
+    c->set_request_id(2); c->set_player_id(123); c->set_generation(1); c->set_upload(true); c->set_accepted(true);
   })));
-  REQUIRE(Until([&] {
-    return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_chunk() && p.chunk().transfer_id() == 30; });
-  }));
+  exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
+  CHECK(std::ranges::none_of(Models(stream.Poll()), [](const auto& p) { return p.has_publish(); }));
   CHECK(exchange.Stats().rejected == 0);
 }
 
@@ -321,42 +227,6 @@ TEST_CASE("Scene allocations and simultaneous replacement share the phantom memo
   CHECK(exchange.RemainingMemory() == settings.memoryBytes);
 }
 
-TEST_CASE("Interrupted phantom download retries instead of becoming permanently unavailable")
-{
-  P::Exchange  exchange;
-  P::Streaming stream(exchange, {});
-  Policy(stream);
-  stream.Poll();
-  auto       model      = Model();
-  const auto descriptor = Describe(model);
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* o = p.mutable_offer();
-    o->set_player_id(9);
-    o->set_view_revision(1);
-    Set(descriptor, o->mutable_asset());
-  })));
-  REQUIRE(Until([&] {
-    return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_download() && p.download().request_id() == 1; });
-  }));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(20);
-    t->set_request_id(1);
-    t->set_player_id(9);
-    Set(descriptor, t->mutable_asset());
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([](auto& p) {
-    auto* c = p.mutable_complete();
-    c->set_request_id(1);
-    c->set_transfer_id(20);
-    c->set_reason("busy");
-    c->set_retry_after_ms(5);
-  })));
-  REQUIRE(Until([&] {
-    return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_download() && p.download().request_id() == 2; });
-  }));
-  CHECK(exchange.Find(9)->State() == P::Representation::Loading);
-}
 
 TEST_CASE("Phantom upload and download use a shared transfer admission limit")
 {
@@ -413,185 +283,8 @@ TEST_CASE("All accepted phantom cache misses reach the download planner")
   }));
 }
 
-TEST_CASE("A local download budget paces acknowledgements fairly across transfers")
-{
-  P::Exchange     exchange;
-  P::ViewSettings settings;
-  settings.downloadBytesPerSecond = 64 * 1024;
-  exchange.Configure(settings);
-  P::Streaming stream(exchange, {});
-  Policy(stream);
-  stream.Poll();
-  auto descriptor            = Describe(Model());
-  descriptor.compressedBytes = 2 * P::Wire::ChunkBytes;
-  descriptor.rawBytes        = 4 * P::Wire::ChunkBytes;
-  for (std::uint64_t id : {9, 10})
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      auto* offer = p.mutable_offer();
-      offer->set_player_id(id);
-      offer->set_view_revision(1);
-      Set(descriptor, offer->mutable_asset());
-    })));
-  std::map<std::uint64_t, std::uint64_t> requests;
-  REQUIRE(Until([&] {
-    for (const auto& p : Models(stream.Poll()))
-      if (p.has_download()) requests[p.download().player_id()] = p.download().request_id();
-    return requests.size() == 2;
-  }));
-  for (const auto& [player, request] : requests)
-  {
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      auto* transfer = p.mutable_transfer();
-      transfer->set_player_id(player);
-      transfer->set_transfer_id(player);
-      transfer->set_request_id(request);
-      Set(descriptor, transfer->mutable_asset());
-    })));
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      p.mutable_chunk()->set_transfer_id(player);
-      p.mutable_chunk()->set_data(std::string(P::Wire::ChunkBytes, 'x'));
-    })));
-  }
-  const auto              started = Clock::now();
-  std::set<std::uint64_t> acknowledged;
-  REQUIRE(Until([&] {
-    for (const auto& p : Models(stream.Poll()))
-      if (p.has_progress())
-      {
-        CHECK(p.progress().next_offset() == P::Wire::ChunkBytes);
-        acknowledged.insert(p.progress().transfer_id());
-      }
-    return acknowledged.size() == 2;
-  }));
-  CHECK(Clock::now() - started >= std::chrono::milliseconds(400));
-}
 
-TEST_CASE("Eight full phantom windows make partial ACK progress below the inactivity timeout")
-{
-  constexpr std::uint32_t count = 8, window = 16, rate = 64 * 1024;
-  P::Exchange             exchange;
-  P::ViewSettings         settings;
-  settings.maximum                = count;
-  settings.memoryBytes            = 1024ULL * 1024 * 1024;
-  settings.downloadBytesPerSecond = rate;
-  exchange.Configure(settings);
-  P::Streaming stream(exchange, {});
-  Policy(stream, count, window, count);
-  stream.Poll();
-  auto descriptor            = Describe(Model());
-  descriptor.compressedBytes = 1024 * 1024;
-  descriptor.rawBytes        = 4 * 1024 * 1024;
-  for (std::uint64_t player = 1; player <= count; ++player)
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      auto* offer = p.mutable_offer();
-      offer->set_player_id(player);
-      offer->set_view_revision(1);
-      Set(descriptor, offer->mutable_asset());
-    })));
-  std::map<std::uint64_t, std::uint64_t> requests;
-  REQUIRE(Until([&] {
-    for (const auto& p : Models(stream.Poll()))
-      if (p.has_download()) requests[p.download().player_id()] = p.download().request_id();
-    return requests.size() == count;
-  }));
-  for (const auto& [player, request] : requests)
-  {
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      auto* transfer = p.mutable_transfer();
-      transfer->set_player_id(player);
-      transfer->set_transfer_id(player);
-      transfer->set_request_id(request);
-      Set(descriptor, transfer->mutable_asset());
-    })));
-    for (std::uint32_t chunk = 0; chunk < window; ++chunk)
-      REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-        auto* data = p.mutable_chunk();
-        data->set_transfer_id(player);
-        data->set_offset(chunk * P::Wire::ChunkBytes);
-        data->set_data(std::string(P::Wire::ChunkBytes, 'x'));
-      })));
-  }
-  const auto                             started = Clock::now();
-  std::map<std::uint64_t, std::uint32_t> acknowledged;
-  std::uint64_t                          initialBytes{}, totalBytes{};
-  for (int second = 0; second <= 31; ++second)
-  {
-    for (const auto& p : Models(stream.Poll(started + std::chrono::seconds(second))))
-    {
-      CHECK_FALSE(p.has_cancel());
-      CHECK_FALSE(p.has_download());
-      if (!p.has_progress()) continue;
-      const auto id = p.progress().transfer_id();
-      REQUIRE(requests.contains(id));
-      const auto offset = p.progress().next_offset();
-      CHECK(offset > acknowledged[id]);
-      CHECK(offset <= window * P::Wire::ChunkBytes);
-      CHECK(offset % P::Wire::ChunkBytes == 0);
-      totalBytes       += offset - acknowledged[id];
-      acknowledged[id]  = offset;
-      if (second <= 2) CHECK(offset < window * P::Wire::ChunkBytes);
-    }
-    if (!second) initialBytes = totalBytes;
-    // At most one fractional chunk of saved credit per download crosses
-    // the test's initial clock boundary; aggregate pacing stays bounded.
-    CHECK(totalBytes - initialBytes <= std::uint64_t(rate) * second + count * P::Wire::ChunkBytes);
-    if (second == 2)
-    {
-      REQUIRE(acknowledged.size() == count);
-      for (const auto& [id, offset] : acknowledged)
-        CHECK(offset >= P::Wire::ChunkBytes);
-    }
-  }
-  REQUIRE(acknowledged.size() == count);
-  for (const auto& [id, offset] : acknowledged)
-    CHECK(offset >= 15 * P::Wire::ChunkBytes);
-  CHECK(totalBytes >= std::uint64_t(count) * 15 * P::Wire::ChunkBytes);
-}
 
-TEST_CASE("Phantom ACK pacing permits the final prefix off a chunk boundary")
-{
-  P::Exchange     exchange;
-  P::ViewSettings settings;
-  settings.downloadBytesPerSecond = 64 * 1024;
-  exchange.Configure(settings);
-  P::Streaming stream(exchange, {});
-  Policy(stream);
-  stream.Poll();
-  auto descriptor            = Describe(Model());
-  descriptor.compressedBytes = P::Wire::ChunkBytes + 123;
-  descriptor.rawBytes        = 4 * P::Wire::ChunkBytes;
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* offer = p.mutable_offer();
-    offer->set_player_id(9);
-    offer->set_view_revision(1);
-    Set(descriptor, offer->mutable_asset());
-  })));
-  std::uint64_t request{};
-  REQUIRE(Until([&] {
-    for (const auto& p : Models(stream.Poll()))
-      if (p.has_download()) request = p.download().request_id();
-    return request != 0;
-  }));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* transfer = p.mutable_transfer();
-    transfer->set_player_id(9);
-    transfer->set_transfer_id(9);
-    transfer->set_request_id(request);
-    Set(descriptor, transfer->mutable_asset());
-  })));
-  for (std::uint32_t offset : {0U, P::Wire::ChunkBytes})
-    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-      auto* chunk = p.mutable_chunk();
-      chunk->set_transfer_id(9);
-      chunk->set_offset(offset);
-      chunk->set_data(std::string(offset ? 123 : P::Wire::ChunkBytes, 'x'));
-    })));
-  const auto output = Models(stream.Poll(Clock::now() + std::chrono::seconds(1)));
-  CHECK(std::ranges::any_of(output, [&](const auto& p) {
-    return p.has_progress() && p.progress().transfer_id() == 9 && p.progress().next_offset() == descriptor.compressedBytes;
-  }));
-  CHECK(std::ranges::none_of(output, [](const auto& p) { return p.has_cancel(); }));
-}
 
 TEST_CASE("Phantom replacement owns two generations and failed preparation restores the old publication")
 {
@@ -785,16 +478,8 @@ TEST_CASE("Preparation rollback resumes the committed model without republishing
   const auto publish  = std::ranges::find_if(requests, [](const auto& p) { return p.has_publish(); });
   REQUIRE(publish != requests.end());
   REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(1);
-    t->set_request_id(publish->publish().request_id());
-    t->set_player_id(123);
-    t->set_upload(true);
-    Set(Describe(*model), t->mutable_asset());
-  })));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
     auto* c = p.mutable_complete();
-    c->set_transfer_id(1);
+
     c->set_request_id(publish->publish().request_id());
     c->set_generation(1);
     c->set_player_id(123);
@@ -949,81 +634,4 @@ TEST_CASE("Capture waits for matching movement space and rejects late capture co
   exchange.Prepared(current.epoch, current.localRevision, {P::Generation{3}, model});
   CHECK(exchange.TakeOutput().publication.has_value());
   CHECK(exchange.Capturing(P::Generation{3}));
-}
-
-TEST_CASE("Model flight responds to sustained delay without growing on duplicate ACKs")
-{
-  using Clock     = std::chrono::steady_clock;
-  auto         at = Clock::time_point{};
-  P::ModelFlow flow(100, 8);
-  CHECK(flow.Allows(0, 200));
-  CHECK_FALSE(flow.Allows(0, 201));
-  std::uint32_t offset = 0;
-  for (int i = 0; i < 8; ++i)
-  {
-    flow.Sent(offset += 100, at);
-    at += std::chrono::milliseconds(100);
-    flow.Acknowledge(offset, at);
-  }
-  CHECK(flow.Allows(0, 800));
-  for (int i = 0; i < 12; ++i)
-  {
-    flow.Sent(offset += 100, at);
-    at += std::chrono::milliseconds(300);
-    flow.Acknowledge(offset, at);
-  }
-  CHECK_FALSE(flow.Allows(0, 800));
-  for (int i = 0; i < 100; ++i)
-    flow.Acknowledge(offset, at += std::chrono::seconds(1));
-  CHECK_FALSE(flow.Allows(0, 800));
-  CHECK(flow.Allows(0, 100));
-  for (int i = 0; i < 50; ++i)
-  {
-    flow.Sent(offset += 100, at);
-    at += std::chrono::milliseconds(100);
-    flow.Acknowledge(offset, at);
-  }
-  CHECK(flow.Allows(0, 800));
-  CHECK_FALSE(flow.Allows(0, 801));
-}
-
-TEST_CASE("Bulk pacing wakes the transport at its next chunk deadline")
-{
-  auto parsed = P::ValidatedAsset::Parse(PhantomFixture::Model(2, 60000));
-  REQUIRE(parsed);
-  auto prepared = P::Prepare(std::move(*parsed));
-  REQUIRE(prepared);
-  auto        model = std::make_shared<const P::PreparedAsset>(std::move(*prepared));
-  P::Exchange exchange;
-  PreparePublication(exchange, model);
-  P::Streaming stream(exchange, {});
-  Policy(stream, 2, 32, 4, 5 * 1024 * 1024);
-  auto at = Clock::now();
-  Models(stream.Poll(at));
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* t = p.mutable_transfer();
-    t->set_transfer_id(10);
-    t->set_request_id(1);
-    t->set_player_id(123);
-    t->set_upload(true);
-    Set(Describe(*model), t->mutable_asset());
-  })));
-  CHECK(stream.WaitMs(10, at) <= 4);
-  at                 += std::chrono::milliseconds(10);
-  std::uint32_t sent  = 0;
-  for (const auto& packet : Models(stream.Poll(at)))
-    if (packet.has_chunk()) sent += static_cast<std::uint32_t>(packet.chunk().data().size());
-  REQUIRE(sent == 2 * P::Wire::ChunkBytes);  // Initial flight is full.
-  CHECK(stream.WaitMs(10, at) == 10);        // ACK, not a busy poll, opens the flight.
-  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    p.mutable_progress()->set_transfer_id(10);
-    p.mutable_progress()->set_next_offset(sent);
-  })));
-  CHECK(stream.WaitMs(10, at) == 0);  // Remaining elapsed-time credit is usable.
-  for (const auto& packet : Models(stream.Poll(at)))
-    if (packet.has_chunk()) sent += static_cast<std::uint32_t>(packet.chunk().data().size());
-  CHECK(sent == 3 * P::Wire::ChunkBytes);
-  const auto wait = stream.WaitMs(10, at);
-  CHECK(wait >= 1);
-  CHECK(wait <= 4);  // Next chunk is due before the ordinary 10 ms transport wait.
 }

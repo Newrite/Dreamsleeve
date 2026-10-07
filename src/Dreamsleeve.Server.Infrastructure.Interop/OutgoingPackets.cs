@@ -124,14 +124,6 @@ public static unsafe class OutgoingPackets
 
             packetOwnsLease = true;
 
-            // Match the native client's bounded reliable flight ceiling. ENet's
-            // default 64 KiB caps bulk delivery at ~0.6 MiB/s at 100 ms RTT.
-            // This does not alter sequence windows, ACKs, throttle or the
-            // application rate/lease budgets. Bandwidth commands can reset it.
-            if (peer.IsCreated && flags == EnetPacketFlag.Reliable && bytes.Length > peer.Mtu
-                && peer.GetInner()->incomingBandwidth == 0 && peer.GetInner()->host->outgoingBandwidth == 0)
-                peer.GetInner()->windowSize = 512 * 1024;
-
             return peer.TrySend(channel, ref packet)
                 ? PacketSendResult.Sent
                 : PacketSendResult.PeerRejected;

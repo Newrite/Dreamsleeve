@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 24
+# Прикладной протокол сессии, версия 25
 
 Схемы разделены по назначению:
 
@@ -12,7 +12,7 @@
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
-| [phantom.proto](phantom.proto) | Независимые оболочки моделей/поз, manifest, политики, оконные передачи и подтверждения |
+| [phantom.proto](phantom.proto) | Независимые оболочки моделей/поз, manifest, политики, допуск HTTP-передач и подтверждения |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
@@ -24,7 +24,7 @@
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 24. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 25. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -32,7 +32,7 @@
 | 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer, метки, скрытое имя, смена имени, модерация (кроме удаления сообщений) и ответы, reliable |
 | 1 | Chat | ClientPacket/ServerPacket: SendChat, PostAnnouncement, DeleteChatMessage, ChatPublished, ChatMessageRemoved и ответы чата, reliable |
 | 2 | Realtime | ClientMovementPacket/ServerMovementPacket: абсолютные pose, unreliable sequenced (flags=0) |
-| 3 | Models | ClientAssetPacket/ServerAssetPacket: настройки, публикации, offers, window/chunks/ACK/cancel, reliable |
+| 3 | Models | ClientAssetPacket/ServerAssetPacket: настройки, публикации, offers, HTTP capabilities/complete/cancel, reliable |
 | 4 | Poses | ClientPosePacket/ServerPosePacket: сжатый полный snapshot с bounds, unreliable sequenced с UNRELIABLE_FRAGMENT |
 
 Нужно минимум пять согласованных каналов. Номера фиксированы в network.proto,
@@ -737,9 +737,9 @@ PresenceChanged; pose/token/sequence движения — отдельные rea
 одновременно не поддерживаются.
 
 
-## Фантомы, версия 24
+## Фантомы, версия 25
 
-Модели и позы имеют отдельные оболочки с той же обязательной версией 23.
+Модели и позы имеют отдельные оболочки с той же обязательной версией 25.
 `phantom.proto` отделён от чата и UpdatePlayer; массивы геометрии не идут через
 UI bridge. Максимальный frame модели: compressed 64 МиБ, raw 128 МиБ;
 позы: compressed 128 КиБ, raw 256 КиБ; 4096 узлов нативной сцены.
@@ -754,9 +754,21 @@ immutable: повтор той же generation допустим только с 
 Publish/Download получают положительный request_id, который Transfer и Complete
 обязательно повторяют. Он отделяет поздние результаты IO предыдущей попытки
 от новой передачи той же модели. Complete с transfer_id=0 обозначает отказ
-до назначения передачи; содержит player/generation, upload, request_id и retry.
+до назначения передачи либо принятую публикацию уже кешированного hash;
+содержит player/generation, upload, request_id и retry.
 Нулевой retry — окончательный отказ; положительный — задержка повтора в мс.
-Chunk — максимум 16384 байт, последовательные offsets и оконные Progress ACK.
+Transfer.http_token — одноразовый случайный ключ (64 hex), выданный actor после
+допуска и pinning storage. PUT/GET `/phantoms/content` используют существующий
+HTTP origin авторизации, `Authorization: Bearer <key>` и бинарное тело. PUT требует
+точного Content-Length; GET возвращает точный Content-Length. Hash не является
+разрешением на скачивание. Ключ связан с направлением, размером и передачей;
+отмена/AOI departure/disconnect отзывают его. Успех PUT — 204, GET — 200.
+Actor посылает Complete после проверки storage/завершения записи HTTP тела;
+получатель ждёт одновременно полное HTTP тело и accepted Complete, независимо
+от порядка их прихода. Затем проверяет hash и декодирует production asset.
+Размер ENet model-control envelope ограничен 4096 байт. Chunk/Progress и
+Policy.window_chunks удалены, их номера зарезервированы. Прикладного окна и
+подтверждений частей больше нет; повтор после обрыва требует нового допуска.
 Первое поколение начинает pose delivery после принятой целой публикации.
 Замена допускает bundled pose после admission Publish, до upload commit.
 
@@ -800,8 +812,9 @@ ClientAssetPacket.displayed=9 подтверждает (player_id, view_revision
 (generation, sequence) отдельно от истекающего Latest, проверяет session/context
 и не разрешает публикацию только на основании исторического HighManifest.
 
-Wire23 не совместим с22; negotiation и сетевого legacy decoder нет. Только
-диагностический reader умеет читать сохранённые DLPDIAG2/protocol22/pose2 записи.
+Wire25 не совместим с24; negotiation и сетевого legacy decoder нет. Только
+offline diagnostic reader допускает сохранённые DLPDIAG2/protocol22–24 записи
+с проверкой фактического asset/pose формата.
 
 ## Камера и спрос на позы (v24)
 

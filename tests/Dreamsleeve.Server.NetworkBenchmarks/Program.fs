@@ -688,7 +688,7 @@ let private run (options: Options) =
         }
         match PhantomProbe.configuration() with
         | Some config ->
-            state.Phantom <- Some(new PhantomProbe.Probe(config, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length, Coordination.now,
+            state.Phantom <- Some(new PhantomProbe.Probe(config, state.Options.AuthUrl, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length, Coordination.now,
                 (fun index lane delivery bytes ->
                     match OutgoingPackets.TrySend(state.Clients[index].Peer, ReadOnlySpan<byte>(bytes), state.Budget, state.Clients[index].Budget, lane, delivery) with
                     | PacketSendResult.Sent -> state.SentApplicationBytes[int lane] <- state.SentApplicationBytes[int lane] + int64 bytes.Length; true
