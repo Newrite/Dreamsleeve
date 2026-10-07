@@ -7,7 +7,10 @@ Protocol25 / asset2 / pose3, ветка `codex/phantom-native-nif`.
 Модель передаётся PUT/GET `/phantoms/content` на существующем ASP.NET Core/Kestrel
 origin авторизации. Новый процесс, отдельный порт, nginx или клиентская DLL-библиотека
 не нужны. Windows-клиент использует системный **асинхронный WinHTTP** с отдельной
-переиспользуемой session. Синхронный auth JSON wrapper не используется для файлов.
+переиспользуемой session. Синхронный auth JSON wrapper не используется для файлов. Контракт времени
+жизни callback/буфера проверен по документации Microsoft:
+[WinHttpCloseHandle](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpclosehandle),
+[WinHttpReadData](https://learn.microsoft.com/en-us/windows/win32/api/winhttp/nf-winhttp-winhttpreaddata).
 
 | Подсистема | Решение |
 |---|---|
@@ -30,6 +33,11 @@ Infrastructure.PhantomHttp владеет временем жизни body opera
 HTTP тело и accepted Complete в любом порядке; Worker проверяет hash/asset и
 возвращает результат через прежнюю epoch/revision границу. Временная ошибка не
 подменяет новую попытку старым completion. Scene/готовность UI здесь не копируются.
+
+Финальный accepted upload дополняет счётчик последними байтами даже если receipt
+пришёл раньше последнего progress poll. Серверный отказ сразу отменяет клиентский
+HTTP job. Smoke сверяет сумму полного body и всех отправленных control envelopes;
+это application bytes, не TCP wire bytes.
 
 Ключ передаётся в Authorization header, никогда в URL. Hash не даёт права скачать
 asset. Direction/length/session/AOI задаются ранее допущенной передачей. Отмена
@@ -58,7 +66,7 @@ asset. Direction/length/session/AOI задаются ранее допущенн
 
 ## Проверки
 
-406/406 native tests; 638/638 server tests. Вместо тестов удалённого ACK/window
+406/406 diagnostic native tests; 392/392 обычных native tests; 638/638 server tests. Вместо тестов удалённого ACK/window
 добавлены HTTP-контракты: одноразовость, неверное направление/размер/hash, усечение,
 отзыв незапрошенного ключа, отмена блокирующего ReadAsync и независимость передач.
 Native integration использует production WinHTTP + Streaming + Worker и реальный
@@ -136,3 +144,37 @@ movement encode получает budget0 после исчезновения tra
 movement, не ошибка HTTP тела; записана для отдельного исправления, не скрыта PASS
 стенда. Аллокации337 MiB/s всё ещё велики: selection/копии pose требуют следующего
 профилирования, HTTP их не устраняет.
+
+## Выпуск и установка
+
+Production change `85212bd`; финальная коррекция учёта/отмены `174be2c`,
+smoke accounting regression `a9ec48d`. Полный dist собран штатным
+`Scripts/package_dist.py`: `S:\Programming\Dreamsleeve\dist`.
+Пакет содержит обычную DLL, ESP из Plugin, UI, опубликованный сервер и конфиги.
+179 файлов; игровых NIF, архивов, IDB, credentials, DB и логов в dist нет.
+Диагностический marker отсутствует в обычной DLL и присутствует в диагностической.
+
+Установлены сервер `S:\Dreamsleeve` и диагностический клиент
+`F:\MO2 - Skyrim - VanillaLike\mods\Dreamsleeve`. Игра/сервер перед копированием
+не работали. Финальные файлы побайтно совпадают с собранными артефактами.
+8 установленных конфигов сохранены побайтно; в активном server.example.toml
+удалён только Phantoms.WindowChunks, остальные parsed values равны исходным.
+Конфиг проверен Configuration.parse из установленного нового сервера.
+Plugin/client.toml остаётся пользовательским изменением вне коммитов.
+Dist сохраняет прежние пользовательские файлы; пример с ESP подготовлен
+отдельно и проверен штатной проверкой packager, без подмены Plugin/client.toml.
+
+После последней правки:392 обычных и406 диагностических native tests PASS;
+сквозной HTTP+ENet smoke выполнен заново для обоих builds, включая точный
+body+control accounting, active cancellation/reentry и потерю pose fragment.
+Server638 tests PASS. Новых игровых проверок не было.
+
+SHA256:
+
+- Обычная DLL: `b5fb8d47decd654a9dd27754789dee20e5a9e2ae30f7f7ab45c28e1d5b261a1b`.
+- Установленная диагностическая DLL: `04a8f7d567d4f674fed853733ab3460222cc79166f78b2832a2830caa3f349a9`.
+- Установленный Server.Core: `1788ff2a1715cf74874e0fad0412d6aa252265c73ad2cf1700c12cac774f300f`.
+
+Резервные копии установки и проверочные JSON находятся в
+`build/http-benchmark/deployment-backup` и соседних `deployment*.json`,
+`dist-validation.json`; в dist они не включены.

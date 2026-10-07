@@ -106,5 +106,21 @@
         "sum": 632211516
       }
     }
+  },
+  "coldNative": {
+    "compressedBytes": 13318718,
+    "fullMs": 5399.43,
+    "prepareUploadCommitMs": 2785.99,
+    "downloadDecodeMs": 2601.22,
+    "chatDuringDownloadMs": 17.245,
+    "environment": "loopback, 5 MiB/s, no game renderer, build/http-smoke-real-idle"
+  },
+  "coldManaged": {
+    "compressedBytes": 13288628,
+    "uploadCommitMs": 2609.4877,
+    "uploadAndVerifiedDownloadMs": 5187.6542,
+    "verifiedDownloads": 1,
+    "unfinishedDownloads": 0,
+    "environment": "normal Program auth host, loopback, build/http-benchmark/cold2-complete"
   }
 }
