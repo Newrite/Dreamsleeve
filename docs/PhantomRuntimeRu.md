@@ -607,3 +607,65 @@ NiAVObject и shadow scene. Существующий hook уже отмечае�
 стоимость сериализации и удлинит этот callback. Доказательства безопасности
 переноса NiStream/нативных объектов на произвольный worker не получено; detached
 bytes, сжатие и файловые операции остаются у существующих workers.
+
+
+## Оптимизация native Save — 08.10.2026
+
+Повторно проверены через IDA MCP: SE `E:/Reverse/SkyrimSE.exe.i64`,
+AE `E:/Reverse/SkyrimSE1170.exe.unpacked.exe.i64`, VR `E:/Reverse/SkyrimVR.exe.i64`.
+Для каждой базы выполнены health и minimal survey; imagebase везде `0x140000000`.
+Input VR в IDB: `D:/Programs/IDA Pro/data/SkyrimVR.exe.1415/SkyrimVR.exe`.
+Порты заново определены через list_instances (в этой сессии SE13339/AE13337/VR13338).
+В таблице offsets AE первая колонка — ID, вторая — **VA** (`70334 140D1F950`);
+RVA ниже получены вычитанием imagebase. Таблица SE использует RVA.
+
+| Операция/slot | SE RVA | AE RVA | VR RVA |
+|---|---|---|---|
+| Save(NiBinaryStream*),04 | C59FE0 (ID68981) | D1F950 (ID70334) | C9F590 |
+| SaveStream,10 | C5C040 | D21C70 | CA15F0 |
+| RegisterObjects,11 | C5C200 | D21FC0 | CA17B0 |
+| RegisterSaveObject,09 | C5A960 | D203A0 | C9FF10 |
+| NiNode::RegisterStreamables,1A | C57750 | D1CC50 | C9C9C0 |
+| NiAVObject::RegisterStreamables,1A | C56930 | D1BD40 | C9B9F0 |
+| NiObjectNET::RegisterStreamables,1A | C60390 | D25DB0 | CA5940 |
+| NiObject::RegisterStreamables,1A | C526B0 | D17DF0 | C97770 |
+| SaveHeader,0E | C5B7C0 | D214D0 | CA0D70 |
+| SaveObjectSizeTable,16 | C5C700 | D224C0 | CA1CB0 |
+
+Основание: vtable entries, decompile, disasm и вызывающая цепочка. В Save
+RCX=NiStream*, RDX=заимствованный NiBinaryStream*, return bool в AL;
+`oStr` по+2A0 устанавливается на время синхронного SaveStream и затем очищается.
+SaveStream сам вызывает RegisterObjects, SaveBinary и backpatch таблицы размеров.
+RegisterSaveObject находит уже зарегистрированный pointer в map+2B0 и возвращает
+AL=0. NiObject/NET/AVObject/NiNode передают этот результат до обхода children;
+нормализованный корень production — обычный NiNode. Поэтому AuditPhantom и Save
+теперь используют **один NiStream**: проверка загрузчиков не удалена, второй
+вызов регистрации прекращается на корне. Между audit и Save дерево не меняется.
+Map, strings, objects и их refcounts освобождает прежний native destructor/Save.
+
+Вместо SaveBuffer с временным NiMemStream вызывается штатный CommonLib `Save1`
+(slot04). Узкий адаптер `PhantomOutput` остаётся в Hooks.ixx; адреса новых функций
+в production не добавлены, global hooks/vtables не патчатся. Движок пишет через
+WriteFn на+18 (RCX=stream, RDX=source, R8D=uint32 bytes, R9=component sizes,
+пятый аргумент=count), затем сам прибавляет возвращённый EAX к uint32 position+08.
+Адаптер не делает этого повторно. tell=slot03; seek=slot02 принимает int32 relative
+смещение. В конце SaveObjectSizeTable курсор остаётся внутри файла: размер output
+равен high-water size, а не tell(). SaveHeader передаёт set_endian_swap(false)
+для текущего little-endian профиля. Неподдержанный режим/чтение/выход за размер
+делают output ошибочным; даже если SaveStream вернёт true, partial asset не отдаётся.
+NiMemStream get_info VR135ACE0 подтверждает pointer, три поля текущего размера,
+два поля позиции; адаптер заполняет их, не раскрывая незаписанную capacity.
+
+`NifOutput` в Client.Core владеет только байтами: ограниченная запись, seek/backpatch,
+move результата в Asset. Буфер резервируется по предыдущей успешной длине с6,25%
+запаса для малых изменений; это подсказка, не новый предел. Холодный рост удваивает
+capacity с минимумом1024B, ограниченным существующим raw assetBytes. Финальной
+копии NiMemStream→vector больше нет. Capacity учитывается существующим MemoryBytes.
+Сам буфер не переиспользуется между assets: предыдущий снимок может ещё принадлежать
+worker/очереди; между захватами хранится только scalar длины на игровом потоке.
+Нативные сцены/NiStream не перенесены на worker.
+
+Статус: статически проверено SE1.5.97/AE1.6.1170/VR1.4.15, комментарии сохранены
+в IDB без изменения executable. Offline output tests не заменяют игровой Save/Load
+и замер frame-time. Сравнение записанного NIF проверяет байты/границы/backpatch,
+но не выполняет engine SaveBinary. Новое игровое ускорение пока **не измерено**.

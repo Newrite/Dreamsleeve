@@ -18,7 +18,7 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     ApplyPose,
     NativeAudit,
     NativeSave,
-    NativeCopy,
+    NativeReserve,
     NativeDispose,
     ModelPrepare,
     AssetDump,

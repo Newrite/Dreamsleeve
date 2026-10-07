@@ -12,6 +12,7 @@ import Dreamsleeve.Game.Input;
 import Dreamsleeve.Game.Phantoms;
 import Dreamsleeve.Game.PhantomNative;
 import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Client.Phantom.NifOutput;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -43,7 +44,6 @@ namespace Hooks
     constexpr auto StreamCtor      = REL::VariantID(68971, 70324, 0xC9EC40);
     constexpr auto StreamDtor      = REL::VariantID(68972, 70325, 0xC9EEA0);
     constexpr auto StreamLoad      = REL::VariantID(68978, 70331, 0xC9F470);
-    constexpr auto StreamSave      = REL::VariantID(68979, 70332, 0xC9F4C0);
     constexpr auto AlphaFactory    = REL::VariantID(69311, 70684, 0xCADF10);
     constexpr auto LightingFactory = REL::VariantID(99847, 106492, 0x1302ED0);
     // Actual string -> no-argument loader registry; the adjacent qword is not it.
@@ -195,19 +195,16 @@ namespace Hooks
     return value;
   }
 
-  std::expected<void, std::string> AuditPhantom(RE::NiNode* root)
+  std::expected<void, std::string> AuditPhantom(RE::NiStream& stream)
   {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Span auditSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeAudit);
 #endif
-    // SaveStream clears objects after saving. Audit a separate registration
-    // pass, including skins/properties/data, using the same streamable RTTI
-    // (virtual slot 20) that the engine writes into its type catalog.
-    auto audit = CreateStream();
-    if (!audit) return std::unexpected{"NiStream allocation failed"};
-    SeedStream(*audit, root);
-    audit->RegisterObjects();
-    if (!audit->objects.size() || audit->objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
+    // Reuse this registration for Save. The native RegisterSaveObject returns
+    // false for a known root, so SaveStream's repeated RegisterObjects stops
+    // before traversing its children. Do not mutate the tree between audit/Save.
+    stream.RegisterObjects();
+    if (!stream.objects.size() || stream.objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
     const auto* registry = *REL::Relocation<const void**>{Address::StreamLoaders};
     if (!registry) return std::unexpected{"NiStream preflight: loader registry unavailable"};
     const auto  buckets = StreamField<std::uint32_t>(registry, Offset::LoaderBuckets);
@@ -226,7 +223,7 @@ namespace Hooks
       }
     if (visited != count) return std::unexpected{"NiStream preflight: incomplete loader registry"};
     std::map<std::string, std::size_t> types;
-    for (const auto& object : audit->objects)
+    for (const auto& object : stream.objects)
     {
       const auto* type = object ? object->GetStreamableRTTI() : nullptr;
       if (!type || !type->GetName()) return std::unexpected{"NiStream preflight: missing streamable RTTI"};
@@ -235,7 +232,7 @@ namespace Hooks
     std::string missing;
     logger::info(
       "[Phantom] NiStream preflight: {} objects, {} types, {} loader factories",
-      audit->objects.size(),
+      stream.objects.size(),
       types.size(),
       factories.size());
     for (const auto& [name, instances] : types)
@@ -252,42 +249,117 @@ namespace Hooks
     return {};
   }
 
+  class PhantomOutput final : public RE::NiBinaryStream
+  {
+    P::NifOutput output;
+
+    static std::uint32_t Read(RE::NiBinaryStream* stream, void*, std::uint32_t, std::uint32_t*, std::uint32_t)
+    {
+      static_cast<PhantomOutput*>(stream)->output.Reject();
+      return 0;
+    }
+
+    static std::uint32_t Write(RE::NiBinaryStream* stream, const void* bytes, std::uint32_t size, std::uint32_t*, std::uint32_t)
+    {
+      return static_cast<PhantomOutput*>(stream)->output.Write({static_cast<const std::uint8_t*>(bytes), size});
+    }
+
+public:
+
+    explicit PhantomOutput(std::uint32_t reserve) : output(P::Limits{}.assetBytes, reserve)
+    {
+      _readFn  = Read;
+      _writeFn = Write;
+    }
+
+    bool good() const override
+    {
+      return output.Good();
+    }
+
+    P::NifOutput::Error Status() const noexcept
+    {
+      return output.Status();
+    }
+
+    void seek(std::int32_t delta) override
+    {
+      output.Seek(delta);
+      _absoluteCurrentPos = output.Position();
+    }
+
+    std::uint32_t tell() const override
+    {
+      return output.Position();
+    }
+
+    void get_info(BufferInfo& info) override
+    {
+      info           = {};
+      info.buffer    = const_cast<std::uint8_t*>(output.Bytes().data());
+      info.totalSize = info.bufferAllocSize = info.bufferReadSize = static_cast<std::uint32_t>(output.Bytes().size());
+      info.bufferPos = info.streamPos = output.Position();
+    }
+
+    void set_endian_swap(bool swap) override
+    {
+      // This production profile emits only little-endian SSE stream-100 NIF.
+      if (swap) output.Reject();
+    }
+
+    std::vector<std::uint8_t> Take() &&
+    {
+      return std::move(output).Take();
+    }
+  };
+
   P::Result<std::vector<std::uint8_t>> SavePhantom(RE::NiNode* root)
   {
     if (!PhantomThread()) return std::unexpected(P::Error{P::Failure::Busy, "native.thread"});
-    if (auto audited = AuditPhantom(root); !audited) return std::unexpected(P::Error{P::Failure::InvalidFormat, audited.error()});
     auto stream = CreateStream();
     if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
     SeedStream(*stream, root);
-    char*         output = nullptr;
-    std::uint32_t length = 0;
-    // All three verified runtimes use a uint32 length reference, not CommonLib's
-    // uint64 declaration. NiMemStream::releaseBuffer transfers RE::malloc storage.
+    if (auto audited = AuditPhantom(*stream); !audited) return std::unexpected(P::Error{P::Failure::InvalidFormat, audited.error()});
+    // A size hint, not a limit or retained allocation. Only the game thread
+    // accesses it. Each vector belongs exclusively to its resulting asset.
+    static std::uint32_t previousBytes{};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto nativeStart = std::chrono::steady_clock::now();
 #endif
-    const bool saved = REL::Relocation<bool(RE::NiStream*, char*&, std::uint32_t&)>{Address::StreamSave}(stream.get(), output, length);
+    PhantomOutput output(previousBytes);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeReserve,
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
+#endif
+    // Native Save(NiBinaryStream*) (slot 04) still registers objects and invokes
+    // their SaveBinary. Only the grow/copy output storage is supplied by us.
+    const bool saved = stream->Save1(&output);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Observe(
       Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeSave,
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
 #endif
-    std::unique_ptr<char, decltype(&RE::free)> buffer{output, &RE::free};
-    if (!saved || !output || !length)
+    if (!output.good())
+      return std::unexpected(
+        P::Error{
+            output.Status() == P::NifOutput::Error::Limit ? P::Failure::LimitExceeded : P::Failure::InvalidFormat,
+            std::format("native.output:{}", static_cast<unsigned>(output.Status()))
+        });
+    if (!saved)
       return std::unexpected(
         P::Error{P::Failure::InvalidFormat, std::format("NiStream Save: {} {}", stream->lastError, stream->lastErrorMessage)});
-    if (length > P::Limits{}.assetBytes) return std::unexpected(P::Error{P::Failure::LimitExceeded, "native.raw-bytes"});
+    auto result = std::move(output).Take();
+    if (result.empty()) return std::unexpected(P::Error{P::Failure::InvalidFormat, "native.empty-output"});
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-    const auto copyStart = std::chrono::steady_clock::now();
+    Dreamsleeve::Client::Diagnostics::Trace::Event(
+      "native_output",
+      std::format("\"reserve_hint\":{},\"raw_bytes\":{},\"capacity\":{}", previousBytes, result.size(), result.capacity()));
 #endif
-    std::vector<std::uint8_t> result{output, output + length};
+    previousBytes = static_cast<std::uint32_t>(result.size());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-    Dreamsleeve::Client::Diagnostics::Trace::Observe(
-      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeCopy,
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - copyStart).count());
     Dreamsleeve::Client::Diagnostics::Trace::Span disposeSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeDispose);
 #endif
-    buffer.reset();
     stream.reset();
     return result;
   }

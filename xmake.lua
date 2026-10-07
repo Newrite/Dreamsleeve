@@ -209,3 +209,12 @@ target("Dreamsleeve.Client.Tests")
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")
+
+-- Detached output microbenchmark; timing is C++, never the launcher/script.
+-- Excluded from the default build and distribution.
+target("Dreamsleeve.NifOutput.Benchmark")
+    set_kind("binary")
+    set_group("Tests")
+    set_default(false)
+    add_files("tests/Dreamsleeve.Client.Benchmarks/NifOutput.cpp")
+    add_deps("Dreamsleeve.Client.Core")

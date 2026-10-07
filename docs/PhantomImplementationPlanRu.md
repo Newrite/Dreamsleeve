@@ -254,3 +254,15 @@ Copy/XOR дельта NIF пока только офлайн измерение 
   обе сборки прошли сквозной HTTP+ENet smoke.
 
 [Результаты и открытые проверки](benchmarks/phantom-http-2026-10-08.md).
+
+
+## Уменьшение стоимости NiStream — 08.10.2026
+
+- [x] Проверить Save1/регистрацию/backpatch в SE, AE и VR через IDA.
+- [x] Переиспользовать регистрацию audit в том же NiStream при Save.
+- [x] Писать native NIF сразу в ограниченный выходной vector и передавать владение.
+- [x] Сохранить loader preflight, raw budget, поток/allocator и production parser.
+- [x] Проверить backpatch/ошибки/байты на27 существующих моделях.
+- [x] Измерить detached output в C++, отдельно от engine SaveBinary.
+- [ ] Игровой Save→Load, внешний вид и новые native/frame-time traces этой сборки.
+- [ ] NIF-дельты: остаются отдельным следующим этапом; полный asset пока передаётся целиком.

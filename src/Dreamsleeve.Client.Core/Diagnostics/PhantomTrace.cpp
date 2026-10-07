@@ -96,7 +96,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
         "apply_pose",
         "native_audit",
         "native_save",
-        "native_copy",
+        "native_reserve",
         "native_dispose",
         "model_prepare",
         "asset_dump",

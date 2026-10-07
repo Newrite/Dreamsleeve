@@ -3,6 +3,7 @@
 #include <cstdlib>
 import std;
 import Dreamsleeve.Client.Phantom.Nif;
+import Dreamsleeve.Client.Phantom.NifOutput;
 import Dreamsleeve.Client.Phantom.Wire;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
@@ -260,4 +261,113 @@ TEST_CASE("Native NIF rejects every truncated prefix without throwing")
     CHECK_NOTHROW(result = N::Inspect(std::span(asset.nif).first(size)));
     CHECK_FALSE(result);
   }
+}
+
+TEST_CASE("Native NIF output backpatch preserves tail and transfers its allocation")
+{
+  using Dreamsleeve::Client::Phantom::NifOutput;
+  NifOutput                         output(64, 64);
+  const std::array<std::uint8_t, 8> data{1, 2, 3, 4, 5, 6, 7, 8};
+  REQUIRE(output.Write(data) == data.size());
+  const auto* allocation = output.Bytes().data();
+  REQUIRE(output.Seek(-6));
+  REQUIRE(output.Write(std::span(data).first(2)) == 2);
+  CHECK(output.Position() == 4);
+  CHECK(output.Bytes().size() == 8);
+  REQUIRE(output.Seek(6));
+  REQUIRE(output.Write(std::span(data).first(2)) == 2);
+  CHECK(output.Position() == 12);
+  auto result = std::move(output).Take();
+  CHECK(result.data() == allocation);
+  CHECK(result == std::vector<std::uint8_t>{1, 2, 1, 2, 5, 6, 7, 8, 0, 0, 1, 2});
+}
+
+TEST_CASE("Native NIF output supports overwrite followed by extension")
+{
+  Dreamsleeve::Client::Phantom::NifOutput output(64, 2);
+  const std::array<std::uint8_t, 4>       data{1, 2, 3, 4};
+  REQUIRE(output.Write(data) == 4);
+  REQUIRE(output.Seek(-2));
+  REQUIRE(output.Write(data) == 4);
+  CHECK(std::move(output).Take() == std::vector<std::uint8_t>{1, 2, 1, 2, 3, 4});
+}
+
+TEST_CASE("Native NIF output budget failure is atomic and sticky")
+{
+  using Dreamsleeve::Client::Phantom::NifOutput;
+  NifOutput                         output(4, 100);
+  const std::array<std::uint8_t, 4> data{1, 2, 3, 4};
+  REQUIRE(output.Write(data) == 4);
+  CHECK(output.Write(std::span(data).first(1)) == 0);
+  CHECK_FALSE(output.Good());
+  CHECK_FALSE(output.Seek(-4));
+  CHECK(output.Write({}) == 0);
+  CHECK(output.Position() == 4);
+  auto result = std::move(output).Take();
+  CHECK(result.capacity() <= 4);
+  CHECK(result == std::vector<std::uint8_t>{1, 2, 3, 4});
+  for (const auto delta : {-1, 5, std::numeric_limits<std::int32_t>::max(), std::numeric_limits<std::int32_t>::min()})
+  {
+    NifOutput invalid(4);
+    CHECK_FALSE(invalid.Seek(delta));
+    CHECK_FALSE(invalid.Good());
+    CHECK(invalid.Bytes().empty());
+  }
+}
+
+TEST_CASE("Native NIF output permits exact budget and empty writes without gaps")
+{
+  Dreamsleeve::Client::Phantom::NifOutput output(4);
+  CHECK(output.Seek(4));
+  CHECK(output.Write({}) == 0);
+  CHECK(output.Good());
+  CHECK(output.Bytes().empty());
+  CHECK(output.Seek(-4));
+  const std::array<std::uint8_t, 4> data{1, 2, 3, 4};
+  CHECK(output.Write(data) == 4);
+  CHECK(output.Good());
+}
+
+TEST_CASE("Native NIF recorded bytes survive seekable output and size backpatch" * doctest::skip(NativeFixture().empty()))
+{
+  namespace P = Dreamsleeve::Client::Phantom;
+  std::ifstream input(NativeFixture(), std::ios::binary);
+  REQUIRE(input);
+  const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(input), {}};
+  REQUIRE(bytes.size() > 4096);
+  REQUIRE(P::Nif::Inspect(bytes));
+  for (auto hint : {0u, static_cast<std::uint32_t>(bytes.size())})
+  {
+    P::NifOutput output(P::Limits{}.assetBytes, hint);
+    const auto   view = std::span(bytes);
+    // Small header/field writes followed by detached data blocks; the size
+    // table is backpatched afterwards, leaving the final cursor inside NIF.
+    for (std::size_t i = 0; i < 4096; i += 4)
+      REQUIRE(output.Write(view.subspan(i, 4)) == 4);
+    for (std::size_t i = 4096; i < bytes.size(); i += 65536)
+    {
+      const auto part = view.subspan(i, std::min<std::size_t>(65536, bytes.size() - i));
+      REQUIRE(output.Write(part) == part.size());
+    }
+    REQUIRE(output.Seek(128 - static_cast<std::int32_t>(output.Position())));
+    REQUIRE(output.Write(view.subspan(128, 256)) == 256);
+    auto result = std::move(output).Take();
+    CHECK(result == bytes);
+    CHECK(P::Nif::Inspect(result));
+  }
+}
+
+TEST_CASE("Native NIF output size hint absorbs small growth without another allocation")
+{
+  Dreamsleeve::Client::Phantom::NifOutput output(4096, 1024);
+  const std::array<std::uint8_t, 1024>    data{};
+  REQUIRE(output.Write(data) == data.size());
+  const auto* allocation = output.Bytes().data();
+  REQUIRE(output.Write(std::span(data).first(64)) == 64);
+  CHECK(output.Bytes().data() == allocation);
+  CHECK(output.Bytes().size() == 1088);
+  output.Reject();
+  CHECK_FALSE(output.Good());
+  CHECK(output.Status() == Dreamsleeve::Client::Phantom::NifOutput::Error::UnsupportedOperation);
+  CHECK(output.Write(data) == 0);
 }
