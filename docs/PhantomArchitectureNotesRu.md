@@ -13,7 +13,8 @@ one publisher с ready+pending учитывается один раз в MaxSour
 
 В24 Exchange владеет текущим/удерживаемым поколениями и разрешением следующей
 публикации; Game держит нативные Source/Scene в соответствии с этим решением.
-Worker сохраняет immutable PreparedAsset; Streaming владеет transfers и квитанцией
+Exchange сохраняет immutable PreparedAsset; два потока Worker обслуживают
+отдельно модели и позы. Streaming владеет transfers и квитанцией
 последнего server commit, чтобы rollback не переотправлял старый manifest.
 Server actor владеет Ready, high-watermark manifest, подтверждениями views и
 ограниченным переходом. Обход подтверждений использует существующий Audiences,
@@ -27,8 +28,8 @@ upload rejection не блокирует будущие изменения: ст
 Game выделяет монотонные поколения независимо от отката Source.
 
 После двухклиентского теста ACK/control модели отделены от pose cadence;
-периодическая отправка поз сохраняет сетку времени. Clock mapping movement
-переиспользуется Playback с микросекундным Duration; состояние истории остаётся
+периодическая отправка поз сохраняет сетку времени. Общий адаптивный
+PlayoutClock используется movement и Playback; состояние phantom истории остаётся
 в Exchange. Диагностический Game log читает эту историю, второго clock owner
 нет. Skinned effect shader заменяется native lighting property только на
 отделённой geometry; исключён shared source write. Engine factory находится

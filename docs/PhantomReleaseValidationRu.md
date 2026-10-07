@@ -1,3 +1,7 @@
+Актуальное продолжение protocol24: [очереди, playout, paced fanout и dist](benchmarks/phantom-algorithms-2026-10-07.md).
+Обычная и диагностическая сборки,624server/407diagnostic tests, UDP и7replays
+прошли. Новый игровой QA остаётся открытым; отсутствие статтеров не заявляется.
+
 Текущий protocol24: [камера, аудитория и проверки](benchmarks/phantom-camera-audience-2026-10-07.md).
 Старые результаты ниже относятся к своим версиям; asset2 / pose3 сохранены.
 

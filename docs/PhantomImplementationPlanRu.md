@@ -168,7 +168,21 @@ Copy/XOR дельта NIF пока только офлайн измерение 
 
 - [x] Первичные источники, аудит кода, held-out сравнение2107кадров и timing simulation.
 - [x] Повторный разбор512-player queue metrics;42focused C++ testsPASS.
-- [ ] Изоляция poses от model handoff/worker с тестами одного и нескольких источников.
-- [ ] Монотонный playhead, адаптивный buffer, ограниченная экстраполяция и loss tests.
-- [ ] Раздельные native timings, frame-time traces и оценка политики10/20Гц.
+- [x] Изоляция poses от model handoff/worker с тестами одного и нескольких источников.
+- [x] Монотонный playhead, адаптивный buffer, ограниченная экстраполяция и loss tests.
+- [x] Раздельные native timings и синтетическая проверка таймера10/20Гц.
+- [ ] Игровые frame-time traces и визуальная оценка политики10/20Гц.
 - [ ] После этих проверок — production NIF delta с определённой базой/target identity.
+
+## Исправление очередей и алгоритмов после исследования
+
+- [x] Отделить Poses от reliable Models в TransportOwner; заменить устаревший
+  полный slot без голодания источника и без расхода reliable reserve.
+- [x] Разделить detached model и pose работу клиента; сохранить G1 poses при
+  подготовке G2; epoch/revision и prepared assets принадлежат Exchange.
+- [x] Общий адаптивный playout для movement/pose, root-only extrapolation.
+- [x] Повторно проверить native completion SE и добавить раздельные stage timings.
+- [x] Закончить повторные suites/ENet/replays/512 benchmark и dist этой части.
+  [Результаты и оставшиеся ограничения](benchmarks/phantom-algorithms-2026-10-07.md).
+- [ ] Пользовательский игровой QA новой сборки: плавность/оружие/камера и frame times.
+- [ ] NIF byte deltas: отдельный последующий этап после stage measurements.

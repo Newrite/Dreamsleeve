@@ -547,3 +547,26 @@ Imagebase 140000000, IDB/input сверены через server_health. В SE т
 Чтение поля не вызывает WindowPointToRay и не зависит от её ABI. Ни один адрес
 новой операцией не релокируется. Это статическая проверка направления; реальный
 VR head tracking, свободное третье лицо и моды камеры требуют игрового теста.
+
+## Повторная проверка готового снимка и потока, 07.10.2026
+
+SE1.5.97: IDA `E:\Reverse\SkyrimSE.exe.i64`, input `SkyrimSE.exe`,
+imagebase0x140000000. Повторно разобран AIProcess::Update3DModel_Impl
+VA0x140650DF0 (RVA0x650DF0); подтверждены ветвь task queue0x1405C37D0,
+обновление equipment/FaceGen, world0x141291F30, shadow0x1412B99F0 и
+Clear3DFlags через callsite0x1406511F0. Это уже существующий completion hook.
+Он сообщает о законченной vanilla работе, но не передаёт immutable serialized
+asset. Его callback по-прежнему только atomic audit request.
+
+CommonLib NiObject::Clone — wrapper REL::RelocationID(68835,70187), без
+контракта безопасного чтения живого дерева из другого потока. Собственный
+Prepare дополнительно читает live skin/optimized bone transforms, создаёт
+NiNode и shader property. Поэтому новый model worker получает уже отделённый
+ValidatedAsset, а Clone/Save/Load не перенесены туда на основании одного
+наличия NiPointer. Новые адреса/ABI/хуки в этой части не добавлялись.
+AE/VR сохраняют прежний статический статус; новых игровых проверок нет.
+
+Diagnostic build пишет `[Phantom stages]`: topology, clone, normalize/ghost,
+NiStream Save; отдельно ValidateAsset и bind/probe/initial pose; при восстановлении
+NiStream Load и scene preparation. Время включает работу именованного блока
+на CPU и возможные ожидания внутри него, не является измерением GPU.

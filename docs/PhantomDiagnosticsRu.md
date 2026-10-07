@@ -695,3 +695,12 @@ AOI, ENet и массовой нагрузки. Политика сетевог�
 сборки флагом DREAMSLEEVE_DIAGNOSTICS, network policy/protocol не менялись.
 DLL/PDB установлены 07.10.2026 00:04, четыре пользовательских файла сохранены;
 backup `build/phantom-replay-install-backup-20261007-000455`.
+
+## Диагностика адаптивного воспроизведения, 07.10.2026
+
+Нативный путь добавляет отдельные `[Phantom stages]` timings (см.
+[PhantomRuntimeRu.md](PhantomRuntimeRu.md)). Сетевой diagnostic log каждые5 секунд
+показывает `target_delay_ms` и `speed` из production Playback вместе с возрастом,
+разрывами и количеством snapshots. Это чтение истории Exchange; отдельного
+диагностического clock/renderer нет. Старые captureMs архивов остаются суммарной
+ценой CapturePlayer и не переименовываются в NiStream или GPU time.
