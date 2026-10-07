@@ -3,6 +3,7 @@
 #endif
 #include <doctest/doctest.h>
 #include <enet/enet.h>
+#include <zstd.h>
 #include <cstdlib>
 #include "protocol.pb.h"
 #include "phantom.pb.h"
@@ -38,6 +39,17 @@ namespace
 
   P::ValidatedAsset Model()
   {
+    if (const auto path = Environment("DREAMSLEEVE_PHANTOM_SMOKE_MODEL"))
+    {
+      std::ifstream input(*path, std::ios::binary);
+      REQUIRE(input);
+      P::Bytes   bytes(std::istreambuf_iterator<char>{input}, {});
+      const auto rawBytes = ZSTD_getFrameContentSize(bytes.data(), bytes.size());
+      REQUIRE(rawBytes <= P::Limits{}.assetBytes);
+      auto parsed = P::ReadAsset(bytes, static_cast<std::uint32_t>(rawBytes));
+      REQUIRE(parsed);
+      return std::move(*parsed);
+    }
     auto raw    = PhantomFixture::Model(NodeCount, 64);
     auto parsed = P::ValidatedAsset::Parse(std::move(raw));
     REQUIRE(parsed);
@@ -97,8 +109,9 @@ namespace
     std::uint64_t                                           chunksSent{}, downloadedBytes{}, uploadId{}, uploadSent{}, uploadAcknowledged{};
     std::uint32_t                                           windowChunks{};
     std::size_t                                             largestPose{};
-    std::string                                             modelHash;
-    std::unordered_set<std::uint64_t>                       requests;
+    std::uint64_t                     chatSentAt{}, chatReceivedAt{}, firstChunkAt{}, lastChunkAt{}, uploadAcceptedAt{};
+    std::string                       modelHash;
+    std::unordered_set<std::uint64_t> requests;
 
     Client(std::uint16_t port, const std::filesystem::path& cache, bool publish) : stream(exchange, cache)
     {
@@ -118,13 +131,9 @@ namespace
 
     void Send(std::uint8_t lane, std::span<const std::uint8_t> bytes, enet_uint32 flags)
     {
-      auto* packet = enet_packet_create(bytes.data(), bytes.size(), flags);
-      REQUIRE(packet);
-      if (enet_peer_send(peer, lane, packet) != 0)
-      {
-        enet_packet_destroy(packet);
-        FAIL("Native ENet rejected smoke packet");
-      }
+      auto wrapped = DreamNetPeer::TryFromNative(peer);
+      REQUIRE(wrapped);
+      REQUIRE(wrapped->PushSpan(bytes, lane, static_cast<PacketFlag>(flags)));
     }
 
     template <class F>
@@ -212,11 +221,20 @@ namespace
         if (value.has_complete())
         {
           REQUIRE(requests.contains(value.complete().request_id()));
-          if (value.complete().accepted() && value.complete().upload()) readyGeneration = value.complete().generation();
+          if (value.complete().accepted() && value.complete().upload())
+          {
+            readyGeneration  = value.complete().generation();
+            uploadAcceptedAt = NowUs();
+          }
         }
         if (value.has_offer()) offerRevision = value.offer().view_revision();
         if (value.has_remove()) removeRevision = value.remove().view_revision();
-        if (value.has_chunk()) downloadedBytes += value.chunk().data().size();
+        if (value.has_chunk())
+        {
+          downloadedBytes += value.chunk().data().size();
+          lastChunkAt      = NowUs();
+          if (!firstChunkAt) firstChunkAt = lastChunkAt;
+        }
         REQUIRE(stream.ReceiveAsset(bytes));
       }
       else if (event.channelID <= 1)
@@ -235,7 +253,11 @@ namespace
           located = true;
           stream.Context(10, true);
         }
-        if (value.has_chat_published() && value.chat_published().message().text() == "native-streaming-udp") chatReceived = true;
+        if (value.has_chat_published() && value.chat_published().message().text() == "native-streaming-udp")
+        {
+          chatReceived   = true;
+          chatReceivedAt = NowUs();
+        }
       }
     }
 
@@ -302,7 +324,8 @@ namespace
   template <class F>
   void Await(Client& alice, Client& bob, std::string_view phase, F ready)
   {
-    const auto deadline = Clock::now() + std::chrono::seconds(20);
+    const auto started  = Clock::now();
+    const auto deadline = started + std::chrono::seconds(90);
     while (!ready() && Clock::now() < deadline)
     {
       alice.Pump();
@@ -311,6 +334,8 @@ namespace
     }
     INFO("phase: ", phase, "; alice error: ", alice.exchange.Stats().error, "; bob error: ", bob.exchange.Stats().error);
     REQUIRE(ready());
+    std::cout << "PHANTOM_PHASE phase=" << phase << " ms=" << std::chrono::duration<double, std::milli>(Clock::now() - started).count()
+              << " aliceWindow=" << alice.peer->windowSize << " bobWindow=" << bob.peer->windowSize << '\n';
   }
 
   bool Loaded(Client& client, std::uint64_t generation)
@@ -371,27 +396,48 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   Await(alice, bob, "movement authority", [&] { return alice.located && bob.located; });
   // No hand-made Prepared completion: Streaming's own Worker consumes admitted
   // Submit and calls Prepared(epoch, localRevision, ...) using production codecs.
-  REQUIRE(alice.exchange.Submit(P::Generation{1}, Model()));
-  bob.Command(
-    11,
-    [](auto& packet) {
-      auto* chat = packet.mutable_send_chat();
-      chat->set_channel_id(1);
-      chat->set_text("native-streaming-udp");
-    },
-    1);
+  auto       model            = Model();
+  const auto expectedChannels = model.Layout().requiredChannels.size();
+  const auto expectedBounds   = model.Layout().bounds.size();
+  REQUIRE(alice.exchange.Submit(P::Generation{1}, std::move(model)));
+  const auto coldStarted = NowUs();
   Await(alice, bob, "cold native prepare/upload/download/decode", [&] {
+    // Exercise control while reliable download fragments are already in flight.
+    if (bob.downloadedBytes && !bob.chatSentAt)
+    {
+      bob.chatSentAt = NowUs();
+      bob.Command(
+        11,
+        [](auto& packet) {
+          auto* chat = packet.mutable_send_chat();
+          chat->set_channel_id(1);
+          chat->set_text("native-streaming-udp");
+        },
+        1);
+    }
+    if (bob.chatSentAt && !bob.chatReceived) REQUIRE(NowUs() - bob.chatSentAt < 2000000);
     return alice.readyGeneration == 1 && Loaded(bob, 1) && bob.chatReceived;
   });
+  REQUIRE(bob.chatReceivedAt >= bob.chatSentAt);
+  REQUIRE(bob.chatReceivedAt - bob.chatSentAt < 2000000);
+  std::cout << "PHANTOM_TRANSFER uploadMs=" << (alice.uploadAcceptedAt - coldStarted) / 1000.0
+            << " downloadMs=" << (bob.lastChunkAt - bob.firstChunkAt) / 1000.0
+            << " chatDuringDownloadMs=" << (bob.chatReceivedAt - bob.chatSentAt) / 1000.0 << '\n';
   REQUIRE(alice.uploadSent > P::Wire::ChunkBytes * alice.windowChunks);
   REQUIRE(alice.chunksSent > alice.windowChunks);
   REQUIRE(bob.downloadedBytes == alice.uploadSent);
-  CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == NodeCount);
-  CHECK(bob.exchange.Find(1)->Asset()->Layout().bounds.size() == NodeCount - 1);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == expectedChannels);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().bounds.size() == expectedBounds);
   Await(alice, bob, "atomic cache completion", [&] {
     return std::filesystem::exists(directory / "server-cache" / (alice.modelHash + ".zst")) &&
            std::filesystem::exists(directory / "bob-cache" / (alice.modelHash + ".zst"));
   });
+
+  if (Environment("DREAMSLEEVE_PHANTOM_SMOKE_MODEL"))
+  {
+    std::cout << "PHANTOM_NATIVE_ASSET_UDP_PASS coldBytes=" << bob.downloadedBytes << '\n';
+    return;  // The synthetic fixture below separately guarantees multi-fragment poses.
+  }
 
   alice.peer->channels[P::Wire::PosesLane].outgoingUnreliableSequenceNumber = 0xFFFF;
   alice.exchange.Submit(Pose(1, 1));

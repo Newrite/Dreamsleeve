@@ -1,4 +1,8 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <doctest/doctest.h>
+#include <enet/enet.h>
 #include "protocol.pb.h"
 
 import Dreamsleeve.Client.ProtocolCodec;
@@ -67,10 +71,10 @@ namespace
     auto runtimeResult = DreamNetRuntime::TryInitialize();
     REQUIRE(runtimeResult.has_value());
 
-    ServerConfig serverConfig = ServerConfig::Default();
-    serverConfig.address      = DreamNetAddress::Loopback(NextTestPort());
-    serverConfig.maxPeers     = 4;
-    serverConfig.channelLimit = 2;
+    ServerConfig serverConfig   = ServerConfig::Default();
+    serverConfig.address        = DreamNetAddress::Loopback(NextTestPort());
+    serverConfig.maxPeers       = 4;
+    serverConfig.channelLimit   = 2;
     serverConfig.maxPacketBytes = maxPacketBytes;
     serverConfig.maxWaitingData = maxPacketBytes * 2;
 
@@ -83,10 +87,10 @@ namespace
     const auto serverInfo = serverResult->GetHostInfo();
     REQUIRE(serverInfo.has_value());
 
-    auto clientConfig = NetConfig::Default();
+    auto clientConfig           = NetConfig::Default();
     clientConfig.maxPacketBytes = maxPacketBytes;
     clientConfig.maxWaitingData = maxPacketBytes * 2;
-    auto clientResult = DreamNetHost::TryCreateClient(clientConfig);
+    auto clientResult           = DreamNetHost::TryCreateClient(clientConfig);
     if (!clientResult.has_value())
     {
       FAIL(clientResult.error().ToLogString());
@@ -455,8 +459,8 @@ TEST_CASE("DreamNetPacket.TryAllocateWith delivers a serialized payload end to e
 
 TEST_CASE("Configured host packet limits apply to clients servers and broadcast ownership")
 {
-  constexpr std::size_t limit = 4096;
-  auto connected = CreateConnectedHosts(limit);
+  constexpr std::size_t limit     = 4096;
+  auto                  connected = CreateConnectedHosts(limit);
   for (auto* host : {&connected.serverHost, &connected.clientHost})
   {
     auto info = host->GetHostInfo();
@@ -485,7 +489,7 @@ TEST_CASE("Configured host packet limits apply to clients servers and broadcast 
 
 TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
 {
-  auto config = NetConfig::Default();
+  auto config           = NetConfig::Default();
   config.maxPacketBytes = 0;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
   config.maxPacketBytes = 2048;
@@ -519,19 +523,19 @@ TEST_CASE("Configured socket buffers replace the ENet defaults")
 
 TEST_CASE("Chat codec serializes directly into a transferable reliable ENet packet")
 {
-  auto connected = CreateConnectedHosts();
+  auto                                           connected = CreateConnectedHosts();
   const Dreamsleeve::Client::Wire::ProtocolCodec codec{Dreamsleeve::Client::Configuration{}};
-  auto packet = codec.Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
+  auto                                           packet = codec.Encode(Dreamsleeve::Client::SendChat{42, 1, "Привет"});
   REQUIRE(packet);
   CHECK(packet->Flags() == PacketFlag::Reliable);
   REQUIRE(connected.clientPeer.PushPacket(std::move(*packet), 0));
-  CHECK_FALSE(packet->IsValid()); // Successful send transferred ownership.
+  CHECK_FALSE(packet->IsValid());  // Successful send transferred ownership.
   connected.clientHost.FlushPackets();
 
   auto received = TryWaitForEvent(connected.serverHost, [](const DreamNetEvent& event) { return event.IsReceive(); });
   REQUIRE(received);
   REQUIRE(received->ViewPacket());
-  const auto bytes = received->ViewPacket()->DataBytesView();
+  const auto                                bytes = received->ViewPacket()->DataBytesView();
   Dreamsleeve::Protocol::Chat::ClientPacket decoded;
   REQUIRE(decoded.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
   CHECK(decoded.request_id() == 42);
@@ -540,3 +544,18 @@ TEST_CASE("Chat codec serializes directly into a transferable reliable ENet pack
 }
 
 TEST_SUITE_END();
+
+TEST_CASE("DreamNet bulk flight ceiling preserves explicit native bandwidth limits")
+{
+  for (int limited : {0, 1, 2})
+  {
+    auto  connected               = CreateConnectedHosts();
+    auto* peer                    = connected.clientPeer.Native();
+    peer->windowSize              = 4096;
+    peer->incomingBandwidth       = limited == 1 ? 65536 : 0;
+    peer->host->outgoingBandwidth = limited == 2 ? 65536 : 0;
+    const std::vector<std::uint8_t> payload(16384);
+    REQUIRE(connected.clientPeer.PushSpan(std::span{payload}, 0));
+    CHECK(peer->windowSize == (limited ? 4096 : 524288));
+  }
+}

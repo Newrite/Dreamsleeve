@@ -47,6 +47,7 @@ export namespace Dreamsleeve::Game::PhantomScene
     Look                                       look;
     RE::NiPointer<RE::NiNode>                  root, parent;
     std::vector<RE::NiAVObject*>               nodes;
+    RE::NiAVObject*                            labelNode{};  // Borrowed from root; game-thread access only.
     std::vector<RE::NiSkinInstance*>           skins;
     std::vector<RE::BSLightingShaderProperty*> surfaces;
     enum class Phase
@@ -123,6 +124,7 @@ public:
       if (phase != Phase::Waiting) return BuildProgress::Ready;
       try
       {
+        labelNode = nullptr;
         nodes.clear();
         skins.clear();
         surfaces.clear();
@@ -166,6 +168,18 @@ public:
             }
           }
         }
+        // A cosmetic anchor only: pose binding still uses validated tree indices.
+        // Reject ambiguous names instead of attaching the label to arbitrary gear.
+        for (auto index : layout.requiredChannels)
+          if (auto* node = nodes[index]; node->AsNode() && node->name == "NPC Head [Head]")
+          {
+            if (labelNode)
+            {
+              labelNode = nullptr;
+              break;
+            }
+            labelNode = node;
+          }
         root->GetFlags().set(Flag::kHidden);
         phase = Phase::Loaded;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -260,9 +274,15 @@ public:
       return {};
     }
 
-    P::Bound BodyBound() const
+    RE::NiPoint3 LabelAnchor() const
     {
-      return root ? P::Bound{A::Value(root->worldBound.center), root->worldBound.radius} : P::Bound{};
+      // Read the displayed interpolated pose, never the conservative culling
+      // sphere (which also encloses weapons and both neighbouring snapshots).
+      if (labelNode) return labelNode->world.translate;
+      if (!root) return {};
+      auto position  = root->world.translate;
+      position.z    += 120.0f * std::abs(root->world.scale);
+      return position;
     }
   };
 

@@ -236,6 +236,20 @@ let tests = testSequenced <| testList "ENet transport" [
                         PacketSendResult.Sent "Boundary and fragmented packet are both accepted."
                 until (fun () -> budget.Packets = 0) pump)
 
+    testCase "bulk flight window respects explicit ENet bandwidth limits" <| fun _ ->
+        withPeers (fun _ peer pump ->
+            let budget = PacketBudget(16, 1024L * 1024L)
+            let peerBudget = PacketBudget(16, 1024L * 1024L)
+            for limited in [true; false] do
+                let mutable inner = NativePtr.read (peer.GetInner())
+                inner.incomingBandwidth <- if limited then 65536u else 0u
+                inner.windowSize <- 4096u
+                NativePtr.write (peer.GetInner()) inner
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(Array.zeroCreate 16384), budget, peerBudget,
+                                                     3uy, PacketDelivery.ReliableBulk)) PacketSendResult.Sent "Bulk admitted."
+                Expect.equal peer.WindowSize (if limited then 4096u else 524288u) "Only unlimited native bandwidth expands."
+                until (fun () -> budget.Packets = 0) pump)
+
     testCase "adapter exposes a payload budget only for live connections" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ peer connection _ _ _ ->
             Expect.equal (transport.MaxUnfragmentedPayloadBytes connection) (OutgoingPackets.GetUnfragmentedPayloadBytes peer) "Negotiated budget."

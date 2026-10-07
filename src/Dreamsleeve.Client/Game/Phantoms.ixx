@@ -651,9 +651,7 @@ namespace Phantoms
         }
         visual.look = look;
       }
-      const auto         bound = visual.current->scene->BodyBound();
-      const RE::NiPoint3 anchor{bound.center.x, bound.center.y, bound.center.z + bound.radius};
-      PlayerLabels::Add(names, remote.player, anchor, online->second, now);
+      PlayerLabels::Add(names, remote.player, visual.current->scene->LabelAnchor(), online->second, now);
     }
     std::erase_if(state.visuals, [&](const auto& entry) {
       if (retained.contains(entry.first)) return false;
