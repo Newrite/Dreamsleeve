@@ -197,12 +197,25 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             wait "Fragmented pose fanout." (fun () -> bob.Poses.Count > 0)
             Expect.equal (bob.Poses[0].PlayerId, bob.Poses[0].ViewRevision, bob.Poses[0].Sample.Sequence) (1UL,fresh.ViewRevision,1UL) "Pose follows authenticated source and fresh AOI epoch."
             asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 26u, Displayed = Dreamsleeve.Protocol.Phantom.Displayed(PlayerId = 1UL, ViewRevision = fresh.ViewRevision, Generation = 1UL)))
-            wait "Scene display settles initial publication." (fun () -> alice.Models |> Seq.exists (fun p -> not (isNull p.Settled) && p.Settled.Generation = 1UL))
+            // Settled for generation 1 may already exist from the receive=false interval.
+            // A correlated request on the same reliable Models lane proves that the
+            // actor processed the fresh view's Displayed before Alice publishes again.
+            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 26u, Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = 1UL, Generation = 1UL, RequestId = 203UL)))
+            wait "Fresh Displayed processed before the next publication." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Transfer) && packet.Transfer.RequestId = 203UL))
+            let barrier = bob.Models |> Seq.pick (fun packet -> if not (isNull packet.Transfer) && packet.Transfer.RequestId = 203UL then Some packet.Transfer else None)
+            asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 26u, Cancel = Dreamsleeve.Protocol.Phantom.Cancel(TransferId = barrier.TransferId)))
+            wait "Display barrier transfer canceled and acknowledged." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 203UL && packet.Complete.TransferId = barrier.TransferId && not packet.Complete.Accepted))
+            // Check notification existence separately; it is not the fresh-view barrier.
+            Expect.isTrue (alice.Models |> Seq.exists (fun packet -> not (isNull packet.Settled) && packet.Settled.Generation = 1UL)) "Initial generation has a settlement notification."
             alice.Models.Clear()
             let warm = descriptor.Clone()
             warm.Generation <- 2UL
             publish 102UL warm
-            wait "Warm cached publication ready without any chunks." (fun () -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.Accepted && packet.Complete.Generation = 2UL))
+            wait "Warm cached publication ready without any chunks." (fun () ->
+                let rejected = alice.Models |> Seq.tryFind (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 102UL && not packet.Complete.Accepted)
+                match rejected with
+                | Some packet -> failtestf "Warm publication rejected: %s; retry after %d ms" packet.Complete.Reason packet.Complete.RetryAfterMs
+                | None -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.Accepted && packet.Complete.Generation = 2UL))
             let bundle = pose.Clone()
             bundle.Sample.Generation <- 2UL
             bundle.Sample.Payload <- ByteString.CopyFrom(Array.create 100000 7uy)
