@@ -1,6 +1,43 @@
 import { describe, it, expect } from "vitest";
 import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 describe("native bridge", () => {
+  it("returns typed JSON failures for malformed input", () => {
+    for (const source of [
+      "",
+      "{",
+      '[{"type":"show"},]',
+      '{"type":"show"} trailing',
+    ])
+      expect(parseHostEvent(source)).toEqual({ ok: false, error: "json" });
+  });
+  it("rejects non-string and unknown event types without coercion", () => {
+    for (const type of [
+      null,
+      1,
+      false,
+      {},
+      ["show"],
+      { toString: "show", valueOf: null },
+      "__proto__",
+      "constructor",
+      "unknown",
+    ])
+      expect(parseHostEvent(JSON.stringify({ type }))).toEqual({
+        ok: false,
+        error: "schema",
+      });
+  });
+  it("keeps the existing payload size boundary", () => {
+    const event = '{"type":"show"}';
+    const atLimit = event.padStart(8 * 1024 * 1024, " ");
+    expect(parseHostEvent(atLimit)).toEqual({
+      ok: true,
+      event: { type: "show" },
+    });
+    expect(parseHostEvent(" " + atLimit)).toEqual({ ok: false, error: "size" });
+  });
+
   it("rejects unknown or malformed events without entering the store", () => {
     for (const value of [
       null,
@@ -15,7 +52,10 @@ describe("native bridge", () => {
       },
       { type: "connection", connected: "yes" },
     ])
-      expect(() => parseHostEvent(JSON.stringify(value))).toThrow();
+      expect(parseHostEvent(JSON.stringify(value))).toEqual({
+        ok: false,
+        error: "schema",
+      });
   });
   it("allows system messages without a player and never coerces uint64 identifiers", () => {
     const event = {
@@ -31,15 +71,15 @@ describe("native bridge", () => {
         },
       ],
     };
-    expect(parseHostEvent(JSON.stringify(event))).toEqual(event);
-    expect(() =>
+    expect(expectHostEvent(JSON.stringify(event))).toEqual(event);
+    expect(
       parseHostEvent(
         JSON.stringify({
           ...event,
           messages: [{ ...event.messages[0], id: 1 }],
         }),
       ),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
   });
   it("accepts the typed auth event and rejects unknown codes or oversized text", () => {
     const event = {
@@ -55,9 +95,9 @@ describe("native bridge", () => {
       browserFailed: false,
       phase: "disconnected",
     };
-    expect(parseHostEvent(JSON.stringify(event))).toEqual(event);
+    expect(expectHostEvent(JSON.stringify(event))).toEqual(event);
     expect(
-      parseHostEvent(
+      expectHostEvent(
         JSON.stringify({
           ...event,
           error: "x".repeat(512),
@@ -82,10 +122,13 @@ describe("native bridge", () => {
       { ...event, steam: "yes" },
       { ...event, browserFailed: undefined },
     ])
-      expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
+      expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+        ok: false,
+        error: "schema",
+      });
   });
   it("rejects a writable system channel", () => {
-    expect(() =>
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "snapshot",
@@ -97,7 +140,7 @@ describe("native bridge", () => {
           messages: [],
         }),
       ),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
   });
   it("a snapshot carries up to 500 lines of every channel", () => {
     const line = (channelId: string) => ({
@@ -120,8 +163,11 @@ describe("native bridge", () => {
         players: [],
         messages: Array.from({ length: count }, () => line("2")),
       });
-    expect(parseHostEvent(snapshot(1000))).toMatchObject({ type: "snapshot" });
-    expect(() => parseHostEvent(snapshot(1001))).toThrow();
+    expect(expectHostEvent(snapshot(1000))).toMatchObject({ type: "snapshot" });
+    expect(parseHostEvent(snapshot(1001))).toEqual({
+      ok: false,
+      error: "schema",
+    });
   });
 });
 describe("ground mark events", () => {
@@ -140,39 +186,42 @@ describe("ground mark events", () => {
         },
       ],
     };
-    expect(parseHostEvent(JSON.stringify(marks))).toEqual(marks);
+    expect(expectHostEvent(JSON.stringify(marks))).toEqual(marks);
     const nearby = {
       type: "nearbyMarks",
       marks: [
         { id: "2", kind: "note", text: "x", time: 1, author: "Мира", ...place },
       ],
     };
-    expect(parseHostEvent(JSON.stringify(nearby))).toEqual(nearby);
+    expect(expectHostEvent(JSON.stringify(nearby))).toEqual(nearby);
     for (const broken of [
       { id: "1", kind: "sign", text: "", time: 0, ...place },
       { id: "1", kind: "note", text: "", time: 0 },
       { id: "1", kind: "note", text: "", time: 0, ...place, x: "1" },
       { id: "1", kind: "note", text: "", time: 0, ...place, author: 5 },
     ])
-      expect(() =>
+      expect(
         parseHostEvent(
           JSON.stringify({ type: "groundMarks", marks: [broken] }),
         ),
-      ).toThrow();
+      ).toEqual({ ok: false, error: "schema" });
     for (const result of [
       { type: "markResult", requestId: "1", markId: "5" },
       { type: "markResult", requestId: "1", markId: "5", evictedId: "4" },
       { type: "markResult", requestId: "1", removed: true },
       { type: "markResult", requestId: "1", error: "Нет" },
     ])
-      expect(parseHostEvent(JSON.stringify(result))).toEqual(result);
+      expect(expectHostEvent(JSON.stringify(result))).toEqual(result);
     for (const broken of [
       { type: "markResult", requestId: "1" },
       { type: "markResult", requestId: "1", markId: "5", error: "Нет" },
       { type: "markResult", requestId: "1", removed: true, error: "Нет" },
       { type: "markResult", requestId: "1", markId: 5 },
     ])
-      expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
+      expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+        ok: false,
+        error: "schema",
+      });
     const snapshot = {
       type: "snapshot",
       channels: [],
@@ -193,9 +242,9 @@ describe("ground mark events", () => {
         },
       ],
     };
-    expect(parseHostEvent(JSON.stringify(snapshot))).toEqual(snapshot);
-    expect(() =>
+    expect(expectHostEvent(JSON.stringify(snapshot))).toEqual(snapshot);
+    expect(
       parseHostEvent(JSON.stringify({ ...snapshot, groundMarksSupported: 1 })),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
   });
 });

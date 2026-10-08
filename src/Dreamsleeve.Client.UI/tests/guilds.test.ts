@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GUILDS, makeChat, visible } from "../src/state/chat";
 import { mayRemove } from "../src/state/guilds";
 import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 import type {
   Channel,
   Command,
@@ -382,11 +383,14 @@ describe("guild events at the bridge", () => {
     removed: [{ guildId: "6", name: "Изгнанники", reason: "disbanded" }],
   };
   it("accept what the host sends and refuse what it never would", () => {
-    expect(parseHostEvent(JSON.stringify(sample)).type).toBe("guilds");
+    expect(expectHostEvent(JSON.stringify(sample)).type).toBe("guilds");
     const broken = structuredClone(sample);
     broken.guilds[0].members[0].role = "king";
-    expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
-    expect(() =>
+    expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+      ok: false,
+      error: "schema",
+    });
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "guildResult",
@@ -395,12 +399,12 @@ describe("guild events at the bridge", () => {
           error: "x",
         }),
       ),
-    ).toThrow();
-    expect(() =>
-      parseHostEvent(JSON.stringify({ type: "guildResult", requestId: "g1" })),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
     expect(
-      parseHostEvent(
+      parseHostEvent(JSON.stringify({ type: "guildResult", requestId: "g1" })),
+    ).toEqual({ ok: false, error: "schema" });
+    expect(
+      expectHostEvent(
         JSON.stringify({ type: "channels", channels: [{ ...ravens }] }),
       ).type,
     ).toBe("channels");
