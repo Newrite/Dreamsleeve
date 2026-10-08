@@ -376,9 +376,49 @@ server {
         proxy_read_timeout 30s;
     }
 
+    # Полные модели и дельты: тот же origin, отдельная политика тела.
+    location = /phantoms/content {
+        client_max_body_size 64m;
+        proxy_pass http://127.0.0.1:8779;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_cache off;
+        # Capability одноразовая: повтором управляет клиент, не nginx.
+        proxy_next_upstream off;
+        proxy_ignore_client_abort off;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        client_body_timeout 30s;
+        send_timeout 30s;
+    }
+
     location / { return 404; }
 }
 ```
+
+`/phantoms/content` обслуживает PUT/GET полных моделей и дельт на том же
+Kestrel:8779. Этот location нужен **на каждом HTTP-прокси цепочки**, включая
+прокси выбранного `routes[].authUrl`. Имя `authUrl` сохраняется; новый порт
+или сервис не нужен. `[Proxies] Trusted` и Steam `ProxyUrls` не создают маршруты nginx.
+
+64m — текущий максимальный размер сжатого HTTP-тела (64 MiB), не raw NIF или RAM.
+Это существующий предел `PhantomOptions`, а не новый меньший лимит прокси.
+При будущем увеличении протокольного предела обновите оба location вместе с ним.
+Авторизация сохраняет отдельный лимит 8k. Нельзя кэшировать ответы с одноразовой
+capability, удалять Authorization/Content-Length, включать преобразование тела
+или делать редирект на другой origin. Клиент проверяет точный размер и hash.
+Отключение request/response buffering позволяет передавать данные сразу, без
+полного промежуточного файла; отмена клиента закрывает upstream.
+Таймауты 30s ограничивают бездействие между операциями, а не общую длительность
+скачивания. Лимиты скорости остаются в Dreamsleeve.
+Семантика директив: [nginx proxy module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
 
 Требования клиента к этому адресу:
 
@@ -626,6 +666,32 @@ server {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 30s;
+    }
+
+    # Полные модели и дельты: тот же origin, отдельная политика тела.
+    location = /phantoms/content {
+        client_max_body_size 64m;
+        proxy_pass https://auth.example.org;
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_cache off;
+        # Capability одноразовая: повтором управляет клиент, не nginx.
+        proxy_next_upstream off;
+        proxy_ignore_client_abort off;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        client_body_timeout 30s;
+        send_timeout 30s;
     }
 
     location / { return 404; }

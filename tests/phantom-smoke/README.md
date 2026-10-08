@@ -1,4 +1,4 @@
-Reusable protocol24 native Streaming / production server UDP smoke
+Reusable protocol26 native Streaming / production server UDP smoke
 
 Run from S:/Programming/Dreamsleeve after the parent has serialized the native build:
 
@@ -20,7 +20,7 @@ Native publication uses admitted Exchange.Submit(Generation, ValidatedAsset), th
 
 Assertions cover protocol24 auth/Policy bootstrap, authenticated source assignment and positive request-ID correlation, bounded cold upload windows and actual model decode, chat requested after download begins with a separate two-second response deadline, atomic server/client cache files, real fragmented pose decode/playback, client FFFF rollover through production DreamNetPeer.RotateUnreliableSequence, a deliberately lost server-to-client unreliable fragment (no partial pose delivered), the next independent pose, receive=false server revocation and fresh view reentry, native disk-cache reuse, warm server same-hash generation publication without chunks, and the next generation's pose.
 
-This bridge drives production Streaming over real ENet sockets; it does not emulate Skyrim capture/render or use ClientRuntime's login/HTTP path. The separate raw ENet transport tests remain the detailed low-level rollover/loss oracle. A native build/run is required to confirm this newly added cross-language path.
+This bridge drives production Streaming over real ENet sockets; it does not emulate Skyrim capture/render or use ClientRuntime's login/route-selection path. The separate raw ENet transport tests remain the detailed low-level rollover/loss oracle. A native build/run is required to confirm this newly added cross-language path.
 
 Manual host/self-check:
 
@@ -56,3 +56,30 @@ No protocol/schema changes are involved in the bounded 512 KiB sender flight
 window. Native bandwidth limits, when explicitly configured, retain ENet's window.
 
 Set `DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS=1` before run.ps1 to record production server meters and phantom lifecycle under the artifact directory. The collector is the same as the production Logging.DiagnosticsEnabled path; every session part is retained.
+
+
+## Real reverse proxy coverage
+
+Pass an existing nginx executable (not bundled or automatically installed):
+
+```powershell
+pwsh -NoProfile -File tests/phantom-smoke/run.ps1 -NativeTests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe -NoBuild -Nginx C:/tools/nginx/nginx.exe
+```
+
+The runner extracts the two nginx server examples from `docs/DeploymentRu.md`,
+replaces TLS/listeners/upstreams with isolated loopback HTTP addresses, validates
+with `nginx -t`, and directs native production WinHTTP through both proxies.
+The content location policies remain unchanged. An unauthenticated request must
+reach production capability validation (403); the native test then checks full
+upload/download, delta reconstruction and context-transition delta delivery.
+Child processes are stopped on success and failure. Use a fresh artifact directory.
+The nginx binary stays outside Git/dist. TLS certificate deployment and UI route
+selection are not exercised by this fixture.
+
+2026-10-09: nginx/Windows 1.26.3, two hops, protocol26: 3397 assertions passed.
+Full body 742923 bytes (above the unchanged auth limit of 8 KiB), delta body
+32465 bytes; context-transition delta sentinel passed. Evidence:
+`build/proxy-check/smoke2`, including both hops' access log and native/server logs.
+This is a correctness smoke, not a WAN throughput benchmark.
+
+Repeat after adding mandatory delta sentinels: 4394 assertions passed; artifacts `build/proxy-check/smoke3`. Assertion counts vary with polling; both required delta sentinels were present.
