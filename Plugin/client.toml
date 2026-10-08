@@ -84,16 +84,16 @@ deathMarkScale = 0.5
 # 16384 covers a game-thread pause of about 1.6 s with 512 players in view at 20 Hz.
 maxPendingMovementSamples = 16384
 
-# ENet host of the client.
-# Client-local immutable phantom models; relative to SKSE/Plugins/Dreamsleeve.
+# Compressed content-addressed phantom cache; filesystem work stays off the game/network threads.
 phantomCacheDirectory = "phantom-cache"
 # Diagnostic build: complete sessions beside this config, no automatic deletion.
 phantomDiagnostics = false
 
+# ENet host of the client.
 [client.network]
 # Must be 1: one connection to one server.
 maxPeers = 1
-# ENet channels, 3..255; the protocol uses 3.
+# ENet channels, 5..255: control, chat, movement, models and poses.
 channelLimit = 5
 # Incoming bandwidth limit, bytes per second; 0 = unlimited.
 inBwLimit = 0
@@ -122,14 +122,14 @@ historyCapacity = 32
 teleportDistance = 2048
 
 # Other routes to the same server, tried in this order when the main one (the keys at the
-# top, shown as "РћСЃРЅРѕРІРЅРѕР№") does not answer: a proxy of the server for players whose
+# top, shown as "Основной") does not answer: a proxy of the server for players whose
 # provider or country blocks it. The client remembers the route that answered and starts
 # with it next time; the Account tab of the game lets the player pick one by hand. The
 # saved login, the device and the ignore list stay the same on every route. Up to 7
 # routes, each a table like this one (remove the leading "# "):
 # [[routes]]
-# # Shown in the game; unique, not "РћСЃРЅРѕРІРЅРѕР№", at most 64 bytes.
-# name = "РџСЂРѕРєСЃРё"
+# # Shown in the game; unique, not "Основной", at most 64 bytes.
+# name = "Прокси"
 # # Like serverHost, serverPort and authUrl above, of the proxy.
 # serverHost = "proxy.example.org"
 # serverPort = 8778
