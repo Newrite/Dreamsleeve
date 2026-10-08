@@ -120,11 +120,35 @@ module PhantomCodec =
           + CodedOutputStream.ComputeUInt64Size revision + CodedOutputStream.ComputeLengthSize sample + sample
           + (value.Previous |> Option.map (fun p -> let n = poseSampleSize p in 1 + CodedOutputStream.ComputeLengthSize n + n) |> Option.defaultValue 0)
 
+    let private writeVarint (bytes: byte array) offset (value: uint64) =
+        let mutable remaining = value
+        let mutable position = offset
+        while remaining >= 128UL do
+            bytes[position] <- byte (remaining ||| 128UL)
+            remaining <- remaining >>> 7
+            position <- position + 1
+        bytes[position] <- byte remaining
+        position + 1
+
+    let private writeField (bytes: byte array) offset tag value =
+        bytes[offset] <- tag
+        writeVarint bytes (offset + 1) value
+
+    let private writePoseSample (bytes: byte array) offset (value: PhantomPose) =
+        let offset = writeField bytes offset 8uy value.Generation.Value
+        let offset = writeField bytes offset 16uy value.Context
+        let offset = writeField bytes offset 24uy value.Sequence.Value
+        let offset = if value.SampledAtUs = 0UL then offset else writeField bytes offset 32uy value.SampledAtUs
+        let payload = value.Payload
+        let offset = writeField bytes offset 42uy (uint64 payload.Length)
+        payload.CopyTo(bytes.AsSpan(offset, payload.Length))
+        offset + payload.Length
+
     /// Serialize the shared immutable sample once, independently of view epochs.
     let encodePoseSample (value: PhantomPose) =
-        let sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = value.Generation.Value, ContextRevision = value.Context, Sequence = value.Sequence.Value
-                                    , SampledAtUs = value.SampledAtUs, Payload = UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(value.Payload)))
-        sample.ToByteArray()
+        let bytes = Array.zeroCreate (poseSampleSize value)
+        writePoseSample bytes 0 value |> ignore
+        bytes
 
     let encodePoseEnvelope player revision (sample: byte array) =
         let player = PlayerId.value player
@@ -147,28 +171,14 @@ module PhantomCodec =
     /// Fanout shares this packet among recipients with the same view revision.
     let encodePose player revision (value: PhantomPose) =
         let bytes = Array.zeroCreate (posePacketSize player revision value)
-        use output = new CodedOutputStream(bytes)
-        output.WriteTag(1, WireFormat.WireType.Varint)
-        output.WriteUInt32 ProtocolCodec.Version
-        output.WriteTag(2, WireFormat.WireType.Varint)
-        output.WriteUInt64 (PlayerId.value player)
-        output.WriteTag(3, WireFormat.WireType.Varint)
-        output.WriteUInt64 revision
-        output.WriteTag(4, WireFormat.WireType.LengthDelimited)
-        output.WriteUInt32 (uint32 (poseSampleSize value))
-        output.WriteTag(1, WireFormat.WireType.Varint)
-        output.WriteUInt64 value.Generation.Value
-        output.WriteTag(2, WireFormat.WireType.Varint)
-        output.WriteUInt64 value.Context
-        output.WriteTag(3, WireFormat.WireType.Varint)
-        output.WriteUInt64 value.Sequence.Value
-        if value.SampledAtUs <> 0UL then
-            output.WriteTag(4, WireFormat.WireType.Varint)
-            output.WriteUInt64 value.SampledAtUs
-        output.WriteTag(5, WireFormat.WireType.LengthDelimited)
-        output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(value.Payload)))
-        value.Previous |> Option.iter (fun previous ->
-            output.WriteTag(5, WireFormat.WireType.LengthDelimited)
-            output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(encodePoseSample previous))))
-        output.CheckNoSpaceLeft()
+        let offset = writeField bytes 0 8uy (uint64 ProtocolCodec.Version)
+        let offset = writeField bytes offset 16uy (PlayerId.value player)
+        let offset = writeField bytes offset 24uy revision
+        let offset = writeField bytes offset 34uy (uint64 (poseSampleSize value))
+        let offset = writePoseSample bytes offset value
+        match value.Previous with
+        | None -> ()
+        | Some previous ->
+            let offset = writeField bytes offset 42uy (uint64 (poseSampleSize previous))
+            writePoseSample bytes offset previous |> ignore
         { Schedule = PacketSchedule.LatestPose(PlayerId.value player); Lane = DeliveryLane.Poses; Bytes = bytes }

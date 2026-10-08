@@ -201,6 +201,57 @@ let tests = testList "Phantoms" [
         PhantomAgent.observe state (PhantomObservation.Departed id)
         Expect.equal (PhantomAgent.snapshot state).Members 0 "Departure cleanup is observed."
 
+    testCase "pose payload owns its constructor copy and exposes only detached writable copies" <| fun _ ->
+        let source = PlayerId.create 1UL |> ok
+        let incoming = [|1uy;2uy;3uy|]
+        let generation = AppearanceGeneration.create 2UL |> ok
+        let sequence = PhantomSequence.create 3UL |> ok
+        let value = PhantomPose.create options.Limits generation 10UL sequence 0UL (ReadOnlyMemory<byte>(incoming)) |> ok
+        incoming[0] <- 99uy
+        let detached = value.Payload.ToArray()
+        detached[1] <- 88uy
+        let encoded = PhantomCodec.encodePoseSample value
+        encoded[0] <- 0uy
+        let actual = Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom((PhantomCodec.encodePose source 1UL value).Bytes)
+        Expect.equal actual.Sample.Payload (ByteString.CopyFrom [|1uy;2uy;3uy|]) "Neither input, detached copy nor encoded bytes can mutate the retained value."
+
+    testCase "pose payload span encoding matches generated current and previous samples at wire boundaries" <| fun _ ->
+        let wireSample generation context sequence sampledAtUs (payload: byte array) =
+            Dreamsleeve.Protocol.Phantom.PoseSample(Generation = generation, ContextRevision = context, Sequence = sequence,
+                SampledAtUs = sampledAtUs, Payload = ByteString.CopyFrom payload)
+        let varints = [2UL] @ [ for shift in 7 .. 7 .. 63 do let boundary = 1UL <<< shift in yield boundary - 1UL; yield boundary ] @ [UInt64.MaxValue]
+        for length in [1;127;128;16383;16384;options.Limits.PoseBytes] do
+            let payload = Array.init length (fun index -> byte index)
+            let priorPayload = Array.init length (fun index -> byte (index + 1))
+            for sampledAt in [0UL;PhantomPose.maximumSampledAtUs] do
+                for generation in varints do
+                    let context, sequence, revision, player =
+                        if generation = 2UL then 1UL, 1UL, 128UL, 1UL
+                        else generation, generation, generation, generation
+                    let source = PlayerId.create player |> ok
+                    let value = PhantomPose.create options.Limits (AppearanceGeneration.create generation |> ok) context
+                                    (PhantomSequence.create sequence |> ok) sampledAt (ReadOnlyMemory<byte>(payload)) |> ok
+                    let previous = PhantomPose.create options.Limits (AppearanceGeneration.create (generation - 1UL) |> ok) context
+                                       (PhantomSequence.create sequence |> ok) sampledAt (ReadOnlyMemory<byte>(priorPayload)) |> ok
+                    let wire = wireSample generation context sequence sampledAt payload
+                    Expect.equal (PhantomCodec.encodePoseSample value) (wire.ToByteArray()) "Sample bytes follow generated protobuf field/default rules."
+                    for paired in [false;true] do
+                        let pose = if paired then PhantomPose.withPrevious previous value |> ok else value
+                        let expected = Dreamsleeve.Protocol.Phantom.ServerPosePacket(ProtocolVersion = ProtocolCodec.Version,
+                                           PlayerId = player, ViewRevision = revision, Sample = wire)
+                        if paired then expected.PreviousSample <- wireSample (generation - 1UL) context sequence sampledAt priorPayload
+                        let encoded = PhantomCodec.encodePose source revision pose
+                        Expect.equal encoded.Bytes (expected.ToByteArray()) "Current and Previous preserve the generated wire contract."
+                        Expect.equal encoded.Bytes.Length (PhantomCodec.posePacketSize source revision pose) "Traffic admission uses the exact encoded size."
+                    let expectedPrior = ByteString.CopyFrom priorPayload
+                    priorPayload[0] <- 77uy
+                    let detachedPrior = previous.Payload.ToArray()
+                    detachedPrior[0] <- 66uy
+                    let paired = PhantomPose.withPrevious previous value |> ok
+                    let actual = Dreamsleeve.Protocol.Phantom.ServerPosePacket.Parser.ParseFrom((PhantomCodec.encodePose source revision paired).Bytes)
+                    Expect.equal actual.PreviousSample.Payload expectedPrior "Previous retains its constructor-owned payload."
+                    priorPayload[0] <- 1uy
+
     testCase "pose encode allocates one final buffer and preserves protobuf bytes" <| fun _ ->
         let payload = Array.init (64 * 1024) (fun index -> byte index)
         let source = PlayerId.create 1UL |> ok

@@ -96,7 +96,8 @@ type PhantomPose = private {
     member this.Context = this.context
     member this.Sequence = this.sequence
     member this.SampledAtUs = this.sampledAtUs
-    member this.Payload = this.payload
+    /// The constructor owns a detached copy; consumers can only read its span.
+    member this.Payload = ReadOnlySpan<byte>(this.payload)
     member this.Previous = this.previous
 
 [<RequireQualifiedAccess>]
