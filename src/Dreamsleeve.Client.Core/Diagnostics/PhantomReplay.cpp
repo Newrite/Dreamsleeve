@@ -2,6 +2,8 @@ import std;
 import Dreamsleeve.Client.Diagnostics.PhantomReplay;
 import Dreamsleeve.Client.ProtocolCodec;
 
+#include "PhantomFiles.hpp"
+
 namespace Dreamsleeve::Client::Diagnostics
 {
   namespace
@@ -34,12 +36,25 @@ namespace Dreamsleeve::Client::Diagnostics
       }
     };
 
+    P::Error ReadFailure(const std::ifstream& input)
+    {
+      if (input.bad() || !input.eof()) return {P::Failure::Storage, "archive.read"};
+      return {P::Failure::InvalidFormat, "archive.truncated-file"};
+    }
+
     P::Result<P::Bytes> ReadBytes(std::ifstream& input, std::size_t n)
     {
       P::Bytes bytes(n);
-      if (!input.read(reinterpret_cast<char*>(bytes.data()), n))
-        return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.truncated-file"});
+      if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(n)))
+        return std::unexpected(ReadFailure(input));
       return bytes;
+    }
+
+    P::Result<void> SkipBytes(std::ifstream& input, std::uint32_t n)
+    {
+      input.ignore(n);
+      if (input.gcount() != n) return std::unexpected(ReadFailure(input));
+      return {};
     }
 
     P::Result<void> Header(std::ifstream& input)
@@ -63,7 +78,11 @@ namespace Dreamsleeve::Client::Diagnostics
 
     P::Result<std::optional<Record>> Next(std::ifstream& input)
     {
-      if (input.peek() == std::char_traits<char>::eof()) return {};
+      if (input.peek() == std::char_traits<char>::eof())
+      {
+        if (input.bad() || !input.eof()) return std::unexpected(P::Error{P::Failure::Storage, "archive.read"});
+        return {};
+      }
       const auto bytes = ReadBytes(input, 8);
       if (!bytes) return std::unexpected(bytes.error());
       Cursor r{*bytes};
@@ -73,24 +92,47 @@ namespace Dreamsleeve::Client::Diagnostics
       return std::optional<Record>{record};
     }
 
-    P::Result<std::filesystem::path> SelectArchive(const std::filesystem::path& root, std::uint32_t scenario)
+    P::Result<std::optional<std::filesystem::path>> SelectArchive(const std::filesystem::path& root, std::uint32_t scenario)
     {
-      // Offline analysis may select one exact recording; the same Load path
-      // still checks its header, every model hash and every production pose.
-      if (std::filesystem::is_regular_file(root)) return root;
-      if (std::filesystem::is_regular_file(root / "capture.phdiag")) return root / "capture.phdiag";
+      // Exact archives follow the same production hash/NIF/pose decoder boundary.
+      auto exact = Files::IsRegularFile(root);
+      if (!exact) return std::unexpected(exact.error());
+      if (*exact) return std::optional{root};
+      auto captured = Files::IsRegularFile(root / "capture.phdiag");
+      if (!captured) return std::unexpected(captured.error());
+      if (*captured) return std::optional{root / "capture.phdiag"};
+      std::error_code error;
+      if (!std::filesystem::exists(root, error))
+      {
+        if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+        return {};
+      }
+      std::filesystem::path::string_type token(1, '-');
+      for (const auto c : Scenarios[scenario]) token.push_back(static_cast<std::filesystem::path::value_type>(c));
+      token.push_back('-');
       std::vector<std::filesystem::path> files;
-      if (std::filesystem::exists(root))
-        for (const auto& entry : std::filesystem::directory_iterator(root))
-          if (entry.is_directory() && entry.path().filename().string().contains(std::format("-{}-", Scenarios[scenario])))
-          {
-            auto file = entry.path() / "capture.phdiag";
-            if (std::filesystem::is_regular_file(file)) files.push_back(std::move(file));
-          }
+      std::filesystem::directory_iterator cursor(root, error), end;
+      if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+      while (cursor != end)
+      {
+        const auto& entry = *cursor;
+        const auto directory = entry.is_directory(error);
+        if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+        if (directory && entry.path().filename().native().find(token) != std::filesystem::path::string_type::npos)
+        {
+          auto file = entry.path() / "capture.phdiag";
+          auto regular = Files::IsRegularFile(file);
+          if (!regular) return std::unexpected(regular.error());
+          if (*regular) files.push_back(std::move(file));
+        }
+        cursor.increment(error);
+        if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
+      }
       std::ranges::sort(files, std::greater{});
       for (const auto& file : files)
       {
         std::ifstream input(file, std::ios::binary);
+        if (!input) return std::unexpected(P::Error{P::Failure::Storage, "archive.open"});
         if (auto header = Header(input); !header) return std::unexpected(header.error());
         for (;;)
         {
@@ -98,9 +140,8 @@ namespace Dreamsleeve::Client::Diagnostics
           if (!next) return std::unexpected(next.error());
           if (!*next) break;
           const auto& record = *next;
-          if (record->kind == 2) return file;
-          input.seekg(record->bytes, std::ios::cur);
-          if (!input) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.seek"});
+          if (record->kind == 2) return std::optional{file};
+          if (auto skipped = SkipBytes(input, record->bytes); !skipped) return std::unexpected(skipped.error());
         }
       }
       return {};
@@ -131,15 +172,18 @@ namespace Dreamsleeve::Client::Diagnostics
     {
       auto file = SelectArchive(root, scenario);
       if (!file) return std::unexpected(file.error());
-      if (file->empty() && !fallback.empty()) file = SelectArchive(fallback, scenario);
+      if (!*file && !fallback.empty()) file = SelectArchive(fallback, scenario);
       if (!file) return std::unexpected(file.error());
-      if (file->empty())
+      if (!*file)
         return std::unexpected(P::Error{P::Failure::InvalidFormat, "Нет завершённой записи с позами для выбранного сценария"});
+      auto display = Files::DisplayPath((*file)->parent_path());
+      if (!display) return std::unexpected(display.error());
       {
         std::lock_guard lock(mutex);
-        status.directory = file->parent_path().string();
+        status.directory = std::move(*display);
       }
-      std::ifstream input(*file, std::ios::binary);
+      std::ifstream input(**file, std::ios::binary);
+      if (!input) return std::unexpected(P::Error{P::Failure::Storage, "archive.open"});
       if (auto header = Header(input); !header) return std::unexpected(header.error());
       std::shared_ptr<const P::ValidatedAsset> asset;
       P::Generation                            generation;
@@ -152,8 +196,7 @@ namespace Dreamsleeve::Client::Diagnostics
         const auto& record = *next;
         if (record->kind != 1 && record->kind != 2)
         {
-          input.seekg(record->bytes, std::ios::cur);
-          if (!input) return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.seek"});
+          if (auto skipped = SkipBytes(input, record->bytes); !skipped) return std::unexpected(skipped.error());
           continue;
         }
         const auto bytes = ReadBytes(input, record->bytes);
@@ -166,7 +209,8 @@ namespace Dreamsleeve::Client::Diagnostics
           const auto raw = r.Get<std::uint32_t>(), size = r.Get<std::uint32_t>();
           const auto digest = r.Take(32), compressed = r.Take(size);
           auto       hash = P::Hash(compressed);
-          if (!r.valid || r.at != bytes->size() || !hash || !std::ranges::equal(digest, *hash))
+          if (!hash) return std::unexpected(hash.error());
+          if (!r.valid || r.at != bytes->size() || !std::ranges::equal(digest, *hash))
             return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.model-hash"});
           auto decoded = P::ReadAsset(compressed, raw, CaptureLimits());
           if (!decoded) return std::unexpected(decoded.error());
@@ -213,16 +257,8 @@ namespace Dreamsleeve::Client::Diagnostics
           if (shutdown) return;
           requested = false;
         }
-        std::string error;
-        try
-        {
-          auto loaded = Load();
-          if (!loaded) error = loaded.error().field;
-        }
-        catch (const std::exception& e)
-        {
-          error = e.what();
-        }
+        const auto loaded = Load();
+        std::string error = loaded ? std::string{} : loaded.error().field;
         std::lock_guard lock(mutex);
         status.busy     = false;
         status.complete = !cancelled && error.empty();

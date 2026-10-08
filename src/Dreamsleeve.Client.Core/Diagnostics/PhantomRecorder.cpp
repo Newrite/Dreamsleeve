@@ -3,6 +3,8 @@ import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import Dreamsleeve.Client.ProtocolCodec;
 import Dreamsleeve.Client.Utils;
 
+#include "PhantomFiles.hpp"
+
 namespace Dreamsleeve::Client::Diagnostics
 {
   namespace
@@ -238,9 +240,11 @@ namespace Dreamsleeve::Client::Diagnostics
         if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
         if (i == 31) return std::unexpected(P::Error{P::Failure::Storage, "directory-collision"});
       }
+      auto display = Files::DisplayPath(directory);
+      if (!display) return std::unexpected(display.error());
       {
         std::lock_guard lock(mutex);
-        status.directory = directory.string();
+        status.directory = std::move(*display);
       }
       const auto    partial = directory / "capture.phdiag.partial";
       std::ofstream output(partial, std::ios::binary);
@@ -445,15 +449,7 @@ namespace Dreamsleeve::Client::Diagnostics
           if (!requested && shuttingDown) return;
           requested = false;
         }
-        P::Result<void> result;
-        try
-        {
-          result = RunSession();
-        }
-        catch (const std::exception& e)
-        {
-          result = std::unexpected(P::Error{P::Failure::Storage, e.what()});
-        }
+        const auto result = RunSession();
         if (!result)
         {
           std::lock_guard lock(mutex);

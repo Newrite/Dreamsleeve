@@ -461,6 +461,92 @@ TEST_CASE("Diagnostic replay rejects a damaged model before returning a renderab
   CHECK(reader.Read().error == "archive.model-hash");
 }
 
+TEST_CASE("Diagnostic recorder reports a blocked directory and releases queued reservations")
+{
+  Fixture f;
+  std::filesystem::create_directories(f.root.parent_path());
+  {
+    std::ofstream blocker(f.root);
+    blocker << "preserve";
+  }
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(1), {}, .1, false);
+  const auto failed = Finished(recorder);
+  CHECK(failed.phase == D::Phase::Failed);
+  CHECK_FALSE(failed.reason.empty());
+  CHECK(failed.queuedBytes == 0);
+  CHECK_FALSE(recorder.Active());
+  CHECK(File(f.root).size() == 8);
+  REQUIRE(recorder.Start(f.root.parent_path() / (f.root.filename().native() + std::filesystem::path("-recovered").native()), 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(2), {}, .1, false);
+  recorder.Stop();
+  CHECK(Finished(recorder).phase == D::Phase::Complete);
+}
+
+TEST_CASE("Diagnostic replay preserves missing archive and rejects truncated header")
+{
+  Fixture f;
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(f.root, 0));
+  CHECK(Replay(reader).empty());
+  CHECK_FALSE(reader.Read().complete);
+  CHECK(reader.Read().error == "Нет завершённой записи с позами для выбранного сценария");
+  std::filesystem::create_directories(f.root);
+  const auto file = f.root / "truncated.phdiag";
+  {
+    std::ofstream out(file, std::ios::binary);
+    out << "DLPDIAG2";
+  }
+  REQUIRE(reader.Start(file, 0));
+  CHECK(Replay(reader).empty());
+  CHECK_FALSE(reader.Read().complete);
+  CHECK(reader.Read().error == "archive.truncated-file");
+}
+
+TEST_CASE("Diagnostic replay cannot skip a truncated trailing record as clean EOF")
+{
+  Fixture f;
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(1), {}, .1, false);
+  recorder.Stop();
+  const auto saved = Finished(recorder);
+  REQUIRE(saved.phase == D::Phase::Complete);
+  const auto file = std::filesystem::u8path(saved.directory) / "capture.phdiag";
+  {
+    std::ofstream out(file, std::ios::binary | std::ios::app);
+    const std::uint32_t kind = 3, size = 7;
+    out.write(reinterpret_cast<const char*>(&kind), sizeof(kind));
+    out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    out << "xx";
+  }
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(file, 0));
+  CHECK(Replay(reader).size() == 1);
+  CHECK_FALSE(reader.Read().complete);
+  CHECK(reader.Read().error == "archive.truncated-file");
+}
+
+TEST_CASE("Diagnostic recorder and replay retain native Unicode paths and UTF8 status")
+{
+  Fixture f;
+  f.root /= std::filesystem::path(u8"Запись-фантом");
+  D::Recorder recorder;
+  REQUIRE(recorder.Start(f.root, 0, 15, 20));
+  recorder.Sample(f.asset, f.Pose(1), {}, .1, false);
+  recorder.Stop();
+  const auto saved = Finished(recorder);
+  REQUIRE(saved.phase == D::Phase::Complete);
+  CHECK(saved.directory.find("Запись-фантом") != std::string::npos);
+  D::ReplayReader reader;
+  REQUIRE(reader.Start(f.root, 0));
+  CHECK(Replay(reader).size() == 1);
+  CHECK(reader.Read().complete);
+  CHECK(reader.Read().error.empty());
+  CHECK(reader.Read().directory == saved.directory);
+}
+
 TEST_CASE("Diagnostic replay decodes the recorded full character archive when supplied")
 {
   const char* root = std::getenv("DREAMSLEEVE_PHANTOM_REPLAY_ROOT");
