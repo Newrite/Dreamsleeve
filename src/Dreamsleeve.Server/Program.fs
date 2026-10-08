@@ -521,24 +521,27 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
         | Ok () ->
             logger.LogInformation("Account database ready: {DatabasePath}", settings.Database.DatabasePath)
             // The password hasher starts with the service, off the console thread.
-            let! authentication = Task.Run(fun () -> AuthService.start settings.Authentication.Service settings.Database logger TimeProvider.System)
-            let admin =
-                if settings.Admin.Enabled then Some (AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
-                else None
-            let! result = task {
-                try return! serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log
-                with error ->
-                    logger.LogError(error, "Server startup failed")
-                    return 1
-            }
-            try
-                do! stopAdmin admin
-                do! stopAuthentication authentication
-                logger.LogInformation("Server stopped with exit code {ExitCode}", result)
-                return result
-            with error ->
-                logger.LogError(error, "Authentication or admin agent shutdown failed")
+            let! started = Task.Run(fun () -> AuthService.start settings.Authentication.Service settings.Database logger TimeProvider.System)
+            match started with
+            | Error error ->
+                logger.LogError("Authentication startup failed while reading IP range bans: {Failure}", error)
                 return 1
+            | Ok authentication ->
+                let startAdmin () =
+                    if settings.Admin.Enabled then Some (AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
+                    else None
+                let! result =
+                    ServiceLifetime.run authentication startAdmin
+                        (fun admin -> serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log)
+                        stopAdmin stopAuthentication
+                match result with
+                | Ok exitCode ->
+                    logger.LogInformation("Server stopped with exit code {ExitCode}", exitCode)
+                    return exitCode
+                | Error failures ->
+                    for failure in failures do
+                        logger.LogError(failure.Error, "Server service lifecycle failed during {Stage}", failure.Stage)
+                    return 1
     with error ->
         logger.LogError(error, "Server failed")
         return 1

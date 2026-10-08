@@ -9,6 +9,7 @@
         <Compile Include="Logging.fs" />
         <Compile Include="Configuration.fs" />
         <Compile Include="WebPorts.fs" />
+        <Compile Include="ServiceLifetime.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 

@@ -26,6 +26,7 @@ let main argv =
         ProfileStoreTests.tests
         SqliteAccountStoreTests.tests
         AuthServiceTests.tests
+        ServiceLifetimeTests.tests
         SteamOpenIdTests.tests
         SanctionTests.tests
         AdminStoreTests.tests

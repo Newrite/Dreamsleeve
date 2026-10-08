@@ -1022,13 +1022,7 @@ module AuthService =
         | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ -> true
         | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> false
 
-    /// The options come checked with the configuration.
-    let start options database (logger: ILogger) (clock: TimeProvider) =
-        // Read before the first request; the caller runs start off the request path.
-        let bans =
-            match SqliteAddressStore.active database (clock.GetUtcNow()) CancellationToken.None with
-            | Ok bans -> bans
-            | Error error -> failwithf "Cannot read the IP range bans: %A" error
+    let private startWithBans options database (logger: ILogger) (clock: TimeProvider) bans =
         let dummyHash = (hasher options).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
         let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
         let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AccountWorkRequest) -> request.ReplyTo)
@@ -1049,6 +1043,12 @@ module AuthService =
         let agent = Agent.Start(settings, handle options clock logger state consumeRequest, isControl = isControl)
         agent.TryPost AuthMessage.Start |> ignore
         agent
+
+    /// Checked configuration; a failed ban read creates no workers or service.
+    let start options database (logger: ILogger) (clock: TimeProvider) =
+        match SqliteAddressStore.active database (clock.GetUtcNow()) CancellationToken.None with
+        | Error error -> Error error
+        | Ok bans -> Ok(startWithBans options database logger clock bans)
 
     let authenticator (agent: Agent<AuthMessage>) = {
         Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket

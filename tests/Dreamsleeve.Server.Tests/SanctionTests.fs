@@ -193,7 +193,7 @@ let private withService run = task {
     SqliteAccountStore.initialize database.Config |> ok
     let changes = ConcurrentQueue<AccountChange>()
     use runtime = Agent.Start(AgentOptions.create "sanction-test-runtime", fun _ change -> task { changes.Enqueue change })
-    use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System
+    use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System |> ok
     let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
     equal AgentPostResult.Posted targeted
     // A runtime first learns the IP range bans in force: none here.
@@ -249,7 +249,7 @@ let private serviceTests = testList "Account service sanctions" [
         let restartedChanges = ConcurrentQueue<AccountChange>()
         let stopped = Agent.Start(AgentOptions.create "stopped-runtime", fun _ (_: AccountChange) -> task { () })
         use restarted = Agent.Start(AgentOptions.create "restarted-runtime", fun _ change -> task { restartedChanges.Enqueue change })
-        use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System
+        use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System |> ok
         let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(stopped.Ref.TryReliable().Value))
         equal AgentPostResult.Posted targeted
         let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password, SignInOrigin.none))

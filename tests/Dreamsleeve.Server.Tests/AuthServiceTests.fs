@@ -29,7 +29,7 @@ type private ManualClock() =
     member _.Advance(span: TimeSpan) = Interlocked.Add(&ticks, span.Ticks) |> ignore
 
 let private start database options clock =
-    AuthService.start options database NullLogger.Instance clock
+    AuthService.start options database NullLogger.Instance clock |> ok
 
 let private access (service: Agent<AuthMessage>) command =
     service.TryAskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitReply
@@ -81,6 +81,25 @@ let private remember service = task {
 }
 
 let tests = testList "Authentication service" [
+    testCase "startup preserves ban storage failure before creating a service" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        match AuthService.start settings database.Config NullLogger.Instance TimeProvider.System with
+        | Error(AccountStoreError.Failed (:? Microsoft.Data.Sqlite.SqliteException)) -> ()
+        | other -> failtestf "Missing database did not return the owning storage error: %A" other)
+
+    case "startup rejects a corrupt ban and succeeds after storage repair" (fun () -> task {
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        // SQLite shape checks accept this nonempty text; domain validation rejects the control character.
+        database.Execute "INSERT INTO address_bans(network,prefix,reason,issued_at) VALUES(zeroblob(16),0,char(1),0)"
+        match AuthService.start settings database.Config NullLogger.Instance TimeProvider.System with
+        | Error(AccountStoreError.Failed (:? System.IO.InvalidDataException)) -> ()
+        | other -> failtestf "Invalid persisted ban was accepted: %A" other
+        database.Execute "DELETE FROM address_bans"
+        use service = start database.Config settings TimeProvider.System
+        do! stop service
+    })
+
     case "saved login survives service restart and logout revokes only its own tickets" (fun () -> task {
         use database = new SqliteAccountStoreTests.Database()
         SqliteAccountStore.initialize database.Config |> ok
