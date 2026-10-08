@@ -49,6 +49,20 @@ export function authStatus(auth: AuthState): string {
   const label = failureLabels[auth.failure];
   return error ? `${label}: ${error}` : label;
 }
+// The host keeps the last operation after it ends, so a finished sign-in that
+// left a failure is told apart from a failed reset, sign-out or forget.
+const signInOperations: ReadonlySet<AuthOperation> = new Set([
+  "passwordLogin",
+  "resume",
+  "steamLogin",
+]);
+export function signInFailed(auth: AuthState): boolean {
+  return (
+    !auth.authenticating &&
+    signInOperations.has(auth.operation) &&
+    (auth.failure !== "none" || auth.error.trim() !== "")
+  );
+}
 export interface AccountForm {
   username: string;
   password: string;

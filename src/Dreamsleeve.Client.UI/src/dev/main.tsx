@@ -550,7 +550,6 @@ function command(c: Command) {
         emitAuth(
           {
             authenticating: false,
-            operation: "none",
             failure: c.code === "bad" ? "invalidCredentials" : "none",
           },
           chat.store.getState().connectionPhase,

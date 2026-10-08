@@ -39,8 +39,9 @@ end
 rule("dreamsleeve.embed")
     set_extensions(".toml")
     add_orders("dreamsleeve.embed", "c++.build.modules.scanner")
+    -- Public: dependents compile the module interfaces that include the header.
     on_load(function (target)
-        target:add("includedirs", path.join(target:autogendir(), "rules", "utils", "bin2c"))
+        target:add("includedirs", path.join(target:autogendir(), "rules", "utils", "bin2c"), {public = true})
     end)
     on_preparecmd_file(function (target, batchcmds, sourcefile, opt)
         import("rules.utils.bin2c.utils", {alias = "bin2c_utils", rootdir = os.programdir()})
@@ -136,9 +137,10 @@ target("Dreamsleeve.Client.Core")
 
     add_deps("Dreamsleeve.Protocol.Native")
     add_syslinks("winhttp", "advapi32", "bcrypt", "ole32", "oleaut32", "uuid", "user32", {public = true})
-    -- The client's version, sent as its HTTP User-Agent.
+    -- The client's version, sent as its HTTP User-Agent. Public like the
+    -- embed header: dependents compile the module interface that uses it.
     on_load(function (target)
-        target:add("defines", "DREAMSLEEVE_VERSION=\"" .. (target:version() or "0.0.0") .. "\"")
+        target:add("defines", "DREAMSLEEVE_VERSION=\"" .. (target:version() or "0.0.0") .. "\"", {public = true})
     end)
     -- The documented client.toml doubles as the file written on first run.
     add_rules("dreamsleeve.embed")

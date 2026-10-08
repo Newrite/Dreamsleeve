@@ -559,6 +559,50 @@ TEST_CASE("Session view reset requests a fresh snapshot and drops stale correlat
   CHECK_FALSE(session.NeedsSnapshot());
 }
 
+TEST_CASE("A snapshot of the session the page shows is a refresh; a new page or session starts over")
+{
+  auto        exchange = MakeExchange();
+  ClientModel model;
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  Session        session;
+  Session::Frame frame;
+  const auto     refresh = [&] {
+    REQUIRE(frame.snapshot);
+    const auto snapshot = std::ranges::find_if(frame.events, [](const auto& e) { return Type(e) == "snapshot"; });
+    REQUIRE(snapshot != frame.events.end());
+    return Parse(*snapshot)["refresh"].get<bool>();
+  };
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  CHECK_FALSE(refresh());
+
+  // The game thread stands still (Alt+Tab): deltas overflow the state queue
+  // and Core replaces them with a snapshot of the same session on its own.
+  for (Domain::ChatMessageId id = 10; id < 19; ++id)
+  {
+    REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(id, 1, "pending")}}));
+    REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel"));
+  }
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  CHECK(refresh());
+
+  // A recreated page holds nothing of the session.
+  session.ResetView();
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  Settle(session, *exchange, model, frame);
+  CHECK_FALSE(refresh());
+
+  model.ResetSession();
+  REQUIRE(model.RegisterChannel(1, 16));
+  REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+  frame = {};
+  session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
+  Settle(session, *exchange, model, frame);
+  CHECK_FALSE(refresh());
+}
+
 TEST_CASE("Session reconnect: disconnect snapshot is silent and the new generation republishes")
 {
   auto        exchange = MakeExchange();

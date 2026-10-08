@@ -7,6 +7,7 @@ import {
   canRegister,
   canResetPassword,
   registrationNote,
+  signInFailed,
 } from "../state/auth";
 import { connectionLabels } from "../state/connection";
 import { identityStatus } from "../state/identity";
@@ -62,6 +63,8 @@ export function AccountPanel({
     displayName,
   });
   const status = authStatus(s.auth);
+  // Sign-in failures sit under the form they answer; the rest keep the status line.
+  const signInError = signInFailed(s.auth) ? status : "";
   const steamWaiting = canCancelSteam(s.auth);
   const registration = canRegister(s.auth);
   const note = registrationNote(s.auth);
@@ -228,6 +231,16 @@ export function AccountPanel({
             onChange={(e) => setRemember(e.target.checked)}
           />
         </label>
+        {signInError && (
+          <p
+            className={styles.status}
+            role="alert"
+            data-failure="true"
+            data-part="sign-in-error"
+          >
+            {signInError}
+          </p>
+        )}
         <div className={styles.actions}>
           <button
             type="submit"
@@ -371,9 +384,9 @@ export function AccountPanel({
         role="status"
         aria-live="polite"
         aria-label="Состояние входа"
-        data-failure={s.auth.failure !== "none"}
+        data-failure={!signInError && s.auth.failure !== "none"}
       >
-        {status}
+        {signInError ? "" : status}
       </p>
       <p className={styles.muted}>
         Пароль передаётся приложению один раз и не хранится в интерфейсе.

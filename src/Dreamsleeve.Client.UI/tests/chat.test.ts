@@ -9,6 +9,7 @@ import {
   canResetPassword,
   idleAuth,
   registrationNote,
+  signInFailed,
 } from "../src/state/auth";
 import { sessionEndText } from "../src/state/moderation";
 import type {
@@ -548,6 +549,31 @@ describe("account", () => {
     expect(authStatus({ ...idleAuth, failure: "banned", error: "Читы" })).toBe(
       "Аккаунт заблокирован: Читы",
     );
+  });
+  it("tells a failed sign-in apart from a failed reset or a sign-in in progress", () => {
+    const failed = { ...idleAuth, failure: "invalidCredentials" } as const;
+    for (const operation of ["passwordLogin", "resume", "steamLogin"] as const)
+      expect(signInFailed({ ...failed, operation })).toBe(true);
+    expect(
+      signInFailed({ ...idleAuth, operation: "resume", error: "timeout" }),
+    ).toBe(true);
+    for (const operation of [
+      "resetPassword",
+      "signOut",
+      "forgetSavedLogin",
+      "none",
+    ] as const)
+      expect(signInFailed({ ...failed, operation })).toBe(false);
+    expect(signInFailed({ ...idleAuth, operation: "passwordLogin" })).toBe(
+      false,
+    );
+    expect(
+      signInFailed({
+        ...failed,
+        operation: "passwordLogin",
+        authenticating: true,
+      }),
+    ).toBe(false);
   });
   it("sets a password from an administrator's code only outside a session", () => {
     expect(canResetPassword(idleAuth, false, " code ", "new-password")).toBe(
