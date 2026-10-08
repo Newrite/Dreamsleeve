@@ -165,27 +165,30 @@ module EnetTransport =
         | true, connection when connection.ConnectId = event.Peer.ConnectId && not connection.Closing ->
             let reliable = (packet.Flags &&& EnetPacketFlag.Reliable) = EnetPacketFlag.Reliable
             let unsequenced = (packet.Flags &&& EnetPacketFlag.Unsequenced) = EnetPacketFlag.Unsequenced
-            let lane = enum<DeliveryLane>(int event.ChannelId)
-            let time = Environment.TickCount64
-            if lane = DeliveryLane.Poses then
-                connection.PoseSamples <- min 2.0 (connection.PoseSamples + double (time - connection.PoseReceivedAt) / double state.Phantoms.PoseIntervalMs)
-                connection.PoseReceivedAt <- time
-            // The only reliable Poses packet is ENet's empty epoch marker at
-            // unreliable sequence rollover. It never reaches the domain codec.
-            if lane = DeliveryLane.Poses && reliable && not unsequenced && packet.DataLength = 0un then ()
-            elif event.ChannelId > byte DeliveryLane.Poses || unsequenced
-               || (event.ChannelId <= byte DeliveryLane.Poses && LanePolicy.reliable lane <> reliable)
-               || packet.DataLength > unativeint state.Config.MaxPacketBytes
-               || (lane = DeliveryLane.Models && packet.DataLength > unativeint PhantomAssetLimits.assetPacketBytes)
-               || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (PhantomAssetLimits.posePacketBytes state.Phantoms.Limits))
-               || (event.ChannelId = byte DeliveryLane.Realtime
-                   && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
+            match DeliveryLane.fromChannel event.ChannelId with
+            | Error _ ->
                 reset state connection.Id
                 events.Add(ServerTransportEvent.Disconnected connection.Id)
-            elif lane = DeliveryLane.Poses && connection.PoseSamples < 1.0 then ()
-            else
-                if lane = DeliveryLane.Poses then connection.PoseSamples <- connection.PoseSamples - 1.0
-                events.Add(ServerTransportEvent.Received(connection.Id, enum<DeliveryLane>(int event.ChannelId), packet.AsSpan().ToArray()))
+            | Ok lane ->
+                let time = Environment.TickCount64
+                if lane = DeliveryLane.Poses then
+                    connection.PoseSamples <- min 2.0 (connection.PoseSamples + double (time - connection.PoseReceivedAt) / double state.Phantoms.PoseIntervalMs)
+                    connection.PoseReceivedAt <- time
+                // The only reliable Poses packet is ENet's empty epoch marker at
+                // unreliable sequence rollover. It never reaches the domain codec.
+                if lane = DeliveryLane.Poses && reliable && not unsequenced && packet.DataLength = 0un then ()
+                elif unsequenced || LanePolicy.reliable lane <> reliable
+                   || packet.DataLength > unativeint state.Config.MaxPacketBytes
+                   || (lane = DeliveryLane.Models && packet.DataLength > unativeint PhantomAssetLimits.assetPacketBytes)
+                   || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (PhantomAssetLimits.posePacketBytes state.Phantoms.Limits))
+                   || (lane = DeliveryLane.Realtime
+                       && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
+                    reset state connection.Id
+                    events.Add(ServerTransportEvent.Disconnected connection.Id)
+                elif lane = DeliveryLane.Poses && connection.PoseSamples < 1.0 then ()
+                else
+                    if lane = DeliveryLane.Poses then connection.PoseSamples <- connection.PoseSamples - 1.0
+                    events.Add(ServerTransportEvent.Received(connection.Id, lane, packet.AsSpan().ToArray()))
         | true, _ | false, _ -> ()
 
     let private poll state () =
@@ -244,16 +247,15 @@ module EnetTransport =
     let private send state (connectionId, packet: TransportPacket) =
         let bytes = packet.Bytes
         if state.Disposed then
-            Error "ENet transport is disposed."
-        elif not (Enum.IsDefined packet.Lane) then Error "Invalid delivery lane."
+            Error(TransportSendError.Closed "ENet transport is disposed.")
         elif isNull bytes || bytes.Length = 0 || bytes.Length > state.Config.MaxPacketBytes then
-            Error "Outgoing packet size is outside the configured limits."
+            Error(TransportSendError.InvalidPacket "Outgoing packet size is outside the configured limits.")
         else
             match state.Connections.TryGetValue connectionId with
-            | false, _ -> Error "Connection is closed."
-            | true, connection when connection.Closing -> Error "Connection is closing."
+            | false, _ -> Error(TransportSendError.Closed "Connection is closed.")
+            | true, connection when connection.Closing -> Error(TransportSendError.Closed "Connection is closing.")
             | true, connection when packet.Lane = DeliveryLane.Realtime && bytes.Length > OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer ->
-                Error "Realtime payload exceeds negotiated MTU."
+                Error(TransportSendError.InvalidPacket "Realtime payload exceeds negotiated MTU.")
             | true, connection ->
                 let started = TransportDiagnostics.BeginSend()
                 let delivery =
@@ -262,15 +264,15 @@ module EnetTransport =
                     | LaneReliability.Reliable -> PacketDelivery.Reliable
                     | LaneReliability.Sequenced -> PacketDelivery.Sequenced
                     | LaneReliability.SequencedFragmented -> PacketDelivery.SequencedFragmented
-                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, byte packet.Lane, delivery)
+                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, DeliveryLane.toChannel packet.Lane, delivery)
                 TransportDiagnostics.EndSend(started, bytes.Length)
                 match result with
                 | PacketSendResult.Sent ->
                     TransportDiagnostics.RecordAcceptedPacket(connection.Peer, bytes.Length)
                     Ok ()
-                | PacketSendResult.BudgetExceeded -> Error "Outgoing ENet packet budget exceeded."
-                | PacketSendResult.PeerRejected -> Error "ENet peer rejected the outgoing packet."
-                | unknown when not (Enum.IsDefined unknown) -> Error "Unknown ENet packet admission result."
+                | PacketSendResult.BudgetExceeded -> Error(TransportSendError.BudgetExceeded "Outgoing ENet packet budget exceeded.")
+                | PacketSendResult.PeerRejected -> Error(TransportSendError.PeerRejected "ENet peer rejected the outgoing packet.")
+                | unknown when not (Enum.IsDefined unknown) -> Error(TransportSendError.Faulted "Unknown ENet packet admission result.")
 
     let private dispose state () =
         if not state.Disposed then

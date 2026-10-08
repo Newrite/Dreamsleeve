@@ -100,13 +100,30 @@ let private withAdapter settings run =
         transport.Dispose()
 
 let tests = testSequenced <| testList "ENet transport" [
+    testCase "internal lanes map to schema channels and reject every unknown channel" <| fun _ ->
+        let lanes = [
+            DeliveryLane.Control, Dreamsleeve.Protocol.Network.DeliveryLane.Control
+            DeliveryLane.Chat, Dreamsleeve.Protocol.Network.DeliveryLane.Chat
+            DeliveryLane.Realtime, Dreamsleeve.Protocol.Network.DeliveryLane.Realtime
+            DeliveryLane.Models, Dreamsleeve.Protocol.Network.DeliveryLane.Models
+            DeliveryLane.Poses, Dreamsleeve.Protocol.Network.DeliveryLane.Poses
+        ]
+        Expect.equal lanes.Length (Enum.GetValues<Dreamsleeve.Protocol.Network.DeliveryLane>().Length) "Every schema lane has an explicit internal owner."
+        for lane, wire in lanes do
+            Expect.equal (DeliveryLane.toChannel lane) (byte wire) "Schema owns the number."
+            Expect.equal (DeliveryLane.fromChannel (byte wire)) (Ok lane) "Boundary constructs the trusted lane."
+        for value in 0 .. 255 do
+            let channel = byte value
+            if not (Enum.IsDefined(enum<Dreamsleeve.Protocol.Network.DeliveryLane> value)) then
+                Expect.equal (DeliveryLane.fromChannel channel) (Error(DeliveryLaneError.UnknownChannel channel)) "Unknown wire lane is a typed rejection."
+
     testCase "models reliable and fragmented sequenced poses use their agreed lanes" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport client peer connection events _ pump ->
             let payload = Array.init 20000 (fun index -> byte (index % 251))
             for lane, flags in [DeliveryLane.Models, EnetPacketFlag.Reliable; DeliveryLane.Poses, EnetPacketFlag.UnreliableFragment] do
                 let bytes = if lane = DeliveryLane.Models then payload[0..PhantomAssetLimits.assetPacketBytes-1] else payload
                 let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>(bytes), flags)
-                try Expect.isTrue (peer.TrySend(byte lane, &packet)) "native send"
+                try Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "native send"
                 finally if packet.IsCreated then packet.Dispose()
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, data) -> actual = lane && data = bytes | _ -> false)) pump
             let mutable received = None
@@ -421,8 +438,8 @@ let tests = testSequenced <| testList "ENet transport" [
         withAdapter ServerConfig.defaults (fun _ transport _ peer connection events _ pump ->
             for lane in [DeliveryLane.Chat; DeliveryLane.Realtime] do
                 let flags = if lane = DeliveryLane.Realtime then enum<EnetPacketFlag> 0 else EnetPacketFlag.Reliable
-                let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|byte lane|]), flags)
-                try Expect.isTrue (peer.TrySend(byte lane, &packet)) "send on agreed channel"
+                let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|DeliveryLane.toChannel lane|]), flags)
+                try Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "send on agreed channel"
                 finally if packet.IsCreated then packet.Dispose()
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, _) -> actual = lane | _ -> false)) pump
             Expect.isFalse (events.Contains(ServerTransportEvent.Disconnected connection)) "supported channels retain connection"

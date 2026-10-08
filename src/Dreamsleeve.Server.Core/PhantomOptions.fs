@@ -13,7 +13,6 @@ module LanePolicy =
         | DeliveryLane.Control | DeliveryLane.Chat | DeliveryLane.Models -> LaneReliability.Reliable
         | DeliveryLane.Realtime -> LaneReliability.Sequenced
         | DeliveryLane.Poses -> LaneReliability.SequencedFragmented
-        | lane -> invalidArg "lane" $"Unknown lane {lane}"
     let reliable lane = reliability lane = LaneReliability.Reliable
     let bulk lane = lane = DeliveryLane.Models
     // Queue/native byte quotas use the control reserve for small model notices.

@@ -30,13 +30,29 @@ type ServerTransportEvent =
     | Disconnected of Guid
     | Failed of Guid * reason: string
 
+/// Classify admission where it fails; diagnostic wording never controls retry.
+[<RequireQualifiedAccess>]
+type TransportSendError =
+    | Closed of string
+    | InvalidPacket of string
+    | BudgetExceeded of string
+    | PeerRejected of string
+    | Faulted of string
+
+[<RequireQualifiedAccess>]
+module TransportSendError =
+    let message = function
+        | TransportSendError.Closed text | TransportSendError.InvalidPacket text
+        | TransportSendError.BudgetExceeded text | TransportSendError.PeerRejected text
+        | TransportSendError.Faulted text -> text
+
 type ServerTransport = {
     Poll: unit -> Result<ServerTransportEvent list, string>
     /// Nonblocking wakeup; false means consumer admission failed and notification must be retried.
     SetReadyHandler: (unit -> bool) -> unit
     /// Success transfers immutable payload ownership to the handoff queue; callers
     /// must not mutate/reuse Bytes. Admission is not acknowledgement of delivery.
-    Send: Guid * TransportPacket -> Result<unit, string>
+    Send: Guid * TransportPacket -> Result<unit, TransportSendError>
     /// Current transport payload budget before fragmentation; zero for unavailable connections.
     MaxUnfragmentedPayloadBytes: Guid -> int
     /// Stop new sends and drain accepted reliable packets; Poll eventually reports Disconnected.

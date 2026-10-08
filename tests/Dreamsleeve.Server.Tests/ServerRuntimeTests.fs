@@ -119,7 +119,7 @@ type private Fixture = {
     Movement: Channel<Guid * ServerMovementPacket>
     Phantoms: Channel<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>
     Sent: ConcurrentQueue<DeliveryLane>
-    SendFailures: ConcurrentDictionary<DeliveryLane, string>
+    SendFailures: ConcurrentDictionary<DeliveryLane, TransportSendError>
     PayloadBudgets: ConcurrentDictionary<Guid, int>
     Errors: ConcurrentQueue<string>
     Closed: Channel<Guid>
@@ -140,7 +140,7 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
     let movement = Channel.CreateUnbounded<Guid * ServerMovementPacket>()
     let phantomOutput = Channel.CreateUnbounded<Guid * Dreamsleeve.Protocol.Phantom.ServerAssetPacket>()
     let sent = ConcurrentQueue<DeliveryLane>()
-    let failures = ConcurrentDictionary<DeliveryLane, string>()
+    let failures = ConcurrentDictionary<DeliveryLane, TransportSendError>()
     let budgets = ConcurrentDictionary<Guid, int>()
     let errors = ConcurrentQueue<string>()
     let logger =
@@ -846,7 +846,7 @@ let tests = testList "ServerRuntime" [
                 Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
                          CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 0UL }
             }
-            fixture.SendFailures[DeliveryLane.Realtime] <- "Outgoing budget full"
+            fixture.SendFailures[DeliveryLane.Realtime] <- TransportSendError.BudgetExceeded "Outgoing budget full"
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|])))
             let left = ServerResponse.PresenceChanged({ PresenceChange.empty with Left = [ pid ] }, ActorValueKinds.none)
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, left)))

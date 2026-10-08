@@ -26,8 +26,8 @@ type private Fake = {
     Id: Guid
     Events: ConcurrentQueue<ServerTransportEvent>
     Calls: ConcurrentQueue<string * int>
-    mutable Send: unit -> Result<unit, string>
-    mutable SendPacket: (TransportPacket -> Result<unit, string>) option
+    mutable Send: unit -> Result<unit, TransportSendError>
+    mutable SendPacket: (TransportPacket -> Result<unit, TransportSendError>) option
     mutable PollFailure: string option
     mutable ThrowPoll: bool
 }
@@ -82,7 +82,7 @@ let tests = testList "TransportOwner" [
             fake.SendPacket <- Some(fun packet ->
                 let number = int packet.Bytes[0]
                 if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
-                if number = 1 && not resumeModel.IsSet then retrySeen.Set(); Error "Native packet budget exceeded."
+                if number = 1 && not resumeModel.IsSet then retrySeen.Set(); Error(TransportSendError.BudgetExceeded "Native packet quota is full.")
                 else delivered.Enqueue number; Ok ())
             owner.Send(fake.Id, value DeliveryLane.Control 0) |> ok
             do! eventually (fun () -> entered.IsSet)
@@ -112,7 +112,7 @@ let tests = testList "TransportOwner" [
             fake.SendPacket <- Some(fun packet ->
                 let number = int packet.Bytes[0]
                 if number = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
-                if number = 1 && not resume.IsSet then Error "Native packet budget exceeded."
+                if number = 1 && not resume.IsSet then Error(TransportSendError.BudgetExceeded "Native packet quota is full.")
                 else delivered.Enqueue number; Ok ())
             let send id lane number = owner.Send(id, { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = [|byte number|] }) |> ok
             send fake.Id DeliveryLane.Control 0
@@ -164,7 +164,7 @@ let tests = testList "TransportOwner" [
             fake.SendPacket <- Some(fun packet ->
                 let n = int packet.Bytes[0]
                 if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
-                if n = 1 && not resume.IsSet then retry.Set(); Error "Native packet budget exceeded."
+                if n = 1 && not resume.IsSet then retry.Set(); Error(TransportSendError.BudgetExceeded "Native packet quota is full.")
                 else delivered.Enqueue n; Ok ())
             let send lane key n = owner.Send(fake.Id, { Lane = lane; Schedule = (match key with ValueSome source -> PacketSchedule.LatestPose source | _ -> PacketSchedule.Ordered); Bytes = [|byte n|] }) |> ok
             send DeliveryLane.Control ValueNone 0
@@ -277,8 +277,8 @@ let tests = testList "TransportOwner" [
             fake.SendPacket <- Some(fun packet ->
                 let n = int packet.Bytes[0]
                 if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
-                if n = 1 && not resume.IsSet then retry.Set(); Error "Native packet budget exceeded."
-                elif n = 2 && not resumeNotice.IsSet then noticeRetry.Set(); Error "Native packet budget exceeded."
+                if n = 1 && not resume.IsSet then retry.Set(); Error(TransportSendError.BudgetExceeded "Native packet quota is full.")
+                elif n = 2 && not resumeNotice.IsSet then noticeRetry.Set(); Error(TransportSendError.BudgetExceeded "Native packet quota is full.")
                 else delivered.Enqueue n; Ok ())
             owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
             do! eventually (fun () -> entered.IsSet)
@@ -321,7 +321,7 @@ let tests = testList "TransportOwner" [
         finally release.Set(); owner.Dispose()
     })
 
-    case "terminal model notice rejection cannot release poses onto an unestablished view" (fun () -> task {
+    case "peer rejection mentioning budget cannot release poses or become a model retry" (fun () -> task {
         let! fake, owner = setup config
         let attempted = ConcurrentQueue<int>()
         use entered = new ManualResetEventSlim(false)
@@ -331,7 +331,7 @@ let tests = testList "TransportOwner" [
                 let n = int packet.Bytes[0]
                 if n = 0 then entered.Set(); release.Wait(TimeSpan.FromSeconds 5.) |> ignore
                 attempted.Enqueue n
-                if n = 1 then Error "PeerRejected" else Ok ())
+                if n = 1 then Error(TransportSendError.PeerRejected "Peer rejected despite available budget") else Ok ())
             owner.Send(fake.Id, { Lane = DeliveryLane.Control; Schedule = PacketSchedule.Ordered; Bytes = [|0uy|] }) |> ok
             do! eventually (fun () -> entered.IsSet)
             owner.Send(fake.Id, { Lane = DeliveryLane.Models; Schedule = PacketSchedule.ModelNotice 11UL; Bytes = [|1uy|] }) |> ok
@@ -419,7 +419,7 @@ let tests = testList "TransportOwner" [
     case "native reliable send failure reports reason and frees the peer without killing owner" (fun () -> task {
         let! fake, owner = setup config
         try
-            fake.Send <- fun () -> Error "native rejected"
+            fake.Send <- fun () -> Error(TransportSendError.PeerRejected "native rejected")
             owner.Send(fake.Id, packet DeliveryLane.Control 8) |> ok
             let mutable failed = false
             do! eventually (fun () ->
@@ -436,7 +436,7 @@ let tests = testList "TransportOwner" [
     case "native realtime send failure is a drop and subsequent reliable commands work" (fun () -> task {
         let! fake, owner = setup config
         try
-            fake.Send <- fun () -> Error "budget"
+            fake.Send <- fun () -> Error(TransportSendError.BudgetExceeded "budget")
             owner.Send(fake.Id, packet DeliveryLane.Realtime 8) |> ok
             do! eventually (fun () -> observed fake "send")
             fake.Send <- fun () -> Ok ()
@@ -525,7 +525,8 @@ let tests = testList "TransportOwner" [
             let disposal = Task.Run(Action owner.Dispose)
             do! eventually (fun () ->
                 match owner.Send(fake.Id, packet DeliveryLane.Realtime 8) with
-                | Error reason -> reason.Contains "stopped"
+                | Error(TransportSendError.Closed reason) -> reason.Contains "stopped"
+                | Error _ -> false
                 | Ok () -> false)
             release.Set()
             do! disposal.WaitAsync(TimeSpan.FromSeconds 5.)

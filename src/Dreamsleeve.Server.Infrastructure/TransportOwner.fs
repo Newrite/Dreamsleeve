@@ -152,12 +152,12 @@ module TransportOwner =
             if exists then
                 match transport.Send(id, packet) with
                 | Ok () -> true
-                | Error reason when packet.Lane = DeliveryLane.Models && reason.Contains("budget", StringComparison.OrdinalIgnoreCase) -> false
+                | Error(TransportSendError.BudgetExceeded _) when packet.Lane = DeliveryLane.Models -> false
                 | Error reason ->
                     lock state.Gate (fun () ->
                         state.NativeFailures <- state.NativeFailures + 1L
                         if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L)
-                    if LanePolicy.reliable packet.Lane then disconnect state transport id reason
+                    if LanePolicy.reliable packet.Lane then disconnect state transport id (TransportSendError.message reason)
                     true
             else true
         | Close id -> transport.Close id; true
@@ -438,21 +438,20 @@ module TransportOwner =
 
     let private send state (id, packet: TransportPacket) =
         lock state.Gate (fun () ->
-            if state.Stopped then Error "Transport owner is stopped."
-            elif state.Fault.IsSome then Error state.Fault.Value
+            if state.Stopped then Error(TransportSendError.Closed "Transport owner is stopped.")
+            elif state.Fault.IsSome then Error(TransportSendError.Faulted state.Fault.Value)
             elif isNull packet.Bytes || packet.Bytes.Length = 0 || packet.Bytes.Length > state.Config.MaxPacketBytes then
-                Error "Outgoing packet size is outside configured limits."
+                Error(TransportSendError.InvalidPacket "Outgoing packet size is outside configured limits.")
             elif (match packet.Schedule with PacketSchedule.ModelNotice _ -> packet.Lane <> DeliveryLane.Models | _ -> false) then
-                Error "Model notices require the model lane."
+                Error(TransportSendError.InvalidPacket "Model notices require the model lane.")
             elif packet.PoseStream.IsSome && packet.Lane <> DeliveryLane.Poses then
-                Error "Only pose packets may replace a stream slot."
-            elif not (Enum.IsDefined packet.Lane) then Error "Invalid delivery lane."
+                Error(TransportSendError.InvalidPacket "Only pose packets may replace a stream slot.")
             else
                 match state.Peers.TryGetValue id with
-                | false, _ -> Error "Connection is closed."
-                | true, peer when peer.Closing -> Error "Connection is closing."
+                | false, _ -> Error(TransportSendError.Closed "Connection is closed.")
+                | true, peer when peer.Closing -> Error(TransportSendError.Closed "Connection is closing.")
                 | true, _ when packet.Lane = DeliveryLane.Realtime
-                               && packet.Bytes.Length > state.Payloads[id] -> Error "Realtime payload exceeds negotiated MTU."
+                               && packet.Bytes.Length > state.Payloads[id] -> Error(TransportSendError.InvalidPacket "Realtime payload exceeds negotiated MTU.")
                 | true, peer ->
                     let replaced =
                         match packet.PoseStream with
@@ -470,7 +469,7 @@ module TransportOwner =
                        || (size > 0L && (size > byteLimit admission state.Config.Worker.QueueBytes - state.OutgoingBytes
                                         || size > byteLimit admission state.Config.MaxOutgoingBytesPerPeer - peer.Bytes)) then
                         if not (LanePolicy.reliable packet.Lane) then state.Dropped <- state.Dropped + 1L
-                        Error "Outgoing transport handoff budget exceeded."
+                        Error(TransportSendError.BudgetExceeded "Outgoing transport handoff budget exceeded.")
                     else
                         // A new view invalidates any unsent pose from its predecessor.
                         // Do not release that old pose after the new Offer/Remove.

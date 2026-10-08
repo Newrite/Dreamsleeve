@@ -496,3 +496,18 @@ handoff одного peer в каждом направлении. Для realtim
 общей и персональной ёмкости: небольшой запас остаётся reliable-данным. Это
 не неограниченная гарантия при reliable-перегрузке; её отказ остаётся явным.
 Служебные Close/Reset и события lifecycle имеют отдельный резерв.
+
+### Проверенные каналы и ошибки допуска транспорта
+
+`DeliveryLane` — закрытый внутренний тип Control/Chat/Realtime/Models/Poses.
+`DeliveryLane.fromChannel` разбирает native channel ID один раз в ENet adapter;
+`toChannel` берёт номера из сгенерированного `network.proto`. Неизвестный ID
+закрывает peer до передачи пакета runtime. Пустой reliable Poses marker при
+rollover остаётся служебным: он не попадает в codec.
+
+`ServerTransport.Send` возвращает `TransportSendError`: Closed, InvalidPacket,
+BudgetExceeded, PeerRejected или Faulted, отдельно от диагностического текста.
+TransportOwner повторяет отказ native допуска Models только для BudgetExceeded,
+сохраняя FIFO и возможность обслужить другие каналы/peer. Прочие reliable отказы
+закрывают peer; отказы Realtime/Poses остаются пропуском снимка. Успешный Send
+означает допуск и передачу владения bytes, а не получение пакета клиентом.

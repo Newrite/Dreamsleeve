@@ -19,7 +19,31 @@ type ProtocolCodecError = {
     Failure: ProtocolCodecFailure
 }
 
-type DeliveryLane = Dreamsleeve.Protocol.Network.DeliveryLane
+/// Trusted transport channels are closed; numeric values belong to Protocol/*.proto.
+[<Struct; RequireQualifiedAccess>]
+type DeliveryLane = Control | Chat | Realtime | Models | Poses
+
+[<RequireQualifiedAccess>]
+type DeliveryLaneError = UnknownChannel of byte
+
+[<RequireQualifiedAccess>]
+module DeliveryLane =
+    let toChannel = function
+        | DeliveryLane.Control -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Control
+        | DeliveryLane.Chat -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Chat
+        | DeliveryLane.Realtime -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Realtime
+        | DeliveryLane.Models -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Models
+        | DeliveryLane.Poses -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Poses
+
+    /// Parse only at the native/wire boundary; internal owners use the closed lane.
+    let fromChannel channel =
+        match enum<Dreamsleeve.Protocol.Network.DeliveryLane>(int channel) with
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Control -> Ok DeliveryLane.Control
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Chat -> Ok DeliveryLane.Chat
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Realtime -> Ok DeliveryLane.Realtime
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Models -> Ok DeliveryLane.Models
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Poses -> Ok DeliveryLane.Poses
+        | _ -> Error(DeliveryLaneError.UnknownChannel channel)
 
 /// A detached encoded packet. Only the transport adapter chooses native flags.
 // Local handoff scheduling, never serialized or interpreted by native ENet.

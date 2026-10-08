@@ -650,7 +650,7 @@ let tests = testList "Phantoms" [
         let mutable sentThisTurn = false
         let state = PhantomAgent.create config memoryStorage (PhantomHttp.create config memoryStorage) (fun (id, packet) ->
             if packet.Lane <> DeliveryLane.Poses then Ok ()
-            elif sentThisTurn then Error "peer budget"
+            elif sentThisTurn then Error(TransportSendError.BudgetExceeded "peer budget")
             else sentThisTurn <- true; delivered.Add id; Ok ())
         let members = Array.init 5 (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
         for id, value in members do

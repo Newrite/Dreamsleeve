@@ -8,7 +8,7 @@ Dreamsleeve — социальный слой для Skyrim: общий чат �
 модель фантома снова использует native clone/NiStream/NIF и native scene;
 neutral geometry/material pipeline и CPU skinning удалены. Reliable model
 streaming, independent unreliable poses, AOI, файловое хранилище и кеш
-переиспользуются. Контракт protocol22: [PhantomsRu.md](PhantomsRu.md).
+переиспользуются. Контракт protocol26: [PhantomsRu.md](PhantomsRu.md).
 Автоматические проверки, результаты benchmarks и остающийся игровой QA
 SE/AE/VR приведены в [отчёте выпуска](PhantomReleaseValidationRu.md).
 

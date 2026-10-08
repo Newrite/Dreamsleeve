@@ -3,7 +3,7 @@
 Актуальная ветка — `codex/phantom-native-nif`, основана на полной функции
 `codex/phantom-replication` (`3b80b8e`). Проверенный локальный прототип
 `codex/phantom-local-se` (`23ae14d`) служит источником native clone/NiStream,
-нормализации костей, оформления и применения поз. Протокол — **23**,
+нормализации костей, оформления и применения поз. Протокол — **26**,
 asset format — **2**; обе стороны обновляются одновременно.
 
 ## Модель и владельцы
@@ -293,6 +293,12 @@ model notices используется reliable control reserve; wire lane ос�
 Иначе заполнение pose очереди выше половины бюджета блокировало бы Offer в
 bulk-квоте и останавливало fanout через pending outbox. Не-budget отказ native
 reliable Send завершает peer, budget pressure остаётся повторяемой операцией.
+`ServerTransport.Send` возвращает `TransportSendError`: категория `BudgetExceeded`
+определяется при отказе допуска, а не по тексту сообщения. Только эта категория
+сохраняет Models в FIFO для следующей попытки; `PeerRejected` завершает reliable peer
+даже при слове «budget» в диагностике. Realtime/Poses при отказе отбрасываются.
+Внутренний `DeliveryLane` — закрытое объединение; ENet adapter переводит channel ID
+через значения сгенерированной схемы и отвергает неизвестный ID на входе.
 
 При принятии нового Offer/Remove TransportOwner удаляет ещё не отправленный pose
 slot предыдущего view того же recipient/source. Это устраняет отправку старой позы

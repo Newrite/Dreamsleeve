@@ -210,7 +210,7 @@ module ServerRuntime =
                     | Ok () -> ()
                     | Error _ when lane = DeliveryLane.Realtime -> () // Next period repairs a dropped pose.
                     | Error reason ->
-                        state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, reason)
+                        state.Logger.LogWarning("Closing {ConnectionId}: {Reason}", entry.ConnectionId, TransportSendError.message reason)
                         close options state context entry
 
     let private send options state context (entry: SessionTable.Entry) response =

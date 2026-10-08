@@ -47,7 +47,7 @@ module PhantomAgent =
     }
     type Snapshot = { Members: int; Sources: int; Subscriptions: int; Transfers: int; LatestPoses: int; PendingIo: int }
     type State = private {
-        Options: PhantomOptions; Storage: PhantomStoragePort; Http: PhantomHttpPort; Send: Guid * TransportPacket -> Result<unit, string>
+        Options: PhantomOptions; Storage: PhantomStoragePort; Http: PhantomHttpPort; Send: Guid * TransportPacket -> Result<unit, TransportSendError>
         Members: Dictionary<Guid, Member>; Players: Dictionary<PlayerId, Guid>; Transfers: Dictionary<PhantomTransferId, Transfer>
         Audiences: Dictionary<PlayerId, HashSet<Guid>>
         Cleanup: ResizeArray<Task<unit>>; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
