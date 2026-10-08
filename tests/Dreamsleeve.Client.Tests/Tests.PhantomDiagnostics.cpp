@@ -486,7 +486,7 @@ TEST_CASE("Diagnostic recorder reports a blocked directory and releases queued r
 
 TEST_CASE("Diagnostic replay preserves missing archive and rejects truncated header")
 {
-  Fixture f;
+  Fixture         f;
   D::ReplayReader reader;
   REQUIRE(reader.Start(f.root, 0));
   CHECK(Replay(reader).empty());
@@ -506,16 +506,16 @@ TEST_CASE("Diagnostic replay preserves missing archive and rejects truncated hea
 
 TEST_CASE("Diagnostic replay cannot skip a truncated trailing record as clean EOF")
 {
-  Fixture f;
+  Fixture     f;
   D::Recorder recorder;
   REQUIRE(recorder.Start(f.root, 0, 15, 20));
   recorder.Sample(f.asset, f.Pose(1), {}, .1, false);
   recorder.Stop();
   const auto saved = Finished(recorder);
   REQUIRE(saved.phase == D::Phase::Complete);
-  const auto file = std::filesystem::u8path(saved.directory) / "capture.phdiag";
+  const auto file = std::filesystem::path(std::u8string(saved.directory.begin(), saved.directory.end())) / "capture.phdiag";
   {
-    std::ofstream out(file, std::ios::binary | std::ios::app);
+    std::ofstream       out(file, std::ios::binary | std::ios::app);
     const std::uint32_t kind = 3, size = 7;
     out.write(reinterpret_cast<const char*>(&kind), sizeof(kind));
     out.write(reinterpret_cast<const char*>(&size), sizeof(size));

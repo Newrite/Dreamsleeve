@@ -29,7 +29,9 @@ std::expected<void, std::string> InitializeLogging()
   try
   {
     fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      "logs/dreamsleeve-client-dev.log", 1024 * 1024 * 5, 3); // 5 MB; keep three files.
+      "logs/dreamsleeve-client-dev.log",
+      1024 * 1024 * 5,
+      3);  // 5 MB; keep three files.
   }
   catch (const spdlog::spdlog_ex& failure)
   {

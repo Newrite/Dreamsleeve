@@ -45,8 +45,7 @@ namespace Dreamsleeve::Client::Diagnostics
     P::Result<P::Bytes> ReadBytes(std::ifstream& input, std::size_t n)
     {
       P::Bytes bytes(n);
-      if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(n)))
-        return std::unexpected(ReadFailure(input));
+      if (!input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(n))) return std::unexpected(ReadFailure(input));
       return bytes;
     }
 
@@ -66,7 +65,9 @@ namespace Dreamsleeve::Client::Diagnostics
       if (!std::ranges::equal(r.Take(8), magic) || r.Get<std::uint32_t>() != 2)
         return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
       const auto protocol = r.Get<std::uint32_t>();
-      if ((protocol != 22 && protocol != 23 && protocol != 24 && protocol != 25 && protocol != Wire::Version) || r.Get<std::uint32_t>() != P::AssetVersion)
+      if (
+        (protocol != 22 && protocol != 23 && protocol != 24 && protocol != 25 && protocol != Wire::Version) ||
+        r.Get<std::uint32_t>() != P::AssetVersion)
         return std::unexpected(P::Error{P::Failure::InvalidFormat, "archive.version"});
       return {};
     }
@@ -108,19 +109,20 @@ namespace Dreamsleeve::Client::Diagnostics
         return {};
       }
       std::filesystem::path::string_type token(1, '-');
-      for (const auto c : Scenarios[scenario]) token.push_back(static_cast<std::filesystem::path::value_type>(c));
+      for (const auto c : Scenarios[scenario])
+        token.push_back(static_cast<std::filesystem::path::value_type>(c));
       token.push_back('-');
-      std::vector<std::filesystem::path> files;
+      std::vector<std::filesystem::path>  files;
       std::filesystem::directory_iterator cursor(root, error), end;
       if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
       while (cursor != end)
       {
-        const auto& entry = *cursor;
-        const auto directory = entry.is_directory(error);
+        const auto& entry     = *cursor;
+        const auto  directory = entry.is_directory(error);
         if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
         if (directory && entry.path().filename().native().find(token) != std::filesystem::path::string_type::npos)
         {
-          auto file = entry.path() / "capture.phdiag";
+          auto file    = entry.path() / "capture.phdiag";
           auto regular = Files::IsRegularFile(file);
           if (!regular) return std::unexpected(regular.error());
           if (*regular) files.push_back(std::move(file));
@@ -174,8 +176,7 @@ namespace Dreamsleeve::Client::Diagnostics
       if (!file) return std::unexpected(file.error());
       if (!*file && !fallback.empty()) file = SelectArchive(fallback, scenario);
       if (!file) return std::unexpected(file.error());
-      if (!*file)
-        return std::unexpected(P::Error{P::Failure::InvalidFormat, "Нет завершённой записи с позами для выбранного сценария"});
+      if (!*file) return std::unexpected(P::Error{P::Failure::InvalidFormat, "Нет завершённой записи с позами для выбранного сценария"});
       auto display = Files::DisplayPath((*file)->parent_path());
       if (!display) return std::unexpected(display.error());
       {
@@ -257,8 +258,8 @@ namespace Dreamsleeve::Client::Diagnostics
           if (shutdown) return;
           requested = false;
         }
-        const auto loaded = Load();
-        std::string error = loaded ? std::string{} : loaded.error().field;
+        const auto      loaded = Load();
+        std::string     error  = loaded ? std::string{} : loaded.error().field;
         std::lock_guard lock(mutex);
         status.busy     = false;
         status.complete = !cancelled && error.empty();
