@@ -29,21 +29,52 @@ let private printHelp () =
     printfn "Dreamsleeve.Server --write-config path.toml"
     printfn "Configuration is read at startup. Commands: %s." Commands
 
+// A console dispatch may continue after an unconfirmed ordinary outcome. Startup
+// instead stops before the game supervisor; neither path retries an admitted command.
+[<RequireQualifiedAccess>]
+type private ConsoleCommandOutcome =
+    | Handled
+    | Unconfirmed
+    | StopServer of exn
+
+let private consoleCommand operation handle (request: Task<AgentAskResult<'Reply>>) = task {
+    match! request with
+    | AgentAskResult.Replied reply -> return! handle reply
+    | AgentAskResult.Full | AgentAskResult.Dropped ->
+        printfn "%s: request admission unavailable; no automatic retry." operation
+        return ConsoleCommandOutcome.Unconfirmed
+    | AgentAskResult.Closed ->
+        printfn "%s: service closed; command not confirmed." operation
+        return ConsoleCommandOutcome.Unconfirmed
+    | AgentAskResult.TimedOut ->
+        printfn "%s: deadline expired; the command may have executed. No automatic retry." operation
+        return ConsoleCommandOutcome.Unconfirmed
+    | AgentAskResult.Canceled ->
+        printfn "%s: waiting canceled; an admitted command may have executed. No automatic retry." operation
+        return ConsoleCommandOutcome.Unconfirmed
+    | AgentAskResult.Faulted error -> return ConsoleCommandOutcome.StopServer error
+}
+
 // One-time panel codes go to the console only, like reset-password codes: never to the log.
 let private adminCode (admin: Agent<AdminMessage> option) command (lifetime: int) = task {
     match admin with
-    | None -> printfn "The admin panel is disabled ([Admin] Enabled = false)."
+    | None ->
+        printfn "The admin panel is disabled ([Admin] Enabled = false)."
+        return ConsoleCommandOutcome.Handled
     | Some service ->
-        let! result = service.AskAsync(fun reply -> AdminMessage.Access(command, reply))
-        match command, result with
-        | AdminCommand.IssueSetupCode, Ok (AdminReply.Secret code) ->
-            printfn "Admin panel setup code (one-time, %d min; open /setup of the panel): %s" lifetime code
-        | AdminCommand.IssueResetCode _, Ok (AdminReply.Secret code) ->
-            printfn "Admin password reset code (one-time, %d min; open /reset of the panel): %s" lifetime code
-        | _, Error AdminServiceError.AlreadyConfigured -> printfn "An administrator already exists; use admin-reset <admin>."
-        | _, Error AdminServiceError.NotFound -> printfn "No such administrator."
-        | _, Error error -> printfn "Admin operation failed: %A" error
-        | _, Ok _ -> printfn "Unexpected admin result."
+        return! service.TryAskAsync(fun reply -> AdminMessage.Access(command, reply))
+            |> consoleCommand "Admin code" (fun result -> task {
+                match command, result with
+                | AdminCommand.IssueSetupCode, Ok (AdminReply.Secret code) ->
+                    printfn "Admin panel setup code (one-time, %d min; open /setup of the panel): %s" lifetime code
+                | AdminCommand.IssueResetCode _, Ok (AdminReply.Secret code) ->
+                    printfn "Admin password reset code (one-time, %d min; open /reset of the panel): %s" lifetime code
+                | _, Error AdminServiceError.AlreadyConfigured -> printfn "An administrator already exists; use admin-reset <admin>."
+                | _, Error AdminServiceError.NotFound -> printfn "No such administrator."
+                | _, Error error -> printfn "Admin operation failed: %A" error
+                | _, Ok _ -> printfn "Unexpected admin result."
+                return ConsoleCommandOutcome.Handled
+            })
 }
 
 // Console.In may implement ReadLineAsync synchronously. One background reader
@@ -67,6 +98,12 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
     let _reader = Task.Run(Action(readConsole input.Writer inputCancellation.Token))
     let mutable stopping = false
+    let mutable serviceFailure = None
+    let applyOutcome = function
+        | ConsoleCommandOutcome.Handled | ConsoleCommandOutcome.Unconfirmed -> ()
+        | ConsoleCommandOutcome.StopServer error ->
+            serviceFailure <- Some error
+            stopping <- true
 
     try
         while not stopping && not supervision.IsCompleted do
@@ -97,18 +134,23 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                         | Error _ -> printfn "Invalid username."
                         | Ok username ->
                             let command = if parts[0] = "reset-password" then AccountAccessCommand.CreatePasswordReset username else AccountAccessCommand.RevokeAccount username
-                            let! result = authentication.AskAsync(fun reply -> AuthMessage.Access(command, reply))
-                            match result with
-                            | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
-                            | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
-                            | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.ProfileChanged _)
-                            | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
-                            | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
-                            | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
-                            | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _)
-                            | Ok (AccountAccessResult.SteamStarted _) | Ok AccountAccessResult.SteamPending ->
-                                printfn "Unexpected administrative result."
-                            | Error error -> printfn "Administrative operation failed: %A" error
+                            let! outcome =
+                                authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
+                                |> consoleCommand "Account command" (fun result -> task {
+                                    match result with
+                                    | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
+                                    | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
+                                    | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.ProfileChanged _)
+                                    | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
+                                    | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
+                                    | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
+                                    | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _)
+                                    | Ok (AccountAccessResult.SteamStarted _) | Ok AccountAccessResult.SteamPending ->
+                                        printfn "Unexpected administrative result."
+                                    | Error error -> printfn "Administrative operation failed: %A" error
+                                    return ConsoleCommandOutcome.Handled
+                                })
+                            applyOutcome outcome
                     elif parts[0] = "registration" then
                         // Without a mode it shows the one in force.
                         let command =
@@ -119,24 +161,33 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
                         match command with
                         | None -> printfn "Registration modes: open | steam | manual."
                         | Some command ->
-                            let! result = authentication.AskAsync(fun reply -> AuthMessage.Access(command, reply))
-                            match result with
-                            | Ok (AccountAccessResult.Registration mode) ->
-                                printfn "Registration mode: %s" (Dreamsleeve.Server.Domain.RegistrationMode.key mode)
-                            | Ok _ -> printfn "Unexpected registration result."
-                            | Error error -> printfn "Registration mode not changed: %A" error
+                            let! outcome =
+                                authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
+                                |> consoleCommand "Registration" (fun result -> task {
+                                    match result with
+                                    | Ok (AccountAccessResult.Registration mode) ->
+                                        printfn "Registration mode: %s" (Dreamsleeve.Server.Domain.RegistrationMode.key mode)
+                                    | Ok _ -> printfn "Unexpected registration result."
+                                    | Error error -> printfn "Registration mode not changed: %A" error
+                                    return ConsoleCommandOutcome.Handled
+                                })
+                            applyOutcome outcome
                     elif parts.Length = 1 && parts[0] = "admin-setup" then
-                        do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                        let! outcome = adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                        applyOutcome outcome
                     elif parts.Length = 2 && parts[0] = "admin-reset" then
                         match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
                         | Error _ -> printfn "Invalid administrator name."
-                        | Ok name -> do! adminCode admin (AdminCommand.IssueResetCode name) settings.Admin.Service.CodeLifetimeMinutes
+                        | Ok name ->
+                            let! outcome = adminCode admin (AdminCommand.IssueResetCode name) settings.Admin.Service.CodeLifetimeMinutes
+                            applyOutcome outcome
                     else printfn "Commands: %s" Commands
                 | Some _ -> ()
             else
                 stopping <- true
     finally
         inputCancellation.Cancel()
+    return serviceFailure
 }
 
 let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntimeMessage>) = task {
@@ -332,6 +383,7 @@ let private serve settings (game: GameSettings) moderation configuration pseudon
             try
                 do! web.StartAsync()
                 // The panel starts after authentication and stops before the game part.
+                let mutable canStartGame = true
                 match admin with
                 | Some service ->
                     let ports = WebPorts.admin service authentication current describer configuration
@@ -339,20 +391,42 @@ let private serve settings (game: GameSettings) moderation configuration pseudon
                     panel <- Some host
                     do! host.StartAsync()
                     logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
-                    let! status = service.AskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
-                    match status with
-                    | Ok (AdminReply.Configured false) -> do! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
-                    | Ok _ -> ()
-                    | Error error -> logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                    let! outcome =
+                        service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
+                        |> consoleCommand "Admin startup status" (fun status -> task {
+                            match status with
+                            | Ok (AdminReply.Configured false) ->
+                                return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                            | Ok _ -> return ConsoleCommandOutcome.Handled
+                            | Error error ->
+                                logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                                return ConsoleCommandOutcome.Handled
+                        })
+                    match outcome with
+                    | ConsoleCommandOutcome.Handled -> ()
+                    | ConsoleCommandOutcome.Unconfirmed ->
+                        canStartGame <- false
+                        exitCode <- 1
+                    | ConsoleCommandOutcome.StopServer error ->
+                        logger.LogError(error, "Admin startup request failed")
+                        canStartGame <- false
+                        exitCode <- 1
                 | None -> logger.LogInformation("Admin panel disabled")
-                let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
-                let running =
-                    AgentSupervisor.start "game-supervisor" (Configuration.restartPolicy settings.Recovery)
-                        (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
-                supervisor.Value <- Some running
-                let! started = firstStart.Task
-                if started then do! waitForStop settings authentication admin current running.Completion canceled.Task
-                if not started || running.Completion.IsFaulted then exitCode <- 1
+                if canStartGame then
+                    let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                    let running =
+                        AgentSupervisor.start "game-supervisor" (Configuration.restartPolicy settings.Recovery)
+                            (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
+                    supervisor.Value <- Some running
+                    let! started = firstStart.Task
+                    if started then
+                        let! serviceFailure = waitForStop settings authentication admin current running.Completion canceled.Task
+                        match serviceFailure with
+                        | None -> ()
+                        | Some error ->
+                            logger.LogError(error, "Console service request faulted")
+                            exitCode <- 1
+                    if not started || running.Completion.IsFaulted then exitCode <- 1
             with error ->
                 logger.LogError(error, "Server listener failed")
                 exitCode <- 1

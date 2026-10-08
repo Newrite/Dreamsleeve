@@ -48,16 +48,26 @@ let run () = task {
 
     match posted with
     | AgentPostResult.Posted -> ()
-    | other -> failwithf "Unexpected post result: %A" other
+    | AgentPostResult.Full | AgentPostResult.Dropped | AgentPostResult.Closed | AgentPostResult.Canceled ->
+        eprintfn "presence: update admission failed: %A" posted
 
     // Materialize INSIDE the agent: no live Dictionary/Values/seq escapes.
     // Each element is immutable, and the returned array is an independent copy.
-    let! snapshot = presence.ReadAsync snapshot
-
-    let! removed = presence.AskAsync(fun reply -> Remove (7UL, reply))
-    let! count = presence.ReadAsync(fun players -> players.Count)
-    printfn "presence: snapshot=%d; removed=%b; current=%d"
-        snapshot.Length removed count
+    let! captured = presence.TryReadAsync snapshot
+    match captured with
+    | AgentAskResult.Replied snapshot ->
+        let! removal = presence.TryAskAsync(fun reply -> Remove (7UL, reply))
+        match removal with
+        | AgentAskResult.Replied removed ->
+            let! current = presence.TryReadAsync(fun players -> players.Count)
+            match current with
+            | AgentAskResult.Replied count ->
+                printfn "presence: snapshot=%d; removed=%b; current=%d"
+                    snapshot.Length removed count
+            | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure -> eprintfn "presence: count not confirmed: %A" failure
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
+            eprintfn "presence: removal not confirmed: %A; do not retry automatically" failure
+    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure -> eprintfn "presence: snapshot not confirmed: %A" failure
 
     presence.Complete() |> ignore
     do! presence.Completion

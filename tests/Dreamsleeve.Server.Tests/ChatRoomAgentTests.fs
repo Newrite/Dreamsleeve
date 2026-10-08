@@ -56,7 +56,7 @@ let private joined = function
     | ChatRoomEvent.Joined snapshot -> snapshot
     | other -> failwithf "Expected join snapshot: %A" other
 let private history (room: Agent<ChatRoomCommand>) = task {
-    let! result = room.AskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueNone, 10, reply)) |> awaitResult
+    let! result = room.TryAskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueNone, 10, reply)) |> awaitReply
     return ok result
 }
 
@@ -415,7 +415,7 @@ let tests = testList "ChatRoomAgent" [
         equal [3UL; 4UL] (ids snapshot.Messages)
 
         let cursor = ChatMessageId.create 1UL |> ok
-        let! result = room.AskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueSome cursor, 1, reply)) |> awaitResult
+        let! result = room.TryAskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueSome cursor, 1, reply)) |> awaitReply
         let page = ok result
         equal [3UL] (ids page.Messages)
         check page.HasGap "Evicted messages before this page were not reported."

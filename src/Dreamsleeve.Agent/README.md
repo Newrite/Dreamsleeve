@@ -1,4 +1,4 @@
-﻿# Dreamsleeve.Agent
+# Dreamsleeve.Agent
 
 Sequential, in-process F# agents built on `System.Threading.Channels` and `Task`. Targets **.NET 10+**; no external runtime packages.
 
@@ -49,14 +49,17 @@ let example () = task {
             reply.Reply text
         })
 
-    let! text = agent.AskAsync(fun reply -> Echo ("hello", reply))
-    printfn "%s" text
+    let! result = agent.TryAskAsync(fun reply -> Echo ("hello", reply))
+    match result with
+    | AgentAskResult.Replied text -> printfn "%s" text
+    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
+        eprintfn "Request not confirmed: %A; do not retry automatically" failure
     agent.Complete() |> ignore
     do! agent.Completion
 }
 ```
 
-`TryPost` attempts immediate admission. `PostAsync` waits for space on a bounded `Wait` mailbox and returns `AgentPostResult`. `Posted` means admitted, not processed. `TryAskAsync` returns `AgentAskResult<'Reply>`; `AskAsync` turns unsuccessful outcomes into exceptions. Both stateful variants also support command/reply and queued state projections through `TryReadAsync` / `ReadAsync`.
+`TryPost` attempts immediate admission. `PostAsync` waits for space on a bounded `Wait` mailbox and returns `AgentPostResult`. `Posted` means admitted, not processed. `TryAskAsync` returns `AgentAskResult<'Reply>`. Both stateful variants also support queued state projections through `TryReadAsync`. The throwing `AskAsync` / `ReadAsync` methods and `askAsync` / `readAsync` pipeline helpers have been removed; migrate callers to `TryAskAsync` / `TryReadAsync` (or `tryAskAsync` / `tryReadAsync`) and handle every outcome explicitly. Handler faults remain `Faulted` with their original exception; `Completion` still reports lifecycle faults.
 
 ## Contracts to know
 

@@ -205,7 +205,7 @@ type AgentOptions =
         /// </summary>
         SingleWriter: bool
         /// <summary>
-        /// Default admission-plus-reply timeout used by AskAsync and TryAskAsync.
+        /// Default admission-plus-reply timeout used by TryAskAsync.
         /// None and Timeout.InfiniteTimeSpan mean no deadline; zero expires without posting.
         /// </summary>
         DefaultAskTimeout: TimeSpan option
@@ -248,8 +248,6 @@ module AgentOptions =
 
 [<AutoOpen>]
 module private AgentInternals =
-    let taskFromException<'T> (error: exn) = Task.FromException<'T>(error)
-
     let inline safeInvoke (callback: unit -> unit) =
         try callback () with _ -> ()
 
@@ -1022,21 +1020,6 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         tryAskCore buildMessage timeout (defaultArg cancellationToken CancellationToken.None)
 
-    /// <summary>Sends a request and returns the reply, throwing on any unsuccessful request result.</summary>
-    member this.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        task {
-            let! result = this.TryAskAsync(buildMessage, ?timeout = timeout, ?cancellationToken = cancellationToken)
-
-            match result with
-            | AgentAskResult.Replied value -> return value
-            | AgentAskResult.Faulted error -> return! taskFromException<'Reply> error
-            | AgentAskResult.Dropped -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox dropped the request."))
-            | AgentAskResult.Full -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox is full."))
-            | AgentAskResult.Closed -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' is not accepting new messages."))
-            | AgentAskResult.TimedOut -> return! taskFromException<'Reply> (TimeoutException($"Request to agent '{options.Name}' timed out."))
-            | AgentAskResult.Canceled -> return! taskFromException<'Reply> (OperationCanceledException($"Ask to agent '{options.Name}' was canceled."))
-        }
-
     /// <summary>Closes admission and gracefully drains every accepted message.</summary>
     member _.Complete() = completeCore ()
 
@@ -1323,13 +1306,6 @@ type StatefulAgent<'State, 'Command>
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
 
-    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
-    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
     /// <summary>
     /// Enqueues a read query to safely project data from the current state.
     /// The projection runs sequentially inside the agent loop.
@@ -1340,20 +1316,6 @@ type StatefulAgent<'State, 'Command>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>
-    /// Enqueues a read query to safely project data from the current state asynchronously.
-    /// The projection runs sequentially inside the agent loop.
-    /// Throws if the query fails, times out, or the agent is closed.
-    /// </summary>
-    /// <param name="projection">A pure function that extracts data from the agent's state.</param>
-    /// <param name="timeout">An optional timeout for the query.</param>
-    /// <param name="cancellationToken">An optional cancellation token.</param>
-    member _.ReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
             (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
@@ -1409,12 +1371,6 @@ module Agent =
         agent.PostAsync(message)
 
     /// <summary>
-    /// Sends a request and waits for a reply, throwing on failure.
-    /// </summary>
-    let askAsync buildMessage (agent: Agent<_>) =
-        agent.AskAsync(buildMessage)
-
-    /// <summary>
     /// Sends a request and returns a result union.
     /// </summary>
     let tryAskAsync buildMessage (agent: Agent<_>) =
@@ -1443,19 +1399,9 @@ module StatefulAgent =
     let postAsync command (agent: StatefulAgent<_, _>) =
         agent.PostAsync(command)
 
-    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
-    let askAsync buildMessage (agent: StatefulAgent<_, _>) =
-        agent.AskAsync(buildMessage)
-
     /// <summary>Sends a command/request and returns a result union.</summary>
     let tryAskAsync buildMessage (agent: StatefulAgent<_, _>) =
         agent.TryAskAsync(buildMessage)
-
-    /// <summary>
-    /// Reads a projection of the current state, throwing on failure.
-    /// </summary>
-    let readAsync projection (agent: StatefulAgent<_, _>) =
-        agent.ReadAsync(projection)
 
     /// <summary>
     /// Reads a projection of the current state and returns a result union.
@@ -1645,13 +1591,6 @@ type MutableStatefulAgent<'State, 'Command>
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
 
-    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
-    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
     /// <summary>
     /// Enqueues a read query to safely project data from the current mutable state.
     /// The projection runs sequentially inside the agent loop.
@@ -1663,20 +1602,6 @@ type MutableStatefulAgent<'State, 'Command>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>
-    /// Enqueues a read query to safely project data from the current mutable state asynchronously.
-    /// The projection runs sequentially inside the agent loop.
-    /// Throws if the query fails, times out, or the agent is closed.
-    /// </summary>
-    /// <param name="projection">A function that extracts data from the current state.</param>
-    /// <param name="timeout">An optional timeout for the query.</param>
-    /// <param name="cancellationToken">An optional cancellation token.</param>
-    member _.ReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
             (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
             ?timeout = timeout,
             ?cancellationToken = cancellationToken)
@@ -1736,19 +1661,9 @@ module MutableStatefulAgent =
     let postAsync command (agent: MutableStatefulAgent<_, _>) =
         agent.PostAsync(command)
 
-    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
-    let askAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
-        agent.AskAsync(buildMessage)
-
     /// <summary>Sends a command/request and returns a result union.</summary>
     let tryAskAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
         agent.TryAskAsync(buildMessage)
-
-    /// <summary>
-    /// Reads a projection of the current mutable state, throwing on failure.
-    /// </summary>
-    let readAsync projection (agent: MutableStatefulAgent<_, _>) =
-        agent.ReadAsync(projection)
 
     /// <summary>
     /// Reads a projection of the current mutable state and returns a result union.

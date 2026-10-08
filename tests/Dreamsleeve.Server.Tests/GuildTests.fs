@@ -335,15 +335,15 @@ let private agentTests = testSequenced <| testList "Guild owner" [
     case "the panel finds guilds, opens one, appoints a master and dissolves a guild" (fun () ->
         withGuilds (fun fixture -> task {
             let! guild = founded fixture
-            let! page = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Search("стр", 1), reply)) |> awaitResult
+            let! page = fixture.Guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Search("стр", 1), reply)) |> awaitReply
             match page with
             | GuildAdminResult.Page page ->
                 equal 1 page.Total
                 equal (ValueSome(pid 1UL)) (page.Guilds.Head.Master |> ValueOption.map _.PlayerId)
             | other -> failtestf "%A" other
-            let! card = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Card guild, reply)) |> awaitResult
+            let! card = fixture.Guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Card guild, reply)) |> awaitReply
             check (match card with GuildAdminResult.Card(ValueSome card) -> card.Members.Length = 2 | _ -> false) "the card shows both members"
-            let! appointed = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Appoint(guild, pid 2UL), reply)) |> awaitResult
+            let! appointed = fixture.Guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Appoint(guild, pid 2UL), reply)) |> awaitReply
             match appointed with
             | GuildAdminResult.Appointed card ->
                 equal (ValueSome(pid 2UL)) (card.Summary.Master |> ValueOption.map _.PlayerId)
@@ -352,9 +352,9 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             let! _ = expectChange fixture.Bob
             let! _ = expectChange fixture.Alice
             let! _ = expectChange fixture.Alice
-            let! mine = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.PlayerGuilds(pid 1UL), reply)) |> awaitResult
+            let! mine = fixture.Guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.PlayerGuilds(pid 1UL), reply)) |> awaitReply
             check (match mine with GuildAdminResult.PlayerGuilds [ (_, GuildRole.Officer) ] -> true | _ -> false) "Alice is an officer now"
-            let! dissolved = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Dissolve guild, reply)) |> awaitResult
+            let! dissolved = fixture.Guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Dissolve guild, reply)) |> awaitReply
             check (match dissolved with GuildAdminResult.Dissolved gone -> gone.Members.Length = 2 | _ -> false) "dissolved"
             let! gone = expectChange fixture.Bob
             equal (GuildChange.Removed(guild, GuildRemoval.Disbanded)) gone

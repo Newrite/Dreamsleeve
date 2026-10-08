@@ -49,14 +49,17 @@ let example () = task {
             reply.Reply text
         })
 
-    let! text = agent.AskAsync(fun reply -> Echo ("hello", reply))
-    printfn "%s" text
+    let! result = agent.TryAskAsync(fun reply -> Echo ("hello", reply))
+    match result with
+    | AgentAskResult.Replied text -> printfn "%s" text
+    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
+        eprintfn "Request not confirmed: %A; do not retry automatically" failure
     agent.Complete() |> ignore
     do! agent.Completion
 }
 ```
 
-`TryPost` сразу пытается поставить сообщение в очередь. `PostAsync` ждёт места в ограниченной очереди с режимом `Wait` и возвращает `AgentPostResult`. `Posted` означает приём, а не завершение обработки. `TryAskAsync` возвращает `AgentAskResult<'Reply>`; `AskAsync` превращает неуспешные исходы в исключения. Оба варианта с состоянием поддерживают команды с ответом и запросы проекции состояния через `TryReadAsync` / `ReadAsync`.
+`TryPost` сразу пытается поставить сообщение в очередь. `PostAsync` ждёт места в ограниченной очереди с режимом `Wait` и возвращает `AgentPostResult`. `Posted` означает приём, а не завершение обработки. `TryAskAsync` возвращает `AgentAskResult<'Reply>`. Обе обёртки с состоянием читают проекции через `TryReadAsync`. Бросающие методы `AskAsync` / `ReadAsync` и pipeline-функции `askAsync` / `readAsync` удалены: вызывающий код переходит на `TryAskAsync` / `TryReadAsync` (или `tryAskAsync` / `tryReadAsync`) и явно разбирает все исходы. `Faulted` сохраняет исходное исключение обработчика; `Completion` по-прежнему сообщает сбой жизненного цикла.
 
 ## Основные контракты
 

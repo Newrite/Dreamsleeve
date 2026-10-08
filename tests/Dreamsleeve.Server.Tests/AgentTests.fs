@@ -22,6 +22,13 @@ let equal expected actual =
 let awaitResult (work: Task<'T>) = work.WaitAsync guard
 let awaitUnit (work: Task) = work.WaitAsync guard
 
+// Successful fixture requests must still inspect the typed boundary result.
+let awaitReply (work: Task<AgentAskResult<'T>>) = task {
+    match! awaitResult work with
+    | AgentAskResult.Replied value -> return value
+    | result -> return failtestf "Expected Replied, received %A" result
+}
+
 let terminal (work: Task) = task {
     let mutable error = None
     try do! work.WaitAsync guard
@@ -143,6 +150,32 @@ let replyTimeoutSettlesChannel () = task {
     check (not (reply.TryReply 123)) "A late reply should lose the one-shot race."
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
+}
+
+let admittedCommandCommitsAfterTimeout () = task {
+    let entered, release, lateReply = gate<unit> (), gate<unit> (), gate<bool> ()
+    let effects = ConcurrentQueue<int>()
+    let mutable built = 0
+    use agent = Agent.Start(AgentOptions.create "committed-after-timeout", fun _ (reply: ReplyChannel<int>) -> task {
+        entered.TrySetResult() |> ignore
+        do! release.Task
+        effects.Enqueue 1
+        lateReply.TrySetResult(reply.TryReply 1) |> ignore
+    })
+    let request = agent.TryAskAsync((fun reply -> built <- built + 1; reply), timeout = TimeSpan.FromMilliseconds 80.)
+    try
+        do! awaitResult entered.Task // The request is admitted and its handler has started.
+        let! result = awaitResult request
+        equal AgentAskResult.TimedOut result
+        equal 0 effects.Count
+    finally
+        release.TrySetResult() |> ignore
+    agent.Complete() |> ignore
+    do! awaitUnit agent.Completion
+    equal [| 1 |] (effects.ToArray())
+    equal 1 built
+    let! replied = awaitResult lateReply.Task
+    check (not replied) "The committed command's late reply must not undo the caller's timeout."
 }
 
 let preCanceledAskHasNoSideEffects () = task {
@@ -492,8 +525,8 @@ let queryFailuresAreIsolated () = task {
     let! mutableFailure = mutableAgent.TryReadAsync<int>(fun _ -> raise expected) |> awaitResult
     expectFault expected stateFailure
     expectFault expected mutableFailure
-    let! stateValue = stateAgent.ReadAsync id |> awaitResult
-    let! mutableValue = mutableAgent.ReadAsync(fun state -> state |> Seq.sum) |> awaitResult
+    let! stateValue = stateAgent.TryReadAsync id |> awaitReply
+    let! mutableValue = mutableAgent.TryReadAsync(fun state -> state |> Seq.sum) |> awaitReply
     equal 10 stateValue
     equal 7 mutableValue
     stateAgent.Complete() |> ignore
@@ -513,7 +546,7 @@ let statefulPolicyPrecedenceAndRecovery () = task {
     use agent = StatefulAgent.Start(config, 1, stateHandler (ConcurrentQueue<int>()))
     equal AgentPostResult.Posted (agent.TryPost(Explode(InvalidOperationException "recover")))
     equal AgentPostResult.Posted (agent.TryPost(Add 3))
-    let! value = agent.ReadAsync id |> awaitResult
+    let! value = agent.TryReadAsync id |> awaitReply
     equal 103 value
     equal 0 baseCalls
     equal [| (1, 100); (100, 103) |] (transitions.ToArray())
@@ -531,8 +564,8 @@ let basePolicyFallbackForBothWrappers () = task {
     let error = InvalidOperationException "fallback failure" :> exn
     equal AgentPostResult.Posted (stateAgent.TryPost(Explode error))
     equal AgentPostResult.Posted (mutableAgent.TryPost(Explode error))
-    let! stateValue = stateAgent.ReadAsync id |> awaitResult
-    let! mutableValue = mutableAgent.ReadAsync(fun state -> state |> Seq.sum) |> awaitResult
+    let! stateValue = stateAgent.TryReadAsync id |> awaitReply
+    let! mutableValue = mutableAgent.TryReadAsync(fun state -> state |> Seq.sum) |> awaitReply
     equal 1 stateValue
     equal 1 mutableValue
     equal 2 calls
@@ -546,11 +579,11 @@ let statefulAtomicCommandReplies () = task {
     let error = InvalidOperationException "state request" :> exn
     let config = { StatefulAgentOptions.create "state-ask" with OnUnhandled = Some(fun _ -> StatefulErrorAction.KeepStateAndContinue) }
     use agent = StatefulAgent.Start(config, 10, stateHandler (ConcurrentQueue<int>()))
-    let! value = agent.AskAsync(fun reply -> AddReply(5, reply)) |> awaitResult
+    let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
     let! failed = agent.TryAskAsync(fun reply -> ExplodeReply(error, reply)) |> awaitResult
     expectFault error failed
-    let! current = agent.ReadAsync id |> awaitResult
+    let! current = agent.TryReadAsync id |> awaitReply
     equal 15 current
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
@@ -560,11 +593,11 @@ let mutableAtomicCommandReplies () = task {
     let error = InvalidOperationException "mutable request" :> exn
     let config = { MutableStatefulAgentOptions.create "mutable-ask" with OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Continue) }
     use agent = MutableStatefulAgent.Start(config, ResizeArray<int>([ 10 ]), mutableHandler (ConcurrentQueue<int>()))
-    let! value = agent.AskAsync(fun reply -> AddReply(5, reply)) |> awaitResult
+    let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
     let! failed = agent.TryAskAsync(fun reply -> ExplodeReply(error, reply)) |> awaitResult
     expectFault error failed
-    let! current = agent.ReadAsync(fun state -> state |> Seq.sum) |> awaitResult
+    let! current = agent.TryReadAsync(fun state -> state |> Seq.sum) |> awaitReply
     equal 15 current
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
@@ -651,6 +684,7 @@ let private scenarios : (string * (unit -> Task<unit>)) list =
       "Bounded backpressure and canceled writer", boundedBackpressure
       "Ask timeout includes mailbox admission", askTimeoutIncludesAdmission
       "Reply timeout settles one-shot channel", replyTimeoutSettlesChannel
+      "An admitted command commits once after caller timeout", admittedCommandCommitsAfterTimeout
       "Pre-canceled Ask does not invoke builder", preCanceledAskHasNoSideEffects
       "Invalid timeout has no side effects", invalidAskTimeoutHasNoSideEffects
       "Message builder failure is isolated", builderFailureIsIsolated

@@ -9,14 +9,15 @@ type OutboundCommand =
     | SendAndConfirm of recipient: string * text: string * ReplyChannel<unit>
 
 let private handle (send: string -> string -> Task) (context: AgentContext<OutboundCommand>) command = task {
-    context.CancellationToken.ThrowIfCancellationRequested()
-
     match command with
     | Send (recipient, text) ->
-        do! send recipient text
+        if not context.CancellationToken.IsCancellationRequested then
+            do! send recipient text
     | SendAndConfirm (recipient, text, reply) ->
-        do! send recipient text
-        reply.Reply ()
+        if context.CancellationToken.IsCancellationRequested then reply.Cancel()
+        else
+            do! send recipient text
+            reply.Reply ()
 }
 
 let run () = task {
@@ -37,10 +38,15 @@ let run () = task {
 
     match posted with
     | AgentPostResult.Posted -> ()
-    | other -> failwithf "Unexpected post result: %A" other
+    | AgentPostResult.Full | AgentPostResult.Dropped | AgentPostResult.Closed | AgentPostResult.Canceled ->
+        eprintfn "outbound: message admission failed: %A" posted
 
-    do! agent.AskAsync(fun reply ->
+    let! confirmed = agent.TryAskAsync(fun reply ->
         SendAndConfirm ("global", "ready", reply))
+    match confirmed with
+    | AgentAskResult.Replied () -> ()
+    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
+        eprintfn "outbound: command not confirmed: %A; do not retry automatically" failure
 
     agent.Complete() |> ignore
     do! agent.Completion

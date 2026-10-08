@@ -25,7 +25,7 @@ type private WallClock() =
     member _.Advance(span: TimeSpan) = now <- now + span
 
 let private access (service: Agent<AdminMessage>) command =
-    service.AskAsync(fun reply -> AdminMessage.Access(command, reply)) |> awaitResult
+    service.TryAskAsync(fun reply -> AdminMessage.Access(command, reply)) |> awaitReply
 
 let private secret = function
     | Ok (AdminReply.Secret value) -> value
@@ -159,10 +159,10 @@ let tests = testSequenced (testList "Admin service" [
         withService { options with MaxConcurrentOperations = 1 } (fun service _ -> task {
             let! _ = setup service
             // Password hashing keeps the only worker busy; the second request is refused at once.
-            let slow = service.AskAsync(fun reply -> AdminMessage.Access(AdminCommand.Login(name "root", password), reply))
+            let slow = service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Login(name "root", password), reply))
             let! busy = access service AdminCommand.Status
             equal (Error AdminServiceError.Busy) busy
-            let! finished = awaitResult slow
+            let! finished = awaitReply slow
             signedIn finished |> ignore
         }))
 ])

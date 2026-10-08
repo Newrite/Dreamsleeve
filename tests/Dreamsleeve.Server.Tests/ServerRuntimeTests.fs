@@ -392,7 +392,7 @@ let tests = testList "ServerRuntime" [
             fixture.Input.Enqueue(ServerTransportEvent.Connected(bob, Net.IPAddress.Parse "203.0.113.9"))
             fixture.Input.Enqueue(incoming(bob, opening "bob"))
             let! _ = welcome fixture bob
-            let! rows = fixture.Runtime.AskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitResult
+            let! rows = fixture.Runtime.TryAskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitReply
             equal (set [ "127.0.0.1"; "203.0.113.9" ]) (rows |> List.map (fun row -> Dreamsleeve.Server.Domain.ClientAddress.text row.Address) |> set)
             let now = DateTimeOffset.UtcNow
             let ban : Dreamsleeve.Server.Domain.AddressBan = {
@@ -446,7 +446,7 @@ let tests = testList "ServerRuntime" [
             fixture.Input.Enqueue(incoming(guest, joinAsGuest 2UL))
             fixture.Notify() |> ignore
             do! connections fixture 2
-            let! rows = fixture.Runtime.AskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitResult
+            let! rows = fixture.Runtime.TryAskAsync(fun reply -> ServerRuntimeMessage.ListSessions reply) |> awaitReply
             let row id = rows |> List.find (fun row -> row.ConnectionId = id)
             equal ("198.51.100.1", Some proxy) (Dreamsleeve.Server.Domain.ClientAddress.text (row alice).Address, (row alice).Proxy)
             equal (proxy, None) ((row guest).Address, (row guest).Proxy)
@@ -649,7 +649,7 @@ let tests = testList "ServerRuntime" [
             let! counted = stats fixture
             equal 1 counted.Connections
             equal 1 counted.Guests
-            let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+            let! rows = fixture.Runtime.TryAskAsync ServerRuntimeMessage.ListSessions |> awaitReply
             check (rows |> List.exactlyOne |> fun row -> row.Phase = RuntimeSessionPhase.Guest && row.PlayerId.IsNone) "a guest row has no player"
 
             fixture.Input.Enqueue(incoming(guest, chat 2UL "hello"))
@@ -1095,7 +1095,7 @@ let private playerId value = Dreamsleeve.Server.Domain.PlayerId.create value |> 
 
 // The panel's path: list the sessions, then ask each one through the describer.
 let private describePlayer fixture (describer: Agent<DescribeRequest>) id = task {
-    let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+    let! rows = fixture.Runtime.TryAskAsync ServerRuntimeMessage.ListSessions |> awaitReply
     let row = rows |> List.find (fun row -> row.PlayerId = Some id)
     return! SessionDescriber.describe describer guard row.Session.Value
 }
@@ -1123,7 +1123,7 @@ let adminTests = testList "ServerRuntime admin panel" [
             let alice = connectHidden fixture "alice"
             let! opened = welcome fixture alice
             fixture.Input.Enqueue(incoming(alice, beginCharacter 2UL "Секретная Героиня"))
-            let! rows = fixture.Runtime.AskAsync ServerRuntimeMessage.ListSessions |> awaitResult
+            let! rows = fixture.Runtime.TryAskAsync ServerRuntimeMessage.ListSessions |> awaitReply
             equal 2 rows.Length
             check (rows |> List.forall (fun row -> row.Phase = RuntimeSessionPhase.Ready && row.Session.IsSome)) "both sessions are ready"
             let! view = describeUntil fixture describer (playerId opened.SelfPlayerId) (fun view -> view.CharacterName.IsSome)

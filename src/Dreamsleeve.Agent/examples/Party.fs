@@ -53,11 +53,18 @@ let run () = task {
 
     use party = StatefulAgent.Start(options, initial, handle)
 
-    let! result = party.AskAsync(fun reply -> Join ("Nerevar", reply))
-    // The queued query executes after the command and its state transition.
-    let! snapshot = party.ReadAsync id
-    printfn "party: %A; members=%d; leader=%s"
-        result snapshot.Members.Count (defaultArg snapshot.Leader "none")
+    let! joined = party.TryAskAsync(fun reply -> Join ("Nerevar", reply))
+    match joined with
+    | AgentAskResult.Replied result ->
+        // The queued query executes after the command and its state transition.
+        let! current = party.TryReadAsync id
+        match current with
+        | AgentAskResult.Replied snapshot ->
+            printfn "party: %A; members=%d; leader=%s"
+                result snapshot.Members.Count (defaultArg snapshot.Leader "none")
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure -> eprintfn "party: read not confirmed: %A" failure
+    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
+        eprintfn "party: join not confirmed: %A; do not retry automatically" failure
 
     party.Complete() |> ignore
     do! party.Completion

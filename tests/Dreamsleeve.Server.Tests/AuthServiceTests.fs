@@ -32,7 +32,7 @@ let private start database options clock =
     AuthService.start options database NullLogger.Instance clock
 
 let private access (service: Agent<AuthMessage>) command =
-    service.AskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitResult
+    service.TryAskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitReply
 
 let private register service = task {
     let! result = access service (AccountAccessCommand.Register(username "player", display, password, SignInOrigin.none))

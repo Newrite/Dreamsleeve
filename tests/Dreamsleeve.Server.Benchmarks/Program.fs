@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Benchmarks.Program
+module Dreamsleeve.Server.Benchmarks.Program
 
 open System
 open System.Collections.Concurrent
@@ -233,7 +233,11 @@ let private start count (probe: Probe) = task {
     let readers = players |> Array.mapi (fun index player ->
         Agent.Start({ AgentOptions.create (sprintf "benchmark-reader-%d" index) with Mailbox = AgentMailbox.boundedWait 1 }, readPlayer index player))
     let updateRead index : Task = task {
-        let! result = readers[index].AskAsync id |> guard
+        let! outcome = readers[index].TryAskAsync id |> guard
+        let result =
+            match outcome with
+            | AgentAskResult.Replied value -> value
+            | failure -> failwithf "Benchmark read failed: %A" failure
         let snapshot = result |> ok
         if snapshot.CharacterName <> ValueSome name then failwith "Player update was not visible in its subsequent read."
     }

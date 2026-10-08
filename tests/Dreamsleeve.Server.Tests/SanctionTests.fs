@@ -171,7 +171,7 @@ let private storeTests = testList "SQLite sanctions" [
 ]
 
 let private access (service: Agent<AuthMessage>) command =
-    service.AskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitResult
+    service.TryAskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitReply
 
 let private consume service ticket = task {
     let completion = gate<SessionAuthenticationReply>()
