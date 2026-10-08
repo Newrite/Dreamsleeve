@@ -123,10 +123,12 @@ describe("phantom settings", () => {
     expect(chat.store.getState().settings.combatHideFireflies).toBe(
       defaults.combatHideFireflies,
     );
-    expect(send).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(5);
+    expect(send.mock.calls.every(([command]) => command.type === "displaySettings")).toBe(true);
+    expect(send).toHaveBeenLastCalledWith({ type: "displaySettings", settings: chat.store.getState().settings });
   });
 
-  it("saves all fourteen fields only through the existing save action", () => {
+  it("applies switches immediately and saves the remaining fields with the existing save action", () => {
     const { chat, send } = setup();
     const patch = {
       publishPhantoms: false,
@@ -167,7 +169,9 @@ describe("phantom settings", () => {
     change(chat, "Лимит памяти моделей", patch.phantomMemoryMiB);
     change(chat, "Лимит кеша на диске", patch.phantomCacheMiB);
     expect(chat.store.getState().settings).toEqual({ ...defaults, ...patch });
-    expect(send).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(4);
+    expect(send.mock.calls.every(([command]) => command.type === "displaySettings")).toBe(true);
+    send.mockClear();
 
     const save = elements(SettingsPanel(props(chat))).find(
       (element) =>

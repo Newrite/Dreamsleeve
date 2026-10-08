@@ -1,4 +1,6 @@
-Текущий protocol25: [HTTP-доставка и проверки08.10.2026](benchmarks/phantom-http-2026-10-08.md).
+Текущий protocol26: [дельты и проверки08.10.2026](benchmarks/phantom-native-delta-2026-10-08.md).
+
+Исторический protocol25: [HTTP-доставка и проверки08.10.2026](benchmarks/phantom-http-2026-10-08.md).
 638 server/406 native tests,301 кадр/5 моделей существующей записи, реальный
 WinHTTP↔Kestrel smoke и512/25 steady проверены. Ниже — история protocol24 и ранее.
 Новый игровой и сопоставимый WAN-тест остаются открытыми.
@@ -355,3 +357,130 @@ CPU/задержки имеют разброс. Визуал/ABI/NiStream не �
 конфиги сохранены. Новый игровой Save/Load/визуал и реальное изменение frame-time
 пока не проверены; detached output benchmark не является измерением engine capture.
 [Результаты, пределы сравнения и хеши сборок](benchmarks/phantom-native-output-2026-10-08.md).
+
+
+## 08.10.2026: protocol26 и asset delta
+
+Production upload/reconstruction/download, full fallback и exact hash проверены;
+normal native399passed, diagnostic414passed, managed640passed, actual-server
+smoke обоих buildsPASS. Семь реальных обновлений восстановлены обеими реализациями
+побайтово. [Размеры, границы и упаковка](benchmarks/phantom-native-delta-2026-10-08.md).
+Новая версия установлена без изменений конфигов; игровая/WAN проверка ещё нужна.
+
+## Проверка выключения фантомов и crash при Clone — 08.10.2026
+
+Галка showPhantoms раньше оставалась черновиком до «Сохранить настройки».
+Четыре переключателя публикации/показа/fallback/боя включены в существующий
+InstantKeys: команда displaySettings применяет и сохраняет их через текущего
+владельца Host. Удаление уже созданных сцен в Game выполняется до ранних выходов
+при ожидании локального 3D/контекста; Scene освобождает и отсоединяет корень на
+игровом потоке. Отключение показа не отключает публикацию своего персонажа.
+
+Для crash report SE 1.5.97 (17:18:01) исключены активные контроллеры именно из
+процесса клонирования фантома; источник и результат удерживаются NiPointer.
+Причина недопустимой ссылки в исходном controller graph не установлена; список
+модов и наличие чужого hook в стеке недостаточны для обвинения конкретного мода.
+ABI, callsites и владение описаны в PhantomRuntimeRu.md. Нужен игровой повтор
+на исходном модпаке: регистрация, первый захват, смена экипировки и камеры,
+лицо/волосы/оружие, выключение уже видимого фантома и повторное включение.
+
+Автоматически: diagnostic native tests — 414 passed, 5 skipped, 50 748 assertions;
+UI — 94 passed; браузер Edge — 2 passed, включая немедленную displaySettings
+до Save в production bundle и сохранение/восстановление настроек. Исправлено
+устаревшее название ползунка в браузерном тесте. Offline тесты не выполняют
+Skyrim CreateClone/ProcessClone и не подтверждают исчезновение игрового crash.
+Логи сборки и проверок: build/phantom-toggle-crash/. Серверный контракт не менялся,
+protocol 26; сервер не требует обновления из-за этих двух исправлений.
+
+## Исправления по сессии semfeliks5 — 08.10.2026
+
+Exchange теперь различает резерв загрузки и готовый immutable asset: после Loaded
+вместо3×raw+compressed остаётся actual Asset.MemoryBytes и резерв поз. Worker
+сохраняет canonical archive и отпускает свои compressed buffers до Loaded.
+Scene добавляет только native/scratch резерв4×NIF+blocks×1024; общий ValidatedAsset
+уже учтён в Exchange. Старая сцена и previous asset удерживаются до первого
+показа новой. Лимит512MiB не поднят. Это всё ещё консервативная native оценка,
+а не измерение VRAM. В диагностике scene.memory теперь есть required/available.
+
+Сопоставление source→clone переведено с обхода детей по имени/RTTI на штатный
+NiCloningProcess::cloneMap. Hooks экспортирует пары NiAVObject после обоих
+проходов, до уничтожения процесса. Game оставляет пары принадлежащих исходному
+и клонированному деревьям узлов; обязательная геометрия по-прежнему проверяется.
+Одинаковые имена, порядок/уплотнение child arrays больше не определяют связь.
+Адреса и ABI клонирования не менялись. При настоящем отсутствии geometry ошибка
+содержит имя/тип/родителя. Исправление требует проверки на проблемном сохранении
+друга: offline тесты не исполняют Skyrim Clone и не доказывают полноту внешности.
+
+Замена third-person root у того же ObjectRefHandle возвращает Busy, а не Stale:
+старый asset и база delta остаются опубликованными, RebuildDue готовит замену
+по существующей политике. Отсоединённое дерево не сэмплируется; старые трансформы
+не выдаются за свежие. При отсутствии новых поз действуют существующие timeout/
+fallback; изменение контекста или identity по-прежнему очищает публикацию.
+Это сохраняет базу, но не обещает непрерывную анимацию во время отсутствия 3D.
+
+Исправлена подпись MiB native NIF в capture log: теперь выводится nif.size(),
+а не Asset.MemoryBytes (capacity+служебные данные). Исторические цифры текстового
+лога до этой правки нельзя считать размером сериализованного файла.
+
+Обычные native tests:401 passed,4 skipped,17446 assertions. Добавлен сценарий
+старой~19MiB и новой~55MiB синтетической модели при512MiB с одновременными
+native reservations, освобождением scratch и отклонением stale completion.
+Отдельно не устранены причины медленного первого HTTP download и policy-selection:
+они не подменяются исправлением memory admission. Серверный протокол26 не менялся.
+
+Финальная проверка пакета semfeliks5 fixes: diagnostic415 passed,5 skipped,
+50814 assertions; обе DLL собраны. Dist пересобран штатным package_dist,
+10 конфигурационных файлов в рабочем дереве/dist сохранены побайтно.
+Диагностическая DLL и UI установлены в MO2 Dreamsleeve после проверки отсутствия
+процесса игры; сервер не заменялся. Архивы: build/session5/release/.
+Проверка native cloneMap и смены 3D в игре после этой сборки ещё не выполнена.
+
+
+## HTTP diagnostics + network scripts, 09.10.2026
+
+Обычная и диагностическая DLL собраны; диагностические native tests: 415 passed,
+5 skipped, 50765 assertions. Сервер: Continuous diagnostics 5/5, Phantom HTTP 7/7,
+включая реальные upload phases, отсутствие capability в событиях и сохранение
+корреляции без агрегации. Production HTTP/ENet smoke прошёл без коллектора.
+Дополнительный smoke с коллектором во время компиляции завершился timeout на
+единственной тестовой unreliable-позе после успешной HTTP-передачи; точная причина
+не установлена, запись сохранена в build/http-trace/smoke-diagnostics.
+Повтор после компиляции прошёл: 4145 assertions, 18 HTTP events / 6 transfers,
+0 dropped / 0 write errors (build/http-trace/smoke-diagnostics-retry). Это локальная
+проверка, не объяснение медленной WAN-загрузки друга.
+
+Start/Stop.ps1 проверены парсером PowerShell и тестом отказа без administrator.
+Параметры сверены с netsh help этого Windows. Реальный ETL capture здесь не запускался:
+текущий процесс не elevated. Сетевые файлы не перезаписываются (single/maxSize=0).
+
+Полный dist пересобран штатным package_dist; NetworkTrace включён по allowlist
+из трёх файлов, без записей. Архивы: build/http-trace/release. Диагностическая DLL/PDB
+установлены в MO2 Dreamsleeve, сервер — в S:/Dreamsleeve, скрипты — в его NetworkTrace.
+Перед копированием проверено отсутствие процессов игры/сервера. Все 10 установленных
+и исходных конфигов проверены SHA-256 и сохранены; phantomDiagnostics и DiagnosticsEnabled
+уже true. Отчёт установки: build/http-trace/deployment.json. Протокол26 не менялся.
+
+
+## Context delta / cold publication, 09.10.2026
+
+Обычная DLL и diagnostic DLL собраны. Normal403 passed/4 skipped/17493 assertions;
+diagnostic417 passed/5 skipped/50784 assertions. Server Phantom suites64 passed.
+Новые регрессии: context сохраняет только basis без generation/publication, Reset
+освобождает её; transient admission сохраняет delta; Withdraw+movement сохраняет
+авторизацию базы без Ready; cold download не отменяется replacement, Displayed
+разрешает публикацию; отсутствие прогресса ограничивается TransferTimeoutMs.
+
+Production cross-language smoke: после недокачанного промежуточного поколения
+оба клиента меняют пространство; следующий upload и download обязаны быть delta.
+Прогон passed/4615 assertions (build/context-delta/smoke-pending). Реальные g6->g8
+из semfeliks6 дают302220 B вместо31956029 B; native Apply побайтно восстановил
+целевой архив. Серверный production delta/storage тест этих копий также passed.
+Это не новый игровой тест и не WAN-бенчмарк; TCP-пропуски маршрута не исправлены.
+
+Dist пересобран штатными скриптами; рабочие/dist и установленные конфиги сохранены
+с проверкой SHA-256. Диагностические DLL/PDB установлены в MO2 Dreamsleeve, сервер
+обновлён в S:/Dreamsleeve после проверки процессов. Протокол26 сохранён.
+Архивы build/context-delta/release, установка deployment.json рядом с ними.
+Базы могут отсутствовать после eviction/смены character/session — тогда full
+остаётся допустимым fallback. Ожидание cold-показа откладывает новую публикацию
+источника, продолжая прежнюю; это осознанная цена предотвращения повторного full.

@@ -266,3 +266,26 @@ Copy/XOR дельта NIF пока только офлайн измерение 
 - [x] Измерить detached output в C++, отдельно от engine SaveBinary.
 - [ ] Игровой Save→Load, внешний вид и новые native/frame-time traces этой сборки.
 - [ ] NIF-дельты: остаются отдельным следующим этапом; полный asset пока передаётся целиком.
+
+
+## 08.10.2026: интеграция delta, protocol26
+
+Реализован общий путь: prepared full asset → optional Zstd prefix delta → HTTP
+upload → server full reconstruction/hash check → full или delta HTTP download →
+обычный ReadAsset/native playback. Отдельного демонстрационного renderer нет.
+База явно адресуется hash, смена сессии/контекста использует прежних владельцев;
+готовность старой сцены сохраняется до обычного commit/attach новой.
+
+Проверки и границы: [измерения delta](benchmarks/phantom-native-delta-2026-10-08.md).
+Дальнейшее уменьшение NiStream capture/load и обновление самой живой сцены не
+подменяются экономией сетевого тела и требуют отдельных измерений в игре.
+
+
+### Исправления по semfeliks6 (09.10.2026)
+
+Реализованы сохранение charged immutable delta-базы при смене контекста, отдельная
+серверная авторизация последних двух committed hash, ожидание первого Displayed
+для уже начатой cold-загрузки и сохранение delta при retryable admission.
+Сетевой regression теперь меняет пространство при незавершённой промежуточной
+загрузке и требует delta и на upload, и на download. Потери/перестановка TCP из
+отчёта не объявляются исправленными этими изменениями.

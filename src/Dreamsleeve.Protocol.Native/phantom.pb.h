@@ -56,6 +56,10 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_phan
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Phantom {
+class AssetDelta;
+struct AssetDeltaDefaultTypeInternal;
+extern AssetDeltaDefaultTypeInternal _AssetDelta_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull AssetDelta_class_data_;
 class AssetDescriptor;
 struct AssetDescriptorDefaultTypeInternal;
 extern AssetDescriptorDefaultTypeInternal _AssetDescriptor_default_instance_;
@@ -203,7 +207,7 @@ class Withdraw final : public ::google::protobuf::internal::ZeroFieldsBase
     return *reinterpret_cast<const Withdraw*>(
         &_Withdraw_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(Withdraw& a, Withdraw& b) { a.Swap(&b); }
   inline void Swap(Withdraw* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -338,7 +342,7 @@ class Settled final : public ::google::protobuf::Message
     return *reinterpret_cast<const Settled*>(
         &_Settled_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(Settled& a, Settled& b) { a.Swap(&b); }
   inline void Swap(Settled* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -540,7 +544,7 @@ class Remove final : public ::google::protobuf::Message
     return *reinterpret_cast<const Remove*>(
         &_Remove_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(Remove& a, Remove& b) { a.Swap(&b); }
   inline void Swap(Remove* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -968,7 +972,7 @@ class PoseSample final : public ::google::protobuf::Message
     return *reinterpret_cast<const PoseSample*>(
         &_PoseSample_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(PoseSample& a, PoseSample& b) { a.Swap(&b); }
   inline void Swap(PoseSample* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1211,7 +1215,7 @@ class PoseDemand final : public ::google::protobuf::Message
     return *reinterpret_cast<const PoseDemand*>(
         &_PoseDemand_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(PoseDemand& a, PoseDemand& b) { a.Swap(&b); }
   inline void Swap(PoseDemand* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1413,7 +1417,7 @@ class Policy final : public ::google::protobuf::Message
     return *reinterpret_cast<const Policy*>(
         &_Policy_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(Policy& a, Policy& b) { a.Swap(&b); }
   inline void Swap(Policy* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1735,7 +1739,7 @@ class Download final : public ::google::protobuf::Message
     return *reinterpret_cast<const Download*>(
         &_Download_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(Download& a, Download& b) { a.Swap(&b); }
   inline void Swap(Download* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1822,10 +1826,26 @@ class Download final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
+    kBaseHashFieldNumber = 4,
     kPlayerIdFieldNumber = 1,
     kGenerationFieldNumber = 2,
     kRequestIdFieldNumber = 3,
   };
+  // bytes base_hash = 4;
+  void clear_base_hash() ;
+  const ::std::string& base_hash() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_base_hash(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_base_hash();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_base_hash();
+  void set_allocated_base_hash(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_base_hash() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_base_hash(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_base_hash();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   ::uint64_t player_id() const;
@@ -1860,7 +1880,7 @@ class Download final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    0, 0,
                                    2>
       _table_;
@@ -1882,6 +1902,7 @@ class Download final : public ::google::protobuf::Message
         const Download& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr base_hash_;
     ::uint64_t player_id_;
     ::uint64_t generation_;
     ::uint64_t request_id_;
@@ -1949,7 +1970,7 @@ class Displayed final : public ::google::protobuf::Message
     return *reinterpret_cast<const Displayed*>(
         &_Displayed_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(Displayed& a, Displayed& b) { a.Swap(&b); }
   inline void Swap(Displayed* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2163,7 +2184,7 @@ class Complete final : public ::google::protobuf::Message
     return *reinterpret_cast<const Complete*>(
         &_Complete_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(Complete& a, Complete& b) { a.Swap(&b); }
   inline void Swap(Complete* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2442,7 +2463,7 @@ class Cancel final : public ::google::protobuf::Message
     return *reinterpret_cast<const Cancel*>(
         &_Cancel_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(Cancel& a, Cancel& b) { a.Swap(&b); }
   inline void Swap(Cancel* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2832,6 +2853,230 @@ class AssetDescriptor final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull AssetDescriptor_class_data_;
 // -------------------------------------------------------------------
 
+class AssetDelta final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.AssetDelta) */ {
+ public:
+  inline AssetDelta() : AssetDelta(nullptr) {}
+  ~AssetDelta() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AssetDelta* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AssetDelta));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR AssetDelta(::google::protobuf::internal::ConstantInitialized);
+
+  inline AssetDelta(const AssetDelta& from) : AssetDelta(nullptr, from) {}
+  inline AssetDelta(AssetDelta&& from) noexcept
+      : AssetDelta(nullptr, ::std::move(from)) {}
+  inline AssetDelta& operator=(const AssetDelta& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AssetDelta& operator=(AssetDelta&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const AssetDelta& default_instance() {
+    return *reinterpret_cast<const AssetDelta*>(
+        &_AssetDelta_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(AssetDelta& a, AssetDelta& b) { a.Swap(&b); }
+  inline void Swap(AssetDelta* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AssetDelta* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AssetDelta* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AssetDelta>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AssetDelta& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AssetDelta& from) { AssetDelta::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AssetDelta* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Phantom.AssetDelta"; }
+
+  explicit AssetDelta(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AssetDelta(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AssetDelta& from);
+  AssetDelta(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AssetDelta&& from) noexcept
+      : AssetDelta(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBaseHashFieldNumber = 1,
+    kHashFieldNumber = 2,
+    kCompressedBytesFieldNumber = 3,
+  };
+  // bytes base_hash = 1;
+  void clear_base_hash() ;
+  const ::std::string& base_hash() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_base_hash(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_base_hash();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_base_hash();
+  void set_allocated_base_hash(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_base_hash() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_base_hash(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_base_hash();
+
+  public:
+  // bytes hash = 2;
+  void clear_hash() ;
+  const ::std::string& hash() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hash(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hash();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hash();
+  void set_allocated_hash(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hash() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hash(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hash();
+
+  public:
+  // uint32 compressed_bytes = 3;
+  void clear_compressed_bytes() ;
+  ::uint32_t compressed_bytes() const;
+  void set_compressed_bytes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_compressed_bytes() const;
+  void _internal_set_compressed_bytes(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.AssetDelta)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AssetDelta& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr base_hash_;
+    ::google::protobuf::internal::ArenaStringPtr hash_;
+    ::uint32_t compressed_bytes_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_phantom_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull AssetDelta_class_data_;
+// -------------------------------------------------------------------
+
 class Transfer final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Phantom.Transfer) */ {
  public:
@@ -2887,7 +3132,7 @@ class Transfer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Transfer*>(
         &_Transfer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(Transfer& a, Transfer& b) { a.Swap(&b); }
   inline void Swap(Transfer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2976,6 +3221,7 @@ class Transfer final : public ::google::protobuf::Message
   enum : int {
     kHttpTokenFieldNumber = 6,
     kAssetFieldNumber = 2,
+    kDeltaFieldNumber = 7,
     kTransferIdFieldNumber = 1,
     kPlayerIdFieldNumber = 3,
     kRequestIdFieldNumber = 5,
@@ -3009,6 +3255,21 @@ class Transfer final : public ::google::protobuf::Message
   private:
   const ::Dreamsleeve::Protocol::Phantom::AssetDescriptor& _internal_asset() const;
   ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NONNULL _internal_mutable_asset();
+
+  public:
+  // .Dreamsleeve.Protocol.Phantom.AssetDelta delta = 7;
+  bool has_delta() const;
+  void clear_delta() ;
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta& delta() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE release_delta();
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL mutable_delta();
+  void set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE unsafe_arena_release_delta();
+
+  private:
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta& _internal_delta() const;
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL _internal_mutable_delta();
 
   public:
   // uint64 transfer_id = 1;
@@ -3055,8 +3316,8 @@ class Transfer final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   1, 56,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   2, 56,
                                    2>
       _table_;
 
@@ -3079,6 +3340,7 @@ class Transfer final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr http_token_;
     ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NULLABLE asset_;
+    ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE delta_;
     ::uint64_t transfer_id_;
     ::uint64_t player_id_;
     ::uint64_t request_id_;
@@ -3147,7 +3409,7 @@ class ServerPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ServerPosePacket*>(
         &_ServerPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(ServerPosePacket& a, ServerPosePacket& b) { a.Swap(&b); }
   inline void Swap(ServerPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3395,7 +3657,7 @@ class Publish final : public ::google::protobuf::Message
     return *reinterpret_cast<const Publish*>(
         &_Publish_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(Publish& a, Publish& b) { a.Swap(&b); }
   inline void Swap(Publish* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3483,6 +3745,7 @@ class Publish final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kAssetFieldNumber = 1,
+    kDeltaFieldNumber = 4,
     kContextRevisionFieldNumber = 2,
     kRequestIdFieldNumber = 3,
   };
@@ -3499,6 +3762,21 @@ class Publish final : public ::google::protobuf::Message
   private:
   const ::Dreamsleeve::Protocol::Phantom::AssetDescriptor& _internal_asset() const;
   ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NONNULL _internal_mutable_asset();
+
+  public:
+  // .Dreamsleeve.Protocol.Phantom.AssetDelta delta = 4;
+  bool has_delta() const;
+  void clear_delta() ;
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta& delta() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE release_delta();
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL mutable_delta();
+  void set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE unsafe_arena_release_delta();
+
+  private:
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta& _internal_delta() const;
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL _internal_mutable_delta();
 
   public:
   // uint64 context_revision = 2;
@@ -3525,8 +3803,8 @@ class Publish final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   1, 0,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   2, 0,
                                    2>
       _table_;
 
@@ -3548,6 +3826,7 @@ class Publish final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::Dreamsleeve::Protocol::Phantom::AssetDescriptor* PROTOBUF_NULLABLE asset_;
+    ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE delta_;
     ::uint64_t context_revision_;
     ::uint64_t request_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3614,7 +3893,7 @@ class Offer final : public ::google::protobuf::Message
     return *reinterpret_cast<const Offer*>(
         &_Offer_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(Offer& a, Offer& b) { a.Swap(&b); }
   inline void Swap(Offer* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3833,7 +4112,7 @@ class ClientPosePacket final : public ::google::protobuf::Message
     return *reinterpret_cast<const ClientPosePacket*>(
         &_ClientPosePacket_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(ClientPosePacket& a, ClientPosePacket& b) { a.Swap(&b); }
   inline void Swap(ClientPosePacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4067,7 +4346,7 @@ class ServerAssetPacket final : public ::google::protobuf::Message
     kPoseDemand = 10,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(ServerAssetPacket& a, ServerAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ServerAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4429,7 +4708,7 @@ class ClientAssetPacket final : public ::google::protobuf::Message
     kDisplayed = 9,
     PAYLOAD_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(ClientAssetPacket& a, ClientAssetPacket& b) { a.Swap(&b); }
   inline void Swap(ClientAssetPacket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5016,7 +5295,265 @@ inline void AssetDescriptor::_internal_set_channels(::uint32_t value) {
 
 // -------------------------------------------------------------------
 
+// AssetDelta
+
+// bytes base_hash = 1;
+inline void AssetDelta::clear_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.base_hash_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& AssetDelta::base_hash() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.AssetDelta.base_hash)
+  return _internal_base_hash();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AssetDelta::set_base_hash(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.base_hash_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.AssetDelta.base_hash)
+}
+inline ::std::string* PROTOBUF_NONNULL AssetDelta::mutable_base_hash()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_base_hash();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.AssetDelta.base_hash)
+  return _s;
+}
+inline const ::std::string& AssetDelta::_internal_base_hash() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.base_hash_.Get();
+}
+inline void AssetDelta::_internal_set_base_hash(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.base_hash_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AssetDelta::_internal_mutable_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.base_hash_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AssetDelta::release_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.AssetDelta.base_hash)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.base_hash_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.base_hash_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AssetDelta::set_allocated_base_hash(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.base_hash_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.base_hash_.IsDefault()) {
+    _impl_.base_hash_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.AssetDelta.base_hash)
+}
+
+// bytes hash = 2;
+inline void AssetDelta::clear_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hash_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& AssetDelta::hash() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.AssetDelta.hash)
+  return _internal_hash();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AssetDelta::set_hash(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hash_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.AssetDelta.hash)
+}
+inline ::std::string* PROTOBUF_NONNULL AssetDelta::mutable_hash()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hash();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.AssetDelta.hash)
+  return _s;
+}
+inline const ::std::string& AssetDelta::_internal_hash() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hash_.Get();
+}
+inline void AssetDelta::_internal_set_hash(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hash_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AssetDelta::_internal_mutable_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hash_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AssetDelta::release_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.AssetDelta.hash)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hash_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hash_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AssetDelta::set_allocated_hash(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hash_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hash_.IsDefault()) {
+    _impl_.hash_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.AssetDelta.hash)
+}
+
+// uint32 compressed_bytes = 3;
+inline void AssetDelta::clear_compressed_bytes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.compressed_bytes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint32_t AssetDelta::compressed_bytes() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.AssetDelta.compressed_bytes)
+  return _internal_compressed_bytes();
+}
+inline void AssetDelta::set_compressed_bytes(::uint32_t value) {
+  _internal_set_compressed_bytes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.AssetDelta.compressed_bytes)
+}
+inline ::uint32_t AssetDelta::_internal_compressed_bytes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.compressed_bytes_;
+}
+inline void AssetDelta::_internal_set_compressed_bytes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.compressed_bytes_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // Publish
+
+// .Dreamsleeve.Protocol.Phantom.AssetDelta delta = 4;
+inline bool Publish::has_delta() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.delta_ != nullptr);
+  return value;
+}
+inline void Publish::clear_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.delta_ != nullptr) _impl_.delta_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::Dreamsleeve::Protocol::Phantom::AssetDelta& Publish::_internal_delta() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta* p = _impl_.delta_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::AssetDelta&>(::Dreamsleeve::Protocol::Phantom::_AssetDelta_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Phantom::AssetDelta& Publish::delta() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Publish.delta)
+  return _internal_delta();
+}
+inline void Publish::unsafe_arena_set_allocated_delta(
+    ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.delta_);
+  }
+  _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.Publish.delta)
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE Publish::release_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* released = _impl_.delta_;
+  _impl_.delta_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE Publish::unsafe_arena_release_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Publish.delta)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* temp = _impl_.delta_;
+  _impl_.delta_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL Publish::_internal_mutable_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.delta_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::AssetDelta>(GetArena());
+    _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(p);
+  }
+  return _impl_.delta_;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL Publish::mutable_delta()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* _msg = _internal_mutable_delta();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Publish.delta)
+  return _msg;
+}
+inline void Publish::set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.delta_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Publish.delta)
+}
 
 // .Dreamsleeve.Protocol.Phantom.AssetDescriptor asset = 1;
 inline bool Publish::has_asset() const {
@@ -5122,7 +5659,7 @@ inline void Publish::clear_context_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.context_revision_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::uint64_t Publish::context_revision() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Publish.context_revision)
@@ -5130,7 +5667,7 @@ inline ::uint64_t Publish::context_revision() const {
 }
 inline void Publish::set_context_revision(::uint64_t value) {
   _internal_set_context_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Publish.context_revision)
 }
 inline ::uint64_t Publish::_internal_context_revision() const {
@@ -5147,7 +5684,7 @@ inline void Publish::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::uint64_t Publish::request_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Publish.request_id)
@@ -5155,7 +5692,7 @@ inline ::uint64_t Publish::request_id() const {
 }
 inline void Publish::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Publish.request_id)
 }
 inline ::uint64_t Publish::_internal_request_id() const {
@@ -5171,12 +5708,77 @@ inline void Publish::_internal_set_request_id(::uint64_t value) {
 
 // Download
 
+// bytes base_hash = 4;
+inline void Download::clear_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.base_hash_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& Download::base_hash() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Download.base_hash)
+  return _internal_base_hash();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void Download::set_base_hash(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.base_hash_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Download.base_hash)
+}
+inline ::std::string* PROTOBUF_NONNULL Download::mutable_base_hash()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_base_hash();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Download.base_hash)
+  return _s;
+}
+inline const ::std::string& Download::_internal_base_hash() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.base_hash_.Get();
+}
+inline void Download::_internal_set_base_hash(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.base_hash_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL Download::_internal_mutable_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.base_hash_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE Download::release_base_hash() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Download.base_hash)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.base_hash_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.base_hash_.Set("", GetArena());
+  }
+  return released;
+}
+inline void Download::set_allocated_base_hash(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.base_hash_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.base_hash_.IsDefault()) {
+    _impl_.base_hash_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Download.base_hash)
+}
+
 // uint64 player_id = 1;
 inline void Download::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000002U);
 }
 inline ::uint64_t Download::player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Download.player_id)
@@ -5184,7 +5786,7 @@ inline ::uint64_t Download::player_id() const {
 }
 inline void Download::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Download.player_id)
 }
 inline ::uint64_t Download::_internal_player_id() const {
@@ -5201,7 +5803,7 @@ inline void Download::clear_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.generation_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::uint64_t Download::generation() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Download.generation)
@@ -5209,7 +5811,7 @@ inline ::uint64_t Download::generation() const {
 }
 inline void Download::set_generation(::uint64_t value) {
   _internal_set_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Download.generation)
 }
 inline ::uint64_t Download::_internal_generation() const {
@@ -5226,7 +5828,7 @@ inline void Download::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::uint64_t Download::request_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Download.request_id)
@@ -5234,7 +5836,7 @@ inline ::uint64_t Download::request_id() const {
 }
 inline void Download::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Download.request_id)
 }
 inline ::uint64_t Download::_internal_request_id() const {
@@ -6153,12 +6755,111 @@ inline void Offer::set_allocated_asset(::Dreamsleeve::Protocol::Phantom::AssetDe
 
 // Transfer
 
+// .Dreamsleeve.Protocol.Phantom.AssetDelta delta = 7;
+inline bool Transfer::has_delta() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.delta_ != nullptr);
+  return value;
+}
+inline void Transfer::clear_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.delta_ != nullptr) _impl_.delta_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::Dreamsleeve::Protocol::Phantom::AssetDelta& Transfer::_internal_delta() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::Dreamsleeve::Protocol::Phantom::AssetDelta* p = _impl_.delta_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Phantom::AssetDelta&>(::Dreamsleeve::Protocol::Phantom::_AssetDelta_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Phantom::AssetDelta& Transfer::delta() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.delta)
+  return _internal_delta();
+}
+inline void Transfer::unsafe_arena_set_allocated_delta(
+    ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.delta_);
+  }
+  _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Phantom.Transfer.delta)
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE Transfer::release_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* released = _impl_.delta_;
+  _impl_.delta_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE Transfer::unsafe_arena_release_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Transfer.delta)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* temp = _impl_.delta_;
+  _impl_.delta_ = nullptr;
+  return temp;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL Transfer::_internal_mutable_delta() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.delta_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Phantom::AssetDelta>(GetArena());
+    _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(p);
+  }
+  return _impl_.delta_;
+}
+inline ::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NONNULL Transfer::mutable_delta()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::Dreamsleeve::Protocol::Phantom::AssetDelta* _msg = _internal_mutable_delta();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Transfer.delta)
+  return _msg;
+}
+inline void Transfer::set_allocated_delta(::Dreamsleeve::Protocol::Phantom::AssetDelta* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.delta_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.delta_ = reinterpret_cast<::Dreamsleeve::Protocol::Phantom::AssetDelta*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Transfer.delta)
+}
+
 // uint64 transfer_id = 1;
 inline void Transfer::clear_transfer_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.transfer_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::uint64_t Transfer::transfer_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.transfer_id)
@@ -6166,7 +6867,7 @@ inline ::uint64_t Transfer::transfer_id() const {
 }
 inline void Transfer::set_transfer_id(::uint64_t value) {
   _internal_set_transfer_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.transfer_id)
 }
 inline ::uint64_t Transfer::_internal_transfer_id() const {
@@ -6282,7 +6983,7 @@ inline void Transfer::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::uint64_t Transfer::player_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.player_id)
@@ -6290,7 +6991,7 @@ inline ::uint64_t Transfer::player_id() const {
 }
 inline void Transfer::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.player_id)
 }
 inline ::uint64_t Transfer::_internal_player_id() const {
@@ -6307,7 +7008,7 @@ inline void Transfer::clear_upload() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.upload_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline bool Transfer::upload() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.upload)
@@ -6315,7 +7016,7 @@ inline bool Transfer::upload() const {
 }
 inline void Transfer::set_upload(bool value) {
   _internal_set_upload(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.upload)
 }
 inline bool Transfer::_internal_upload() const {
@@ -6332,7 +7033,7 @@ inline void Transfer::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::uint64_t Transfer::request_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Transfer.request_id)
@@ -6340,7 +7041,7 @@ inline ::uint64_t Transfer::request_id() const {
 }
 inline void Transfer::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Transfer.request_id)
 }
 inline ::uint64_t Transfer::_internal_request_id() const {

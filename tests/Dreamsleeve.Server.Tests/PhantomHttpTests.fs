@@ -38,14 +38,117 @@ type private BlockedBody() =
         entered.TrySetResult() |> ignore
         ValueTask<int>(TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously).Task.WaitAsync cancellation)
 
+let private deltaFixture = fixture "native prefix delta reconstructs canonical archive and serves full or delta by exact base" (fun options storage http -> task {
+    let directory = Environment.GetEnvironmentVariable "DREAMSLEEVE_DELTA_FIXTURE"
+    let basis, target, patch =
+        if String.IsNullOrEmpty directory then
+            let raw = Array.zeroCreate<byte> (256 * 1024)
+            Random(42).NextBytes raw
+            use encoder = new ZstdSharp.Compressor(3)
+            let basis = encoder.Wrap(raw.AsSpan()).ToArray()
+            let changed = Array.copy raw
+            changed[17000] <- changed[17000] ^^^ 85uy
+            let target = encoder.Wrap(changed.AsSpan()).ToArray()
+            encoder.LoadDictionary raw
+            basis, target, encoder.Wrap(changed.AsSpan()).ToArray()
+        else
+            File.ReadAllBytes(Path.Combine(directory,"base.zst")),
+            File.ReadAllBytes(Path.Combine(directory,"target.zst")),
+            File.ReadAllBytes(Path.Combine(directory,"patch.zst"))
+    let rawSize = int (ZstdSharp.Decompressor.GetDecompressedSize(target.AsSpan()))
+    let baseAsset = manifest basis
+    let asset = PhantomManifest.create options.Limits (AssetHash.create(SHA256.HashData target) |> ok)
+                    (AppearanceGeneration.create 2UL |> ok) 2u (uint32 target.Length) (uint32 rawSize) 2u |> ok
+    let delta = PhantomDelta.create asset baseAsset.Hash (AssetHash.create(SHA256.HashData patch) |> ok) (uint32 patch.Length) |> ok
+    let owner = Guid.NewGuid()
+    let upload id value change bytes = task {
+        let! admitted = storage.StartUpload(id,value,change)
+        Expect.equal admitted (Ok false) "New body."
+        let lease = http.Admit(owner,id,value,true,change)
+        use input = new MemoryStream(bytes: byte array)
+        let! result = http.Serve(request lease.Token true (Some(int64 bytes.Length)) input)
+        do! http.Cancel id
+        return result
+    }
+    let! full = upload (PhantomTransferId 1UL) baseAsset None basis
+    Expect.equal full (Ok ()) "Base committed."
+    let! restored = upload (PhantomTransferId 2UL) asset (Some delta) patch
+    Expect.equal restored (Ok ()) "Delta committed only after canonical target hash."
+    Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(options.StoragePath,asset.Hash.Hex+".zst"))) target "Exact compressed target."
+    for number, wanted, expected in [3UL,None,target;4UL,Some baseAsset.Hash,patch;5UL,Some asset.Hash,target] do
+        let id=PhantomTransferId number
+        let! selected=storage.StartDownload(id,asset,wanted)
+        let change=ok selected
+        Expect.equal change (if number=4UL then Some delta else None) "Only exact base selects patch."
+        let lease=http.Admit(owner,id,asset,false,change)
+        use output=new MemoryStream()
+        let! result=http.Serve(request lease.Token false None output)
+        Expect.equal result (Ok ()) "Body served."
+        Expect.sequenceEqual (output.ToArray()) expected "Correct transport body."
+        do! http.Cancel id
+        do! storage.Cancel id
+    let different=Array.copy target
+    different[different.Length-1] <- different[different.Length-1] ^^^ 1uy
+    let invalidTarget=PhantomManifest.create options.Limits (AssetHash.create(SHA256.HashData different) |> ok)
+                        (AppearanceGeneration.create 3UL |> ok) 2u (uint32 target.Length) (uint32 rawSize) 2u |> ok
+    let badDelta=PhantomDelta.create invalidTarget baseAsset.Hash delta.Hash (uint32 patch.Length) |> ok
+    let! rejected=upload (PhantomTransferId 6UL) invalidTarget (Some badDelta) patch
+    Expect.isError rejected "Valid patch cannot publish a different target hash."
+    Expect.isFalse (File.Exists(Path.Combine(options.StoragePath,invalidTarget.Hash.Hex+".zst"))) "Rejected target not committed."
+    let bad=Array.copy patch
+    bad[bad.Length-1] <- bad[bad.Length-1] ^^^ 1uy
+    let! corrupt=upload (PhantomTransferId 7UL) invalidTarget (Some badDelta) bad
+    Expect.isError corrupt "Patch transport hash checked."
+    let absent=AssetHash.create(Array.create 32 123uy) |> ok
+    let missingDelta=PhantomDelta.create invalidTarget absent delta.Hash (uint32 patch.Length) |> ok
+    let! missing=storage.StartUpload(PhantomTransferId 8UL,invalidTarget,Some missingDelta)
+    Expect.isError missing "Missing base requires full fallback before receiving body."
+    let mutable ignored=Array.empty<byte>
+    Expect.isFalse (PhantomDeltaCodec.TryApply(basis,patch,rawSize-1,options.Limits.RawBytes,options.Limits.CompressedBytes,&ignored)) "Exact raw bound checked."
+})
+
 let tests = testList "Phantom HTTP" [
+    fixture "HTTP diagnostics preserve real upload phases and omit capability" (fun _ storage http -> task {
+        let lines = Collections.Concurrent.ConcurrentQueue<string>()
+        let collector = new ContinuousDiagnostics(Action<string>(lines.Enqueue))
+        use cleanup = collector
+        let owner = Guid.NewGuid()
+        let bytes = Array.init 65539 (fun index -> byte index)
+        let asset = manifest bytes
+        let id = PhantomTransferId 918273UL
+        let! _ = storage.StartUpload(id, asset, None)
+        let lease = http.Admit(owner, id, asset, true, None)
+        use input = new MemoryStream(bytes)
+        let! result = http.Serve(request lease.Token true (Some(int64 bytes.Length)) input)
+        Expect.equal result (Ok ()) "Instrumented upload succeeds"
+        collector.Dispose()
+        let phases = ResizeArray<string>()
+        for line in lines do
+            Expect.isFalse (line.Contains lease.Token) "Capability must never be logged"
+            use record = Text.Json.JsonDocument.Parse line
+            let root = record.RootElement
+            if root.GetProperty("kind").GetString() = "phantom" then
+                let fields = root.GetProperty("fields")
+                let mutable identity = Unchecked.defaultof<Text.Json.JsonElement>
+                if fields.GetProperty("event").GetString() = "http" && fields.TryGetProperty("owner", &identity) && identity.GetString() = string owner then
+                    Expect.equal (fields.GetProperty("transfer").GetUInt64()) id.Value "Transfer correlation"
+                    let phase = fields.GetProperty("phase").GetString()
+                    phases.Add phase
+                    if phase = "body_complete" then
+                        Expect.equal (fields.GetProperty("progress").GetInt32()) bytes.Length "Whole body measured"
+                        Expect.isGreaterThan (fields.GetProperty("storage_ms").GetDouble()) 0. "Storage timing present"
+        Expect.isTrue (phases.Contains "claimed") "Request start"
+        Expect.isTrue (phases.Contains "first_body") "First body chunk"
+        Expect.isTrue (phases.Contains "body_complete") "Completion"
+    })
+    deltaFixture
     fixture "capability binds direction and exact size, is single use, and never exposes a hash URL" (fun _ storage http -> task {
         let bytes = Array.init 65539 (fun index -> byte index)
         let asset = manifest bytes
         let id = PhantomTransferId 1UL
-        let! cold = storage.StartUpload(id, asset)
+        let! cold = storage.StartUpload(id, asset, None)
         Expect.equal cold (Ok false) "Admission prepared temporary file."
-        let lease = http.Admit(Guid.NewGuid(), id, asset, true)
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
         Expect.equal lease.Token.Length 64 "256 random bits."
         use input = new MemoryStream(bytes)
         let! unknown = http.Serve(request asset.Hash.Hex true (Some(int64 bytes.Length)) input)
@@ -66,8 +169,8 @@ let tests = testList "Phantom HTTP" [
         for number, body in [1UL, [|8uy;8uy;8uy;8uy|]; 2UL, [|1uy|]] do
             let asset = manifest [|1uy;2uy;3uy;4uy|]
             let id = PhantomTransferId number
-            let! _ = storage.StartUpload(id, asset)
-            let lease = http.Admit(Guid.NewGuid(), id, asset, true)
+            let! _ = storage.StartUpload(id, asset, None)
+            let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
             use input = new MemoryStream(body)
             let! outcome = http.Serve(request lease.Token true (Some 4L) input)
             Expect.isError outcome "Neither truncated nor corrupt data is ready."
@@ -79,8 +182,8 @@ let tests = testList "Phantom HTTP" [
     fixture "revocation interrupts active I/O and duplicate requests cannot steal it" (fun _ storage http -> task {
         let id = PhantomTransferId 1UL
         let asset = manifest [|1uy;2uy;3uy;4uy|]
-        let! _ = storage.StartUpload(id, asset)
-        let lease = http.Admit(Guid.NewGuid(), id, asset, true)
+        let! _ = storage.StartUpload(id, asset, None)
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
         use input = new BlockedBody()
         let running = http.Serve(request lease.Token true (Some 4L) input)
         do! input.Entered.WaitAsync(TimeSpan.FromSeconds 2.)
@@ -95,15 +198,15 @@ let tests = testList "Phantom HTTP" [
     fixture "slow upload does not prevent another transfer's disk I/O" (fun _ storage http -> task {
         let blockedAsset = manifest [|1uy;2uy;3uy;4uy|]
         let blockedId, fastId = PhantomTransferId 1UL, PhantomTransferId 2UL
-        let! _ = storage.StartUpload(blockedId, blockedAsset)
-        let slow = http.Admit(Guid.NewGuid(), blockedId, blockedAsset, true)
+        let! _ = storage.StartUpload(blockedId, blockedAsset, None)
+        let slow = http.Admit(Guid.NewGuid(), blockedId, blockedAsset, true, None)
         use body = new BlockedBody()
         let waiting = http.Serve(request slow.Token true (Some 4L) body)
         do! body.Entered.WaitAsync(TimeSpan.FromSeconds 2.)
         let bytes = Array.create 32768 9uy
         let fastAsset = manifest bytes
-        let! _ = storage.StartUpload(fastId, fastAsset)
-        let fast = http.Admit(Guid.NewGuid(), fastId, fastAsset, true)
+        let! _ = storage.StartUpload(fastId, fastAsset, None)
+        let fast = http.Admit(Guid.NewGuid(), fastId, fastAsset, true, None)
         use ready = new MemoryStream(bytes)
         let! finished = (http.Serve(request fast.Token true (Some(int64 bytes.Length)) ready)).WaitAsync(TimeSpan.FromSeconds 2.)
         Expect.equal finished (Ok ()) "Independent upload completes."
@@ -113,8 +216,8 @@ let tests = testList "Phantom HTTP" [
     fixture "unclaimed capability is revoked immediately" (fun _ storage http -> task {
         let asset = manifest [|1uy|]
         let id = PhantomTransferId 1UL
-        let! _ = storage.StartUpload(id, asset)
-        let lease = http.Admit(Guid.NewGuid(), id, asset, true)
+        let! _ = storage.StartUpload(id, asset, None)
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
         do! http.Cancel id
         use input = new MemoryStream([|1uy|])
         let! denied = http.Serve(request lease.Token true (Some 1L) input)

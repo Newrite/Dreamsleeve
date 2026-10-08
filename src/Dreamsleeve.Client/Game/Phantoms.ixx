@@ -302,7 +302,7 @@ namespace Phantoms
           nextGeneration.value,
           asset.Layout().requiredChannels.size(),
           asset.Layout().bounds.size(),
-          asset.MemoryBytes() / 1048576.0,
+          asset.Value().nif.size() / 1048576.0,
           std::chrono::duration<double, std::milli>(Clock::now() - now).count(),
           changeReason);
         if (publishing && !exchange.Submit(*captureContext, nextGeneration, asset)) return false;
@@ -436,6 +436,12 @@ namespace Phantoms
       state.settings = settings;
       exchange.Configure(settings);
     }
+    // Apply visibility even while waiting for the local player/cell or replay.
+    if (!settings.receive && !state.visuals.empty())
+    {
+      for (const auto& [id, visual] : state.visuals) exchange.SceneMemory(id, 0);
+      state.visuals.clear(); // Scene destruction detaches each root on this game thread.
+    }
     auto* player = RE::PlayerCharacter::GetSingleton();
     auto* cell   = player ? player->GetParentCell() : nullptr;
     auto* root   = player ? player->Get3D(false) : nullptr;
@@ -561,13 +567,7 @@ namespace Phantoms
       ResetResources();
       return;
     }
-    if (!settings.receive)
-    {
-      for (const auto& [id, visual] : state.visuals)
-        exchange.SceneMemory(id, 0);
-      state.visuals.clear();
-      return;
-    }
+    if (!settings.receive) return;
     const auto observer = World::Observe(player);
     if (!observer) return;
     const auto&                          ui = runtime.ui.ui.chat;

@@ -24,6 +24,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     RE::NiAlphaProperty*                 (*alpha)(){};
     RE::BSLightingShaderProperty*        (*lighting)(){};
     void                                 (*normalizeBones)(RE::BSFlattenedBoneTree&){};
+    RE::NiPointer<RE::NiObject>          (*clone)(RE::NiNode*, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>&){};
   };
   enum class Transform
   {
@@ -61,44 +62,25 @@ export namespace Dreamsleeve::Game::PhantomNative
     return {};
   }
 
-  P::Result<void> Pair(
-    RE::NiAVObject*                                       source,
-    RE::NiAVObject*                                       clone,
-    std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs,
-    std::unordered_map<const RE::NiTransform*, Binding>&  transforms)
+  P::Result<void> BindTransforms(
+    const std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs,
+    std::unordered_map<const RE::NiTransform*, Binding>& transforms)
   {
-    pairs.emplace(source, clone);
-    transforms.emplace(&source->world, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::World});
-    transforms.emplace(&source->local, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::Local});
-    if (auto* tree = netimmerse_cast<RE::BSFlattenedBoneTree*>(source))
+    for (const auto& [source, clone] : pairs)
     {
-      const auto& data = tree->GetRuntimeData();
-      if (data.numBones > MaxNodes) return A::Fail(P::Failure::InvalidLink, "Слишком много костей");
-      for (std::uint32_t i = 0; data.boneEntries && i < data.numBones; ++i)
+      transforms.emplace(&source->world, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::World});
+      transforms.emplace(&source->local, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::Local});
+      if (auto* tree = netimmerse_cast<RE::BSFlattenedBoneTree*>(source))
       {
-        const auto& bone = data.boneEntries[i];
-        transforms.emplace(&bone.world, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::BoneWorld, bone.nodeName, i});
-        transforms.emplace(&bone.local, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::BoneLocal, bone.nodeName, i});
-      }
-    }
-    auto* a = source->AsNode();
-    auto* b = clone->AsNode();
-    if (!a || !b) return {};
-    auto&       children = b->GetChildren();
-    std::size_t next     = 0;
-    for (const auto& child : a->GetChildren())
-    {
-      if (!child) continue;
-      for (auto i = next; i < children.capacity(); ++i)
-        if (
-          children[static_cast<std::uint16_t>(i)] && children[static_cast<std::uint16_t>(i)]->name == child->name &&
-          children[static_cast<std::uint16_t>(i)]->GetRTTI() == child->GetRTTI())
+        const auto& data = tree->GetRuntimeData();
+        if (data.numBones > MaxNodes) return A::Fail(P::Failure::InvalidLink, "Слишком много костей");
+        for (std::uint32_t i = 0; data.boneEntries && i < data.numBones; ++i)
         {
-          if (auto paired = Pair(child.get(), children[static_cast<std::uint16_t>(i)].get(), pairs, transforms); !paired)
-            return std::unexpected(paired.error());
-          next = i + 1;
-          break;
+          const auto& bone = data.boneEntries[i];
+          transforms.emplace(&bone.world, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::BoneWorld, bone.nodeName, i});
+          transforms.emplace(&bone.local, Binding{RE::NiPointer<RE::NiAVObject>{source}, Transform::BoneLocal, bone.nodeName, i});
         }
+      }
     }
     return {};
   }
@@ -298,7 +280,7 @@ export namespace Dreamsleeve::Game::PhantomNative
 
   inline P::Result<Prepared> Prepare(RE::NiNode* live, const Engine& engine)
   {
-    if (!engine.mainThread || !engine.mainThread() || !engine.save || !engine.normalizeBones || !engine.alpha)
+    if (!engine.mainThread || !engine.mainThread() || !engine.save || !engine.normalizeBones || !engine.alpha || !engine.clone)
       return A::Fail(P::Failure::Busy, "native capture outside game thread");
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     using Clock      = std::chrono::steady_clock;
@@ -316,7 +298,8 @@ export namespace Dreamsleeve::Game::PhantomNative
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto cloneStart = Clock::now();
 #endif
-    RE::NiPointer<RE::NiObject> holder{live->Clone()};
+    std::unordered_map<RE::NiAVObject*, RE::NiAVObject*> pairs;
+    RE::NiPointer<RE::NiObject> holder = engine.clone(live, pairs);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto cloneEnd = Clock::now();
 #endif
@@ -329,11 +312,19 @@ export namespace Dreamsleeve::Game::PhantomNative
       if (sourceNodes.contains(node)) return A::Fail(P::Failure::InvalidLink, "Копия содержит узлы исходной модели");
     for (auto* node : cloned)
       if (auto* tree = netimmerse_cast<RE::BSFlattenedBoneTree*>(node)) engine.normalizeBones(*tree);
-    std::unordered_map<RE::NiAVObject*, RE::NiAVObject*> pairs;
+    const std::unordered_set<RE::NiAVObject*> clonedNodes{cloned.begin(), cloned.end()};
+    std::erase_if(pairs, [&](const auto& pair) {
+      return !sourceNodes.contains(pair.first) || !clonedNodes.contains(pair.second);
+    });
     std::unordered_map<const RE::NiTransform*, Binding>  transforms;
-    if (auto paired = Pair(live, clone, pairs, transforms); !paired) return std::unexpected(paired.error());
+    if (auto paired = BindTransforms(pairs, transforms); !paired) return std::unexpected(paired.error());
     for (auto* source : required)
-      if (!pairs.contains(source)) return A::Fail(P::Failure::InvalidLink, "clone omitted required native geometry");
+      if (!pairs.contains(source))
+        return A::Fail(P::Failure::InvalidLink, std::format(
+          "clone omitted required native geometry: name={} type={} parent={}",
+          source->name.c_str() ? source->name.c_str() : "",
+          source->GetRTTI()->GetName(),
+          source->parent && source->parent->name.c_str() ? source->parent->name.c_str() : ""));
     for (const auto& [source, target] : pairs)
     {
       auto* geometry = source->AsGeometry();

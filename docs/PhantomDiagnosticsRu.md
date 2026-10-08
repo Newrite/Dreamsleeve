@@ -815,3 +815,45 @@ relay с ограниченным буфером выявил отказ дос�
 и фактическую `capacity`. Ошибочный/неполный output не публикуется. Для сравнения
 общей стоимости использовать также `native_export_ms` и полный model capture:
 уменьшение одного вложенного таймера не доказывает такое же уменьшение frame-time.
+
+
+## Delta, protocol26
+
+Diagnostic client использует те же Delta/Worker/Streaming: `delta_encode` и
+`delta_apply` — отдельные интервалы, `delta_prepared` содержит generation,
+full_bytes и delta_bytes. Сохранённый asset — восстановленный полный архив,
+поэтому запись воспроизводится без цепочки баз. На сервере Meter
+`Dreamsleeve.PhantomDelta`, histogram `phantom.delta.apply` (ms) измеряет
+восстановление и запись полного тела, без ожидания semaphore. Это не NiStream
+и не время игры. HTTP bytes относятся к реально переданному телу; manifest size
+по-прежнему относится к полному архиву. Квоты записей не изменены.
+
+
+## HTTP phases и сетевая трасса (09.10.2026)
+
+Диагностический клиент пишет события `http` с transfer/request/player/generation,
+направлением, фактическим body_bytes (delta либо full), progress и phase.
+Накопительные send_ms включают DNS/connect/TLS и отправку запроса; headers_ms —
+ожидание ответа; budget_ms — клиентский limiter; body_ms — WinHTTP read/write;
+eof_ms — проверка конца тела. Полное elapsed_ms также включает подготовку и
+закрытие запроса. Завершение различает complete, failed и canceled; отдельного
+кода ошибки в новом HTTP-событии пока нет.
+Токен, URL и заголовки в этих событиях не сохраняются.
+
+Серверный Meter `Dreamsleeve.PhantomHttp`, counter `phantom.http`, сохраняется
+ContinuousDiagnostics как отдельные `kind=phantom`, `fields.event=http`, а не
+агрегат. transfer, owner, generation связывают phases claimed/first_body/body_complete
+с клиентом. peer_budget_ms/global_budget_ms, storage_ms и body_ms показывают
+ожидания бюджетов, хранилища и ASP.NET Body соответственно. elapsed_ms сервера
+начинается с выдачи capability, клиента — с запуска job; это разные интервалы.
+body_complete сервера означает завершение Body.WriteAsync, не TCP ACK и не
+получение клиентом. Промежуточный event — примерно раз в секунду либо после
+операции от 250 мс. Операция, которая ещё не завершилась, пока не имеет timing.
+Существующие events_dropped_total/write_errors_total нужно проверять при анализе.
+
+Скрипты и инструкция: [NetworkTrace](../Scripts/NetworkTrace/README.ru.md).
+netsh снимает TCP только для указанного IP, первые 128 байт каждого пакета,
+в отдельную именованную сессию. single/maxSize=0 сохраняют всю сессию без
+перезаписи начала. ETL может содержать фрагменты секретных заголовков: передавать
+приватно. Нужны права администратора. Установленная конфигурация на обеих сторонах
+уже включает диагностику; старые игровые записи новых полей не содержат.

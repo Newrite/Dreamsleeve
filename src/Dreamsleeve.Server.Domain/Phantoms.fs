@@ -75,6 +75,17 @@ module PhantomManifest =
         else Ok { hash = hash; generation = generation; compressedBytes = int compressed; rawBytes = int raw
                   channels = int channels }
 
+type PhantomDelta = private { baseHash: AssetHash; hash: AssetHash; compressedBytes: int } with
+    member this.BaseHash = this.baseHash
+    member this.Hash = this.hash
+    member this.CompressedBytes = this.compressedBytes
+
+[<RequireQualifiedAccess>]
+module PhantomDelta =
+    let create (target: PhantomManifest) baseHash hash bytes =
+        if bytes = 0u || uint64 bytes >= uint64 target.CompressedBytes || baseHash = target.Hash then Error "delta descriptor"
+        else Ok { baseHash = baseHash; hash = hash; compressedBytes = int bytes }
+
 type PhantomPreferences = { Publish: bool; Receive: bool; Maximum: int; Distance: float32 }
 
 type PhantomPose = private {
@@ -110,8 +121,8 @@ module PhantomPose =
 [<RequireQualifiedAccess>]
 type PhantomRequest =
     | Preferences of PhantomPreferences
-    | Publish of PhantomManifest * context: uint64 * PhantomRequestId
-    | Download of PlayerId * AppearanceGeneration * PhantomRequestId
+    | Publish of PhantomManifest * context: uint64 * PhantomRequestId * PhantomDelta option
+    | Download of PlayerId * AppearanceGeneration * PhantomRequestId * AssetHash option
     | Cancel of PhantomTransferId
     | Withdraw
     | Displayed of PlayerId * viewRevision: uint64 * AppearanceGeneration
@@ -130,7 +141,7 @@ type PhantomCompletion = { Target: PhantomTarget; Upload: bool; RetryAfterMs: in
 [<RequireQualifiedAccess>]
 type PhantomResponse =
     | Offer of PlayerId * viewRevision: uint64 * PhantomManifest
-    | Transfer of PhantomTransferId * PhantomManifest * PlayerId * upload: bool * PhantomRequestId * token: string
+    | Transfer of PhantomTransferId * PhantomManifest * PlayerId * upload: bool * PhantomRequestId * token: string * PhantomDelta option
     | Complete of PhantomTransferId * accepted: bool * reason: string * PhantomRequestId * PhantomCompletion option
     | Remove of PlayerId * viewRevision: uint64
     | Policy of PhantomServerPolicy

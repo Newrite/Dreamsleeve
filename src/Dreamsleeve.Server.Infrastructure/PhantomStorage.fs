@@ -13,18 +13,24 @@ open Dreamsleeve.Server.Core
 /// metadata; each admitted transfer serializes its own asynchronous file I/O.
 [<RequireQualifiedAccess>]
 module PhantomStorage =
+    let private meter = new System.Diagnostics.Metrics.Meter("Dreamsleeve.PhantomDelta")
+    let private applyDuration = meter.CreateHistogram<double>("phantom.delta.apply", "ms")
+    type private Patch = { Descriptor: PhantomDelta; Path: string }
     type private Entry = {
         Path: string; Size: int64; mutable Touched: int64; mutable Pins: int
-        mutable Verified: bool; mutable Ram: byte array option
+        mutable Verified: bool; mutable Ram: byte array option; Patch: Patch option
     }
-    type private Upload = { Manifest: PhantomManifest; Path: string; File: FileStream; Hash: IncrementalHash; mutable Offset: int; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
-    type private Download = { Entry: Entry; File: FileStream; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
+    type private Upload = { Manifest: PhantomManifest; Delta: PhantomDelta option; Basis: Entry option; Reserved: int64; Path: string; File: FileStream; Hash: IncrementalHash; mutable Offset: int; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
+    type private Download = { Entry: Entry; Size: int64; File: FileStream; Gate: Threading.SemaphoreSlim; mutable Closed: bool }
     type private Transfer = Upload of Upload | Download of Download
 
     let create (options: PhantomOptions) : PhantomStoragePort =
         let directory = Path.GetFullPath options.StoragePath
         let entries = Dictionary<AssetHash, Entry>()
         let transfers = Dictionary<PhantomTransferId, Transfer>()
+        // At most one detached reconstruction per store; queued transfers stay on disk.
+        let reconstruction = new Threading.SemaphoreSlim(1, 1)
+        let cost (entry: Entry) = entry.Size + (entry.Patch |> Option.map (fun p -> int64 p.Descriptor.CompressedBytes) |> Option.defaultValue 0L)
         let mutable used = 0L
         let mutable reserved = 0L
         let mutable ram = 0L
@@ -39,7 +45,8 @@ module PhantomStorage =
             File.Delete(Path.Combine(directory, Path.GetFileName path))
         let remove key (entry: Entry) =
             safeDelete entry.Path
-            used <- used - entry.Size
+            entry.Patch |> Option.iter (fun patch -> safeDelete patch.Path)
+            used <- used - cost entry
             entry.Ram |> Option.iter (fun bytes -> ram <- ram - int64 bytes.Length)
             entries.Remove key |> ignore
         let clean () =
@@ -59,7 +66,8 @@ module PhantomStorage =
         let initialize () =
             if not initialized then
                 Directory.CreateDirectory directory |> ignore
-                for path in Directory.EnumerateFiles(directory, "*.tmp") do safeDelete path
+                for pattern in ["*.tmp"; "*.delta"] do
+                    for path in Directory.EnumerateFiles(directory, pattern) do safeDelete path
                 for path in Directory.EnumerateFiles(directory, "*.zst") do
                     let name = Path.GetFileNameWithoutExtension path
                     let mutable hash = None
@@ -72,7 +80,7 @@ module PhantomStorage =
                     match hash with
                     | Some key when file.Length > 0L && file.Length <= int64 options.Limits.CompressedBytes && makeRoom file.Length ->
                         let age = max 0L (int64 (DateTime.UtcNow - file.LastWriteTimeUtc).TotalMilliseconds)
-                        entries[key] <- { Path = path; Size = file.Length; Touched = time() - age; Pins = 0; Verified = false; Ram = None }
+                        entries[key] <- { Path = path; Size = file.Length; Touched = time() - age; Pins = 0; Verified = false; Ram = None; Patch = None }
                         used <- used + file.Length
                     | _ -> safeDelete path
                 initialized <- true
@@ -100,7 +108,9 @@ module PhantomStorage =
                 upload.File.Dispose()
                 upload.Hash.Dispose()
                 transfers.Remove id |> ignore
-                reserved <- reserved - int64 upload.Manifest.CompressedBytes
+                reserved <- reserved - upload.Reserved
+                upload.Basis |> Option.iter (fun entry -> entry.Pins <- entry.Pins - 1)
+                safeDelete (upload.Path + ".delta")
                 safeDelete upload.Path
             | true, Download download ->
                 download.Closed <- true
@@ -131,7 +141,7 @@ module PhantomStorage =
                 with error -> reply.TrySetResult(Error error.Message) |> ignore
             if not (channel.Writer.TryWrite work) then reply.TrySetResult(Error "storage queue full") |> ignore
             reply.Task
-        let startUpload (id, manifest: PhantomManifest) = enqueue (fun () ->
+        let startUpload (id, manifest: PhantomManifest, change: PhantomDelta option) = enqueue (fun () ->
             clean()
             if transfers.ContainsKey id || transfers.Count >= options.MaxTransfers then Error "transfer limit"
             else
@@ -140,14 +150,33 @@ module PhantomStorage =
                     match verify manifest.Hash entry with
                     | Ok () -> Ok true
                     | Error error -> remove manifest.Hash entry; Error error
-                | _ when not (makeRoom (int64 manifest.CompressedBytes)) -> Error "disk quota"
                 | _ ->
-                    let path = Path.Combine(directory, $"{id.Value}-{Guid.NewGuid():N}.tmp")
-                    let file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
-                    let upload = { Manifest = manifest; Path = path; File = file; Hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256; Offset = 0; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
-                    transfers[id] <- Upload upload
-                    reserved <- reserved + int64 manifest.CompressedBytes
-                    Ok false)
+                    let basis =
+                        match change with
+                        | None -> Ok None
+                        | Some delta ->
+                            match entries.TryGetValue delta.BaseHash with
+                            | true, entry -> verify delta.BaseHash entry |> Result.map (fun () -> Some entry)
+                            | _ -> Error "delta base unavailable"
+                    match basis with
+                    | Error error -> Error error
+                    | Ok previous ->
+                        previous |> Option.iter (fun entry -> entry.Pins <- entry.Pins + 1)
+                        let mutable retained = false
+                        try
+                            let reservation = int64 manifest.CompressedBytes + (change |> Option.map (fun d -> int64 d.CompressedBytes) |> Option.defaultValue 0L)
+                            if not (makeRoom reservation) then
+                                Error "disk quota"
+                            else
+                                let path = Path.Combine(directory, $"{id.Value}-{Guid.NewGuid():N}.tmp")
+                                let file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
+                                let upload = { Manifest = manifest; Delta = change; Basis = previous; Reserved = reservation; Path = path; File = file; Hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256; Offset = 0; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
+                                transfers[id] <- Upload upload
+                                reserved <- reserved + reservation
+                                retained <- true
+                                Ok false
+                        finally
+                            if not retained then previous |> Option.iter (fun entry -> entry.Pins <- entry.Pins - 1))
         let completeUpload (upload: Upload) =
             if upload.Hash.GetHashAndReset() <> AssetHash.bytes upload.Manifest.Hash then Error "hash mismatch"
             else
@@ -158,12 +187,50 @@ module PhantomStorage =
                 | true, entry when entry.Size <> int64 upload.Manifest.CompressedBytes -> Error "hash size conflict"
                 | true, entry ->
                     verify upload.Manifest.Hash entry
-                    |> Result.map (fun () -> safeDelete upload.Path)
+                    |> Result.map (fun () -> safeDelete upload.Path; safeDelete (upload.Path + ".delta"))
                 | false, _ ->
                     File.Move(upload.Path, path)
-                    entries[upload.Manifest.Hash] <- { Path = path; Size = int64 upload.Manifest.CompressedBytes; Touched = time(); Pins = 0; Verified = true; Ram = None }
-                    used <- used + int64 upload.Manifest.CompressedBytes
+                    let patch = upload.Delta |> Option.map (fun descriptor ->
+                        let deltaPath = Path.Combine(directory, upload.Manifest.Hash.Hex + ".delta")
+                        File.Move(upload.Path + ".delta", deltaPath, true)
+                        { Descriptor = descriptor; Path = deltaPath })
+                    let entry = { Path = path; Size = int64 upload.Manifest.CompressedBytes; Touched = time(); Pins = 0; Verified = true; Ram = None; Patch = patch }
+                    entries[upload.Manifest.Hash] <- entry
+                    used <- used + cost entry
                     Ok ()
+        let restore (upload: Upload) = task {
+            match upload.Delta, upload.Basis with
+            | None, _ -> return Ok ()
+            | Some delta, Some basis ->
+                if upload.Hash.GetHashAndReset() <> AssetHash.bytes delta.Hash then return Error "delta hash mismatch"
+                else
+                    do! reconstruction.WaitAsync()
+                    let started = System.Diagnostics.Stopwatch.GetTimestamp()
+                    try
+                        let! result = Task.Run(fun () ->
+                            let previous = File.ReadAllBytes basis.Path
+                            let patch = Array.zeroCreate<byte> delta.CompressedBytes
+                            upload.File.Position <- 0L
+                            upload.File.ReadExactly(patch.AsSpan())
+                            let mutable full = Array.empty<byte>
+                            if not (PhantomDeltaCodec.TryApply(previous, patch, upload.Manifest.RawBytes, options.Limits.RawBytes, options.Limits.CompressedBytes, &full)) then Error "delta reconstruction"
+                            elif full.Length <> upload.Manifest.CompressedBytes || SHA256.HashData full <> AssetHash.bytes upload.Manifest.Hash then Error "delta target hash"
+                            else
+                                File.WriteAllBytes(upload.Path + ".delta", patch)
+                                Ok full)
+                        match result with
+                        | Error reason -> return Error reason
+                        | Ok full ->
+                            upload.File.Position <- 0L
+                            upload.File.SetLength 0L
+                            do! upload.File.WriteAsync(full.AsMemory())
+                            upload.Hash.AppendData full
+                            return Ok ()
+                    finally
+                        applyDuration.Record(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+                        reconstruction.Release() |> ignore
+            | _ -> return Error "delta base unavailable"
+        }
         let writeChunk (id, offset, bytes: byte array) = task {
             let! admitted = enqueue (fun () ->
                 match transfers.TryGetValue id with
@@ -176,17 +243,21 @@ module PhantomStorage =
                 try
                     let! outcome = task {
                         try
+                            let bodyBytes = upload.Delta |> Option.map _.CompressedBytes |> Option.defaultValue upload.Manifest.CompressedBytes
                             if upload.Closed then return Error "upload closed"
                             elif offset <> upload.Offset || bytes.Length = 0 || bytes.Length > options.ChunkBytes
-                                 || bytes.Length > upload.Manifest.CompressedBytes - offset then return Error "chunk offset/size"
+                                 || bytes.Length > bodyBytes - offset then return Error "chunk offset/size"
                             else
                                 do! upload.File.WriteAsync(bytes.AsMemory())
                                 upload.Hash.AppendData bytes
                                 upload.Offset <- upload.Offset + bytes.Length
-                                if upload.Offset <> upload.Manifest.CompressedBytes then return Ok false
+                                if upload.Offset <> bodyBytes then return Ok false
                                 else
                                     do! upload.File.FlushAsync()
-                                    return! enqueue (fun () -> completeUpload upload |> Result.map (fun () -> true))
+                                    let! restored = restore upload
+                                    match restored with
+                                    | Error reason -> return Error reason
+                                    | Ok () -> return! enqueue (fun () -> completeUpload upload |> Result.map (fun () -> true))
                         with error -> return Error error.Message
                     }
                     match outcome with
@@ -197,14 +268,15 @@ module PhantomStorage =
                             | Ok true ->
                                 upload.Closed <- true
                                 upload.Hash.Dispose()
-                                reserved <- reserved - int64 upload.Manifest.CompressedBytes
+                                upload.Basis |> Option.iter (fun entry -> entry.Pins <- entry.Pins - 1)
+                                reserved <- reserved - upload.Reserved
                                 transfers.Remove id |> ignore
                             | _ -> cancel id
                             Ok ())
                         return outcome
                 finally upload.Gate.Release() |> ignore
         }
-        let startDownload (id, manifest: PhantomManifest) = enqueue (fun () ->
+        let startDownload (id, manifest: PhantomManifest, basis: AssetHash option) = enqueue (fun () ->
             clean()
             if transfers.ContainsKey id || transfers.Count >= options.MaxTransfers then Error "transfer limit"
             else
@@ -213,10 +285,13 @@ module PhantomStorage =
                     match verify manifest.Hash entry with
                     | Error error -> remove manifest.Hash entry; Error error
                     | Ok () ->
-                        let file = new FileStream(entry.Path, FileMode.Open, FileAccess.Read, FileShare.Read, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
+                        let patch = entry.Patch |> Option.filter (fun patch -> basis = Some patch.Descriptor.BaseHash)
+                        let path = patch |> Option.map _.Path |> Option.defaultValue entry.Path
+                        let size = patch |> Option.map (fun patch -> int64 patch.Descriptor.CompressedBytes) |> Option.defaultValue entry.Size
+                        let file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, options.ChunkBytes, FileOptions.SequentialScan ||| FileOptions.Asynchronous)
                         entry.Pins <- entry.Pins + 1
-                        transfers[id] <- Download { Entry = entry; File = file; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
-                        Ok ()
+                        transfers[id] <- Download { Entry = entry; Size = size; File = file; Gate = new Threading.SemaphoreSlim(1, 1); Closed = false }
+                        Ok (patch |> Option.map _.Descriptor)
                 | _ -> Error "asset unavailable")
         let readFile (entry: Entry) offset count =
             use file = File.OpenRead entry.Path
@@ -251,10 +326,10 @@ module PhantomStorage =
                 match transfers.TryGetValue id with
                 | true, Download download ->
                     let entry = download.Entry
-                    if offset < 0 || count < 1 || count > options.ChunkBytes || int64 offset + int64 count > entry.Size then Error "read bounds"
+                    if offset < 0 || count < 1 || count > options.ChunkBytes || int64 offset + int64 count > download.Size then Error "read bounds"
                     else
                         entry.Touched <- time()
-                        cache entry |> Result.map (fun () -> download, entry.Ram)
+                        (if download.Size = entry.Size then cache entry else Ok ()) |> Result.map (fun () -> download, if download.Size = entry.Size then entry.Ram else None)
                 | _ -> Error "unknown download")
             match admitted with
             | Error error -> return Error error
@@ -269,7 +344,7 @@ module PhantomStorage =
                             return Ok count
                         | None ->
                             try
-                                if download.File.Length <> download.Entry.Size then return Error "cache size changed"
+                                if download.File.Length <> download.Size then return Error "cache size changed"
                                 else
                                     download.File.Position <- int64 offset
                                     let mutable read = 0

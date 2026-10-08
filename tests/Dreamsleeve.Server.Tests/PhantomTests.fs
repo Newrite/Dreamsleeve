@@ -30,7 +30,7 @@ let private result value = Task.FromResult(Ok value)
 let private memoryStorage : PhantomStoragePort = {
     StartUpload = fun _ -> result true
     WriteChunk = fun _ -> result false
-    StartDownload = fun _ -> result ()
+    StartDownload = fun _ -> result None
     ReadChunk = fun (_, offset, destination) ->
         for index in 0 .. destination.Length - 1 do destination.Span[index] <- byte (offset + index)
         result destination.Length
@@ -41,7 +41,7 @@ let private leases = Runtime.CompilerServices.ConditionalWeakTable<PhantomAgent.
 let private fakeHttp () =
     let live = Collections.Generic.Dictionary<PhantomTransferId, PhantomHttpLease>()
     let port = {
-        Admit = fun (_, id, manifest, _) ->
+        Admit = fun (_, id, manifest, _, _) ->
             let lease = PhantomHttpLease(String.replicate 64 "a", manifest.CompressedBytes)
             live[id] <- lease
             lease
@@ -78,7 +78,7 @@ let private models (output: ResizeArray<Guid * TransportPacket>) =
 let private transfer output =
     models output |> Array.pick (fun packet -> if isNull packet.Transfer then None else Some(PhantomTransferId packet.Transfer.TransferId))
 let private ready state (id, value: PlayerSnapshot) manifest =
-    PhantomAgent.handle state 2L id (PhantomRequest.Publish(manifest, value.MovementContext, requestId()))
+    PhantomAgent.handle state 2L id (PhantomRequest.Publish(manifest, value.MovementContext, requestId(), None))
     PhantomAgent.tick state 3L
 let private view state (observer, _: PlayerSnapshot) (source, value: PlayerSnapshot) revision distance =
     PhantomAgent.observe state (PhantomObservation.View(observer, source, value.Identity.PlayerId, revision, distance, None))
@@ -194,7 +194,7 @@ let tests = testList "Phantoms" [
         Expect.equal output.Count 1 "Only the activation policy is sent."
         let policy = Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom(output[0].Bytes).Policy
         Expect.isFalse policy.Enabled "Authenticated client learns the effective disabled policy."
-        PhantomAgent.handle state 2L id (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
+        PhantomAgent.handle state 2L id (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 3L
         Expect.equal started 0 "Disabled publication never starts detached IO."
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "No subscriptions."
@@ -268,13 +268,13 @@ let tests = testList "Phantoms" [
 
     testCase "authenticated source assignment and generation/context admission" <| fun _ ->
         let state, members, output = setup options memoryStorage 1
-        PhantomAgent.handle state 2L (Guid.NewGuid()) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
+        PhantomAgent.handle state 2L (Guid.NewGuid()) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "unauthenticated"
         ready state members[0] (asset 2UL [|1uy|])
         let sent = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal sent.PlayerId (PlayerId.value (snd members[0]).Identity.PlayerId) "server source"
-        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|2uy|], 10UL, requestId()))
-        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|2uy|], 9UL, requestId()))
+        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|2uy|], 10UL, requestId(), None))
+        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|2uy|], 9UL, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "old publish rejected"
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "context rejected before IO"
 
@@ -313,7 +313,7 @@ let tests = testList "Phantoms" [
 
     testCase "departure late View and reconnect outside AOI require current session epoch and fresh authority" <| fun _ ->
         let mutable downloads = 0
-        let storage = { memoryStorage with StartDownload = fun _ -> downloads <- downloads + 1; result () }
+        let storage = { memoryStorage with StartDownload = fun _ -> downloads <- downloads + 1; result None }
         let state, members, output = setup options storage 2
         let oldId, oldSource = members[0]
         let observerId, _ = members[1]
@@ -322,7 +322,7 @@ let tests = testList "Phantoms" [
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Initial Presence authority."
-        PhantomAgent.handle state 5L observerId (PhantomRequest.Download(oldSource.Identity.PlayerId, manifest.Generation, requestId()))
+        PhantomAgent.handle state 5L observerId (PhantomRequest.Download(oldSource.Identity.PlayerId, manifest.Generation, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Old session download is live."
         output.Clear()
         PhantomAgent.detach state oldId
@@ -337,7 +337,7 @@ let tests = testList "Phantoms" [
         let newSource = { oldSource with Location = ValueSome far }
         PhantomAgent.observe state (PhantomObservation.Member(newId, newSource))
         PhantomAgent.activate state newId
-        PhantomAgent.handle state 6L newId (PhantomRequest.Publish(manifest, newSource.MovementContext, requestId()))
+        PhantomAgent.handle state 6L newId (PhantomRequest.Publish(manifest, newSource.MovementContext, requestId(), None))
         PhantomAgent.tick state 7L
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Same-player cached publication is allowed."
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "No View is inherited outside AOI."
@@ -350,7 +350,7 @@ let tests = testList "Phantoms" [
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Both session epoch and authority floor are required."
         Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Offer))) "No stale model offer."
         Expect.isFalse (output |> Seq.exists (fun (_, packet) -> packet.Lane = DeliveryLane.Poses)) "No stale pose fanout."
-        PhantomAgent.handle state 9L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId()))
+        PhantomAgent.handle state 9L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "Unseen reconnect cannot be downloaded."
         Expect.equal downloads 1 "Denied reconnect starts no IO."
         // Presence later authorizes the new session at a fresh revision.
@@ -363,9 +363,61 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 11L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Late old-session facts cannot replace or remove the new view."
         Expect.equal (models output |> Array.filter (fun packet -> not (isNull packet.Offer)) |> Array.length) 1 "Exactly one new offer."
-        PhantomAgent.handle state 12L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId()))
+        PhantomAgent.handle state 12L observerId (PhantomRequest.Download(newSource.Identity.PlayerId, manifest.Generation, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Fresh authorized download still works."
         Expect.equal downloads 2 "Only authorized sessions create read IO."
+
+    testCase "withdraw and movement retain authorized delta basis without retaining visible publication" <| fun _ ->
+        let state, members, output = setup options memoryStorage 1
+        let first = asset 1UL [|1uy;2uy|]
+        ready state members[0] first
+        PhantomAgent.handle state 4L (fst members[0]) PhantomRequest.Withdraw
+        PhantomAgent.observe state (PhantomObservation.Member(fst members[0], { snd members[0] with MovementContext = 11UL }))
+        Expect.equal (PhantomAgent.snapshot state).Sources 0 "No visible publication crosses withdraw"
+        let next = asset 2UL [|2uy;3uy|]
+        let delta = PhantomDelta.create next first.Hash first.Hash 1u |> ok
+        output.Clear()
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(next,11UL,requestId(),Some delta))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Exact committed base survives movement"
+        PhantomAgent.stop state
+
+    testCase "cold download survives replacement until displayed acknowledgement" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        let first = asset 1UL [|1uy;2uy;3uy;4uy|]
+        ready state members[0] first
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        let offer = models output |> Array.pick (fun p -> if isNull p.Offer then None else Some p.Offer)
+        output.Clear()
+        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, first.Generation, requestId(), None))
+        PhantomAgent.tick state 6L
+        let downloading = transfer output
+        let next = asset 2UL [|2uy;3uy;4uy;5uy|]
+        PhantomAgent.handle state 7L (fst members[0]) (PhantomRequest.Publish(next,10UL,requestId(),None))
+        PhantomAgent.tick state 8L
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Cold transfer is not canceled or replaced"
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.Reason = "initial display pending")) "Retryable admission"
+        let live = leases.GetValue(state, fun _ -> failwith "fixture missing")
+        live[downloading].Advance 4
+        live[downloading].Finish(Ok ())
+        PhantomAgent.tick state 9L
+        PhantomAgent.handle state 10L (fst members[1]) (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId,offer.ViewRevision,first.Generation))
+        PhantomAgent.handle state 11L (fst members[0]) (PhantomRequest.Publish(next,10UL,requestId(),None))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Replacement admitted after display"
+        PhantomAgent.stop state
+
+    testCase "missing first display acknowledgement cannot indefinitely block publication" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        let first = asset 1UL [|1uy;2uy|]
+        ready state members[0] first
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId,first.Generation,requestId(),None))
+        PhantomAgent.tick state 6L
+        let at = 7L + int64 options.TransferTimeoutMs
+        PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy;3uy|],10UL,requestId(),None))
+        Expect.equal (PhantomAgent.snapshot state).Transfers 2 "Replacement admitted after inactivity timeout"
+        PhantomAgent.stop state
 
     testCase "context retains appearance but clears poses and source/observer subscriptions" <| fun _ ->
         let state, members, output = setup options memoryStorage 2
@@ -386,7 +438,7 @@ let tests = testList "Phantoms" [
     testCase "late worker completion after character change and disconnect cannot publish" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,string>>()
         let state, members, _ = setup options { memoryStorage with StartUpload = fun _ -> pending.Task } 1
-        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
+        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId(), None))
         PhantomAgent.observe state (PhantomObservation.Member(fst members[0], { snd members[0] with CharacterGeneration = 2UL }))
         pending.SetResult(Ok true)
         PhantomAgent.tick state 3L
@@ -403,9 +455,9 @@ let tests = testList "Phantoms" [
         let state, members, output = setup options storage 1
         let manifest = asset 1UL [|1uy|]
         let first, next = PhantomRequestId.create 1001UL |> ok, PhantomRequestId.create 1002UL |> ok
-        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, first))
+        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, first, None))
         PhantomAgent.observe state (PhantomObservation.Member(fst members[0], { snd members[0] with MovementContext = 11UL }))
-        PhantomAgent.handle state 3L (fst members[0]) (PhantomRequest.Publish(manifest, 11UL, next))
+        PhantomAgent.handle state 3L (fst members[0]) (PhantomRequest.Publish(manifest, 11UL, next, None))
         PhantomAgent.tick state 4L
         let complete = models output |> Array.choose (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         let cancelled = complete |> Array.find (fun value -> value.RequestId = 1001UL)
@@ -427,7 +479,7 @@ let tests = testList "Phantoms" [
         Expect.isError (PhantomCodec.decodeAsset options (download.ToByteArray())) "Missing download request ID."
         download.Download.RequestId <- 101UL
         match PhantomCodec.decodeAsset options (download.ToByteArray()) |> ok with
-        | PhantomRequest.Download(_,_,request) -> Expect.equal request.Value 101UL "Typed request retained."
+        | PhantomRequest.Download(_,_,request, None) -> Expect.equal request.Value 101UL "Typed request retained."
         | _ -> failtest "Expected download."
 
 
@@ -436,7 +488,7 @@ let tests = testList "Phantoms" [
         let storage = { memoryStorage with StartUpload = fun _ -> attempts <- attempts + 1; if attempts = 1 then Task.FromResult(Error "storage busy") else result true }
         let state, members, output = setup { options with PublishCooldownMs = 100 } storage 1
         let manifest = asset 2UL [|1uy|]
-        let publish at value context = PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(value, context, requestId())); PhantomAgent.tick state (at + 1L)
+        let publish at value context = PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(value, context, requestId(), None)); PhantomAgent.tick state (at + 1L)
         publish 2L manifest 10UL
         let first = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (first.TransferId, first.PlayerId, first.Generation, first.Upload, first.RetryAfterMs) (0UL,1UL,2UL,true,100u) "Pre-Transfer IO failure is correlated and temporary."
@@ -468,18 +520,18 @@ let tests = testList "Phantoms" [
         let storage = { memoryStorage with StartUpload = fun _ -> attempts <- attempts + 1; if attempts = 1 then pending.Task else result true }
         let state, members, output = setup { options with MaxTransfers = 1; PublishCooldownMs = 10 } storage 2
         let manifest = asset 1UL [|1uy|]
-        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
-        PhantomAgent.handle state 2L (fst members[1]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
+        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId(), None))
+        PhantomAgent.handle state 2L (fst members[1]) (PhantomRequest.Publish(manifest, 10UL, requestId(), None))
         PhantomAgent.tick state 3L
         let busy = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (busy.TransferId,busy.PlayerId,busy.Generation,busy.Upload,busy.RetryAfterMs) (0UL,2UL,1UL,true,10u) "Request-level upload capacity correlation."
         pending.SetResult(Error "storage busy")
         PhantomAgent.tick state 4L
-        PhantomAgent.handle state 12L (fst members[1]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
+        PhantomAgent.handle state 12L (fst members[1]) (PhantomRequest.Publish(manifest, 10UL, requestId(), None))
         PhantomAgent.tick state 13L
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Unchanged generation retries after capacity becomes available."
         output.Clear()
-        PhantomAgent.handle state 14L (fst members[0]) (PhantomRequest.Download((snd members[1]).Identity.PlayerId, manifest.Generation, requestId()))
+        PhantomAgent.handle state 14L (fst members[0]) (PhantomRequest.Download((snd members[1]).Identity.PlayerId, manifest.Generation, requestId(), None))
         PhantomAgent.tick state 15L
         let download = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (download.TransferId,download.PlayerId,download.Generation,download.Upload,download.RetryAfterMs) (0UL,2UL,1UL,false,1000u) "Download denial can leave client's requested phase."
@@ -487,7 +539,7 @@ let tests = testList "Phantoms" [
     testCase "starting IO timeout without a Transfer response remains request-correlated" <| fun _ ->
         let storage = { memoryStorage with StartUpload = fun _ -> TaskCompletionSource<Result<bool,string>>().Task }
         let state, members, output = setup { options with TransferTimeoutMs = 2; PublishCooldownMs = 10 } storage 1
-        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
+        PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 5L
         let complete = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (complete.TransferId,complete.PlayerId,complete.Generation,complete.Upload,complete.RetryAfterMs) (0UL,1UL,1UL,true,10u) "Starting timeout is retryable without unknown transfer correlation."
@@ -505,11 +557,11 @@ let tests = testList "Phantoms" [
 
     testCase "replacement upload does not consume another publisher quota slot" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,string>>()
-        let storage = { memoryStorage with StartUpload = fun (_, manifest) -> if manifest.Generation.Value = 2UL then pending.Task else result true }
+        let storage = { memoryStorage with StartUpload = fun (_, manifest, _) -> if manifest.Generation.Value = 2UL then pending.Task else result true }
         let state, members, _ = setup { options with MaxSources = 2 } storage 2
         ready state members[0] (asset 1UL [|1uy|])
-        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
-        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Publish(asset 1UL [|3uy|], 10UL, requestId()))
+        PhantomAgent.handle state 4L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
+        PhantomAgent.handle state 5L (fst members[1]) (PhantomRequest.Publish(asset 1UL [|3uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 6L
         Expect.equal (PhantomAgent.snapshot state).Sources 2 "Two distinct publishers fit while one replaces its asset."
         pending.SetResult(Ok true)
@@ -527,7 +579,7 @@ let tests = testList "Phantoms" [
             let at = 5L + int64 index * 4L
             PhantomAgent.handle state at (fst members[1]) (receive 1 4096.0f)
             PhantomAgent.tick state at
-            PhantomAgent.handle state (at + 1L) (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, manifest.Generation, requestId()))
+            PhantomAgent.handle state (at + 1L) (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, manifest.Generation, requestId(), None))
             Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Download started."
             PhantomAgent.handle state (at + 1L) (fst members[1]) reduced
             Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Reduction takes effect in the command turn."
@@ -679,13 +731,15 @@ let tests = testList "Phantoms" [
         let observerId = fst members[1]
         PhantomAgent.receive state 5L sourceId DeliveryLane.Poses (pose 1UL 10UL 10UL)
         PhantomAgent.tick state 5L
+        let visible = models output |> Array.pick (fun p -> if isNull p.Offer then None else Some p.Offer)
+        PhantomAgent.handle state 5L observerId (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId,visible.ViewRevision,AppearanceGeneration.create 1UL |> ok))
         output.Clear()
-        PhantomAgent.handle state 6L observerId (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId()))
+        PhantomAgent.handle state 6L observerId (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 1UL |> ok, requestId(), None))
         PhantomAgent.tick state 6L
         let oldDownload = transfer output
         output.Clear()
         nextUpload <- pending.Task
-        PhantomAgent.handle state 7L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 7L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 7L
         let snapshot = PhantomAgent.snapshot state
         Expect.equal snapshot.Sources 1 "Previous publication remains available."
@@ -702,7 +756,7 @@ let tests = testList "Phantoms" [
         Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.TransferId = oldDownload.Value)) "Old download is not cancelled by failure."
         output.Clear()
         nextUpload <- result true
-        PhantomAgent.handle state 10L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 10L sourceId (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 11L
         Expect.isFalse (models output |> Array.exists (fun packet -> not (isNull packet.Remove))) "Replacement sends Offer without Remove."
         let offer = models output |> Array.pick (fun packet -> if isNull packet.Offer then None else Some packet.Offer)
@@ -722,10 +776,10 @@ let tests = testList "Phantoms" [
         ready state members[0] (asset 1UL [|1uy..8uy|])
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
-        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId()))
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 6L
         output.Clear()
-        PhantomAgent.handle state 7L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId()))
+        PhantomAgent.handle state 7L (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId(), None))
         for at in 7L .. 10L do PhantomAgent.tick state at
         let id = transfer output
         output.Clear()
@@ -746,11 +800,11 @@ let tests = testList "Phantoms" [
         ready state members[0] (asset 1UL [|1uy..8uy|])
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
-        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId()))
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|1uy..8uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 6L
         let download at =
             output.Clear()
-            PhantomAgent.handle state at (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId()))
+            PhantomAgent.handle state at (fst members[1]) (PhantomRequest.Download((snd members[0]).Identity.PlayerId, AppearanceGeneration.create 2UL |> ok, requestId(), None))
             for tick in at .. at + 3L do PhantomAgent.tick state tick
             transfer output
         let first = download 7L
@@ -768,7 +822,7 @@ let tests = testList "Phantoms" [
         ready state members[0] (asset 1UL [|1uy|])
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
-        PhantomAgent.handle state 10L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 10L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 11L
         let offer = models output |> Array.pick (fun p -> if not (isNull p.Offer) && p.Offer.Asset.Generation = 2UL then Some p.Offer else None)
         view state members[2] members[0] 1UL 1.0
@@ -790,7 +844,7 @@ let tests = testList "Phantoms" [
         view state members[1] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
         next <- pending.Task
-        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 5L (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
         let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 2UL 1UL 10UL)
         packet.PreviousSample <- Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 1UL 20UL 10UL).Sample
         packet.PreviousSample.SampledAtUs <- packet.Sample.SampledAtUs
@@ -807,7 +861,7 @@ let tests = testList "Phantoms" [
         let offer = models output |> Array.pick (fun p -> if isNull p.Offer then None else Some p.Offer)
         Expect.equal offer.Asset.Generation 2UL "Only complete asset gets offered."
         output.Clear()
-        PhantomAgent.handle state 8L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|3uy|], 10UL, requestId()))
+        PhantomAgent.handle state 8L (fst members[0]) (PhantomRequest.Publish(asset 3UL [|3uy|], 10UL, requestId(), None))
         PhantomAgent.tick state 8L
         Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.RetryAfterMs > 0u)) "Third generation waits for display."
         PhantomAgent.handle state 9L (fst members[1]) (PhantomRequest.Displayed((snd members[0]).Identity.PlayerId, offer.ViewRevision - 1UL, AppearanceGeneration.create 2UL |> ok))
@@ -832,7 +886,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 4L
         next <- pending.Task
         let id = fst members[0]
-        PhantomAgent.handle state 5L id (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId()))
+        PhantomAgent.handle state 5L id (PhantomRequest.Publish(asset 2UL [|2uy|], 10UL, requestId(), None))
         let packet = Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 2UL 1UL 10UL)
         packet.PreviousSample <- Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser.ParseFrom(pose 1UL 20UL 10UL).Sample
         packet.PreviousSample.SampledAtUs <- packet.Sample.SampledAtUs
@@ -887,7 +941,7 @@ let tests = testList "Phantoms" [
         let manifest = asset 1UL [|1uy|]
         ready state members[0] manifest
         PhantomAgent.receive state 5L (fst members[0]) DeliveryLane.Poses (pose 1UL 10UL 10UL)
-        PhantomAgent.handle state 6L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId()))
+        PhantomAgent.handle state 6L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId(), None))
         PhantomAgent.tick state 7L
         PhantomAgent.receive state 8L (fst members[0]) DeliveryLane.Poses (pose 1UL 9UL 10UL)
         Expect.equal (PhantomAgent.snapshot state).LatestPoses 1 "Identical model republish retains the current pose; old sequence cannot replace it."
@@ -925,7 +979,7 @@ let tests = testList "Phantoms" [
         let config = { options with MaxSources = 2; MaxTransfers = 1; TransferTimeoutMs = 2 }
         let state, members, _ = setup config { memoryStorage with StartUpload = fun _ -> TaskCompletionSource<Result<bool,string>>().Task } 3
         Expect.equal (PhantomAgent.snapshot state).Members 3 "receivers remain admitted"
-        for id, _ in members do PhantomAgent.handle state 2L id (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId()))
+        for id, _ in members do PhantomAgent.handle state 2L id (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, requestId(), None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 1 "concurrency"
         PhantomAgent.tick state 5L
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "expiry"
@@ -939,24 +993,24 @@ let tests = testList "Phantoms" [
             let bytes = Array.init (1024 * 1024 + 7) (fun index -> byte (index % 251))
             let manifest = asset 1UL bytes
             let uploadId, downloadId = PhantomTransferId 1UL, PhantomTransferId 2UL
-            let! initial = storage.StartUpload(uploadId, manifest)
+            let! initial = storage.StartUpload(uploadId, manifest, None)
             Expect.equal initial (Ok false) "Cold file."
-            let upload = http.Admit(Guid.NewGuid(), uploadId, manifest, true)
+            let upload = http.Admit(Guid.NewGuid(), uploadId, manifest, true, None)
             use input = new MemoryStream(bytes, false)
             let! written = http.Serve { Token = upload.Token; Upload = true; Length = Some(int64 bytes.Length); Body = input
                                         BeginResponse = ignore; Cancellation = Threading.CancellationToken.None }
             Expect.equal written (Ok ()) "Complete verified upload."
             Expect.equal upload.Progress bytes.Length "Monotonic full progress."
             Expect.equal (File.ReadAllBytes(Path.Combine(config.StoragePath, manifest.Hash.Hex + ".zst"))) bytes "Exact file."
-            let! _ = storage.StartDownload(downloadId, manifest)
-            let download = http.Admit(Guid.NewGuid(), downloadId, manifest, false)
+            let! _ = storage.StartDownload(downloadId, manifest, None)
+            let download = http.Admit(Guid.NewGuid(), downloadId, manifest, false, None)
             use output = new MemoryStream()
             let! read = http.Serve { Token = download.Token; Upload = false; Length = None; Body = output
                                      BeginResponse = (fun size -> Expect.equal size bytes.Length "HTTP content length")
                                      Cancellation = Threading.CancellationToken.None }
             Expect.equal read (Ok ()) "Download completed."
             Expect.equal (output.ToArray()) bytes "Exact round trip."
-            let! warm = storage.StartUpload(PhantomTransferId 3UL, asset 2UL bytes)
+            let! warm = storage.StartUpload(PhantomTransferId 3UL, asset 2UL bytes, None)
             Expect.equal warm (Ok true) "Same hash needs no second upload."
         finally
             http.Dispose().GetAwaiter().GetResult()
@@ -965,7 +1019,7 @@ let tests = testList "Phantoms" [
     storageCase "streaming SHA256 atomic completion and restart deduplication" (fun root config storage -> task {
         let bytes = [|1uy;2uy;3uy;4uy;5uy;6uy;7uy;8uy|]
         let manifest = asset 1UL bytes
-        let! started = storage.StartUpload(PhantomTransferId 1UL, manifest)
+        let! started = storage.StartUpload(PhantomTransferId 1UL, manifest, None)
         Expect.equal (ok started) false "upload needed"
         let! partial = storage.WriteChunk(PhantomTransferId 1UL, 0, bytes[0..3])
         Expect.equal (ok partial) false "not ready"
@@ -976,7 +1030,7 @@ let tests = testList "Phantoms" [
         Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "atomic rename"
         let restarted = PhantomStorage.create config
         try
-            let! cached = restarted.StartUpload(PhantomTransferId 2UL, manifest)
+            let! cached = restarted.StartUpload(PhantomTransferId 2UL, manifest, None)
             Expect.equal (ok cached) true "restart cache verified"
         finally restarted.Dispose().GetAwaiter().GetResult()
     })
@@ -989,11 +1043,11 @@ let tests = testList "Phantoms" [
         File.WriteAllBytes(path, content)
         let store = PhantomStorage.create config
         try
-            let! _ = store.StartDownload(PhantomTransferId 1UL, asset 2UL [|5uy|])
+            let! _ = store.StartDownload(PhantomTransferId 1UL, asset 2UL [|5uy|], None)
             File.Delete path
-            let! lost = store.StartDownload(PhantomTransferId 2UL, manifest)
+            let! lost = store.StartDownload(PhantomTransferId 2UL, manifest, None)
             Expect.isError lost "Cache disappeared before its first verification."
-            let! retry = store.StartUpload(PhantomTransferId 3UL, manifest)
+            let! retry = store.StartUpload(PhantomTransferId 3UL, manifest, None)
             Expect.equal retry (Ok false) "The stale entry was evicted; publication can recover."
             let! completed = store.WriteChunk(PhantomTransferId 3UL, 0, content)
             Expect.equal completed (Ok true) "Recovered cache content."
@@ -1008,15 +1062,15 @@ let tests = testList "Phantoms" [
         AppDomain.CurrentDomain.FirstChanceException.AddHandler handler
         try
             let manifest = asset 1UL [|1uy;2uy;3uy;4uy|]
-            let! missing = storage.StartDownload(PhantomTransferId 1UL, manifest)
+            let! missing = storage.StartDownload(PhantomTransferId 1UL, manifest, None)
             Expect.isError missing "Missing cache entry."
-            let! started = storage.StartUpload(PhantomTransferId 2UL, manifest)
+            let! started = storage.StartUpload(PhantomTransferId 2UL, manifest, None)
             Expect.equal started (Ok false) "Cold upload."
-            let! duplicate = storage.StartUpload(PhantomTransferId 2UL, manifest)
+            let! duplicate = storage.StartUpload(PhantomTransferId 2UL, manifest, None)
             Expect.isError duplicate "Duplicate transfer."
             let! offset = storage.WriteChunk(PhantomTransferId 2UL, 1, [|1uy|])
             Expect.isError offset "Bad offset releases reservation."
-            let! restarted = storage.StartUpload(PhantomTransferId 3UL, manifest)
+            let! restarted = storage.StartUpload(PhantomTransferId 3UL, manifest, None)
             Expect.equal restarted (Ok false) "Admission refunded."
             let! hash = storage.WriteChunk(PhantomTransferId 3UL, 0, [|4uy;3uy;2uy;1uy|])
             Expect.isError hash "Wrong hash."
@@ -1028,11 +1082,11 @@ let tests = testList "Phantoms" [
 
     storageCase "hash and offset failures delete temporary files and refund admission" (fun root _ storage -> task {
         let manifest = asset 1UL [|1uy;2uy;3uy;4uy|]
-        let! _ = storage.StartUpload(PhantomTransferId 1UL, manifest)
+        let! _ = storage.StartUpload(PhantomTransferId 1UL, manifest, None)
         let! corrupt = storage.WriteChunk(PhantomTransferId 1UL, 0, [|4uy;3uy;2uy;1uy|])
         Expect.isError corrupt "hash mismatch"
         Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "cleanup"
-        let! retry = storage.StartUpload(PhantomTransferId 2UL, manifest)
+        let! retry = storage.StartUpload(PhantomTransferId 2UL, manifest, None)
         Expect.equal (ok retry) false "quota refunded"
         let! offset = storage.WriteChunk(PhantomTransferId 2UL, 1, [|1uy|])
         Expect.isError offset "order"
@@ -1044,17 +1098,17 @@ let tests = testList "Phantoms" [
         try
             let first = asset 1UL [|1uy;2uy;3uy;4uy|]
             let second = asset 2UL [|4uy;3uy;2uy;1uy|]
-            let! _ = store.StartUpload(PhantomTransferId 1UL, first)
+            let! _ = store.StartUpload(PhantomTransferId 1UL, first, None)
             let! stored = store.WriteChunk(PhantomTransferId 1UL, 0, [|1uy;2uy;3uy;4uy|])
             Expect.isOk stored "stored"
-            let! opened = store.StartDownload(PhantomTransferId 2UL, first)
+            let! opened = store.StartDownload(PhantomTransferId 2UL, first, None)
             Expect.isOk opened "pinned"
-            let! refused = store.StartUpload(PhantomTransferId 3UL, second)
+            let! refused = store.StartUpload(PhantomTransferId 3UL, second, None)
             Expect.isError refused "quota protects active read"
             let! bytes = readChunk store (PhantomTransferId 2UL, 0, 4)
             Expect.equal (ok bytes) [|1uy;2uy;3uy;4uy|] "RAM read"
             do! store.Cancel(PhantomTransferId 2UL)
-            let! admitted = store.StartUpload(PhantomTransferId 4UL, second)
+            let! admitted = store.StartUpload(PhantomTransferId 4UL, second, None)
             Expect.equal (ok admitted) false "unpin enables LRU"
         finally store.Dispose().GetAwaiter().GetResult()
     })
@@ -1063,11 +1117,11 @@ let tests = testList "Phantoms" [
         let store = PhantomStorage.create { config with StoragePath = Path.Combine(root, "pin-quota"); DiskBytes = 8L; CacheEntries = 2 }
         try
             let first, second = asset 1UL [|1uy;2uy;3uy;4uy|], asset 2UL [|4uy;3uy;2uy;1uy|]
-            let! _ = store.StartUpload(PhantomTransferId 1UL, first)
+            let! _ = store.StartUpload(PhantomTransferId 1UL, first, None)
             let! _ = store.WriteChunk(PhantomTransferId 1UL, 0, [|1uy;2uy;3uy;4uy|])
-            let! _ = store.StartDownload(PhantomTransferId 2UL, first)
-            let! _ = store.StartDownload(PhantomTransferId 3UL, first)
-            let! admitted = store.StartUpload(PhantomTransferId 4UL, second)
+            let! _ = store.StartDownload(PhantomTransferId 2UL, first, None)
+            let! _ = store.StartDownload(PhantomTransferId 3UL, first, None)
+            let! admitted = store.StartUpload(PhantomTransferId 4UL, second, None)
             Expect.equal (ok admitted) false "Read leases do not consume extra file-entry quota."
             let! full = store.WriteChunk(PhantomTransferId 4UL, 0, [|4uy;3uy;2uy;1uy|])
             Expect.equal (ok full) true "Two files fit exact disk/entry quota while old file remains pinned twice."
@@ -1076,18 +1130,18 @@ let tests = testList "Phantoms" [
     storageCase "RAM fill rejects changed file length before allocating descriptor-sized cache" (fun root _ storage -> task {
         let bytes = [|1uy;2uy;3uy;4uy|]
         let manifest = asset 1UL bytes
-        let! _ = storage.StartUpload(PhantomTransferId 1UL, manifest)
+        let! _ = storage.StartUpload(PhantomTransferId 1UL, manifest, None)
         let! _ = storage.WriteChunk(PhantomTransferId 1UL, 0, bytes)
-        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
+        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest, None)
         let path = Path.Combine(root, manifest.Hash.Hex + ".zst")
         do! storage.Cancel(PhantomTransferId 2UL)
         File.WriteAllBytes(path, Array.zeroCreate 32)
-        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
+        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest, None)
         let! grown = readChunk storage (PhantomTransferId 2UL, 0, 4)
         Expect.isError grown "Warm verified entry cannot allocate an unexpectedly grown file."
         do! storage.Cancel(PhantomTransferId 2UL)
         File.WriteAllBytes(path, bytes)
-        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest)
+        let! _ = storage.StartDownload(PhantomTransferId 2UL, manifest, None)
         let! recovered = readChunk storage (PhantomTransferId 2UL, 0, 4)
         Expect.equal (ok recovered) bytes "Failed fill did not publish invalid RAM cache."
         do! storage.Cancel(PhantomTransferId 2UL)
@@ -1099,7 +1153,7 @@ let tests = testList "Phantoms" [
         File.WriteAllBytes(Path.Combine(root, manifest.Hash.Hex + ".zst"), [|4uy;3uy;2uy;1uy|])
         let store = PhantomStorage.create config
         try
-            let! corrupt = store.StartDownload(PhantomTransferId 1UL, manifest)
+            let! corrupt = store.StartDownload(PhantomTransferId 1UL, manifest, None)
             Expect.isError corrupt "integrity on restart"
             Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "partial cleanup"
             Expect.equal (Directory.GetFiles(root, "*.zst").Length) 0 "corruption removed"

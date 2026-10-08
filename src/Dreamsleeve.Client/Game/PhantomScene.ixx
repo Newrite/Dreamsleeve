@@ -91,7 +91,9 @@ public:
 
     static std::uint64_t Reservation(const P::ValidatedAsset& asset)
     {
-      return asset.MemoryBytes() + 4ULL * asset.Value().nif.size() + asset.Layout().blocks * 1024ULL;
+      // Exchange owns the shared validated asset reservation. Only native scene
+      // allocations and loader scratch belong to this additional reservation.
+      return 4ULL * asset.Value().nif.size() + asset.Layout().blocks * 1024ULL;
     }
 
     static P::Result<std::unique_ptr<Scene>> Begin(
@@ -106,7 +108,10 @@ public:
       // Conservative admission, not a claim to measure native heap or driver
       // residency: NIF + native arrays + native GPU buffers + loader scratch.
       const auto bytes = Reservation(asset);
-      if (bytes > budget.memoryBytes) return A::Fail(P::Failure::LimitExceeded, "scene.memory");
+      if (bytes > budget.memoryBytes)
+        return A::Fail(P::Failure::LimitExceeded,
+          std::format("scene.memory: native_required={} available={} shared_asset={}",
+            bytes, budget.memoryBytes, asset.MemoryBytes()));
       return std::unique_ptr<Scene>(new Scene(std::move(asset), engine, context, generation, look, bytes));
     }
 

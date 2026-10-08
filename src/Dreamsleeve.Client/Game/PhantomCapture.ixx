@@ -184,7 +184,12 @@ public:
     P::Result<P::Snapshot> Sample(RE::PlayerCharacter& p, bool firstPerson, Stamp stamp, bool retainMissing = false)
     {
       if (!engine.mainThread || !engine.mainThread()) return A::Fail(P::Failure::Busy, "native.thread");
-      if (p.GetHandle() != player || p.Get3D(false) != root.get()) return A::Fail(P::Failure::Stale, "native.source");
+      if (p.GetHandle() != player) return A::Fail(P::Failure::Stale, "native.source");
+      // Outfit rebuilds may replace third-person 3D without changing identity or
+      // context. Keep the published asset/base while waiting for a new source.
+      // Never sample the detached old root or label old transforms as fresh.
+      if (p.Get3D(false) != root.get())
+        return A::Fail(P::Failure::Busy, "native.source-rebuilding");
       P::Snapshot out    = last;
       out.generation     = stamp.generation;
       out.sequence       = stamp.sequence;

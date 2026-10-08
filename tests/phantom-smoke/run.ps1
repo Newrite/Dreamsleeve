@@ -52,7 +52,7 @@ try {
         Start-Sleep -Milliseconds 25
     }
     $ready = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
-    if ($ready.protocolVersion -ne 25 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
+    if ($ready.protocolVersion -ne 26 -or $ready.port -ne $port) { throw 'Unexpected server fixture contract.' }
     $nativeInfo = New-ChildInfo $nativePath @('--test-case=Phantom production Streaming real UDP smoke', '--no-colors=true')
     # Per-child environment; invoking shell and normal native tests stay unchanged.
     $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_PORT'] = [string]$port

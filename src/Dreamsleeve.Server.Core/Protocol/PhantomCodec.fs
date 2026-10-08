@@ -21,6 +21,13 @@ module PhantomCodec =
             | Ok hash, Ok generation -> PhantomManifest.create options.Limits hash generation asset.FormatVersion asset.CompressedBytes asset.RawBytes asset.Channels
             | Error error, _ | _, Error error -> Error error
 
+    let private delta target (value: Dreamsleeve.Protocol.Phantom.AssetDelta) =
+        if isNull value then Ok None
+        else
+            match AssetHash.create(value.BaseHash.ToByteArray()), AssetHash.create(value.Hash.ToByteArray()) with
+            | Ok basis, Ok hash -> PhantomDelta.create target basis hash value.CompressedBytes |> Result.map Some
+            | _ -> Error "delta hash"
+
     let decodeAsset options bytes =
         parse PhantomAssetLimits.assetPacketBytes bytes Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser (fun packet ->
             if packet.ProtocolVersion <> ProtocolCodec.Version then Error "protocol version"
@@ -32,11 +39,11 @@ module PhantomCodec =
                     else Ok (PhantomRequest.Preferences { Publish = value.Publish; Receive = value.Receive; Maximum = int value.Maximum; Distance = value.Distance })
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Publish ->
                     match manifest options packet.Publish.Asset, PhantomRequestId.create packet.Publish.RequestId with
-                    | Ok value, Ok request when packet.Publish.ContextRevision <> 0UL -> Ok (PhantomRequest.Publish(value, packet.Publish.ContextRevision, request))
+                    | Ok value, Ok request when packet.Publish.ContextRevision <> 0UL -> delta value packet.Publish.Delta |> Result.map (fun change -> PhantomRequest.Publish(value, packet.Publish.ContextRevision, request, change))
                     | _ -> Error "publish descriptor/context/request"
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Download ->
                     match PlayerId.create packet.Download.PlayerId, AppearanceGeneration.create packet.Download.Generation, PhantomRequestId.create packet.Download.RequestId with
-                    | Ok player, Ok generation, Ok request -> Ok (PhantomRequest.Download(player, generation, request))
+                    | Ok player, Ok generation, Ok request -> (if packet.Download.BaseHash.IsEmpty then Ok None else AssetHash.create(packet.Download.BaseHash.ToByteArray()) |> Result.map Some) |> Result.map (fun basis -> PhantomRequest.Download(player, generation, request, basis))
                     | _ -> Error "download"
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Cancel when packet.Cancel.TransferId <> 0UL -> Ok (PhantomRequest.Cancel(PhantomTransferId packet.Cancel.TransferId))
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Displayed ->
@@ -67,11 +74,16 @@ module PhantomCodec =
                              , FormatVersion = value.FormatVersion, CompressedBytes = uint32 value.CompressedBytes
                              , RawBytes = uint32 value.RawBytes, Channels = uint32 value.Channels)
 
+    let private deltaDescriptor (value: PhantomDelta option) =
+        match value with
+        | None -> null
+        | Some d -> Dreamsleeve.Protocol.Phantom.AssetDelta(BaseHash=ByteString.CopyFrom(AssetHash.bytes d.BaseHash), Hash=ByteString.CopyFrom(AssetHash.bytes d.Hash), CompressedBytes=uint32 d.CompressedBytes)
+
     let encode response =
         let packet = Dreamsleeve.Protocol.Phantom.ServerAssetPacket(ProtocolVersion = ProtocolCodec.Version)
         match response with
         | PhantomResponse.Offer(player, revision, value) -> packet.Offer <- Dreamsleeve.Protocol.Phantom.Offer(PlayerId = PlayerId.value player, ViewRevision = revision, Asset = descriptor value)
-        | PhantomResponse.Transfer(id, value, player, upload, request, token) -> packet.Transfer <- Dreamsleeve.Protocol.Phantom.Transfer(TransferId = id.Value, Asset = descriptor value, PlayerId = PlayerId.value player, Upload = upload, RequestId = request.Value, HttpToken = token)
+        | PhantomResponse.Transfer(id, value, player, upload, request, token, change) -> packet.Transfer <- Dreamsleeve.Protocol.Phantom.Transfer(TransferId = id.Value, Asset = descriptor value, PlayerId = PlayerId.value player, Upload = upload, RequestId = request.Value, HttpToken = token, Delta = deltaDescriptor change)
         | PhantomResponse.Complete(id, accepted, reason, request, target) ->
             let value = Dreamsleeve.Protocol.Phantom.Complete(TransferId = id.Value, Accepted = accepted, Reason = reason, RequestId = request.Value)
             target |> Option.iter (fun completion ->

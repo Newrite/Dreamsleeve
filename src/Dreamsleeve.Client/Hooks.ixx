@@ -41,6 +41,9 @@ namespace Hooks
     constexpr auto UpdateActor3D = REL::VariantID(38404, 39395, 0x65A140);
     constexpr auto Clear3DFlags  = REL::VariantID(38868, 39909, 0x687870);
 
+    constexpr auto ObjectNetCopy = REL::VariantID(69139, 70500, 0xCA5580);
+    constexpr auto ObjectNetProcessClone = REL::VariantID(69162, 70523, 0xCA6A50);
+
     constexpr auto StreamCtor      = REL::VariantID(68971, 70324, 0xC9EC40);
     constexpr auto StreamDtor      = REL::VariantID(68972, 70325, 0xC9EEA0);
     constexpr auto StreamLoad      = REL::VariantID(68978, 70331, 0xC9F470);
@@ -417,6 +420,72 @@ public:
     data.boneEntries = native;
   }
 
+  // NiObjectNET's controller edges only. The native geometry/skin clone still
+  // executes both passes. Never detach or edit controllers on the live actor.
+  struct PhantomClone
+  {
+    static inline thread_local RE::NiCloningProcess* snapshot{};
+
+    static RE::NiObject* ControllerCopy(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      return snapshot == &process ? nullptr : controller->CreateClone(process);
+    }
+
+    static void ControllerProcess(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      if(snapshot != &process) controller->ProcessClone(process);
+    }
+
+    static RE::NiPointer<RE::NiObject> Clone(
+      RE::NiNode* root, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs)
+    {
+      if(!PhantomThread() || !root) return {};
+      const RE::NiPointer<RE::NiNode> source{root};
+      RE::NiCloningProcess process{};
+      process.copyType = 1; // Native CopyMembers: preserve names without suffixes.
+      process.scale = {1,1,1};
+      struct Scope
+      {
+        RE::NiCloningProcess* previous;
+        ~Scope() { snapshot = previous; }
+      } scope{std::exchange(snapshot, &process)};
+      RE::NiPointer<RE::NiObject> clone{source->CreateClone(process)};
+      if (clone)
+      {
+        source->ProcessClone(process);
+        // Export the native identity map while its process is still alive.
+        // Duplicate names and reordered/compacted child arrays are irrelevant.
+        for (const auto& [original, copied] : process.cloneMap)
+        {
+          auto* from = netimmerse_cast<RE::NiAVObject*>(original);
+          auto* to = netimmerse_cast<RE::NiAVObject*>(copied);
+          if (from && to) pairs.emplace(from, to);
+        }
+      }
+      return clone;
+    }
+
+    static bool Install()
+    {
+      const auto copy = Address::ObjectNetCopy.address() + REL::Relocate(0x259,0x25B,0x259);
+      const auto process = Address::ObjectNetProcessClone.address() + 0x64;
+      constexpr std::array<std::uint8_t,6> copyBytes{0xFF,0x90,0xB8,0,0,0};
+      constexpr std::array<std::uint8_t,6> processBytes{0xFF,0x90,0xE8,0,0,0};
+      if(!std::ranges::equal(copyBytes, std::span{reinterpret_cast<const std::uint8_t*>(copy),6}) ||
+         !std::ranges::equal(processBytes, std::span{reinterpret_cast<const std::uint8_t*>(process),6}))
+      {
+        logger::error("Native phantom disabled: controller clone call sites changed");
+        return false;
+      }
+      // The audited original is a register-indirect call, not RIP-relative.
+      // Both full instructions were checked above; no original target is saved.
+      SKSE::GetTrampoline().write_call<6>(copy, ControllerCopy, true);
+      SKSE::GetTrampoline().write_call<6>(process, ControllerProcess, true);
+      logger::info("Phantom controller-free clone installed at {:X}/{:X}", copy, process);
+      return true;
+    }
+  };
+
   bool InstallPhantomNative()
   {
     const auto version = REL::Module::get().version();
@@ -428,10 +497,11 @@ public:
       logger::warn("Native phantom disabled for unaudited runtime {}", version.string());
       return false;
     }
+    if(!PhantomClone::Install()) return false;
     ModelCompleted::Install();
     phantomThread = std::this_thread::get_id();
     const Dreamsleeve::Game::PhantomNative::Engine
-      engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, PhantomLighting, Normalize};
+      engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, PhantomLighting, Normalize, PhantomClone::Clone};
     Phantoms::Install(engine);
     logger::info("Native NiStream phantom operations bound to Main::Update, runtime {}", version.string());
     return true;

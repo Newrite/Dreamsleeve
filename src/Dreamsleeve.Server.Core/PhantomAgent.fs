@@ -30,7 +30,7 @@ module PhantomAgent =
         Player: PlayerId; mutable Character: uint64; mutable Context: uint64; mutable Located: bool; mutable Active: bool
         mutable Demand: struct (uint64 * bool) option; mutable Preferences: PhantomPreferences; Views: Dictionary<PlayerId, View>; Selected: Dictionary<PlayerId, Selected>
         mutable ClearedAuthority: uint64; mutable Revision: uint64; mutable HighManifest: PhantomManifest option
-        mutable Ready: PhantomManifest option; mutable Latest: struct (PhantomPose * int64) option
+        mutable Bases: struct (AssetHash option * AssetHash option); mutable Ready: PhantomManifest option; mutable Latest: struct (PhantomPose * int64) option
         mutable Previous: AppearanceGeneration option; mutable Settled: AppearanceGeneration option; mutable CommittedAt: int64
         mutable DispatchedPose: struct (AppearanceGeneration * uint64) option
         mutable PreviousSequence: uint64; mutable LastPose: struct (AppearanceGeneration * uint64) option; mutable NextPublish: int64; mutable PoseCursor: int
@@ -38,12 +38,12 @@ module PhantomAgent =
     }
     type private Phase =
         | StartingUpload of Task<Result<bool, string>>
-        | StartingDownload of Task<Result<unit, string>>
+        | StartingDownload of Task<Result<PhantomDelta option, string>>
         | StreamingHttp of PhantomHttpLease
     type private Transfer = {
         Id: PhantomTransferId; Request: PhantomRequestId; Owner: Guid; Source: PlayerId; Manifest: PhantomManifest
         Character: uint64; Context: uint64; View: uint64; Upload: bool
-        mutable Progress: int; mutable Touched: int64; mutable Phase: Phase
+        mutable Delta: PhantomDelta option; mutable Progress: int; mutable Touched: int64; mutable Phase: Phase
     }
     type Snapshot = { Members: int; Sources: int; Subscriptions: int; Transfers: int; LatestPoses: int; PendingIo: int }
     type State = private {
@@ -252,6 +252,7 @@ module PhantomAgent =
                 if characterChanged || contextChanged then
                     trace "context" memberState.Player value.MovementContext 0UL 0UL (if characterChanged then "character" else "movement")
                 if characterChanged then
+                    memberState.Bases <- struct (None, None)
                     clearSource state memberState
                     memberState.LastPose <- None
                     memberState.DispatchedPose <- None
@@ -282,7 +283,7 @@ module PhantomAgent =
                     Located = value.Location.IsSome && value.MovementContext <> 0UL; Active = false
                     Preferences = { Publish = options.Enabled; Receive = options.Enabled; Maximum = options.Maximum; Distance = options.Distance }
                     Demand = None; Views = Dictionary(); Selected = Dictionary(); ClearedAuthority = 0UL; Revision = 0UL; HighManifest = None
-                    Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; DispatchedPose = None; NextPublish = 0L; PoseCursor = 0
+                    Bases = struct (None, None); Ready = None; Latest = None; Previous = None; Settled = None; CommittedAt = 0L; PreviousSequence = 0UL; LastPose = None; DispatchedPose = None; NextPublish = 0L; PoseCursor = 0
                     PoseCredit = credit 0L options.PoseBytesPerSecond
                     OutgoingPoseCredit = credit 0L options.PoseBytesPerSecond; PoseSamples = credit 0L 2; ReplicationCredit = credit 0L 2
                     Commands = credit 0L options.CommandsPerSecond; Outbox = Queue()
@@ -324,15 +325,28 @@ module PhantomAgent =
         emit state owner (PhantomResponse.Complete(PhantomTransferId 0UL, false, reason, request, Some completion))
         deny()
 
-    let private startTransfer state at owner player (manifest: PhantomManifest) character context revision upload request =
+    let private startTransfer state at owner player (manifest: PhantomManifest) character context revision upload request change basis =
         if not (transferAvailable state owner) then
             refuse state owner player manifest.Generation upload request (if upload then max 1 state.Options.PublishCooldownMs else 1000) "transfer limit"
         else
             state.NextTransfer <- state.NextTransfer + 1UL
             let id = PhantomTransferId state.NextTransfer
-            let phase = if upload then StartingUpload(state.Storage.StartUpload(id, manifest)) else StartingDownload(state.Storage.StartDownload(id, manifest))
+            let phase = if upload then StartingUpload(state.Storage.StartUpload(id, manifest, change)) else StartingDownload(state.Storage.StartDownload(id, manifest, basis))
             state.Transfers[id] <- { Id = id; Request = request; Owner = owner; Source = player; Manifest = manifest; Character = character; Context = context
-                                     View = revision; Upload = upload; Progress = 0; Touched = at; Phase = phase }
+                                     View = revision; Upload = upload; Delta = change; Progress = 0; Touched = at; Phase = phase }
+
+    // Keep a cold receiver's chosen base stable until its native scene is ready.
+    // The existing progress timeout bounds a missing Displayed acknowledgement.
+    let private awaitingFirstDisplay state at player =
+        match state.Audiences.TryGetValue player with
+        | true, audience ->
+            audience |> Seq.exists (fun id ->
+                match state.Members[id].Selected.TryGetValue player with
+                | true, selected ->
+                    selected.Displayed.IsNone && at - selected.DisplayProgressAt < int64 state.Options.TransferTimeoutMs
+                    && (selected.DisplayProgressBytes > 0 || (state.Transfers.Values |> Seq.exists (fun transfer -> not transfer.Upload && transfer.Owner = id && transfer.Source = player)))
+                | _ -> false)
+        | _ -> false
 
     let handle state at id request =
         match state.Members.TryGetValue id with
@@ -343,7 +357,7 @@ module PhantomAgent =
                 if not preferences.Publish then clearSource state memberState
                 refresh state
             | PhantomRequest.Withdraw -> clearSource state memberState; refresh state
-            | PhantomRequest.Publish(manifest, context, request) ->
+            | PhantomRequest.Publish(manifest, context, request, change) ->
                 trace "publish_request" memberState.Player context manifest.Generation.Value 0UL ""
                 let sources = state.Members.Values |> Seq.filter (fun item -> item.Ready.IsSome) |> Seq.length
                 let pendingSources = state.Transfers.Values |> Seq.filter (fun item ->
@@ -351,11 +365,16 @@ module PhantomAgent =
                 let existingSource = memberState.Ready.IsSome || (state.Transfers.Values |> Seq.exists (fun item -> item.Upload && item.Owner = id))
                 let stale = memberState.HighManifest |> Option.exists (fun highest ->
                     manifest.Generation.Value < highest.Generation.Value || (manifest.Generation = highest.Generation && manifest <> highest))
-                if not memberState.Preferences.Publish || not memberState.Located || context <> memberState.Context
+                let struct (basis, priorBasis) = memberState.Bases
+                if (change |> Option.exists (fun d -> basis <> Some d.BaseHash && priorBasis <> Some d.BaseHash)) then
+                    refuse state id memberState.Player manifest.Generation true request 0 "delta base unavailable"
+                elif not memberState.Preferences.Publish || not memberState.Located || context <> memberState.Context
                    || stale then
                     refuse state id memberState.Player manifest.Generation true request 0 "publish admission"
                 elif memberState.Ready |> Option.exists (fun ready -> memberState.Settled <> Some ready.Generation && manifest <> ready) then
                     refuse state id memberState.Player manifest.Generation true request 1000 "replacement pending"
+                elif (memberState.Ready |> Option.exists (fun ready -> manifest <> ready)) && awaitingFirstDisplay state at memberState.Player then
+                    refuse state id memberState.Player manifest.Generation true request 1000 "initial display pending"
                 elif at < memberState.NextPublish then
                     refuse state id memberState.Player manifest.Generation true request (int (memberState.NextPublish - at)) "publish cooldown"
                 elif not existingSource && sources + pendingSources >= state.Options.MaxSources then
@@ -373,7 +392,7 @@ module PhantomAgent =
                     | _ -> ()
                     memberState.HighManifest <- Some manifest
                     memberState.NextPublish <- at + int64 state.Options.PublishCooldownMs
-                    startTransfer state at id memberState.Player manifest memberState.Character context 0UL true request
+                    startTransfer state at id memberState.Player manifest memberState.Character context 0UL true request change None
                     refresh state
             | PhantomRequest.Displayed(player, revision, generation) ->
                 match memberState.Selected.TryGetValue player with
@@ -381,13 +400,13 @@ module PhantomAgent =
                     traceFor (uint64 memberState.Player) "displayed" player memberState.Context generation.Value revision ""
                     selected.Displayed <- Some generation
                 | _ -> deny()
-            | PhantomRequest.Download(player, generation, request) ->
+            | PhantomRequest.Download(player, generation, request, basis) ->
                 match memberState.Selected.TryGetValue player, source state player with
                 | (true, selected), ValueSome current when selected.Asset.Generation = generation ->
                     let previous = state.Transfers.Values |> Seq.filter (fun item -> item.Owner = id && not item.Upload && item.Source = player) |> Seq.toArray
                     if previous |> Array.forall (fun item -> item.Request <> request) then
                         for transfer in previous do cancel state transfer.Id false "superseded"
-                        startTransfer state at id player selected.Asset current.Character current.Context selected.Revision false request
+                        startTransfer state at id player selected.Asset current.Character current.Context selected.Revision false request None basis
                 | _ -> refuse state id player generation false request 1000 "view unavailable"
             | PhantomRequest.Cancel transferId ->
                 match state.Transfers.TryGetValue transferId with
@@ -461,13 +480,15 @@ module PhantomAgent =
                     // Commit must not reopen its sequence floor or discard it.
                     owner.Latest <- owner.Latest |> Option.filter (fun struct (pose, _) -> pose.Generation = transfer.Manifest.Generation)
                 trace "committed" owner.Player owner.Context transfer.Manifest.Generation.Value 0UL ""
+                let struct (basis, _) = owner.Bases
+                if basis <> Some transfer.Manifest.Hash then owner.Bases <- struct (Some transfer.Manifest.Hash, basis)
                 owner.Ready <- Some transfer.Manifest
                 owner.CommittedAt <- at
                 cancel state transfer.Id true ""
             let beginHttp () =
-                let lease = state.Http.Admit(transfer.Owner, transfer.Id, transfer.Manifest, transfer.Upload)
+                let lease = state.Http.Admit(transfer.Owner, transfer.Id, transfer.Manifest, transfer.Upload, transfer.Delta)
                 transfer.Phase <- StreamingHttp lease
-                emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, transfer.Upload, transfer.Request, lease.Token))
+                emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, transfer.Upload, transfer.Request, lease.Token, transfer.Delta))
             match transfer.Phase with
             | StartingUpload pending when pending.IsCompleted ->
                 match pending.Result with
@@ -477,7 +498,7 @@ module PhantomAgent =
             | StartingDownload pending when pending.IsCompleted ->
                 match pending.Result with
                 | Error reason -> cancel state transfer.Id false reason
-                | Ok () -> beginHttp()
+                | Ok change -> transfer.Delta <- change; beginHttp()
             | StreamingHttp lease ->
                 let progress = lease.Progress
                 if progress > transfer.Progress then

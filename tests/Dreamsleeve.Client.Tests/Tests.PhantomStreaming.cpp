@@ -278,7 +278,7 @@ TEST_CASE("All accepted phantom cache misses reach the download planner")
   std::set<std::uint64_t> missed;
   REQUIRE(Until([&] {
     for (const auto& offer : worker.TakeMissing())
-      missed.insert(offer.player);
+      missed.insert(offer.offer.player);
     return missed.size() == 9;
   }));
 }
@@ -634,4 +634,114 @@ TEST_CASE("Capture waits for matching movement space and rejects late capture co
   exchange.Prepared(current.epoch, current.localRevision, {P::Generation{3}, model});
   CHECK(exchange.TakeOutput().publication.has_value());
   CHECK(exchange.Capturing(P::Generation{3}));
+}
+
+
+TEST_CASE("Delta with an evicted base requests a full body instead of rejecting the model")
+{
+  P::Exchange exchange;
+  auto model = Model();
+  P::Wire::Offer offer{42, 1, Describe(model)};
+  REQUIRE(exchange.Offer(offer));
+  P::Worker worker(exchange, {});
+  P::Digest absent{};
+  absent[0] = 123;
+  P::AssetDelta delta{absent, model.hash, static_cast<std::uint32_t>(model.compressed->size())};
+  REQUIRE(worker.Queue(offer, model.compressed, delta));
+  REQUIRE(Until([&] {
+    auto missing = worker.TakeMissing();
+    if(missing.empty()) return false;
+    CHECK(missing.front().offer.player == offer.player);
+    CHECK_FALSE(missing.front().baseHash);
+    return true;
+  }));
+  CHECK(exchange.Stats().rejected == 0);
+}
+
+
+TEST_CASE("Decoded outfit replacement releases transfer scratch before admitting its native scene")
+{
+  constexpr std::uint64_t MiB = 1024 * 1024;
+  P::Exchange exchange;
+  P::ViewSettings settings;
+  settings.memoryBytes = 512 * MiB;
+  exchange.Configure(settings);
+  auto oldAsset = P::ValidatedAsset::Parse(PhantomFixture::Model(20, 65535));
+  auto newAsset = P::ValidatedAsset::Parse(PhantomFixture::Model(56, 65535));
+  REQUIRE(oldAsset);
+  REQUIRE(newAsset);
+  P::Wire::Offer first{1, 1, {P::Digest{}, {1}, P::AssetVersion, 9 * 1024 * 1024,
+    static_cast<std::uint32_t>(oldAsset->Value().nif.size() + 12), 20}};
+  REQUIRE(exchange.Offer(first));
+  exchange.Loaded(exchange.Epoch(), first, std::make_shared<const P::ValidatedAsset>(*oldAsset), false);
+  REQUIRE(exchange.SceneMemory(1, 80 * MiB));
+  auto second = first;
+  second.view = 2;
+  second.asset.generation = {2};
+  second.asset.rawBytes = static_cast<std::uint32_t>(newAsset->Value().nif.size() + 12);
+  second.asset.compressedBytes = 32 * 1024 * 1024;
+  second.asset.channels = 56;
+  REQUIRE(exchange.Offer(second));
+  CHECK_FALSE(exchange.Find(1)->WaitingBudget());
+  // A stale worker completion must not release the current transfer's budget.
+  const auto loading = exchange.RemainingMemory();
+  exchange.Loaded(exchange.Epoch() + 1, second, std::make_shared<const P::ValidatedAsset>(*newAsset), false);
+  CHECK(exchange.RemainingMemory() == loading);
+  exchange.Loaded(exchange.Epoch(), second, std::make_shared<const P::ValidatedAsset>(*newAsset), false);
+  CHECK(exchange.RemainingMemory() > loading + 64 * MiB);
+  REQUIRE(exchange.SceneMemory(1, (80 + 224) * MiB));
+  REQUIRE(exchange.Find(1)->previous);
+  const auto replacing = exchange.RemainingMemory();
+  exchange.Displayed({1, 2, {2}});
+  REQUIRE(exchange.SceneMemory(1, 224 * MiB));
+  CHECK(exchange.RemainingMemory() > replacing + 80 * MiB);
+  CHECK_FALSE(exchange.SceneMemory(1, settings.memoryBytes));
+}
+
+TEST_CASE("Context keeps only a charged immutable delta basis and reset releases it")
+{
+  P::Exchange exchange;
+  auto model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  exchange.Settled({P::Generation{1}, 1});
+  exchange.Context(2, false);
+  exchange.RestartCapture();
+  auto work = exchange.TakeWork();
+  CHECK_FALSE(work.generation);
+  CHECK_FALSE(work.asset);
+  CHECK(work.priorAsset == model);
+  CHECK_FALSE(exchange.TakeOutput().publication);
+  exchange.Context(2, true);
+  REQUIRE(exchange.Submit(2, P::Generation{2}, model->asset));
+  work = exchange.TakeWork();
+  CHECK(work.priorAsset == model);
+  CHECK_FALSE(work.previousGeneration);
+  exchange.Reset();
+  CHECK_FALSE(exchange.TakeWork().priorAsset);
+}
+
+TEST_CASE("Transient publication admission preserves delta on retry")
+{
+  P::Exchange exchange;
+  auto model = std::make_shared<P::PreparedAsset>(Model());
+  auto basis = model->hash;
+  basis[0] ^= 1;
+  model->delta = P::PreparedDelta{{basis,model->hash,1},std::make_shared<const P::Bytes>(P::Bytes{1})};
+  PreparePublication(exchange, model);
+  P::Streaming stream(exchange, {});
+  Policy(stream);
+  auto packets = Models(stream.Poll());
+  auto publication = std::ranges::find_if(packets, [](const auto& p) { return p.has_publish(); });
+  REQUIRE(publication != packets.end());
+  REQUIRE(publication->publish().has_delta());
+  const auto request = publication->publish().request_id();
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* c=p.mutable_complete();
+    c->set_request_id(request); c->set_player_id(123); c->set_generation(1); c->set_upload(true);
+    c->set_reason("initial display pending"); c->set_retry_after_ms(10);
+  })));
+  packets = Models(stream.Poll(Clock::now()+std::chrono::seconds(1)));
+  publication = std::ranges::find_if(packets, [](const auto& p) { return p.has_publish(); });
+  REQUIRE(publication != packets.end());
+  CHECK(publication->publish().has_delta());
 }

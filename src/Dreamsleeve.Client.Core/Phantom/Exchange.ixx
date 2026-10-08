@@ -113,8 +113,11 @@ private:
       return !poseDemand || poseDemand->context != context || poseDemand->required;
     }
 
-    void ClearPublication()
+    void ClearPublication(bool retainBasis = false)
     {
+      // A compression basis has no generation/pose authority in the next context.
+      auto basis = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
+      const auto basisReservation = basis ? (basis == localAsset ? localReservation : previousReservation) : 0;
       ++localRevision;
       localGeneration.reset();
       previousGeneration.reset();
@@ -125,7 +128,8 @@ private:
       snapshot.reset();
       publication.reset();
       localAsset.reset();
-      previousAsset.reset();
+      previousAsset = std::move(basis);
+      previousReservation = basisReservation;
       encoded.reset();
       localReservation = 0;
     }
@@ -149,7 +153,11 @@ private:
 
     static std::uint64_t Reservation(const Remote& remote)
     {
-      return (remote.WaitingBudget() ? 0 : Reservation(remote.descriptor)) + remote.sceneBytes +
+      // Once decode completes, worker scratch and compressed input are released.
+      // The immutable asset is shared with Game; charge it once here.
+      const auto contentBytes = remote.Asset() ? Retained(remote)
+                              : remote.WaitingBudget() ? 0 : Reservation(remote.descriptor);
+      return contentBytes + remote.sceneBytes +
              (remote.previous ? Retained(*remote.previous) : 0);
     }
 
@@ -232,7 +240,7 @@ public:
     void Context(std::uint64_t value, bool ready, std::optional<Domain::LocationId> location = {})
     {
       std::lock_guard lock(mutex);
-      if (value != context) ClearPublication();
+      if (value != context) ClearPublication(true);
       space = std::move(location);
       if (value != context || available != ready)
       {
@@ -273,7 +281,7 @@ public:
     void RestartCapture()
     {
       std::lock_guard lock(mutex);
-      ClearPublication();
+      ClearPublication(true);
       changed = true;
     }
 
@@ -287,7 +295,7 @@ public:
         bytes + Reserved() - (phase == PublicationPhase::Rejected ? localReservation : 0) > settings.memoryBytes)
         return false;
       // A rejected candidate never replaces the last usable bridge asset.
-      if (phase != PublicationPhase::Rejected)
+      if (phase != PublicationPhase::Rejected && localGeneration)
       {
         previousGeneration  = localGeneration;
         previousReservation = localReservation;
@@ -345,7 +353,8 @@ public:
       {
         // Preparation scratch is gone; keep immutable NIF/compressed data and
         // bounded pose work, not another compression reservation indefinitely.
-        localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() + 6 * SnapshotWorkingBytes() +
+        localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() +
+                           (value.asset->delta ? value.asset->delta->bytes->capacity() : 0) + 6 * SnapshotWorkingBytes() +
                            Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
         localAsset       = value.asset;
         publication      = std::move(value);

@@ -233,4 +233,8 @@ export const instantKeys = [
   "textFilter",
   "markDateStyle",
   "markGuildmatesOnly",
+  "publishPhantoms",
+  "showPhantoms",
+  "phantomFallback",
+  "combatHidePhantoms",
 ] as const;

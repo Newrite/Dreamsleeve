@@ -218,3 +218,11 @@ target("Dreamsleeve.NifOutput.Benchmark")
     set_default(false)
     add_files("tests/Dreamsleeve.Client.Benchmarks/NifOutput.cpp")
     add_deps("Dreamsleeve.Client.Core")
+
+-- Production WinHTTP body probe; excluded from default build and dist.
+target("Dreamsleeve.Http.Benchmark")
+    set_kind("binary")
+    set_group("Tests")
+    set_default(false)
+    add_files("tests/Dreamsleeve.Client.Benchmarks/Http.cpp")
+    add_deps("Dreamsleeve.Client.Core")

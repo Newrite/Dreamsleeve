@@ -9,12 +9,21 @@ export namespace Dreamsleeve::Client::Phantom
   using Bytes  = std::vector<std::uint8_t>;
   using Digest = std::array<std::uint8_t, 32>;
 
+  struct AssetDelta
+  {
+    Digest baseHash, hash;
+    std::uint32_t compressedBytes{};
+    bool operator==(const AssetDelta&) const = default;
+  };
+  struct PreparedDelta { AssetDelta descriptor; std::shared_ptr<const Bytes> bytes; };
+
   struct PreparedAsset
   {
     ValidatedAsset               asset;
     Digest                       hash;
     std::shared_ptr<const Bytes> compressed;
     std::uint32_t                rawBytes{};
+    std::optional<PreparedDelta> delta;
   };
 
   Result<Digest>         Hash(std::span<const std::uint8_t> bytes);

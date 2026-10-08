@@ -28,9 +28,31 @@ let tests = testList "Continuous diagnostics" [
                         |> Array.find (fun x -> x.GetProperty("name").GetString() = "test.stage")
             Expect.equal (found.GetProperty("count").GetInt64()) 2L "all measurements"
             Expect.equal (found.GetProperty("sum").GetDouble()) 10.0 "sum"
-            let transition = records |> Array.find (fun x -> x.RootElement.GetProperty("kind").GetString() = "phantom")
+            let transition = records |> Array.find (fun x -> x.RootElement.GetProperty("kind").GetString() = "phantom" && x.RootElement.GetProperty("fields").GetProperty("event").GetString() = "context")
             Expect.equal (transition.RootElement.GetProperty("fields").GetProperty("context").GetUInt64()) 123UL "numeric context"
         finally for record in records do record.Dispose()
+    testCase "HTTP events retain transfer correlation and phases without aggregation" <| fun _ ->
+        let lines = ConcurrentQueue<string>()
+        use meter = new Meter("Dreamsleeve.Test.Http")
+        let events = meter.CreateCounter<int64>("phantom.http")
+        let collector = new ContinuousDiagnostics(Action<string>(lines.Enqueue))
+        for phase in ["claimed"; "first_body"; "body_complete"] do
+            let mutable tags = Diagnostics.TagList()
+            tags.Add("event", "http"); tags.Add("phase", phase)
+            tags.Add("transfer", 791UL); tags.Add("body_ms", 123.5)
+            events.Add(1L, &tags)
+        collector.Dispose()
+        let phases = ResizeArray<string>()
+        for line in lines do
+            use record = JsonDocument.Parse line
+            let root = record.RootElement
+            if root.GetProperty("kind").GetString() = "phantom" then
+                let fields = root.GetProperty("fields")
+                if fields.GetProperty("event").GetString() = "http" then
+                    Expect.equal (fields.GetProperty("transfer").GetUInt64()) 791UL "Exact transfer ID"
+                    Expect.equal (fields.GetProperty("body_ms").GetDouble()) 123.5 "Timing preserved"
+                    phases.Add(fields.GetProperty("phase").GetString())
+        Expect.sequenceEqual phases ["claimed"; "first_body"; "body_complete"] "Every phase persisted"
     testCase "sink failure cannot fault shutdown or producer" <| fun _ ->
         use collector = new ContinuousDiagnostics(Action<string>(fun _ -> failwith "disk unavailable"))
         use meter = new Meter("Dreamsleeve.Test.Failure")

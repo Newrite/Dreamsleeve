@@ -8,6 +8,9 @@ export module Dreamsleeve.Client.Phantom.Http;
 import std;
 import Dreamsleeve.Client.Auth;
 import Dreamsleeve.Client.Phantom.Wire;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+#endif
 
 export namespace Dreamsleeve::Client::Phantom
 {
@@ -18,6 +21,45 @@ export namespace Dreamsleeve::Client::Phantom
     struct Closer { void operator()(void* value) const { if (value) WinHttpCloseHandle(value); } };
     using Handle = std::unique_ptr<void, Closer>;
     using Clock = std::chrono::steady_clock;
+    // Per-job timings, emitted at most once/sec plus slow operations and endpoints.
+    struct Trace
+    {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const Wire::Transfer& transfer;
+      Clock::time_point start{Clock::now()}, emitted{start};
+      std::array<double, 5> totals{};
+      std::uint32_t progress{};
+      bool active{Diagnostics::Trace::Enabled()};
+      explicit Trace(const Wire::Transfer& value) : transfer(value) { Emit("start", 0); }
+      void Emit(std::string_view phase, double elapsed)
+      {
+        if (!active) return;
+        Diagnostics::Trace::Event("http", std::format(
+          "\"transfer\":{},\"request\":{},\"player\":{},\"generation\":{},\"upload\":{},\"body_bytes\":{},\"progress\":{},\"phase\":\"{}\",\"operation_ms\":{},\"elapsed_ms\":{},\"send_ms\":{},\"headers_ms\":{},\"budget_ms\":{},\"body_ms\":{},\"eof_ms\":{}",
+          transfer.transfer.value, transfer.request.value, transfer.player, transfer.asset.generation.value,
+          transfer.upload, transfer.BodyBytes(), progress, phase, elapsed,
+          std::chrono::duration<double, std::milli>(Clock::now()-start).count(),
+          totals[0], totals[1], totals[2], totals[3], totals[4]));
+        emitted = Clock::now();
+      }
+      template<class F> bool Step(unsigned stage, std::string_view phase, F&& action)
+      {
+        if (!active) return action();
+        const auto at = Clock::now();
+        const bool ok = action();
+        const auto ms = std::chrono::duration<double, std::milli>(Clock::now()-at).count();
+        totals[stage] += ms;
+        if (!ok || stage < 2 || stage == 4 || ms >= 250 || Clock::now()-emitted >= std::chrono::seconds(1)) Emit(phase, ms);
+        return ok;
+      }
+      void Progress(std::uint32_t value) { if (!progress && value) { progress=value; Emit("first_body",0); } else progress=value; }
+#else
+      explicit Trace(const Wire::Transfer&) {}
+      void Emit(std::string_view, double) {}
+      template<class F> bool Step(unsigned, std::string_view, F&& action) { return action(); }
+      void Progress(std::uint32_t) {}
+#endif
+    };
     struct Budget
     {
       std::mutex mutex;
@@ -104,7 +146,7 @@ export namespace Dreamsleeve::Client::Phantom
     std::string origin;
     bool allowInsecure{};
 
-    std::optional<std::string> Run(Job& job, std::string url, bool insecure, std::uint32_t rate, std::stop_token stop)
+    std::optional<std::string> Run(Job& job, std::string url, bool insecure, std::uint32_t rate, std::stop_token stop, Trace& trace)
     {
       if (auto valid = Auth::ValidateUrl(url, insecure); !valid) return valid.error();
       if (!session) return "WinHTTP session unavailable";
@@ -132,45 +174,47 @@ export namespace Dreamsleeve::Client::Phantom
           !WinHttpSetOption(request.handle, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled))) return "HTTP options";
       std::wstring headers = L"Authorization: Bearer " + std::wstring(job.transfer.httpToken.begin(), job.transfer.httpToken.end()) + L"\r\nContent-Type: application/octet-stream\r\n";
       const auto fail = [&] { std::lock_guard lock(request.mutex); return stop.stop_requested() ? std::string("HTTP canceled") : "WinHTTP error " + std::to_string(request.error); };
-      if (!request.Step(stop, WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE, [&] {
+      if (!trace.Step(0, "send", [&] { return request.Step(stop, WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE, [&] {
             return WinHttpSendRequest(request.handle, headers.c_str(), static_cast<DWORD>(headers.size()), nullptr, 0,
-                                      job.transfer.upload ? job.transfer.asset.compressedBytes : 0, reinterpret_cast<DWORD_PTR>(&request));
-          })) return fail();
+                                      job.transfer.upload ? job.transfer.BodyBytes() : 0, reinterpret_cast<DWORD_PTR>(&request));
+          }); })) return fail();
       if (job.transfer.upload)
       {
         while (job.progress < job.input->size())
         {
           auto offset = job.progress.load();
           auto count = static_cast<DWORD>(std::min<std::size_t>(32768, job.input->size() - offset));
-          if (!uploadBudget.Wait(count, rate, stop)) return "HTTP canceled";
-          if (!request.Step(stop, WINHTTP_CALLBACK_STATUS_WRITE_COMPLETE, [&] {
+          if (!trace.Step(2, "budget", [&] { return uploadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
+          if (!trace.Step(3, "write", [&] { return request.Step(stop, WINHTTP_CALLBACK_STATUS_WRITE_COMPLETE, [&] {
                 return WinHttpWriteData(request.handle, job.input->data() + offset, count, nullptr);
-              })) return fail();
+              }); })) return fail();
           if (!request.count || request.count > count) return "HTTP write length";
           job.progress = offset + request.count;
+          trace.Progress(job.progress.load());
         }
       }
-      if (!request.Step(stop, WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE, [&] { return WinHttpReceiveResponse(request.handle, nullptr); })) return fail();
+      if (!trace.Step(1, "headers", [&] { return request.Step(stop, WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE, [&] { return WinHttpReceiveResponse(request.handle, nullptr); }); })) return fail();
       DWORD status{}, statusSize = sizeof(status);
       if (!WinHttpQueryHeaders(request.handle, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, nullptr, &status, &statusSize, nullptr)) return "HTTP status";
       if (status != (job.transfer.upload ? 204u : 200u)) return "HTTP status " + std::to_string(status);
       if (job.transfer.upload) return {};
       DWORD contentLength{}, headerSize = sizeof(contentLength);
       if (!WinHttpQueryHeaders(request.handle, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER, nullptr, &contentLength, &headerSize, nullptr) ||
-          contentLength != job.transfer.asset.compressedBytes) return "HTTP content length";
+          contentLength != job.transfer.BodyBytes()) return "HTTP content length";
       job.output = std::make_shared<Bytes>(contentLength);
       while (job.progress < contentLength)
       {
         auto offset = job.progress.load();
         auto count = std::min<DWORD>(32768, contentLength - offset);
-        if (!downloadBudget.Wait(count, rate, stop)) return "HTTP canceled";
-        if (!request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] {
+        if (!trace.Step(2, "budget", [&] { return downloadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
+        if (!trace.Step(3, "read", [&] { return request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] {
               return WinHttpReadData(request.handle, job.output->data() + offset, count, nullptr);
-            })) return fail();
+            }); })) return fail();
         if (!request.count || request.count > count) return "HTTP truncated";
         job.progress = offset + request.count;
+          trace.Progress(job.progress.load());
       }
-      if (!request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] { return WinHttpReadData(request.handle, tail.data(), 1, nullptr); })) return fail();
+      if (!trace.Step(4, "eof", [&] { return request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] { return WinHttpReadData(request.handle, tail.data(), 1, nullptr); }); })) return fail();
       if (request.count) return "HTTP oversized";
       return {};
     }
@@ -180,12 +224,14 @@ export namespace Dreamsleeve::Client::Phantom
     void Configure(std::string url, bool insecure) { origin = std::move(url); allowInsecure = insecure; }
     bool Start(Wire::Transfer transfer, std::shared_ptr<const Bytes> input, std::uint32_t rate)
     {
-      if (jobs.size() >= 8 || origin.empty() || !rate || (transfer.upload && (!input || input->size() != transfer.asset.compressedBytes))) return false;
+      if (jobs.size() >= 8 || origin.empty() || !rate || (transfer.upload && (!input || input->size() != transfer.BodyBytes()))) return false;
       auto job = std::make_unique<Job>();
       job->transfer = std::move(transfer); job->input = std::move(input);
       auto* owner = job.get();
       job->thread = std::jthread([this, owner, url = origin, insecure = allowInsecure, rate](std::stop_token stop) {
-        owner->error = Run(*owner, url, insecure, rate, stop);
+        Trace trace{owner->transfer};
+        owner->error = Run(*owner, url, insecure, rate, stop, trace);
+        trace.Emit(owner->error ? (stop.stop_requested() ? "canceled" : "failed") : "complete", 0);
         owner->done.store(true, std::memory_order_release);
       });
       jobs.push_back(std::move(job));

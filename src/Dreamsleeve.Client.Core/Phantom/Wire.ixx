@@ -38,6 +38,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     Descriptor    asset;
     std::uint64_t context{};
     RequestId     request;
+    std::optional<AssetDelta> delta;
   };
 
   struct Download
@@ -45,6 +46,7 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     std::uint64_t player{};
     Generation    generation;
     RequestId     request;
+    std::optional<Digest> baseHash;
   };
 
   struct Cancel
@@ -77,6 +79,8 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     bool          upload{};
     RequestId     request;
     std::string   httpToken;
+    std::optional<AssetDelta> delta;
+    std::uint32_t BodyBytes() const { return delta ? delta->compressedBytes : asset.compressedBytes; }
   };
 
   struct Complete

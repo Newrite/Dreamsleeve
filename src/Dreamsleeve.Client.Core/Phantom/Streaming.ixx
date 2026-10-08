@@ -24,7 +24,6 @@ export namespace Dreamsleeve::Client::Phantom
       Wire::Transfer    transfer;
       std::uint32_t     progress{};
       Clock::time_point touched;
-
     };
 
     struct Pending
@@ -48,6 +47,7 @@ export namespace Dreamsleeve::Client::Phantom
     {
       Publication                                              value;
       std::variant<Pending, Awaiting, Upload, Ready, Rejected> state;
+      bool                                                     fullOnly{};
     };
 
     struct CacheProbe
@@ -64,16 +64,23 @@ export namespace Dreamsleeve::Client::Phantom
     {
       Wire::Offer                                            offer;
       std::variant<CacheProbe, Pending, Awaiting, Receiving> state;
+      std::optional<Digest>                                  baseHash;
     };
 
     struct Download
     {
-      Wire::Offer            offer;
-      std::shared_ptr<Bytes> bytes;
-      Clock::time_point      touched;
-      RequestId              request;
-      std::uint32_t          progress{};
+      Wire::Offer                   offer;
+      std::shared_ptr<Bytes>        bytes;
+      Clock::time_point             touched;
+      RequestId                     request;
+      std::uint32_t                 progress{};
       std::optional<Wire::Complete> receipt;
+      std::optional<AssetDelta>     delta;
+
+      std::uint32_t BodyBytes() const
+      {
+        return delta ? delta->compressedBytes : offer.asset.compressedBytes;
+      }
     };
 
     Exchange&                   exchange;
@@ -171,7 +178,11 @@ export namespace Dreamsleeve::Client::Phantom
           static_cast<std::uint32_t>(asset.asset.Layout().requiredChannels.size())
       };
       const auto id = NextRequest();
-      if (id.value && Request(Wire::Publish{descriptor, context, id})) local->state = Awaiting{id, now + Timeout};
+      if (
+        id.value &&
+        Request(
+          Wire::Publish{descriptor, context, id, !local->fullOnly && asset.delta ? std::optional{asset.delta->descriptor} : std::nullopt}))
+        local->state = Awaiting{id, now + Timeout};
     }
 
     void Receive(const Wire::Policy& value)
@@ -237,7 +248,18 @@ export namespace Dreamsleeve::Client::Phantom
           Cancel(value.transfer);
           return;
         }
-        if (!http.Start(value, local->value.asset->compressed, std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond)))
+        const auto& prepared = *local->value.asset;
+        if (value.delta && (local->fullOnly || !prepared.delta || prepared.delta->descriptor != *value.delta))
+        {
+          Cancel(value.transfer);
+          local->fullOnly = true;
+          local->state    = Pending{Clock::now()};
+          return;
+        }
+        if (!http.Start(
+              value,
+              value.delta ? prepared.delta->bytes : prepared.compressed,
+              std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond)))
         {
           Cancel(value.transfer);
           local->state = Pending{Clock::now() + std::chrono::seconds(1)};
@@ -256,10 +278,18 @@ export namespace Dreamsleeve::Client::Phantom
         Cancel(value.transfer);
         return;
       }
+      if (value.delta && (plan->second.baseHash != value.delta->baseHash))
+      {
+        Cancel(value.transfer);
+        plan->second.baseHash.reset();
+        plan->second.state = Pending{Clock::now()};
+        return;
+      }
       auto bytes = std::make_shared<Bytes>();
 
-      const auto [entry, inserted] =
-        downloads.emplace(value.transfer.value, Download{plan->second.offer, std::move(bytes), Clock::now(), value.request});
+      const auto [entry, inserted] = downloads.emplace(
+        value.transfer.value,
+        Download{plan->second.offer, std::move(bytes), Clock::now(), value.request, 0, {}, value.delta});
       if (!inserted)
       {
         Cancel(value.transfer);
@@ -290,13 +320,20 @@ export namespace Dreamsleeve::Client::Phantom
           {
             // A commit can arrive between HTTP progress polls. Count its final
             // persisted bytes before replacing Upload with Ready.
-            if (value.accepted) exchange.Count(upload->transfer.asset.compressedBytes - upload->progress, 0);
-            else http.Cancel(value.transfer);
+            if (value.accepted)
+              exchange.Count(upload->transfer.BodyBytes() - upload->progress, 0);
+            else
+              http.Cancel(value.transfer);
           }
           if (value.accepted)
           {
             local->state        = Ready{};
             committedGeneration = local->value.generation;
+          }
+          else if (!local->fullOnly && local->value.asset->delta && (value.retryAfterMs == 0 || value.reason == "delta base unavailable"))
+          {
+            local->fullOnly = true;
+            local->state    = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
           }
           else
           {
@@ -331,7 +368,7 @@ export namespace Dreamsleeve::Client::Phantom
       const auto found = downloads.find(value.transfer.value);
       if (found == downloads.end()) return;
       if (found->second.request != value.request) return;
-      if (value.accepted && found->second.bytes->size() != found->second.offer.asset.compressedBytes)
+      if (value.accepted && found->second.bytes->size() != found->second.BodyBytes())
       {
         found->second.receipt = value;
         return;
@@ -346,13 +383,18 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       plans.erase(download.offer.player);
-      if (!value.accepted || download.bytes->size() != download.offer.asset.compressedBytes)
+      if (!value.accepted || download.bytes->size() != download.BodyBytes())
       {
         exchange.Unavailable(exchange.Epoch(), download.offer, "Передача модели фантома не завершена");
         return;
       }
-      if (!worker.Queue(download.offer, std::move(download.bytes)))
-        exchange.Unavailable(exchange.Epoch(), download.offer, "Очередь проверки моделей заполнена");
+      if (!worker.Queue(download.offer, std::move(download.bytes), download.delta))
+      {
+        if (download.delta)
+          plans.insert_or_assign(download.offer.player, DownloadPlan{download.offer, Pending{now}});
+        else
+          exchange.Unavailable(exchange.Epoch(), download.offer, "Очередь проверки моделей заполнена");
+      }
     }
 
     void Receive(const Wire::Remove& value)
@@ -374,11 +416,18 @@ export namespace Dreamsleeve::Client::Phantom
 
     void DownloadPoll(Clock::time_point now)
     {
-      for (auto& offer : worker.TakeMissing())
+      for (auto& missing : worker.TakeMissing())
       {
-        const auto plan = plans.find(offer.player);
-        if (plan != plans.end() && plan->second.offer.view == offer.view && plan->second.offer.asset == offer.asset)
-          plan->second.state = Pending{now};
+        const auto& offer  = missing.offer;
+        const auto  remote = exchange.Find(offer.player);
+        if (!remote || remote->view != offer.view || remote->descriptor != offer.asset || remote->Asset()) continue;
+        auto plan = plans.find(offer.player);
+        if (plan == plans.end()) plan = plans.emplace(offer.player, DownloadPlan{offer, Pending{now}}).first;
+        if (plan->second.offer.view == offer.view && plan->second.offer.asset == offer.asset)
+        {
+          plan->second.state    = Pending{now};
+          plan->second.baseHash = missing.baseHash;
+        }
       }
       if (!policy || !active || !exchange.Settings().receive) return;
       for (auto it = plans.begin(); it != plans.end();)
@@ -418,7 +467,7 @@ export namespace Dreamsleeve::Client::Phantom
             continue;
           }
           const auto request = NextRequest();
-          if (request.value && Request(Wire::Download{id, plan.offer.asset.generation, request}))
+          if (request.value && Request(Wire::Download{id, plan.offer.asset.generation, request, plan.baseHash}))
           {
             plan.state = Awaiting{request, now + Timeout};
             ++count;
@@ -431,7 +480,10 @@ public:
 
     Streaming(Exchange& owner, std::filesystem::path cache) : exchange(owner), worker(owner, std::move(cache)) {}
 
-    void ConfigureHttp(std::string url, bool insecure) { http.Configure(std::move(url), insecure); }
+    void ConfigureHttp(std::string url, bool insecure)
+    {
+      http.Configure(std::move(url), insecure);
+    }
 
     void Reset()
     {
@@ -447,9 +499,9 @@ public:
       context          = 0;
       active           = false;
       lastPoseSequence = localRevision = 0;
-      poseCredit = 0;
-      lastBudget               = Clock::now();
-      nextPose                 = {};
+      poseCredit                       = 0;
+      lastBudget                       = Clock::now();
+      nextPose                         = {};
     }
 
     void Context(std::uint64_t revision, bool ready, std::optional<Domain::LocationId> location = {})
@@ -524,7 +576,8 @@ public:
           if (progress > upload->progress)
           {
             exchange.Count(progress - upload->progress, 0);
-            upload->progress = progress; upload->touched = now;
+            upload->progress = progress;
+            upload->touched  = now;
           }
           if (now - upload->touched > Timeout)
           {
@@ -538,26 +591,39 @@ public:
         if (progress > download.progress)
         {
           exchange.Count(progress - download.progress, 0);
-          download.progress = progress; download.touched = now;
+          download.progress = progress;
+          download.touched  = now;
         }
       }
       for (auto& done : http.Poll())
       {
         const auto& transfer = done.transfer;
-        const auto* upload = local ? std::get_if<Upload>(&local->state) : nullptr;
-        const auto remote = downloads.find(transfer.transfer.value);
-        if (transfer.upload ? (!upload || upload->transfer.request != transfer.request || upload->transfer.transfer != transfer.transfer)
-                            : (remote == downloads.end() || remote->second.request != transfer.request)) continue;
+        const auto* upload   = local ? std::get_if<Upload>(&local->state) : nullptr;
+        const auto  remote   = downloads.find(transfer.transfer.value);
+        if (
+          transfer.upload ? (!upload || upload->transfer.request != transfer.request || upload->transfer.transfer != transfer.transfer)
+                          : (remote == downloads.end() || remote->second.request != transfer.request))
+          continue;
         if (done.error)
         {
           Request(Wire::Cancel{transfer.transfer});
-          Receive(Wire::Complete{transfer.transfer, false, *done.error, transfer.player, transfer.asset.generation, 1000, transfer.upload, transfer.request});
+          Receive(
+            Wire::Complete{
+                transfer.transfer,
+                false,
+                *done.error,
+                transfer.player,
+                transfer.asset.generation,
+                1000,
+                transfer.upload,
+                transfer.request
+            });
         }
         else if (!transfer.upload)
         {
           const auto found = downloads.find(transfer.transfer.value);
           if (found == downloads.end() || found->second.request != transfer.request) continue;
-          found->second.bytes = std::move(done.bytes);
+          found->second.bytes   = std::move(done.bytes);
           found->second.touched = now;
           if (found->second.receipt)
           {
@@ -632,7 +698,8 @@ public:
       lastBudget         = now;
       if (policy)
       {
-        poseCredit  = std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, double(2ULL * policy->limits.compressedPoseBytes + 1024));
+        poseCredit =
+          std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, double(2ULL * policy->limits.compressedPoseBytes + 1024));
       }
       for (auto it = downloads.begin(); it != downloads.end();)
       {

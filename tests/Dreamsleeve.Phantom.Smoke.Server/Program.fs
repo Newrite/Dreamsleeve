@@ -40,7 +40,7 @@ let private run (arguments: string array) = task {
             let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1025L * 1025L)
             new ContinuousDiagnostics(Action<string>(file.Write), Action(file.Dispose)) :> IDisposable
         else { new IDisposable with member _.Dispose() = () }
-    if ProtocolCodec.Version <> 25u then failwith "Smoke fixture requires protocol25."
+    if ProtocolCodec.Version <> 26u then failwith "Smoke fixture requires protocol26."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
                                                    DiskBytes = 128L * 1025L * 1025L; RamBytes = 4L * 1025L * 1025L;
                                                    PublishCooldownMs = 100; ReplicationIntervalMs = 10 }
@@ -80,9 +80,9 @@ let private run (arguments: string array) = task {
                       authentication transport logger
     try
         Directory.CreateDirectory(Path.GetDirectoryName readyFile) |> ignore
-        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 25; port = int port;
+        File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 26; port = int port;
             stateDirectory = directory; aliceTicket = ticket "alice"; bobTicket = ticket "bob" |}))
-        printfn "PHANTOM_SMOKE_READY protocol25 127.0.0.1:%d" port
+        printfn "PHANTOM_SMOKE_READY protocol26 127.0.0.1:%d" port
         let input = task {
             if not (Array.contains "--self-check" arguments) then
                 let mutable running = true

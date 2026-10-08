@@ -57,7 +57,7 @@ public sealed class ContinuousDiagnostics : IDisposable
     private void Observe(Instrument instrument, double value, ReadOnlySpan<KeyValuePair<string, object?>> tags)
     {
         if (!double.IsFinite(value)) return;
-        if (instrument.Name == "phantom.lifecycle") {
+        if (instrument.Name is "phantom.lifecycle" or "phantom.http") {
             var fields = new Dictionary<string, object?>();
             foreach (var tag in tags) fields[tag.Key] = tag.Value;
             if (!events.Writer.TryWrite(new { kind = "phantom", utc_ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),

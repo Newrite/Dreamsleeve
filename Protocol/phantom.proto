@@ -9,8 +9,9 @@ message AssetDescriptor {
   uint32 channels = 6;
   reserved 7; reserved "geometry";
 }
-message Publish { AssetDescriptor asset = 1; uint64 context_revision = 2; uint64 request_id = 3; }
-message Download { uint64 player_id = 1; uint64 generation = 2; uint64 request_id = 3; }
+message AssetDelta { bytes base_hash = 1; bytes hash = 2; uint32 compressed_bytes = 3; }
+message Publish { AssetDelta delta = 4; AssetDescriptor asset = 1; uint64 context_revision = 2; uint64 request_id = 3; }
+message Download { bytes base_hash = 4; uint64 player_id = 1; uint64 generation = 2; uint64 request_id = 3; }
 message Cancel { uint64 transfer_id = 1; }
 // Sent only after a native scene has applied its first pose and become visible.
 message Displayed { uint64 player_id = 1; uint64 view_revision = 2; uint64 generation = 3; }
@@ -28,7 +29,7 @@ message ClientAssetPacket {
   }
 }
 message Offer { uint64 player_id = 1; uint64 view_revision = 2; AssetDescriptor asset = 3; }
-message Transfer { uint64 transfer_id = 1; AssetDescriptor asset = 2; uint64 player_id = 3; bool upload = 4; uint64 request_id = 5; string http_token = 6; }
+message Transfer { AssetDelta delta = 7; uint64 transfer_id = 1; AssetDescriptor asset = 2; uint64 player_id = 3; bool upload = 4; uint64 request_id = 5; string http_token = 6; }
 message Complete {
   uint64 transfer_id = 1;
   bool accepted = 2;

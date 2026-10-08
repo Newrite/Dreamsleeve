@@ -12,7 +12,7 @@ const sliders = [
   ["phantomDrawDistance", "Дальность фантомов", 2048],
   ["phantomOpacity", "Непрозрачность фантомов", 0.35],
   ["phantomSampleRate", "Частота движения", 15],
-  ["phantomDelayMs", "Задержка сглаживания", 125],
+  ["phantomDelayMs", "Минимальная задержка сглаживания", 125],
   ["phantomExtrapolationMs", "Продолжение движения без обновлений", 75],
   ["phantomTimeoutMs", "Скрывать при отсутствии обновлений", 1500],
   ["phantomMemoryMiB", "Лимит памяти моделей", 512],
@@ -80,7 +80,7 @@ test("phantom controls save and restore all sixteen scalar settings", async ({
   expect(errors).toEqual([]);
 });
 
-test("built phantom settings send one scalar save and keep controls stable on chat updates", async ({
+test("built phantom settings apply visibility before save and keep controls stable on chat updates", async ({
   page,
 }, testInfo) => {
   const errors: string[] = [];
@@ -193,14 +193,19 @@ test("built phantom settings send one scalar save and keep controls stable on ch
     unchangedMarkup: true,
     retainedInputs: true,
   });
+  await group.getByLabel("Показывать фантомы других игроков", { exact: true }).uncheck();
+  expect(await page.evaluate(() => (window as unknown as { phantomCommands: unknown[] }).phantomCommands)).toEqual([
+    { type: "displaySettings", settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false } },
+  ]);
   await page.getByRole("button", { name: "Сохранить настройки" }).click();
   const commands = await page.evaluate(
     () => (window as unknown as { phantomCommands: unknown[] }).phantomCommands,
   );
   expect(commands).toEqual([
+    { type: "displaySettings", settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false } },
     {
       type: "saveSettings",
-      settings: { ...defaults, phantomSampleRate: 15 },
+      settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false },
       revision: expect.any(Number),
     },
   ]);

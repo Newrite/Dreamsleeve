@@ -25,6 +25,8 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     AssetDecode,
     PoseEncode,
     PoseDecode,
+    DeltaEncode,
+    DeltaApply,
     Count
   };
   bool Start(const std::filesystem::path& directory, std::size_t partBytes = 64ULL * 1024 * 1024) noexcept;

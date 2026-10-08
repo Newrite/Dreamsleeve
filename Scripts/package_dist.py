@@ -41,7 +41,7 @@ WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
 SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
 FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "phantom-diagnostics", "diagnostics", "DreamsleevePhantoms", "DreamsleevePhantomDiagnostics", "captures")
-FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".partial", ".dmp", ".i64", ".idb", ".phdiag")
+FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".delta", ".partial", ".dmp", ".i64", ".idb", ".phdiag")
 # Relative to dist/: user-owned files and folders that a rebuild must not replace.
 PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/client.toml",
@@ -211,13 +211,17 @@ MIT (текст в нём самом): его можно подключать в
 
 def server_notices() -> str:
     htmx = (WEB / "Resources" / "htmx.LICENSE").read_text(encoding="utf-8").strip()
+    zstdsharp = (ROOT / "third_party/licenses/ZstdSharp.txt").read_text(encoding="utf-8").strip()
+    zstd = (ROOT / "third_party/licenses/Zstd.txt").read_text(encoding="utf-8").strip()
     return ("# Third-party notices\n\n"
             "The admin panel (Dreamsleeve.Server.Web.dll) embeds htmx 2.0.11 (https://htmx.org), "
             "served from the assembly at /static/htmx.min.js; its license:\n\n"
             f"```\n{htmx}\n```\n\n"
             "Falco, Falco.Markup and Falco.Htmx (https://github.com/FalcoFramework) are licensed under Apache-2.0. "
             "Other packages (Serilog, Tomlyn, SqlHydra, Migrondi, Microsoft.Data.Sqlite, yENet, Google.Protobuf, FSharp.Core) "
-            "keep their own licenses, listed in their NuGet packages.\n")
+            "keep their own licenses, listed in their NuGet packages.\n\n"
+            "ZstdSharp.Port 0.8.6 (https://github.com/oleg-st/ZstdSharp), MIT:\n\n"
+            f"```\n{zstdsharp}\n```\n\nZstandard (https://github.com/facebook/zstd), BSD:\n\n```\n{zstd}\n```\n")
 
 
 def check_server(server: Path) -> None:
@@ -400,6 +404,12 @@ def main() -> int:
         (server / "THIRD_PARTY_NOTICES.md").write_text(server_notices(), encoding="utf-8")
         copy_licenses(server)
         check_server(server)
+
+    network_trace = output / "NetworkTrace"
+    network_trace.mkdir()
+    # Explicit allowlist: never package recordings from a developer's tools folder.
+    for name in ("Start.ps1", "Stop.ps1", "README.ru.md"):
+        shutil.copy2(ROOT / "Scripts" / "NetworkTrace" / name, network_trace / name)
 
     for item in output.rglob("*"):
         relative = item.relative_to(output).parts

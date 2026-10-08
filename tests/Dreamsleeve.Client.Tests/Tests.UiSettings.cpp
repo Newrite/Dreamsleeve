@@ -126,9 +126,13 @@ TEST_CASE("Instant settings are copied and compared alone")
   UiSettings edited;
   edited.fontSize   = 20;
   edited.textFilter = "mask";
+  edited.showPhantoms = false;
+  edited.publishPhantoms = false;
   CHECK(InstantChanged(saved, edited));
   ApplyInstant(saved, edited);
   CHECK(saved.textFilter == "mask");
+  CHECK_FALSE(saved.showPhantoms);
+  CHECK_FALSE(saved.publishPhantoms);
   CHECK(saved.fontSize == UiSettings{}.fontSize);
   CHECK_FALSE(InstantChanged(saved, edited));
 }

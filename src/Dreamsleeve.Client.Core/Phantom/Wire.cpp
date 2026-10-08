@@ -23,6 +23,19 @@ namespace Dreamsleeve::Client::Phantom::Wire
       return bytes;
     }
 
+    void Set(const AssetDelta& value, Proto::AssetDelta* out)
+    {
+      out->set_base_hash(value.baseHash.data(),32); out->set_hash(value.hash.data(),32); out->set_compressed_bytes(value.compressedBytes);
+    }
+    Result<AssetDelta> Get(const Proto::AssetDelta& value, const Descriptor& target)
+    {
+      if (value.base_hash().size()!=32 || value.hash().size()!=32 || !value.compressed_bytes() || value.compressed_bytes()>=target.compressedBytes) return std::unexpected(Invalid("delta"));
+      AssetDelta result{}; result.compressedBytes=value.compressed_bytes();
+      std::ranges::copy(value.base_hash(),result.baseHash.begin()); std::ranges::copy(value.hash(),result.hash.begin());
+      if(result.baseHash==target.hash) return std::unexpected(Invalid("delta.base"));
+      return result;
+    }
+
     void Set(const Descriptor& d, Proto::AssetDescriptor* out)
     {
       out->set_hash(d.hash.data(), d.hash.size());
@@ -76,12 +89,14 @@ namespace Dreamsleeve::Client::Phantom::Wire
           auto* out = packet.mutable_publish();
           Set(value.asset, out->mutable_asset());
           out->set_context_revision(value.context);
+          if(value.delta) Set(*value.delta,out->mutable_delta());
           out->set_request_id(value.request.value);
         }
         else if constexpr (std::is_same_v<T, Download>)
         {
           auto* out = packet.mutable_download();
           out->set_player_id(value.player);
+          if(value.baseHash) out->set_base_hash(value.baseHash->data(),32);
           out->set_generation(value.generation.value);
           out->set_request_id(value.request.value);
         }
@@ -144,8 +159,10 @@ namespace Dreamsleeve::Client::Phantom::Wire
         const auto& v          = packet.transfer();
         auto        descriptor = Get(v.asset(), limits);
         if (!descriptor || !v.transfer_id() || !v.player_id() || !v.request_id() || v.http_token().size() != 64 || !std::ranges::all_of(v.http_token(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })) return std::unexpected(Invalid("transfer"));
+        std::optional<AssetDelta> change;
+        if(v.has_delta()) { auto parsed=Get(v.delta(),*descriptor); if(!parsed) return std::unexpected(parsed.error()); change=*parsed; }
         return Response{
-            Transfer{TransferId{v.transfer_id()}, *descriptor, v.player_id(), v.upload(), RequestId{v.request_id()}, v.http_token()}
+            Transfer{TransferId{v.transfer_id()}, *descriptor, v.player_id(), v.upload(), RequestId{v.request_id()}, v.http_token(), change}
         };
       }
       case Proto::ServerAssetPacket::kComplete: {

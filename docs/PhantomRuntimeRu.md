@@ -676,3 +676,61 @@ worker/очереди; между захватами хранится тольк
 в IDB без изменения executable. Offline output tests не заменяют игровой Save/Load
 и замер frame-time. Сравнение записанного NIF проверяет байты/границы/backpatch,
 но не выполняет engine SaveBinary. Новое игровое ускорение пока **не измерено**.
+
+## Клонирование без активных контроллеров — 08.10.2026
+
+CrashLogger SE 1.5.97 от 17:18:01 показывает AV в NiObjectNET::GetController
+(C61380+16, ID69160): mov rax,[rbx], RBX содержит недопустимый адрес.
+Цепочка: наш Prepare → NiObject::Clone → NiObjectNET::ProcessClone →
+NiControllerManager::ProcessClone → NiControllerSequence::Activate → разрешение
+transform interpolators → GetController. Регистрация запускает первый захват;
+это не доказательство ошибки аутентификации или конкретного стороннего мода.
+Удаление контроллеров после Clone происходило слишком поздно.
+
+В Hooks теперь отдельная операция Clone: удерживает источник через NiPointer,
+создаёт NiCloningProcess и выполняет штатные CreateClone/ProcessClone. Два callsite
+NiObjectNET пропускают только контроллерные связи **этого процесса**. Thread-local
+указатель сравнивается с адресом process, восстанавливается RAII scope; остальные
+клонирования выполняют исходный виртуальный вызов. Живое дерево не изменяется.
+Геометрия, extra data и skin проходят оба штатных прохода. Владение корнем само
+по себе не исправляет повреждённые внутренние ссылки контроллеров.
+
+| Операция | SE ID / RVA / callsite | AE ID / RVA / callsite | VR RVA / callsite |
+|---|---|---|---|
+| NiObjectNET CopyMembers: controller CreateClone | 69139 / C5FFD0 / C60229 (+259) | 70500 / D259E0 / D25C3B (+25B) | CA5580 / CA57D9 (+259) |
+| NiObjectNET ProcessClone: controller ProcessClone | 69162 / C614A0 / C61504 (+64) | 70523 / D26EC0 / D26F24 (+64) | CA6A50 / CA6AB4 (+64) |
+
+Проверены все три указанные выше базы, input paths и imagebase; источники —
+decompile, машинные инструкции, vtable и вызывающая цепочка. Таблица SE содержит
+ID/RVA, AE — ID/VA; третий аргумент VariantID здесь **VR RVA**. Смещение controllers
+в NiObjectNET — 18 во всех трёх runtime. CreateClone: RCX=NiObject*, RDX=ссылка
+NiCloningProcess, RAX=NiObject*; slot17, инструкция FF 90 B8 00 00 00.
+ProcessClone: те же аргументы, void; slot1D, FF 90 E8 00 00 00.
+CopyMembers допускает null результата контроллера, не увеличивает его refcount.
+Перед установкой проверяются обе полные инструкции; несовпадение отключает native
+phantom. Общий расход trampoline: 3×14 + 2×8 = 58 байт из существующих 64.
+
+NiCloningProcess: cloneMap+00, processMap+30, copyType+60, appendChar+64,
+scale+68, размер78. copyType=1 сохраняет имена без суффикса, scale=(1,1,1).
+Карты хранят невладеющие NiObject*/bool, очищаются CommonLib RAII через RE heap.
+SE native cleanup 1B8AD0/1B8B90 и пустые деструкторы элементов 1BA270/1BA280
+сверены; произвольный allocator не введён. Результат удерживается NiPointer до
+ProcessClone и передаётся в Game. Вся операция остаётся на Main::Update;
+smart pointer обеспечивает время жизни, а не межпоточную синхронизацию.
+
+Статус: статическая проверка SE1.5.97/AE1.6.1170/VR1.4.15, комментарии сохранены
+в IDB без патча executable. Компиляция и offline тесты не воспроизводят нативный
+Clone. Нужен повтор регистрации/захвата на модпаке из crash report и визуальная
+проверка лица, брони и оружия после исключения контроллеров.
+
+## Использование native cloneMap — 08.10.2026
+
+PhantomClone экспортирует NiAVObject пары из process.cloneMap после ProcessClone,
+пока NiCloningProcess ещё жив. Источник удерживает NiPointer, клонированные
+объекты удерживает возвращённый root; map содержит невладеющие указатели.
+Game отбрасывает пары вне двух собранных деревьев, затем строит bindings и
+проверяет всю обязательную геометрию. Имена/индексы children больше не используются
+для установления соответствия. Нормализация BSFlattenedBoneTree не заменяет
+сам NiAVObject, поэтому identity map остаётся действительной. После построения
+переносимого дерева сетевые каналы всё так же используют стабильный layout NIF.
+Новых relocations, хуков, ABI или фонового доступа к NiObject не добавлено.

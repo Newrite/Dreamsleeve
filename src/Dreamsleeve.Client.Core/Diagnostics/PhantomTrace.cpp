@@ -102,7 +102,9 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
         "asset_dump",
         "asset_decode",
         "pose_encode",
-        "pose_decode"
+        "pose_decode",
+        "delta_encode",
+        "delta_apply"
     };
     static_assert(names.size() == static_cast<std::size_t>(Metric::Count));
 

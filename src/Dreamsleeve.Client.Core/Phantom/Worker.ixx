@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.Phantom.Worker;
 
 import std;
+import Dreamsleeve.Client.Phantom.Delta;
 export import Dreamsleeve.Client.Phantom.Exchange;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
@@ -17,6 +18,7 @@ export namespace Dreamsleeve::Client::Phantom
       std::uint64_t                epoch;
       Wire::Offer                  offer;
       std::shared_ptr<const Bytes> bytes;
+      std::optional<AssetDelta>    delta;
     };
 
     struct PoseJob
@@ -28,9 +30,10 @@ export namespace Dreamsleeve::Client::Phantom
 
     struct ModelJob
     {
-      std::uint64_t  epoch{}, revision{};
-      Generation     generation;
-      ValidatedAsset asset;
+      std::uint64_t                        epoch{}, revision{};
+      Generation                           generation;
+      ValidatedAsset                       asset;
+      std::shared_ptr<const PreparedAsset> basis;
     };
 
     Exchange&                                                  exchange;
@@ -42,10 +45,12 @@ export namespace Dreamsleeve::Client::Phantom
 
     struct Missing
     {
-      std::uint64_t epoch;
-      Wire::Offer   offer;
+      std::uint64_t         epoch;
+      Wire::Offer           offer;
+      std::optional<Digest> baseHash;
     };
 
+    std::map<std::uint64_t, Wire::Descriptor>            previousAssets;  // ModelRun owner; descriptors only.
     std::vector<Missing>                                 missing;
     std::optional<ModelJob>                              model;
     std::uint64_t                                        assetInFlightBytes{};
@@ -117,13 +122,14 @@ export namespace Dreamsleeve::Client::Phantom
       Trim(budget);
     }
 
-    std::shared_ptr<const Bytes> Cached(const Wire::Descriptor& descriptor)
+    std::shared_ptr<const Bytes> Cached(const Digest& hash, std::uint32_t expectedSize = 0)
     {
       if (directory.empty() || !exchange.Settings().diskBytes) return {};
-      const auto      path = directory / (Hex(descriptor.hash) + ".zst");
+      const auto      path = directory / (Hex(hash) + ".zst");
       std::error_code error;
-      if (std::filesystem::file_size(path, error) != descriptor.compressedBytes || error) return {};
-      auto          bytes = std::make_shared<Bytes>(descriptor.compressedBytes);
+      const auto      size = std::filesystem::file_size(path, error);
+      if (error || !size || size > Limits{}.compressedAssetBytes || (expectedSize && size != expectedSize)) return {};
+      auto          bytes = std::make_shared<Bytes>(size);
       std::ifstream input(path, std::ios::binary);
       input.read(reinterpret_cast<char*>(bytes->data()), static_cast<std::streamsize>(bytes->size()));
       if (!input) return {};
@@ -131,7 +137,7 @@ export namespace Dreamsleeve::Client::Phantom
       return bytes;
     }
 
-    void Asset(const AssetJob& job)
+    void Asset(AssetJob& job)
     {
       if (job.epoch != exchange.Epoch()) return;
       const auto remote = exchange.Find(job.offer.player);
@@ -141,15 +147,38 @@ export namespace Dreamsleeve::Client::Phantom
         exchange.Loaded(job.epoch, job.offer, std::move(loaded), true);
         return;
       }
-      auto bytes = job.bytes ? job.bytes : Cached(job.offer.asset);
+      auto bytes = job.bytes ? job.bytes : Cached(job.offer.asset.hash, job.offer.asset.compressedBytes);
       if (!bytes)
       {
         Miss(job);
         return;
       }
+      if (job.delta)
+      {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Diagnostics::Trace::Span deltaSpan(Diagnostics::Trace::Metric::DeltaApply);
+#endif
+        const auto digest     = Hash(*bytes);
+        auto       basis      = Cached(job.delta->baseHash);
+        const auto baseDigest = basis ? Hash(*basis) : Result<Digest>{std::unexpected(Error{Failure::InvalidFormat, "delta.base"})};
+        auto       full       = basis && baseDigest && *baseDigest == job.delta->baseHash && digest && *digest == job.delta->hash
+                                ? Delta::Apply(*basis, *bytes, job.offer.asset.rawBytes)
+                                : Result<Bytes>{std::unexpected(Error{Failure::InvalidFormat, "delta.base"})};
+        if (!full)
+        {
+          Miss(job, false);
+          return;
+        }
+        bytes = std::make_shared<const Bytes>(std::move(*full));
+      }
       const auto digest = Hash(*bytes);
       if (!digest || *digest != job.offer.asset.hash)
       {
+        if (job.delta)
+        {
+          Miss(job, false);
+          return;
+        }
         if (!job.bytes)
         {
           std::error_code error;
@@ -174,16 +203,32 @@ export namespace Dreamsleeve::Client::Phantom
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       Diagnostics::Trace::Asset(Hex(job.offer.asset.hash), *bytes);
 #endif
-      exchange.Loaded(job.epoch, job.offer, std::make_shared<const ValidatedAsset>(std::move(*decoded)), !job.bytes);
+      const bool cached = !job.bytes;
       if (job.bytes) Save(job.offer.asset, *bytes, exchange.Settings().diskBytes);
+      // Complete persistence before releasing the decode reservation. Otherwise
+      // Game could admit a replacement while these compressed buffers are live.
+      bytes.reset();
+      job.bytes.reset();
+      exchange.Loaded(job.epoch, job.offer, std::make_shared<const ValidatedAsset>(std::move(*decoded)), cached);
+      if (previousAssets.size() >= 512 && !previousAssets.contains(job.offer.player)) previousAssets.erase(previousAssets.begin());
+      previousAssets.insert_or_assign(job.offer.player, job.offer.asset);
     }
 
-    void Miss(const AssetJob& job)
+    void Miss(const AssetJob& job, bool allowDelta = true)
     {
+      std::optional<Digest> baseHash;
+      const auto            prior = previousAssets.find(job.offer.player);
+      if (allowDelta && prior != previousAssets.end() && prior->second.hash != job.offer.asset.hash)
+      {
+        std::error_code error;
+        const auto      size = std::filesystem::file_size(directory / (Hex(prior->second.hash) + ".zst"), error);
+        if (!directory.empty() && exchange.Settings().diskBytes && !error && size == prior->second.compressedBytes)
+          baseHash = prior->second.hash;
+      }
       std::lock_guard lock(mutex);
       std::erase_if(missing, [&](const auto& value) { return value.epoch != job.epoch || value.offer.player == job.offer.player; });
       if (missing.size() < 16)
-        missing.push_back({job.epoch, job.offer});
+        missing.push_back({job.epoch, job.offer, baseHash});
       else
         exchange.Unavailable(job.epoch, job.offer, "Очередь загрузки моделей заполнена");
     }
@@ -196,7 +241,14 @@ export namespace Dreamsleeve::Client::Phantom
         if (work.capture)
         {
           std::lock_guard lock(mutex);
-          model.emplace(ModelJob{work.epoch, work.localRevision, work.capture->first, std::move(work.capture->second)});
+          model.emplace(
+            ModelJob{
+                work.epoch,
+                work.localRevision,
+                work.capture->first,
+                std::move(work.capture->second),
+                work.priorAsset ? work.priorAsset : work.asset
+            });
           modelWake.notify_one();
         }
         // While the next asset is compressed, keep the committed scene moving.
@@ -300,7 +352,8 @@ export namespace Dreamsleeve::Client::Phantom
           {
             remote = std::move(assets.front());
             assets.pop_front();
-            assetInFlightBytes = 2ULL * remote->offer.asset.rawBytes + remote->offer.asset.compressedBytes;
+            assetInFlightBytes = 2ULL * remote->offer.asset.rawBytes + remote->offer.asset.compressedBytes +
+                                 (remote->delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
           }
         }
         const auto settings = exchange.Settings();
@@ -326,8 +379,35 @@ export namespace Dreamsleeve::Client::Phantom
 #endif
               return prepare(std::move(capture->asset));
             }();
+            if (result && capture->basis && capture->basis->hash != result->hash)
+            {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-            if (result) Diagnostics::Trace::Asset(Hex(result->hash), *result->compressed);
+              Diagnostics::Trace::Span deltaSpan(Diagnostics::Trace::Metric::DeltaEncode);
+#endif
+              auto bytes = Delta::Create(*capture->basis->compressed, *result->compressed);
+              if (bytes && bytes->size() < result->compressed->size())
+              {
+                auto hash = Hash(*bytes);
+                if (hash)
+                  result->delta = PreparedDelta{
+                      AssetDelta{capture->basis->hash, *hash, static_cast<std::uint32_t>(bytes->size())},
+                      std::make_shared<const Bytes>(std::move(*bytes))
+                  };
+              }
+            }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+            if (result)
+            {
+              Diagnostics::Trace::Asset(Hex(result->hash), *result->compressed);
+              if (result->delta)
+                Diagnostics::Trace::Event(
+                  "delta_prepared",
+                  std::format(
+                    "\"generation\":{},\"full_bytes\":{},\"delta_bytes\":{}",
+                    capture->generation.value,
+                    result->compressed->size(),
+                    result->delta->bytes->size()));
+            }
 #endif
             if (result)
               exchange.Prepared(
@@ -385,17 +465,19 @@ public:
       modelThread.join();
     }
 
-    bool Queue(Wire::Offer offer, std::shared_ptr<const Bytes> bytes = {})
+    bool Queue(Wire::Offer offer, std::shared_ptr<const Bytes> bytes = {}, std::optional<AssetDelta> delta = {})
     {
       const auto      epoch  = exchange.Epoch();
       const auto      budget = exchange.Settings().memoryBytes;
       std::lock_guard lock(mutex);
       std::erase_if(assets, [&](const auto& job) { return job.epoch != epoch || job.offer.player == offer.player; });
-      std::uint64_t queued = assetInFlightBytes + 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes;
+      std::uint64_t queued = assetInFlightBytes + 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes +
+                             (delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
       for (const auto& job : assets)
-        queued += 2ULL * job.offer.asset.rawBytes + job.offer.asset.compressedBytes;
+        queued += 2ULL * job.offer.asset.rawBytes + job.offer.asset.compressedBytes +
+                  (job.delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
       if (assets.size() >= 8 || queued > budget) return false;
-      assets.push_back({epoch, std::move(offer), std::move(bytes)});
+      assets.push_back({epoch, std::move(offer), std::move(bytes), delta});
       modelWake.notify_one();
       return true;
     }
@@ -410,12 +492,12 @@ public:
       wake.notify_one();
     }
 
-    std::vector<Wire::Offer> TakeMissing()
+    auto TakeMissing()
     {
-      std::lock_guard          lock(mutex);
-      std::vector<Wire::Offer> result;
+      std::lock_guard      lock(mutex);
+      std::vector<Missing> result;
       for (auto& value : missing)
-        if (value.epoch == exchange.Epoch()) result.push_back(std::move(value.offer));
+        if (value.epoch == exchange.Epoch()) result.push_back(std::move(value));
       missing.clear();
       return result;
     }

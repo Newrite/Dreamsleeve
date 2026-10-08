@@ -208,7 +208,8 @@ export namespace Dreamsleeve::Host
   // How names, texts, dates and whose marks are projected. These apply to every
   // surface at once, without saving, and a change projects the session again.
   constexpr auto InstantKeys =
-    std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle", "markGuildmatesOnly"});
+    std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle", "markGuildmatesOnly",
+      "publishPhantoms", "showPhantoms", "phantomFallback", "combatHidePhantoms"});
 
   // The hide-my-name choices in the order of Domain::HiddenIdentity.
   constexpr auto HidingNames = std::to_array<std::string_view>({"off", "everywhere", "exceptGroundMarks"});

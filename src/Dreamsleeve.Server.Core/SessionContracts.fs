@@ -70,7 +70,7 @@ type PhantomHttpRequest = {
 /// HTTP handling never reads or changes actor state. Admission gives a scoped
 /// single-use capability, and cancellation revokes both waiting and active I/O.
 type PhantomHttpPort = {
-    Admit: Guid * PhantomTransferId * PhantomManifest * bool -> PhantomHttpLease
+    Admit: Guid * PhantomTransferId * PhantomManifest * bool * PhantomDelta option -> PhantomHttpLease
     Cancel: PhantomTransferId -> Task<unit>
     Serve: PhantomHttpRequest -> Task<Result<unit, string>>
     Dispose: unit -> Task<unit>
@@ -79,9 +79,9 @@ type PhantomHttpPort = {
 /// Operations are detached and serialized by the storage worker. A completed
 /// upload is a verified compressed file; false means more bytes are required.
 type PhantomStoragePort = {
-    StartUpload: PhantomTransferId * PhantomManifest -> Task<Result<bool, string>>
+    StartUpload: PhantomTransferId * PhantomManifest * PhantomDelta option -> Task<Result<bool, string>>
     WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, string>>
-    StartDownload: PhantomTransferId * PhantomManifest -> Task<Result<unit, string>>
+    StartDownload: PhantomTransferId * PhantomManifest * AssetHash option -> Task<Result<PhantomDelta option, string>>
     ReadChunk: PhantomTransferId * int * Memory<byte> -> Task<Result<int, string>>
     Cancel: PhantomTransferId -> Task<unit>
     Dispose: unit -> Task<unit>
