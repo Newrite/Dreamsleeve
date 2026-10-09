@@ -175,7 +175,7 @@ module SqliteGroundMarkStore =
                     [ "@id", box (int64 (GroundMarkId.value evicted)) ] |> ignore
                 insertInto context mark))
 
-    let private write config (logger: ILogger) (context: AgentContext<GroundMarkWrite>) (request: GroundMarkWrite) = task {
+    let private write config (logger: ILogger) (context: ReliableAgentContext<GroundMarkWrite>) (request: GroundMarkWrite) = task {
         let result =
             match request with
             | GroundMarkWrite.Insert mark -> insert config mark context.CancellationToken
@@ -193,4 +193,4 @@ module SqliteGroundMarkStore =
     /// capacity is GroundMarks.MaxPendingWrites, checked with the configuration.
     let startWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.TryStart(options, write config logger)
+        Agent.TryStartReliable(options, write config logger)

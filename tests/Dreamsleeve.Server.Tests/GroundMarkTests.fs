@@ -806,7 +806,7 @@ let private storeTests = testList "SQLite ground marks" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = register database "writer"
-        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8 |> expectStarted
+        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8 |> expectStarted |> fun writer -> writer.Owner
         let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UnixEpoch
         for id in 1UL .. 3UL do
             let! posted = writer.PostAsync(GroundMarkWrite.Insert (mark id))

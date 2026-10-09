@@ -32,22 +32,25 @@ let run () = task {
         printfn "outbound: %s <- %s" recipient text
         Task.CompletedTask
 
-    use agent = Agent.Start(options, handle send)
+    match Agent.TryStart(options, handle send) with
+    | Error error -> eprintfn "agent: startup rejected: %A" error
+    | Ok owner ->
+        use agent = owner
 
-    let! posted = agent.PostAsync(Send ("global", "hello"))
+        let! posted = agent.PostAsync(Send ("global", "hello"))
 
-    match posted with
-    | AgentPostResult.Posted -> ()
-    | AgentPostResult.Full | AgentPostResult.Dropped | AgentPostResult.Closed | AgentPostResult.Canceled ->
-        eprintfn "outbound: message admission failed: %A" posted
+        match posted with
+        | AgentPostResult.Posted -> ()
+        | AgentPostResult.Full | AgentPostResult.Dropped | AgentPostResult.Closed | AgentPostResult.Canceled ->
+            eprintfn "outbound: message admission failed: %A" posted
 
-    let! confirmed = agent.TryAskAsync(fun reply ->
-        SendAndConfirm ("global", "ready", reply))
-    match confirmed with
-    | AgentAskResult.Replied () -> ()
-    | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _) as failure ->
-        eprintfn "outbound: command not confirmed: %A; do not retry automatically" failure
+        let! confirmed = agent.TryAskAsync(fun reply ->
+            SendAndConfirm ("global", "ready", reply))
+        match confirmed with
+        | AgentAskResult.Replied () -> ()
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
+            eprintfn "outbound: command not confirmed: %A; do not retry automatically" failure
 
-    agent.Complete() |> ignore
-    do! agent.Completion
+        agent.Complete() |> ignore
+        do! agent.Completion
 }

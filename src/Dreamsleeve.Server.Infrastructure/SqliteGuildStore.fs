@@ -168,7 +168,7 @@ module SqliteGuildStore =
     /// One change, in its own unit of work.
     let write config (change: GuildWrite) token = SqliteAccountStore.withContext config token (fun context -> apply context change)
 
-    let private handle config (logger: ILogger) (context: AgentContext<GuildWrite>) (change: GuildWrite) = task {
+    let private handle config (logger: ILogger) (context: ReliableAgentContext<GuildWrite>) (change: GuildWrite) = task {
         match write config change context.CancellationToken with
         | Ok() -> ()
         | Error error ->
@@ -185,4 +185,4 @@ module SqliteGuildStore =
     /// Guilds.MaxPendingWrites, checked with the configuration.
     let startWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "guild-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.TryStart(options, handle config logger)
+        Agent.TryStartReliable(options, handle config logger)
