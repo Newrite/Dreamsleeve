@@ -15,9 +15,14 @@ module DeviceId =
     let Length = 64
 
     let create (text: string) : Result<DeviceId, DomainError> =
-        if not (isNull text) && text.Length = Length && text |> Seq.forall (fun c -> Char.IsAsciiDigit c || (c >= 'a' && c <= 'f')) then
+        if isNull text then
+            Error(DomainError.InvalidText("DeviceId", TextError.InvalidFormat))
+        elif text.Length <> Length then
+            Error(DomainError.InvalidText("DeviceId", TextError.InvalidFormat))
+        elif text |> Seq.forall (fun c -> Char.IsAsciiDigit c || (c >= 'a' && c <= 'f')) then
             Ok(DeviceId text)
-        else Error(DomainError.InvalidText("DeviceId", TextError.InvalidFormat))
+        else
+            Error(DomainError.InvalidText("DeviceId", TextError.InvalidFormat))
 
     let value (DeviceId text) = text
 
