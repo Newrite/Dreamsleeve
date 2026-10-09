@@ -17,7 +17,17 @@ open Google.Protobuf
 open Dreamsleeve.Protocol.Chat
 open Dreamsleeve.Server.Infrastructure.Interop
 
-type private Options = { AuthUrl: Uri; Port: uint16; Clients: int; Hosts: int; Seconds: float; Rate: float; ReplicationMs: int; ActorValuesHz: float; Scenario: string; Output: string }
+type private Options =
+    { AuthUrl: Uri
+      Port: uint16
+      Clients: int
+      Hosts: int
+      Seconds: float
+      Rate: float
+      ReplicationMs: int
+      ActorValuesHz: float
+      Scenario: string
+      Output: string }
 
 type private Client = {
     Index: int
@@ -92,7 +102,9 @@ type private State = {
 }
 
 let private now state = state.Clock.Elapsed.TotalMilliseconds
-let private stage name = printfn "STAGE %s" name; Console.Out.Flush()
+let private stage name =
+    printfn "STAGE %s" name
+    Console.Out.Flush()
 
 let private protocolVersion = Dreamsleeve.Server.Core.ProtocolCodec.Version
 let private password = "NetworkBench-Password-2026!"
@@ -130,8 +142,12 @@ let private fail state message =
 
 let private sendBytes state client channel reliable (bytes: byte array) =
     match OutgoingPackets.TrySend(client.Peer, ReadOnlySpan<byte>(bytes), state.Budget, client.Budget, channel, (if reliable then PacketDelivery.Reliable else PacketDelivery.Sequenced)) with
-    | PacketSendResult.Sent -> state.SentApplicationBytes[int channel] <- state.SentApplicationBytes[int channel] + int64 bytes.Length; true
-    | PacketSendResult.BudgetExceeded -> state.BackpressurePackets <- state.BackpressurePackets + 1L; false
+    | PacketSendResult.Sent ->
+        state.SentApplicationBytes[int channel] <- state.SentApplicationBytes[int channel] + int64 bytes.Length
+        true
+    | PacketSendResult.BudgetExceeded ->
+        state.BackpressurePackets <- state.BackpressurePackets + 1L
+        false
     | failure ->
         fail state (sprintf "Client %d packet admission failed: %A" client.Index failure)
         false
@@ -393,7 +409,8 @@ let private ramp state =
     state.Group.Wait("joined", state.Group.Workers, barrierPump state)
     let expectedPlayers = HashSet<uint64>(state.AllPlayerIds)
     let allOnline () = state.Clients |> Array.forall (fun client -> client.Online.SetEquals expectedPlayers)
-    while not (allOnline()) && state.ErrorCount = 0 && now state < deadline do pump state
+    while not (allOnline()) && state.ErrorCount = 0 && now state < deadline do
+        pump state
     state.PresenceConverged <-
         state.ReadyCount = state.Clients.Length && expectedPlayers.Count = state.AllPlayerIds.Length
         && (state.Clients |> Array.forall (fun client -> client.Online.SetEquals expectedPlayers))
@@ -404,7 +421,8 @@ let private ramp state =
 
 let private serviceFor state durationMs =
     let deadline = now state + durationMs
-    while now state < deadline && state.ErrorCount = 0 do pump state
+    while now state < deadline && state.ErrorCount = 0 do
+        pump state
 
 let private sendChat state =
     let mutable chosen = None
@@ -426,13 +444,19 @@ let private sendChat state =
         if send state client packet then
             state.SentChatPayloadBytes <- state.SentChatPayloadBytes + int64 (packet.CalculateSize())
             state.Messages.Add {
-                Sender = client.Index; RequestId = requestId; SentMs = sentMs; MessageId = 0UL
-                Received = 0; AuthorAckMs = -1.; CompletedMs = -1.
+                Sender = client.Index
+                RequestId = requestId
+                SentMs = sentMs
+                MessageId = 0UL
+                Received = 0
+                AuthorAckMs = -1.
+                CompletedMs = -1.
             }
             client.Pending.Add(requestId, sequence)
             state.MaxInflight <- max state.MaxInflight (state.Messages.Count - state.Completed)
             true
-        else false
+        else
+            false
 
 let private load state =
     stage "idle"
@@ -446,8 +470,10 @@ let private load state =
         while now state < deadline && state.ErrorCount = 0 do
             let mutable blocked = false
             while state.Options.Rate > 0. && now state >= due && now state < deadline && not blocked && state.ErrorCount = 0 do
-                if state.Messages.Count - state.Completed < 128 && sendChat state then due <- due + interval
-                else blocked <- true
+                if state.Messages.Count - state.Completed < 128 && sendChat state then
+                    due <- due + interval
+                else
+                    blocked <- true
             let before = now state
             pump state
             if blocked then state.BackpressuredMs <- state.BackpressuredMs + now state - before
@@ -459,7 +485,8 @@ let private drain state =
     stage "drain"
     let started = now state
     let deadline = started + 30000.
-    while state.Completed < state.Messages.Count && state.ErrorCount = 0 && now state < deadline do pump state
+    while state.Completed < state.Messages.Count && state.ErrorCount = 0 && now state < deadline do
+        pump state
     state.DrainMs <- now state - started
     if state.Completed <> state.Messages.Count then fail state "Delivery completion timed out or failed"
     for client in state.Clients do
@@ -481,7 +508,8 @@ let private movementLoad state =
     state.Group.Publish("characters", true)
     state.Group.Wait("characters", state.Group.Workers, barrierPump state)
     let setupDeadline = now state + 30000.
-    while not probe.Prepared && state.ErrorCount = 0 && now state < setupDeadline do pump state
+    while not probe.Prepared && state.ErrorCount = 0 && now state < setupDeadline do
+        pump state
     if not probe.Prepared then fail state "Character snapshots did not converge before load"
     serviceFor state 1000.
 
@@ -512,12 +540,16 @@ let private movementLoad state =
             pump state
         if not phantom.Prepared then fail state "Phantom publications did not settle before steady load"
         else
-            state.Group.All("phantoms-ready", true, fun () -> phantom.Tick(); barrierPump state ()) |> ignore
+            state.Group.All("phantoms-ready", true, fun () ->
+                phantom.Tick()
+                barrierPump state ()) |> ignore
             serviceFor state 500.
     | _ -> ()
+
     stage "armed"
     let started = state.Group.Start(barrierPump state)
-    while Coordination.now() < started do pump state
+    while Coordination.now() < started do
+        pump state
     stage "load"
     let hostBefore = state.Hosts |> Array.map(fun host -> host.TotalSentData, host.TotalReceivedData, host.TotalSentPackets, host.TotalReceivedPackets)
     let sentBefore = Array.copy state.SentApplicationBytes
@@ -534,6 +566,7 @@ let private movementLoad state =
                 if sendChat state then chatDue <- chatDue + 100.)
         pump state
         probe.RecordIteration(Coordination.now() - iterationStarted)
+
     let difference (before: uint32) (after: uint32) = (uint64 after + 0x100000000UL - uint64 before) % 0x100000000UL
     let totals = Array.map2 (fun (sent, received, sentPackets, receivedPackets) (host: EnetHost) ->
         difference sent host.TotalSentData, difference received host.TotalReceivedData,
@@ -545,6 +578,7 @@ let private movementLoad state =
         udpReceivedPackets = totals |> Array.sumBy(fun (_,_,_,x) -> x)
         sentApplicationBytesByLane = Array.map2 (-) state.SentApplicationBytes sentBefore
         receivedApplicationBytesByLane = Array.map2 (-) state.ReceivedApplicationBytes receivedBefore |})
+
     probe.Stop()
     state.Phantom |> Option.iter _.Stop()
     state.LoadMs <- Coordination.now() - started
@@ -552,7 +586,8 @@ let private movementLoad state =
     stage "drain"
     let draining = now state
     let deadline = draining + 30000.
-    while probe.Pending > 0 && state.ErrorCount = 0 && now state < deadline do pump state
+    while probe.Pending > 0 && state.ErrorCount = 0 && now state < deadline do
+        pump state
     if state.ErrorCount = 0 && probe.Pending = 0 then
         probe.FinalSamples(fun () -> pump state)
         let locations = state.Group.All("final", probe.FinalLocations, barrierPump state) |> Array.transpose |> Array.concat
@@ -578,10 +613,12 @@ let private disconnect state =
     state.Disconnecting <- true
     for client in state.Clients do
         if client.Peer.IsCreated && not client.Closed then client.Peer.DisconnectLater 0u
-    for host in state.Hosts do host.Flush()
+    for host in state.Hosts do
+        host.Flush()
     let deadline = now state + 10000.
     let stillConnected () = state.Clients |> Array.exists (fun client -> client.Peer.IsCreated && not client.Closed)
-    while stillConnected () && now state < deadline do pump state
+    while stillConnected () && now state < deadline do
+        pump state
     if stillConnected () then fail state "Graceful client disconnect timed out"
     for client in state.Clients do
         if client.Peer.IsCreated && not client.Closed then client.Peer.DisconnectNow 0u
@@ -591,7 +628,11 @@ let private summary (values: float array) =
     let percentile fraction =
         if values.Length = 0 then 0.
         else values[max 0 (int (ceil (fraction * float values.Length)) - 1)]
-    {| count = values.Length; p50 = percentile 0.50; p95 = percentile 0.95; p99 = percentile 0.99
+
+    {| count = values.Length
+       p50 = percentile 0.50
+       p95 = percentile 0.95
+       p99 = percentile 0.99
        max = if values.Length = 0 then 0. else values[values.Length - 1] |}
 
 let private report state =
@@ -603,8 +644,14 @@ let private report state =
         transportDuringLoad = state.LoadTraffic |> Option.toObj
         phantom = state.Phantom |> Option.map _.Report() |> Option.toObj
         movement = state.Movement |> Option.map (fun probe -> probe.Report(state.LoadMs)) |> Option.toObj
-        clients = state.Clients.Length; ready = state.ReadyCount; presenceConverged = state.PresenceConverged; seconds = state.Options.Seconds; requestedRate = state.Options.Rate
-        sent = state.Messages.Count; received = state.Received; expected = int64 state.Messages.Count * int64 state.Clients.Length
+        clients = state.Clients.Length
+        ready = state.ReadyCount
+        presenceConverged = state.PresenceConverged
+        seconds = state.Options.Seconds
+        requestedRate = state.Options.Rate
+        sent = state.Messages.Count
+        received = state.Received
+        expected = int64 state.Messages.Count * int64 state.Clients.Length
         sentChatPayloadBytes = state.SentChatPayloadBytes
         receivedChatPayloadBytes = state.ReceivedChatPayloadBytes
         sentChatPayloadBytesPerSecond = if state.LoadMs = 0. then 0. else float state.SentChatPayloadBytes * 1000. / state.LoadMs
@@ -612,20 +659,39 @@ let private report state =
             if state.LoadMs + state.DrainMs = 0. then 0.
             else float state.ReceivedChatPayloadBytes * 1000. / (state.LoadMs + state.DrainMs)
         actualSendRate = if state.LoadMs = 0. then 0. else float state.Messages.Count * 1000. / state.LoadMs
-        registrationMs = state.RegistrationMs; loginMs = state.LoginMs
-        rampIncludesLogin = true; authenticationConcurrency = 4
-        rampMs = state.RampMs; loadMs = state.LoadMs; drainMs = state.DrainMs; totalMs = now state
+        registrationMs = state.RegistrationMs
+        loginMs = state.LoginMs
+        rampIncludesLogin = true
+        authenticationConcurrency = 4
+        rampMs = state.RampMs
+        loadMs = state.LoadMs
+        drainMs = state.DrainMs
+        totalMs = now state
         backpressurePackets = state.BackpressurePackets
-        backpressuredMs = state.BackpressuredMs; maxInflight = state.MaxInflight; inflightLimit = 128; connectWindow = 4
-        workerIndex = state.Group.Index; workerCount = state.Group.Workers; totalClients = state.AllPlayerIds.Length
-        hostCount = state.Hosts.Length; socketCount = state.Hosts.Length; serviceLoopCount = 1
-        unexpectedDisconnects = state.Disconnections; rejections = state.Rejections; errorCount = state.ErrorCount
+        backpressuredMs = state.BackpressuredMs
+        maxInflight = state.MaxInflight
+        inflightLimit = 128
+        connectWindow = 4
+        workerIndex = state.Group.Index
+        workerCount = state.Group.Workers
+        totalClients = state.AllPlayerIds.Length
+        hostCount = state.Hosts.Length
+        socketCount = state.Hosts.Length
+        serviceLoopCount = 1
+        unexpectedDisconnects = state.Disconnections
+        rejections = state.Rejections
+        errorCount = state.ErrorCount
         errors = state.Errors.ToArray()
         transportConnectMs = state.Clients |> Array.filter _.Ready |> Array.map (fun client -> client.ConnectedMs - client.StartedMs) |> summary
         applicationOpenMs = state.Clients |> Array.filter _.Ready |> Array.map (fun client -> client.ReadyMs - client.ConnectedMs) |> summary
         authorAckMs = state.Messages |> Seq.filter (fun item -> item.AuthorAckMs >= 0.) |> Seq.map _.AuthorAckMs |> Seq.toArray |> summary
         allRecipientsMs = state.Messages |> Seq.filter (fun item -> item.CompletedMs >= 0.) |> Seq.map _.CompletedMs |> Seq.toArray |> summary
-        recipients = state.Clients |> Array.map (fun client -> {| index = client.Index; received = client.Received; lastMessageId = client.LastMessageId |})
+        recipients =
+            state.Clients
+            |> Array.map (fun client ->
+                {| index = client.Index
+                   received = client.Received
+                   lastMessageId = client.LastMessageId |})
     |}
     File.WriteAllText(output, JsonSerializer.Serialize(result, JsonSerializerOptions(WriteIndented = true)))
     stage "done"
@@ -636,6 +702,7 @@ let private run (options: Options) =
     let prefix = "nb" + Guid.NewGuid().ToString("N").Substring(0, 12)
     use authentication = new HttpClient(BaseAddress = options.AuthUrl, Timeout = TimeSpan.FromSeconds 30.)
     let group = Coordination.Group()
+
     stage "auth-register"
     group.Wait("accounts", group.Index, fun () -> System.Threading.Thread.Sleep 10)
     let registration = Stopwatch.StartNew()
@@ -672,29 +739,80 @@ let private run (options: Options) =
 
         let state = {
             EventBudgetPerHost = max 1 (4096 / totalHosts)
-            Group = group; AllPlayerIds = allPlayerIds; GlobalOffset = globalOffset
-            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics(fun error -> eprintfn "Optional ENet diagnostic probe disabled: %O" error)); Movement = None; Phantom = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
-            RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
-            Clock = Stopwatch.StartNew(); Prefix = prefix
-            SentApplicationBytes = Array.zeroCreate 5; ReceivedApplicationBytes = Array.zeroCreate 5; LoadTraffic = None
-            Clients = Array.init options.Clients (fun index -> {
-                Index = index; HostIndex = index % options.Hosts; AccountId = accounts[index]; SessionTicket = ""; Peer = Unchecked.defaultof<EnetPeer>; Budget = PacketBudget(16, 1024L * 1024L)
-                StartedMs = 0.; ConnectedMs = 0.; ReadyMs = 0.; Ready = false; Closed = false
-                PlayerId = 0UL; ChannelId = 0UL; LastMessageId = 0UL; Received = 0; Pending = Dictionary(); Online = HashSet()
-            })
-            Slots = Dictionary(); Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L / int64 group.Workers); Messages = ResizeArray(); Errors = ResizeArray()
-            ErrorCount = 0; ReadyCount = 0; Disconnections = 0; Rejections = 0; Received = 0L; SentChatPayloadBytes = 0L; ReceivedChatPayloadBytes = 0L; Completed = 0; NextSender = 0
-            Disconnecting = false; PresenceConverged = false; RampMs = 0.; LoadMs = 0.; DrainMs = 0.; BackpressurePackets = 0L; BackpressuredMs = 0.; MaxInflight = 0
+            Group = group
+            AllPlayerIds = allPlayerIds
+            GlobalOffset = globalOffset
+            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics(fun error -> eprintfn "Optional ENet diagnostic probe disabled: %O" error))
+            Movement = None
+            Phantom = None
+            Options = options
+            Hosts = hosts.ToArray()
+            Authentication = authentication
+            RegistrationMs = registration.Elapsed.TotalMilliseconds
+            LoginMs = 0.
+            Clock = Stopwatch.StartNew()
+            Prefix = prefix
+            SentApplicationBytes = Array.zeroCreate 5
+            ReceivedApplicationBytes = Array.zeroCreate 5
+            LoadTraffic = None
+            Clients =
+                Array.init options.Clients (fun index ->
+                    { Index = index
+                      HostIndex = index % options.Hosts
+                      AccountId = accounts[index]
+                      SessionTicket = ""
+                      Peer = Unchecked.defaultof<EnetPeer>
+                      Budget = PacketBudget(16, 1024L * 1024L)
+                      StartedMs = 0.
+                      ConnectedMs = 0.
+                      ReadyMs = 0.
+                      Ready = false
+                      Closed = false
+                      PlayerId = 0UL
+                      ChannelId = 0UL
+                      LastMessageId = 0UL
+                      Received = 0
+                      Pending = Dictionary()
+                      Online = HashSet() })
+            Slots = Dictionary()
+            Budget = PacketBudget(outgoingPackets, 16L * 1024L * 1024L / int64 group.Workers)
+            Messages = ResizeArray()
+            Errors = ResizeArray()
+            ErrorCount = 0
+            ReadyCount = 0
+            Disconnections = 0
+            Rejections = 0
+            Received = 0L
+            SentChatPayloadBytes = 0L
+            ReceivedChatPayloadBytes = 0L
+            Completed = 0
+            NextSender = 0
+            Disconnecting = false
+            PresenceConverged = false
+            RampMs = 0.
+            LoadMs = 0.
+            DrainMs = 0.
+            BackpressurePackets = 0L
+            BackpressuredMs = 0.
+            MaxInflight = 0
         }
+
         match PhantomProbe.configuration() with
         | Some config ->
             state.Phantom <- Some(new PhantomProbe.Probe(config, state.Options.AuthUrl, state.AllPlayerIds, state.Group.Index, state.Group.Workers, state.Clients.Length, Coordination.now,
                 (fun index lane delivery bytes ->
                     match OutgoingPackets.TrySend(state.Clients[index].Peer, ReadOnlySpan<byte>(bytes), state.Budget, state.Clients[index].Budget, lane, delivery) with
-                    | PacketSendResult.Sent -> state.SentApplicationBytes[int lane] <- state.SentApplicationBytes[int lane] + int64 bytes.Length; true
-                    | PacketSendResult.BudgetExceeded -> state.BackpressurePackets <- state.BackpressurePackets + 1L; false
-                    | result -> fail state (sprintf "Phantom packet admission lane%d: %A" lane result); false), fail state))
+                    | PacketSendResult.Sent ->
+                        state.SentApplicationBytes[int lane] <- state.SentApplicationBytes[int lane] + int64 bytes.Length
+                        true
+                    | PacketSendResult.BudgetExceeded ->
+                        state.BackpressurePackets <- state.BackpressurePackets + 1L
+                        false
+                    | result ->
+                        fail state (sprintf "Phantom packet admission lane%d: %A" lane result)
+                        false), fail state))
         | None -> ()
+
         try
             ramp state
             if state.ErrorCount = 0 then
@@ -703,16 +821,29 @@ let private run (options: Options) =
                     if state.ErrorCount = 0 then drain state
                 else movementLoad state
         with error -> fail state (error.ToString())
+
         try disconnect state with error -> fail state ("Cleanup: " + error.Message)
         let result = report state
+
         state.Phantom |> Option.iter(fun probe -> (probe :> IDisposable).Dispose())
         result
     finally
-        for host in hosts do host.Dispose()
+        for host in hosts do
+            host.Dispose()
         enet.ENET_API.enet_deinitialize()
 
 let private parse (args: string array) =
-    let mutable options = { AuthUrl = Uri("http://127.0.0.1:8779/"); Port = 8778us; Clients = 10; Hosts = 1; Seconds = 10.; Rate = 10.; ReplicationMs = 50; ActorValuesHz = 0.; Scenario = "chat"; Output = "build/network-benchmark.json" }
+    let mutable options =
+        { AuthUrl = Uri("http://127.0.0.1:8779/")
+          Port = 8778us
+          Clients = 10
+          Hosts = 1
+          Seconds = 10.
+          Rate = 10.
+          ReplicationMs = 50
+          ActorValuesHz = 0.
+          Scenario = "chat"
+          Output = "build/network-benchmark.json" }
     if args.Length % 2 <> 0 then invalidArg "args" "Expected --auth-url URL --port P --clients N --seconds D --rate R --output path.json"
     for index in 0 .. 2 .. args.Length - 1 do
         let value = args[index + 1]
@@ -749,7 +880,11 @@ let private parse (args: string array) =
 let main args =
     try
         match args with
-        | [|"--verify-movement-oracle"|] -> Movement.verifyOracle(); 0
+        | [|"--verify-movement-oracle"|] ->
+            Movement.verifyOracle()
+            0
         | [|"--server-config"; config; "--metrics-output"; output|] -> Measurements.runServer config output
         | _ -> parse args |> run
-    with error -> eprintfn "%s" error.Message; 2
+    with error ->
+        eprintfn "%s" error.Message
+        2
