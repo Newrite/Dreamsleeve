@@ -9,7 +9,9 @@ open Expecto
 open AgentTests
 open SqliteAccountStoreTests
 
-let private ok = function Ok value -> value | Error error -> failtestf "Unexpected error: %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Unexpected error: %A" error
 let private token = CancellationToken.None
 let private name value = Username.create 32 value |> ok
 let private now = DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero)
@@ -55,13 +57,16 @@ let tests = testList "SQLite admin" [
                           + "DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts;"
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
+
         SqliteAccountStore.initialize database.Config |> ok
         equal 14L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
+
         // An existing player gets a name color of the palette new accounts get theirs from.
         let color = database.Scalar "SELECT name_color FROM profiles" |> uint32
         check (NameColor.palette |> Array.exists (fun entry -> NameColor.value entry = color)) $"palette color: {color:X6}"
+
         // The DOWN sections return to schemas 13, 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
         database.Execute (downSql "1791590400000_name_colors.sql")
         equal 13L (database.Scalar "PRAGMA user_version")
@@ -101,6 +106,7 @@ let tests = testList "SQLite admin" [
         equal "admin-hash" stored.PasswordHash
         let audit = SqliteAdminStore.recentAudit database.Config 10 token |> ok
         equal [ AdminAction.CreatedAdmin ] (audit |> List.map _.Action)
+
         // A player name is not an administrator: the tables are separate.
         player database "root" "Root player" |> ignore
         equal 1L (SqliteAdminStore.countAdmins database.Config token |> ok))
@@ -112,8 +118,10 @@ let tests = testList "SQLite admin" [
         SqliteAdminStore.createSession database.Config (PanelSession.create "session-short" root.Id now (TimeSpan.FromMinutes 1.)) token |> ok
         equal (Some root) (SqliteAdminStore.findSession database.Config "session-short" (now + TimeSpan.FromSeconds 59.) token |> ok)
         equal None (SqliteAdminStore.findSession database.Config "session-short" (now + TimeSpan.FromMinutes 1.) token |> ok)
+
         SqliteAdminStore.deleteSession database.Config "session-1" token |> ok
         equal None (SqliteAdminStore.findSession database.Config "session-1" now token |> ok)
+
         SqliteAdminStore.createSession database.Config (PanelSession.create "session-3" root.Id now hours) token |> ok
         let changed = SqliteAdminStore.setPassword database.Config root.Id "new-hash" (PanelSession.create "session-4" root.Id now hours) now token |> ok
         equal (Some root) changed
@@ -133,6 +141,7 @@ let tests = testList "SQLite admin" [
         let listed = SqliteAdminStore.listApiTokens database.Config token |> ok
         equal [ "CI" ] (listed |> List.map (_.Label >> ApiTokenLabel.value))
         equal [ "root" ] (listed |> List.map (_.Owner >> Username.value))
+
         check (SqliteAdminStore.revokeApiToken database.Config root hash now token |> ok) "revoked"
         check (not (SqliteAdminStore.revokeApiToken database.Config root hash now token |> ok)) "already gone"
         equal None (SqliteAdminStore.findApiToken database.Config hash token |> ok)
@@ -152,11 +161,13 @@ let tests = testList "SQLite admin" [
         equal PlayerRole.Moderator (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.get).Role
         equal PlayerRole.Moderator (SqliteAccountStore.findAccount database.Config (name "alice") token |> ok |> Option.get).Role
         equal (Some PlayerRole.Moderator) (SqliteAdminStore.findPlayer database.Config alice.PlayerId token |> ok |> Option.map _.Role)
+
         SqliteAdminStore.setRole database.Config root alice.PlayerId PlayerRole.Player now token |> ok |> ignore
         equal PlayerRole.Player (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.get).Role
         equal 1L (database.Scalar "SELECT count(*) FROM player_roles")
         let audit = SqliteAdminStore.recentAudit database.Config 10 token |> ok
         equal 2 (audit |> List.filter (fun entry -> entry.Action = AdminAction.SetRole) |> List.length)
+
         // Deleting the account removes the role with the profile.
         database.Execute "DELETE FROM accounts WHERE username='alice'"
         equal 0L (database.Scalar "SELECT count(*) FROM player_roles"))
@@ -173,7 +184,9 @@ let tests = testList "SQLite admin" [
         equal [ percent.PlayerId ] ((search "%").Players |> List.map _.Profile.PlayerId)
         equal [ under.PlayerId ] ((search (string (PlayerId.value under.PlayerId))).Players |> List.map _.Profile.PlayerId |> List.filter ((=) under.PlayerId))
         equal 4 (search "").Total
-        for index in 1 .. 50 do player database $"bulk{index}" $"Bulk {index}" |> ignore
+
+        for index in 1 .. 50 do
+            player database $"bulk{index}" $"Bulk {index}" |> ignore
         let first = search ""
         let second = SqliteAdminStore.searchPlayers database.Config "" 2 token |> ok
         equal 54 first.Total
@@ -197,6 +210,7 @@ let tests = testList "SQLite admin" [
         | other -> failtestf "%A" other
         equal "Алиса" (DisplayName.value (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.get).Profile.DisplayName)
         equal RenameOutcome.NotFound (rename (PlayerId.create 404UL |> ok) "X" ValueNone TimeSpan.Zero now)
+
         // The player's own changes are limited by the interval; administrator changes are not counted.
         let day = TimeSpan.FromDays 1.
         match rename alice.PlayerId "Own One" ValueNone day now with
@@ -209,6 +223,7 @@ let tests = testList "SQLite admin" [
         match rename alice.PlayerId "Own Two" ValueNone day (now + day) with
         | RenameOutcome.Renamed _ -> ()
         | other -> failtestf "%A" other
+
         // The same name is not a change: no history line.
         match rename alice.PlayerId "Own Two" ValueNone TimeSpan.Zero (now + day) with
         | RenameOutcome.Renamed _ -> ()
@@ -216,6 +231,7 @@ let tests = testList "SQLite admin" [
         let history = SqliteAdminStore.nameHistory database.Config alice.PlayerId 10 token |> ok
         equal [ "By Admin", "Own Two"; "Own One", "By Admin"; "Алиса", "Own One"; "Alice", "Алиса" ] (history |> List.map (fun change -> change.OldName, change.NewName))
         equal [ None; Some "root"; None; Some "root" ] (history |> List.map (_.ChangedBy >> Option.map Username.value))
+
         // Only the newest changes stay.
         let trimmed = SqliteAccountStore.rename database.Config alice.PlayerId (DisplayName.create 64 "Last" |> ok) (ValueSome root.Id) TimeSpan.Zero 2 (now + day) token |> ok
         match trimmed with
@@ -286,11 +302,16 @@ let tests = testList "SQLite admin" [
         equal [ "aaaaaaaaaaaa", 2L; "bbbbbbbbbbbb", 1L ]
               (SqliteDeviceStore.history database.Config alice.PlayerId token |> ok |> List.map (fun entry -> DeviceId.short entry.Device, entry.SignIns))
         let order kind devices =
-            { Target = alice.PlayerId; Kind = kind; Term = SanctionTerm.For(TimeSpan.FromHours 1.); Reason = SanctionReason.create "Спам" |> ok
-              IssuedBy = SanctionIssuer.Admin root.Id; Devices = devices }
+            { Target = alice.PlayerId
+              Kind = kind
+              Term = SanctionTerm.For(TimeSpan.FromHours 1.)
+              Reason = SanctionReason.create "Спам" |> ok
+              IssuedBy = SanctionIssuer.Admin root.Id
+              Devices = devices }
         // A mute never bans devices, even when asked.
         SqliteSanctionStore.issue database.Config (order SanctionKind.Mute true) now token |> ok |> ignore
         equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") now token |> ok)
+
         let ban =
             match SqliteSanctionStore.issue database.Config (order SanctionKind.Ban true) now token |> ok with
             | SanctionOutcome.Applied ban -> ban
@@ -300,6 +321,7 @@ let tests = testList "SQLite admin" [
         equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") (now.AddHours 2.) token |> ok)
         let audit = SqliteAdminStore.recentAudit database.Config 1 token |> ok
         check (audit.Head.Details.Contains "devices: 2") $"The audit line counts the devices: {audit.Head.Details}"
+
         SqliteSanctionStore.lift database.Config alice.PlayerId SanctionKind.Ban (SanctionIssuer.Admin root.Id) now token |> ok |> ignore
         equal ValueNone (SqliteSanctionStore.bannedDevice database.Config (device "a") now token |> ok))
 ]
