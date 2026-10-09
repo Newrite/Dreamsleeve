@@ -10,19 +10,35 @@ open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 
-let private ok = function Ok value -> value | Error error -> failtestf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "%A" error
+
 let private manifest (bytes: byte array) =
     PhantomManifest.create PhantomOptions.defaults.Limits (AssetHash.create (SHA256.HashData bytes) |> ok)
         (AppearanceGeneration.create 1UL |> ok) 2u (uint32 bytes.Length) (uint32 bytes.Length) 2u |> ok
+
 let private request lease upload length body = {
-    Token = lease; Upload = upload; Length = length; Body = body; BeginResponse = ignore; Cancellation = CancellationToken.None
+    Token = lease
+    Upload = upload
+    Length = length
+
+    Body = body
+    BeginResponse = ignore
+    Cancellation = CancellationToken.None
 }
+
 let private fixture name run = testCaseAsync name (async {
     let root = Path.Combine(Path.GetTempPath(), "dreamsleeve-http-" + Guid.NewGuid().ToString("N"))
-    let options = { PhantomOptions.defaults with StoragePath = root; RamBytes = 0L }
+    let options = {
+        PhantomOptions.defaults with
+            StoragePath = root
+            RamBytes = 0L
+    }
     let storage = PhantomStorage.create options
     let http = PhantomHttp.create options storage
-    try do! run options storage http |> Async.AwaitTask
+    try
+        do! run options storage http |> Async.AwaitTask
     finally
         http.Dispose().GetAwaiter().GetResult()
         storage.Dispose().GetAwaiter().GetResult()
@@ -48,34 +64,55 @@ let private deltaFixture = fixture "native prefix delta reconstructs canonical a
         if String.IsNullOrEmpty directory then
             let raw = Array.zeroCreate<byte> (256 * 1024)
             Random(42).NextBytes raw
+
             use encoder = new ZstdSharp.Compressor(3)
             let basis = encoder.Wrap(raw.AsSpan()).ToArray()
             let changed = Array.copy raw
             changed[17000] <- changed[17000] ^^^ 85uy
             let target = encoder.Wrap(changed.AsSpan()).ToArray()
+
             encoder.LoadDictionary raw
             basis, target, encoder.Wrap(changed.AsSpan()).ToArray()
         else
-            File.ReadAllBytes(Path.Combine(directory,"base.zst")),
-            File.ReadAllBytes(Path.Combine(directory,"target.zst")),
-            File.ReadAllBytes(Path.Combine(directory,"patch.zst"))
+            File.ReadAllBytes(Path.Combine(directory, "base.zst")),
+            File.ReadAllBytes(Path.Combine(directory, "target.zst")),
+            File.ReadAllBytes(Path.Combine(directory, "patch.zst"))
+
     let rawSize = int (ZstdSharp.Decompressor.GetDecompressedSize(target.AsSpan()))
     let baseAsset = manifest basis
-    let asset = PhantomManifest.create options.Limits (AssetHash.create(SHA256.HashData target) |> ok)
-                    (AppearanceGeneration.create 2UL |> ok) 2u (uint32 target.Length) (uint32 rawSize) 2u |> ok
-    let delta = PhantomDelta.create asset baseAsset.Hash (AssetHash.create(SHA256.HashData patch) |> ok) (uint32 patch.Length) |> ok
+    let asset =
+        PhantomManifest.create
+            options.Limits
+            (AssetHash.create(SHA256.HashData target) |> ok)
+            (AppearanceGeneration.create 2UL |> ok)
+            2u
+            (uint32 target.Length)
+            (uint32 rawSize)
+            2u
+        |> ok
+    let delta =
+        PhantomDelta.create
+            asset
+            baseAsset.Hash
+            (AssetHash.create(SHA256.HashData patch) |> ok)
+            (uint32 patch.Length)
+        |> ok
+
     let owner = Guid.NewGuid()
     let upload id value change bytes = task {
-        let! admitted = storage.StartUpload(id,value,change)
+        let! admitted = storage.StartUpload(id, value, change)
         Expect.equal admitted (Ok false) "New body."
-        let lease = http.Admit(owner,id,value,true,change)
+
+        let lease = http.Admit(owner, id, value, true, change)
         use input = new MemoryStream(bytes: byte array)
         let! result = http.Serve(request lease.Token true (Some(int64 bytes.Length)) input)
         do! http.Cancel id
         return result
     }
+
     let! full = upload (PhantomTransferId 1UL) baseAsset None basis
     Expect.equal full (Ok ()) "Base committed."
+
     // Force the real patch rename dependency to fail before canonical commit.
     let blockedPatch = Path.Combine(options.StoragePath, asset.Hash.Hex + ".delta")
     Directory.CreateDirectory blockedPatch |> ignore
@@ -83,50 +120,81 @@ let private deltaFixture = fixture "native prefix delta reconstructs canonical a
     match failedPublication with
     | Error (PhantomHttpError.Storage (PhantomStorageError.Io _)) -> ()
     | other -> failtestf "Expected patch filesystem failure, got %A" other
+
     Expect.isFalse (File.Exists(Path.Combine(options.StoragePath, asset.Hash.Hex + ".zst"))) "No rejected canonical target."
     Expect.equal (Directory.GetFiles(options.StoragePath, "*.tmp").Length) 0 "Failed publication releases temporary file."
     Expect.isTrue (File.Exists(Path.Combine(options.StoragePath, baseAsset.Hash.Hex + ".zst"))) "Usable base retained."
+
     Directory.Delete blockedPatch
     let! restored = upload (PhantomTransferId 2UL) asset (Some delta) patch
     Expect.equal restored (Ok ()) "Delta committed only after canonical target hash."
-    Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(options.StoragePath,asset.Hash.Hex+".zst"))) target "Exact compressed target."
-    for number, wanted, expected in [3UL,None,target;4UL,Some baseAsset.Hash,patch;5UL,Some asset.Hash,target] do
-        let id=PhantomTransferId number
-        let! selected=storage.StartDownload(id,asset,wanted)
-        let change=ok selected
-        Expect.equal change (if number=4UL then Some delta else None) "Only exact base selects patch."
-        let lease=http.Admit(owner,id,asset,false,change)
-        use output=new MemoryStream()
-        let! result=http.Serve(request lease.Token false None output)
+    Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(options.StoragePath, asset.Hash.Hex + ".zst"))) target "Exact compressed target."
+
+    for number, wanted, expected in [
+        3UL, None, target
+        4UL, Some baseAsset.Hash, patch
+        5UL, Some asset.Hash, target
+    ] do
+        let id = PhantomTransferId number
+        let! selected = storage.StartDownload(id, asset, wanted)
+        let change = ok selected
+        Expect.equal change (if number = 4UL then Some delta else None) "Only exact base selects patch."
+
+        let lease = http.Admit(owner, id, asset, false, change)
+        use output = new MemoryStream()
+        let! result = http.Serve(request lease.Token false None output)
         Expect.equal result (Ok ()) "Body served."
         Expect.sequenceEqual (output.ToArray()) expected "Correct transport body."
+
         do! http.Cancel id
         do! storage.Cancel id
-    let different=Array.copy target
-    different[different.Length-1] <- different[different.Length-1] ^^^ 1uy
-    let invalidTarget=PhantomManifest.create options.Limits (AssetHash.create(SHA256.HashData different) |> ok)
-                        (AppearanceGeneration.create 3UL |> ok) 2u (uint32 target.Length) (uint32 rawSize) 2u |> ok
-    let badDelta=PhantomDelta.create invalidTarget baseAsset.Hash delta.Hash (uint32 patch.Length) |> ok
-    let! rejected=upload (PhantomTransferId 6UL) invalidTarget (Some badDelta) patch
+
+    let different = Array.copy target
+    different[different.Length - 1] <- different[different.Length - 1] ^^^ 1uy
+    let invalidTarget =
+        PhantomManifest.create
+            options.Limits
+            (AssetHash.create(SHA256.HashData different) |> ok)
+            (AppearanceGeneration.create 3UL |> ok)
+            2u
+            (uint32 target.Length)
+            (uint32 rawSize)
+            2u
+        |> ok
+    let badDelta =
+        PhantomDelta.create invalidTarget baseAsset.Hash delta.Hash (uint32 patch.Length)
+        |> ok
+    let! rejected = upload (PhantomTransferId 6UL) invalidTarget (Some badDelta) patch
     Expect.isError rejected "Valid patch cannot publish a different target hash."
-    Expect.isFalse (File.Exists(Path.Combine(options.StoragePath,invalidTarget.Hash.Hex+".zst"))) "Rejected target not committed."
-    let bad=Array.copy patch
-    bad[bad.Length-1] <- bad[bad.Length-1] ^^^ 1uy
-    let! corrupt=upload (PhantomTransferId 7UL) invalidTarget (Some badDelta) bad
+    Expect.isFalse (File.Exists(Path.Combine(options.StoragePath, invalidTarget.Hash.Hex + ".zst"))) "Rejected target not committed."
+
+    let bad = Array.copy patch
+    bad[bad.Length - 1] <- bad[bad.Length - 1] ^^^ 1uy
+    let! corrupt = upload (PhantomTransferId 7UL) invalidTarget (Some badDelta) bad
     Expect.isError corrupt "Patch transport hash checked."
-    let absent=AssetHash.create(Array.create 32 123uy) |> ok
-    let missingDelta=PhantomDelta.create invalidTarget absent delta.Hash (uint32 patch.Length) |> ok
-    let! missing=storage.StartUpload(PhantomTransferId 8UL,invalidTarget,Some missingDelta)
+
+    let absent = AssetHash.create(Array.create 32 123uy) |> ok
+    let missingDelta =
+        PhantomDelta.create invalidTarget absent delta.Hash (uint32 patch.Length)
+        |> ok
+    let! missing = storage.StartUpload(PhantomTransferId 8UL, invalidTarget, Some missingDelta)
     Expect.isError missing "Missing base requires full fallback before receiving body."
-    let mutable ignored=Array.empty<byte>
-    Expect.isFalse (PhantomDeltaCodec.TryApply(basis,patch,rawSize-1,options.Limits.RawBytes,options.Limits.CompressedBytes,&ignored)) "Exact raw bound checked."
+
+    let mutable ignored = Array.empty<byte>
+    Expect.isFalse
+        (PhantomDeltaCodec.TryApply(
+            basis, patch, rawSize - 1,
+            options.Limits.RawBytes, options.Limits.CompressedBytes, &ignored))
+        "Exact raw bound checked."
 })
 
 let tests = testList "Phantom HTTP" [
     fixture "HTTP diagnostics preserve real upload phases and omit capability" (fun _ storage http -> task {
         let lines = Collections.Concurrent.ConcurrentQueue<string>()
-        let collector = ContinuousDiagnostics.TryStart(Func<string, DiagnosticOperationResult>(fun line -> lines.Enqueue line; DiagnosticOperationResult.Success)).Match(
-                            (fun collector -> collector), (fun () -> failtest "Invalid diagnostic test sink."))
+        let collector = ContinuousDiagnostics.TryStart(Func<string, DiagnosticOperationResult>(fun line ->
+            lines.Enqueue line
+            DiagnosticOperationResult.Success)).Match(
+                (fun collector -> collector), (fun () -> failtest "Invalid diagnostic test sink."))
         use cleanup = collector
         let owner = Guid.NewGuid()
         let bytes = Array.init 65539 (fun index -> byte index)
@@ -263,8 +331,11 @@ let tests = testList "Phantom HTTP" [
         let original = InvalidOperationException "unexpected dependency fault"
         use body = new FailedBody(original)
         let mutable seen = None
-        try let! _ = http.Serve(request lease.Token true (Some 4L) body) in ()
-        with error -> seen <- Some error
+        try
+            let! _ = http.Serve(request lease.Token true (Some 4L) body)
+            ()
+        with error ->
+            seen <- Some error
         Expect.isTrue (seen |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Original fault observed."
         let! failed = http.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
         Expect.isTrue (Object.ReferenceEquals(failed, original)) "Lifecycle owner receives original fault."
@@ -281,7 +352,11 @@ let tests = testList "Phantom HTTP" [
             storage with
                 WriteChunk = fun args -> task {
                     let! written = storage.WriteChunk args
-                    match written with Ok true -> stop.Cancel() | Ok false | Error _ -> ()
+                    match written with
+                    | Ok true -> stop.Cancel()
+                    | Ok false
+                    | Error _ -> ()
+
                     return written
                 }
         }
@@ -300,7 +375,8 @@ let tests = testList "Phantom HTTP" [
             do! storage.Cancel id
             let! warm = storage.StartUpload(PhantomTransferId 2UL, asset, None)
             Expect.equal warm (Ok true) "Whole manifest retry observes canonical cache; no second body."
-        finally http.Dispose().GetAwaiter().GetResult()
+        finally
+            http.Dispose().GetAwaiter().GetResult()
     })
 
     fixture "storage cleanup IO fault after commit faults HTTP lease instead of HTTP IO rejection" (fun options _ _ -> task {
@@ -316,8 +392,11 @@ let tests = testList "Phantom HTTP" [
         let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
         use body = new MemoryStream(bytes)
         let mutable observed = None
-        try let! _ = http.Serve(request lease.Token true (Some 4L) body) in ()
-        with error -> observed <- Some error
+        try
+            let! _ = http.Serve(request lease.Token true (Some 4L) body)
+            ()
+        with error ->
+            observed <- Some error
         Expect.isSome observed "Cleanup fault is not an ordinary body IOException result."
         let! original = store.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
         let! forwarded = http.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
@@ -327,8 +406,10 @@ let tests = testList "Phantom HTTP" [
         do! (http.Cancel id).WaitAsync(TimeSpan.FromSeconds 2.)
         do! http.Dispose()
         let mutable released = false
-        try do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
-        with error -> released <- Object.ReferenceEquals(error, original)
+        try
+            do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
+        with error ->
+            released <- Object.ReferenceEquals(error, original)
         Expect.isTrue released "Storage teardown reports original fault after cleanup."
         Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(directory, asset.Hash.Hex + ".zst"))) bytes "Canonical content still committed."
     })

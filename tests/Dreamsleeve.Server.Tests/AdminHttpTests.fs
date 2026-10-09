@@ -17,11 +17,17 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private setupCode = String('s', 43)
 let private apiToken = String('t', 43)
 let private password = "Admin-Password-2026"
-let private root = { Id = AdminId.create 1L |> ok; Username = Username.create 32 "root" |> ok }
+let private root = {
+    Id = AdminId.create 1L |> ok
+    Username = Username.create 32 "root" |> ok
+}
 
 /// The admin service as the routes see it: codes, sessions and audit in memory.
 type private FakeAdmin() =
@@ -32,10 +38,12 @@ type private FakeAdmin() =
     member _.Configure() = configured <- true
     member this.Handle(command: AdminCommand) : Result<AdminReply, AdminServiceError> =
         this.Commands.Enqueue command
+
         let signIn () =
             let token = Guid.NewGuid().ToString("N")
             sessions[token] <- root
             Ok (AdminReply.SignedIn(root, token, DateTimeOffset.UtcNow.AddHours 1.))
+
         match command with
         | AdminCommand.Status -> Ok (AdminReply.Configured configured)
         | AdminCommand.Setup(code, _, _) ->
@@ -44,12 +52,20 @@ type private FakeAdmin() =
             else
                 configured <- true
                 signIn ()
-        | AdminCommand.Login(_, secret) -> if configured && secret = password then signIn () else Error AdminServiceError.InvalidCredentials
+        | AdminCommand.Login(_, secret) ->
+            if configured && secret = password then
+                signIn ()
+            else
+                Error AdminServiceError.InvalidCredentials
         | AdminCommand.Authenticate token ->
             match sessions.TryGetValue token with
             | true, admin -> Ok (AdminReply.Admin admin)
             | false, _ -> Error AdminServiceError.InvalidCredentials
-        | AdminCommand.AuthenticateApi token -> if token = apiToken then Ok (AdminReply.Admin root) else Error AdminServiceError.InvalidCredentials
+        | AdminCommand.AuthenticateApi token ->
+            if token = apiToken then
+                Ok (AdminReply.Admin root)
+            else
+                Error AdminServiceError.InvalidCredentials
         | AdminCommand.Logout token ->
             sessions.TryRemove token |> ignore
             Ok AdminReply.Completed
@@ -60,19 +76,34 @@ type private FakeAdmin() =
         // The hidden player has a card; the rest of it is not served here.
         | AdminCommand.FindPlayer playerId when PlayerId.value playerId = 7UL ->
             let stored = PlayerData.create playerId (Username.create 32 "alice.real" |> ok) (DisplayName.create 64 "Алиса Настоящая" |> ok) NameColor.unknown
-            Ok (AdminReply.Player(Some { Profile = stored; Role = PlayerRole.Player }))
-        | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
-        | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
-        | AdminCommand.FindPlayer _ -> Error AdminServiceError.Unavailable
+            Ok (AdminReply.Player(Some {
+                Profile = stored
+                Role = PlayerRole.Player
+            }))
+        | AdminCommand.IssueSetupCode
+        | AdminCommand.IssueResetCode _
+        | AdminCommand.ResetPassword _
+        | AdminCommand.CreateApiToken _
+        | AdminCommand.ListApiTokens
+        | AdminCommand.RevokeApiToken _
+        | AdminCommand.SetRole _
+        | AdminCommand.SearchPlayers _
+        | AdminCommand.FindPlayer _ ->
+            Error AdminServiceError.Unavailable
         | AdminCommand.NameHistory _ -> Ok (AdminReply.Names [])
         | AdminCommand.PlayerSanctions _ -> Ok (AdminReply.Sanctions [])
         | AdminCommand.ActiveSanctions -> Ok (AdminReply.ActiveSanctions [])
 
 // One hidden player online; its real names only the panel may show.
 let private hiddenRow = {
-    ConnectionId = Guid.NewGuid(); Address = IPAddress.Parse "203.0.113.7"; Proxy = None; PlayerId = Some (PlayerId.create 7UL |> ok)
+    ConnectionId = Guid.NewGuid()
+    Address = IPAddress.Parse "203.0.113.7"
+    Proxy = None
+    PlayerId = Some (PlayerId.create 7UL |> ok)
+
     Phase = RuntimeSessionPhase.Ready
-    ConnectedAt = DateTimeOffset.UtcNow; Session = None
+    ConnectedAt = DateTimeOffset.UtcNow
+    Session = None
 }
 
 let private hiddenView =
@@ -112,7 +143,14 @@ let private withPanel customize run = task {
         | GuildAdminCommand.PlayerGuilds _ -> GuildAdminResult.PlayerGuilds []
         | _ -> GuildAdminResult.Refused GuildError.NotFound)
     let adminReply = ref admin.Handle
-    let snapshotReply: AgentAskResult<ServerRuntimeSnapshot> ref = ref (AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
+    let snapshotReply: AgentAskResult<ServerRuntimeSnapshot> ref = ref (AgentAskResult.Replied {
+        Connections = 1
+        Guests = 0
+        Ready = 1
+        Reservations = 1
+        Closing = 0
+        Stopping = false
+    })
     let sessionsReply = ref (AgentAskResult.Replied [ hiddenRow ])
     let describeReply = ref (fun (row: RuntimeSessionRow) -> Ok (if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None))
     let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
@@ -127,7 +165,9 @@ let private withPanel customize run = task {
             Task.FromResult(AgentAskResult.Replied(guildReply.Value command))
         Sessions = fun _ _ -> Task.FromResult sessionsReply.Value
         Describe = fun _ row -> Task.FromResult(describeReply.Value row)
-        Announce = fun announcement -> announcements.Enqueue announcement; true
+        Announce = fun announcement ->
+            announcements.Enqueue announcement
+            true
         ApplyRole = fun _ _ -> true
         ApplyProfile = fun _ -> true
         Configuration = fun () -> []
@@ -135,7 +175,16 @@ let private withPanel customize run = task {
     let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let panel = Configuration.defaults.Admin
-    let config = customize { Configuration.defaults with Admin = { panel with Listener = { panel.Listener with ListenUrl = "http://127.0.0.1:0" } } }
+    let config = customize {
+        Configuration.defaults with
+            Admin = {
+                panel with
+                    Listener = {
+                        panel.Listener with
+                            ListenUrl = "http://127.0.0.1:0"
+                    }
+            }
+    }
     let app = AdminRoutes.build (WebPorts.adminListener config) (WebPorts.adminRoutes config Moderation.empty) ports logger
     let! outcome = task {
         try
@@ -143,15 +192,31 @@ let private withPanel customize run = task {
             let cookies = CookieContainer()
             use handler = new HttpClientHandler(CookieContainer = cookies, UseCookies = true, AllowAutoRedirect = false)
             use http = new HttpClient(handler, BaseAddress = Uri(Seq.head app.Urls), Timeout = guard)
-            do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements; Accounts = accounts; AccountReply = accountReply
-                      Guilds = guildCommands; GuildReply = guildReply; AdminReply = adminReply; SnapshotReply = snapshotReply
-                      SessionsReply = sessionsReply; DescribeReply = describeReply; Logs = logs }
+            do! run {
+                Http = http
+                Cookies = cookies
+                Admin = admin
+
+                Announcements = announcements
+                Accounts = accounts
+                AccountReply = accountReply
+                Guilds = guildCommands
+                GuildReply = guildReply
+                AdminReply = adminReply
+                SnapshotReply = snapshotReply
+                SessionsReply = sessionsReply
+                DescribeReply = describeReply
+                Logs = logs
+            }
             return Ok ()
         with failure -> return Error failure
     }
     do! app.StopAsync()
     do! app.DisposeAsync().AsTask()
-    match outcome with Ok () -> () | Error failure -> return raise failure
+
+    match outcome with
+    | Ok () -> ()
+    | Error failure -> return raise failure
 }
 
 let private form (fields: (string * string) list) = new FormUrlEncodedContent(fields |> List.map KeyValuePair)
@@ -167,6 +232,7 @@ let private submit (panel: Panel) (path: string) fields (headers: (string * stri
 }
 
 let private status expected (response: HttpResponseMessage) = equal expected (int response.StatusCode)
+
 let private setCookie (response: HttpResponseMessage) =
     match response.Headers.TryGetValues "Set-Cookie" with
     | true, values -> String.concat "\n" values
@@ -189,9 +255,22 @@ let private api panel (path: string) = task {
 let tests = testSequenced (testList "Admin HTTP" [
     case "description absence, timeout and original fault remain distinct from available player data" (fun () ->
         withPanel id (fun panel -> task {
-            let missing = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None; Phase = RuntimeSessionPhase.Guest }
-            let slow = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None }
-            let failed = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None }
+            let missing = {
+                hiddenRow with
+                    ConnectionId = Guid.NewGuid()
+                    PlayerId = None
+                    Phase = RuntimeSessionPhase.Guest
+            }
+            let slow = {
+                hiddenRow with
+                    ConnectionId = Guid.NewGuid()
+                    PlayerId = None
+            }
+            let failed = {
+                hiddenRow with
+                    ConnectionId = Guid.NewGuid()
+                    PlayerId = None
+            }
             let failure = InvalidOperationException("description-owner-fault")
             panel.SessionsReply.Value <- AgentAskResult.Replied [ hiddenRow; missing; slow; failed ]
             panel.DescribeReply.Value <- fun row ->
@@ -242,17 +321,27 @@ let tests = testSequenced (testList "Admin HTTP" [
             for field in [ "names"; "sanctions"; "addresses"; "devices"; "guilds" ] do
                 equal 0 (json.RootElement.GetProperty(field).GetArrayLength())
             let original = panel.AdminReply.Value
-            panel.AdminReply.Value <- function AdminCommand.NameHistory _ -> Error AdminServiceError.Unavailable | command -> original command
+            panel.AdminReply.Value <- function
+                | AdminCommand.NameHistory _ -> Error AdminServiceError.Unavailable
+                | command -> original command
             use! names = api panel "/api/v1/players/7"
             status 503 names
-            panel.AdminReply.Value <- function AdminCommand.NameHistory _ -> Ok AdminReply.Completed | command -> original command
+            panel.AdminReply.Value <- function
+                | AdminCommand.NameHistory _ -> Ok AdminReply.Completed
+                | command -> original command
             use! wrong = panel.Http.GetAsync "/players/7"
             status 503 wrong
             panel.AdminReply.Value <- original
-            panel.AccountReply.Value <- function AccountAccessCommand.AddressHistory _ -> Error AccountAccessError.Unavailable | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices []) | _ -> Error AccountAccessError.Unavailable
+            panel.AccountReply.Value <- function
+                | AccountAccessCommand.AddressHistory _ -> Error AccountAccessError.Unavailable
+                | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices [])
+                | _ -> Error AccountAccessError.Unavailable
             use! addresses = api panel "/api/v1/players/7"
             status 503 addresses
-            panel.AccountReply.Value <- function AccountAccessCommand.AddressHistory _ -> Ok (AccountAccessResult.Addresses []) | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices []) | _ -> Error AccountAccessError.Unavailable
+            panel.AccountReply.Value <- function
+                | AccountAccessCommand.AddressHistory _ -> Ok (AccountAccessResult.Addresses [])
+                | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices [])
+                | _ -> Error AccountAccessError.Unavailable
             panel.GuildReply.Value <- fun _ -> GuildAdminResult.Refused GuildError.NotFound
             use! guilds = api panel "/api/v1/players/7"
             status 503 guilds
@@ -410,12 +499,31 @@ let tests = testSequenced (testList "Admin HTTP" [
             let bans = ref []
             let range = AddressRange.parse "203.0.113.0/24" |> ok
             let reason = SanctionReason.create "Рейд" |> ok
-            let ban : AddressBan = { Id = 5L; Range = range; Reason = reason; IssuedBy = ValueSome root.Id; IssuedAt = DateTimeOffset.UtcNow; Expires = ValueNone }
+            let ban : AddressBan = {
+                Id = 5L
+                Range = range
+                Reason = reason
+
+                IssuedBy = ValueSome root.Id
+                IssuedAt = DateTimeOffset.UtcNow
+                Expires = ValueNone
+            }
             let bob = PlayerData.create (PlayerId.create 8UL |> ok) (Username.create 32 "bob" |> ok) (DisplayName.create 64 "Боб" |> ok) NameColor.unknown
-            let seen : SignInAddress = { Address = IPAddress.Parse "203.0.113.9"; FirstSeen = DateTimeOffset.UtcNow; LastSeen = DateTimeOffset.UtcNow; SignIns = 3L }
+            let seen : SignInAddress = {
+                Address = IPAddress.Parse "203.0.113.9"
+                FirstSeen = DateTimeOffset.UtcNow
+                LastSeen = DateTimeOffset.UtcNow
+                SignIns = 3L
+            }
             panel.AccountReply.Value <- (function
                 | AccountAccessCommand.ListAddressBans -> Ok (AccountAccessResult.AddressBans bans.Value)
-                | AccountAccessCommand.PlayersInRange _ -> Ok (AccountAccessResult.PlayersAt [ ({ Player = bob; Address = seen } : AddressMatch) ])
+                | AccountAccessCommand.PlayersInRange _ ->
+                    Ok (AccountAccessResult.PlayersAt [
+                        ({
+                            Player = bob
+                            Address = seen
+                        } : AddressMatch)
+                    ])
                 | AccountAccessCommand.BanAddresses _ ->
                     bans.Value <- [ ban ]
                     Ok (AccountAccessResult.AddressesBanned ban)
@@ -473,23 +581,57 @@ let tests = testSequenced (testList "Admin HTTP" [
             let profile raw username display = PlayerData.create (pid raw) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
             let bob = profile 8UL "bob" "<i>Боб</i>"
             let carol = profile 9UL "carol" "Кэрол"
-            let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone }
+            let membership (player: PlayerData) role : GuildMember = {
+                Player = player.PlayerId
+                Role = role
+                JoinedAt = at
+                Mute = ValueNone
+            }
             // The master's account is gone: the guild waits for the panel.
-            let summary master : GuildSummary = { Guild = guild; Name = name; CreatedAt = at; Members = 2; Master = master }
+            let summary master : GuildSummary = {
+                Guild = guild
+                Name = name
+                CreatedAt = at
+
+                Members = 2
+                Master = master
+            }
             let card bobRole master : GuildCard =
-                { Summary = summary master
-                  Members = [ { Membership = membership bob bobRole; Profile = bob; Online = true }
-                              { Membership = membership carol GuildRole.Officer; Profile = carol; Online = false } ]
-                  Invites = [] }
+                {
+                    Summary = summary master
+                    Members = [
+                        {
+                            Membership = membership bob bobRole
+                            Profile = bob
+                            Online = true
+                        }
+                        {
+                            Membership = membership carol GuildRole.Officer
+                            Profile = carol
+                            Online = false
+                        }
+                    ]
+                    Invites = []
+                }
             panel.GuildReply.Value <- (function
-                | GuildAdminCommand.Search _ -> GuildAdminResult.Page { Guilds = [ summary ValueNone ]; Total = 1; Page = 1 }
+                | GuildAdminCommand.Search _ ->
+                    GuildAdminResult.Page {
+                        Guilds = [ summary ValueNone ]
+                        Total = 1
+                        Page = 1
+                    }
                 | GuildAdminCommand.Card id when id = guild -> GuildAdminResult.Card(ValueSome(card GuildRole.Member ValueNone))
                 | GuildAdminCommand.Card _ -> GuildAdminResult.Card ValueNone
                 | GuildAdminCommand.PlayerGuilds _ -> GuildAdminResult.PlayerGuilds [ summary ValueNone, GuildRole.Officer ]
                 | GuildAdminCommand.Appoint(_, player) when player = pid 10UL -> GuildAdminResult.Refused GuildError.TargetNotFound
                 | GuildAdminCommand.Appoint _ -> GuildAdminResult.Appointed(card GuildRole.Master (ValueSome bob))
                 | GuildAdminCommand.Dissolve _ ->
-                    GuildAdminResult.Dissolved { Guild = guild; Name = name; Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]; Invites = [] })
+                    GuildAdminResult.Dissolved {
+                        Guild = guild
+                        Name = name
+                        Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]
+                        Invites = []
+                    })
             do! signIn panel
             use! list = panel.Http.GetAsync "/guilds?q=вор"
             status 200 list
@@ -535,7 +677,16 @@ let tests = testSequenced (testList "Admin HTTP" [
         }))
 
     case "sign-in attempts are limited per address and forwarded addresses are ignored unless trusted" (fun () ->
-        let limit (config: ApplicationConfig) = { config with Admin = { config.Admin with Service = { config.Admin.Service with LoginAttemptsPerMinute = 2 } } }
+        let limit (config: ApplicationConfig) = {
+            config with
+                Admin = {
+                    config.Admin with
+                        Service = {
+                            config.Admin.Service with
+                                LoginAttemptsPerMinute = 2
+                        }
+                }
+        }
         let wrong = [ "username", "root"; "password", "Wrong-Password-2026" ]
         task {
             do! withPanel limit (fun panel -> task {
@@ -546,7 +697,16 @@ let tests = testSequenced (testList "Admin HTTP" [
                 status 429 limited
             })
             let trusted (config: ApplicationConfig) =
-                limit { config with Admin = { config.Admin with Listener = { config.Admin.Listener with TrustForwardedHeaders = true } } }
+                limit {
+                    config with
+                        Admin = {
+                            config.Admin with
+                                Listener = {
+                                    config.Admin.Listener with
+                                        TrustForwardedHeaders = true
+                                }
+                        }
+                }
             do! withPanel trusted (fun panel -> task {
                 for index in 1 .. 3 do
                     use! refused = submit panel "/login" wrong [ "X-Forwarded-For", Some $"203.0.113.{index}" ]
