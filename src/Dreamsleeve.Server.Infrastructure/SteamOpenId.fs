@@ -16,6 +16,28 @@ type SteamProfile = {
     Created: DateTimeOffset voption
 }
 
+[<RequireQualifiedAccess>]
+type SteamRequestError =
+    | HttpStatus of int
+    | Transport of HttpRequestException
+    | RequestCanceled
+    | TimedOut
+
+[<RequireQualifiedAccess>]
+type SteamVerifyError =
+    | UserCanceled
+    | InvalidAnswer
+    | NotConfirmed
+    | Request of SteamRequestError
+
+[<RequireQualifiedAccess>]
+type SteamProfileFormatError = Json | Envelope | Identity | Name | Timestamp
+
+[<RequireQualifiedAccess>]
+type SteamProfileError =
+    | InvalidResponse of SteamProfileFormatError
+    | Request of SteamRequestError
+
 /// "Sign in through Steam" (OpenID 2.0, docs/AuthenticationRu.md, «Вход через
 /// Steam»): the browser goes to Steam and comes back with a claimed ID that the
 /// server has Steam confirm (check_authentication). Steam needs no registration
@@ -40,17 +62,46 @@ module SteamOpenId =
         |> String.concat "&"
         |> fun query -> Endpoint + "?" + query
 
-    /// The SteamID of the answer the browser brought back for this flow, once
-    /// Steam confirms that it issued it. "canceled" when the player turned back.
-    /// The flow returns to whichever of the public origins it began through.
+    let private send (http: HttpClient) (request: HttpRequestMessage) (token: CancellationToken) = task {
+        try
+            let! response = http.SendAsync(request, HttpCompletionOption.ResponseContentRead, token)
+            return Ok response
+        with
+        | :? HttpRequestException as error -> return Error (SteamRequestError.Transport error)
+        | :? OperationCanceledException ->
+            return Error (if token.IsCancellationRequested then SteamRequestError.RequestCanceled else SteamRequestError.TimedOut)
+    }
+
+    let private readContent (content: HttpContent) (token: CancellationToken) = task {
+        try
+            let! text = content.ReadAsStringAsync(token)
+            return Ok text
+        with
+        | :? HttpRequestException as error -> return Error (SteamRequestError.Transport error)
+        | :? OperationCanceledException ->
+            return Error (if token.IsCancellationRequested then SteamRequestError.RequestCanceled else SteamRequestError.TimedOut)
+    }
+
+    let private readHttp http request token = task {
+        match! send http request token with
+        | Error error -> return Error error
+        | Ok received ->
+            use response = received
+            if not response.IsSuccessStatusCode then return Error (SteamRequestError.HttpStatus (int response.StatusCode))
+            else return! readContent response.Content token
+    }
+
+    /// The SteamID confirmed for this flow; an intentional browser cancellation
+    /// is distinct from invalid answers and dependency failures.
     let verify (http: HttpClient) (publicUrls: string list) (flow: string) (fields: (string * string) list) (token: CancellationToken) = task {
         let expected returned = publicUrls |> List.exists (fun publicUrl -> returned = returnUrl publicUrl flow)
         let field name = fields |> List.tryFind (fun (key, _) -> key = name) |> Option.map snd
         match field "openid.mode", field "openid.op_endpoint", field "openid.return_to", field "openid.claimed_id", field "openid.identity" with
-        | Some "cancel", _, _, _, _ -> return Error "canceled"
+        | Some "cancel", _, _, _, _ -> return Error SteamVerifyError.UserCanceled
         | Some "id_res", Some Endpoint, Some returned, Some id, Some identity when expected returned && id = identity ->
             let found = claimed.Match id
-            if not found.Success then return Error "The claimed ID is not a Steam account."
+            let validNumber, steamId = UInt64.TryParse(found.Groups[1].Value, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture)
+            if not found.Success || not validNumber then return Error SteamVerifyError.InvalidAnswer
             else
                 // Steam checks its own signature over the very fields it sent.
                 let check =
@@ -58,39 +109,77 @@ module SteamOpenId =
                     |> List.filter (fun (key, _) -> key.StartsWith("openid.", StringComparison.Ordinal))
                     |> List.map (fun (key, value) -> KeyValuePair(key, (if key = "openid.mode" then "check_authentication" else value)))
                 use content = new FormUrlEncodedContent(check)
-                use! response = http.PostAsync(Endpoint, content, token)
-                let! body = response.Content.ReadAsStringAsync(token)
-                if response.IsSuccessStatusCode && body.Split('\n') |> Array.exists (fun line -> line.Trim() = "is_valid:true") then
-                    return Ok(UInt64.Parse found.Groups[1].Value)
-                else return Error "Steam did not confirm the sign-in."
-        | _ -> return Error "The answer from Steam is incomplete or belongs to another sign-in."
+                use request = new HttpRequestMessage(HttpMethod.Post, Endpoint, Content = content)
+                match! readHttp http request token with
+                | Error error -> return Error (SteamVerifyError.Request error)
+                | Ok body when body.Split('\n') |> Array.exists (fun line -> line.Trim() = "is_valid:true") ->
+                    return Ok steamId
+                | Ok _ -> return Error SteamVerifyError.NotConfirmed
+        | _ -> return Error SteamVerifyError.InvalidAnswer
     }
 
-    /// The public profile through the Web API key. Any failure leaves the fields
-    /// unknown; nothing about the key reaches a log.
-    let profile (http: HttpClient) (key: string) (steamId: uint64) (token: CancellationToken) = task {
+    let private parseProfile (text: string) =
+        try Ok (JsonDocument.Parse text)
+        with :? JsonException -> Error SteamProfileFormatError.Json
+
+    let private profileFields steamId (root: JsonElement) =
         let unknown = { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
-        try
-            use! response = http.GetAsync($"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={Uri.EscapeDataString key}&steamids={steamId}", token)
-            if not response.IsSuccessStatusCode then return unknown
+        let decode () =
+            if root.ValueKind <> JsonValueKind.Object then Error SteamProfileFormatError.Envelope
             else
-                let! text = response.Content.ReadAsStringAsync(token)
-                use document = JsonDocument.Parse text
-                match document.RootElement.TryGetProperty "response" with
-                | true, answer ->
-                    match answer.TryGetProperty "players" with
-                    | true, players when players.ValueKind = JsonValueKind.Array && players.GetArrayLength() > 0 ->
-                        let player = players[0]
-                        let name =
-                            match player.TryGetProperty "personaname" with
-                            | true, value when value.ValueKind = JsonValueKind.String -> ValueSome(value.GetString())
-                            | true, _ | false, _ -> ValueNone
-                        let created =
-                            match player.TryGetProperty "timecreated" with
-                            | true, value when value.ValueKind = JsonValueKind.Number -> ValueSome(DateTimeOffset.FromUnixTimeSeconds(value.GetInt64()))
-                            | true, _ | false, _ -> ValueNone
-                        return { unknown with PersonaName = name; Created = created }
-                    | true, _ | false, _ -> return unknown
-                | false, _ -> return unknown
-        with _ -> return unknown
+                match root.TryGetProperty "response" with
+                | true, response when response.ValueKind = JsonValueKind.Object ->
+                    match response.TryGetProperty "players" with
+                    | true, players when players.ValueKind = JsonValueKind.Array ->
+                        if players.GetArrayLength() = 0 then Ok unknown
+                        else
+                            let player = players[0]
+                            if player.ValueKind <> JsonValueKind.Object then Error SteamProfileFormatError.Envelope
+                            else
+                                let identity =
+                                    match player.TryGetProperty "steamid" with
+                                    | true, value when value.ValueKind = JsonValueKind.String ->
+                                        match UInt64.TryParse(value.GetString(), Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture) with
+                                        | true, actual when actual = steamId -> Ok ()
+                                        | _ -> Error SteamProfileFormatError.Identity
+                                    | _ -> Error SteamProfileFormatError.Identity
+                                let name () =
+                                    match player.TryGetProperty "personaname" with
+                                    | false, _ -> Ok ValueNone
+                                    | true, value when value.ValueKind = JsonValueKind.String -> Ok (ValueSome (value.GetString()))
+                                    | true, _ -> Error SteamProfileFormatError.Name
+                                let created () =
+                                    match player.TryGetProperty "timecreated" with
+                                    | false, _ -> Ok ValueNone
+                                    | true, value when value.ValueKind = JsonValueKind.Number ->
+                                        match value.TryGetInt64() with
+                                        | true, seconds when seconds >= DateTimeOffset.MinValue.ToUnixTimeSeconds() && seconds <= DateTimeOffset.MaxValue.ToUnixTimeSeconds() ->
+                                            Ok (ValueSome (DateTimeOffset.FromUnixTimeSeconds seconds))
+                                        | _ -> Error SteamProfileFormatError.Timestamp
+                                    | true, _ -> Error SteamProfileFormatError.Timestamp
+                                match identity with
+                                | Error error -> Error error
+                                | Ok () ->
+                                    match name (), created () with
+                                    | Ok name, Ok created -> Ok { unknown with PersonaName = name; Created = created }
+                                    | Error error, _ | _, Error error -> Error error
+                    | _ -> Error SteamProfileFormatError.Envelope
+                | _ -> Error SteamProfileFormatError.Envelope
+        // JsonDocument defers Unicode unescape until member access; only JSON
+        // representation reads and total scalar conversions run in this adapter.
+        try decode ()
+        with :? InvalidOperationException -> Error SteamProfileFormatError.Json
+
+    /// The optional public profile. Expected dependency/representation errors
+    /// stay typed; the caller owns fallback without exposing the API key in logs.
+    let profile (http: HttpClient) (key: string) (steamId: uint64) (token: CancellationToken) = task {
+        use request = new HttpRequestMessage(HttpMethod.Get, $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={Uri.EscapeDataString key}&steamids={steamId}")
+        match! readHttp http request token with
+        | Error error -> return Error (SteamProfileError.Request error)
+        | Ok text ->
+            match parseProfile text with
+            | Error error -> return Error (SteamProfileError.InvalidResponse error)
+            | Ok parsed ->
+                use document = parsed
+                return profileFields steamId document.RootElement |> Result.mapError SteamProfileError.InvalidResponse
     }

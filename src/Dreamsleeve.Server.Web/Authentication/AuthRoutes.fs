@@ -20,9 +20,9 @@ open Dreamsleeve.Server.Web
 /// with one HttpClient; tests pass functions.
 type SteamPorts = {
     /// The SteamID of the answer the browser brought back for a flow, confirmed by Steam.
-    Verify: string -> (string * string) list -> CancellationToken -> Task<Result<uint64, string>>
+    Verify: string -> (string * string) list -> CancellationToken -> Task<Result<uint64, SteamVerifyError>>
     /// The public profile with a Web API key; unknown fields without one.
-    Profile: uint64 -> CancellationToken -> Task<SteamProfile>
+    Profile: uint64 -> CancellationToken -> Task<Result<SteamProfile, SteamProfileError>>
 }
 
 /// The account service as the public routes see it. The composition root
@@ -271,10 +271,35 @@ module AuthRoutes =
 
     // A new Steam account is named after its persona when the word list allows it.
     let private steamName settings moderation (profile: SteamProfile) =
-        let fallback () = DisplayName.create settings.Input.DisplayName $"Steam {profile.SteamId % 10000UL:D4}" |> Result.toOption |> Option.get
+        let fallback () = DisplayName.create settings.Input.DisplayName $"Steam {profile.SteamId % 10000UL:D4}"
         match profile.PersonaName |> ValueOption.map (DisplayName.create settings.Input.DisplayName) with
-        | ValueSome (Ok name) when Moderation.allows moderation (DisplayName.value name) -> name
+        | ValueSome (Ok name) when Moderation.allows moderation (DisplayName.value name) -> Ok name
         | ValueSome _ | ValueNone -> fallback ()
+
+    let private steamRequestCategory = function
+        | SteamRequestError.HttpStatus _ -> "http_status"
+        | SteamRequestError.Transport _ -> "transport"
+        | SteamRequestError.RequestCanceled -> "request_canceled"
+        | SteamRequestError.TimedOut -> "timeout"
+
+    let private steamProfileCategory = function
+        | SteamProfileError.Request error -> steamRequestCategory error
+        | SteamProfileError.InvalidResponse error ->
+            match error with
+            | SteamProfileFormatError.Json -> "json"
+            | SteamProfileFormatError.Envelope -> "envelope"
+            | SteamProfileFormatError.Identity -> "identity"
+            | SteamProfileFormatError.Name -> "name"
+            | SteamProfileFormatError.Timestamp -> "timestamp"
+
+    let private steamCanceled (context: HttpContext) =
+        if context.RequestAborted.IsCancellationRequested then 499, "Запрос входа отменён."
+        else 504, "Steam не ответил вовремя. Начните вход из игры заново."
+
+    let private steamRequestOutcome context = function
+        | SteamRequestError.RequestCanceled -> steamCanceled context
+        | SteamRequestError.TimedOut -> 504, "Steam не ответил вовремя. Начните вход из игры заново."
+        | SteamRequestError.HttpStatus _ | SteamRequestError.Transport _ -> 502, "Steam недоступен. Попробуйте позже."
 
     /// Steam sends the browser here; the client that began the flow learns the
     /// outcome by polling, the browser shows it as text.
@@ -288,25 +313,44 @@ module AuthRoutes =
             if settings.SteamPublicUrls.IsEmpty then return 404, "Вход через Steam на этом сервере выключен."
             elif not (AuthService.validToken flow) then return 400, "Ссылка входа повреждена. Начните вход из игры заново."
             else
-                try
-                    let fields = [ for pair in context.Request.Query do if pair.Key.StartsWith("openid.", StringComparison.Ordinal) then pair.Key, pair.Value.ToString() ]
-                    match! ports.Steam.Verify flow fields deadline.Token with
-                    | Error "canceled" -> return 200, "Вход через Steam отменён. Вернитесь в игру."
-                    | Error reason ->
-                        logger.Information("Steam sign-in not verified: {Reason}", reason)
-                        return 400, "Steam не подтвердил вход. Начните вход из игры заново."
-                    | Ok steamId ->
-                        let! profile = ports.Steam.Profile steamId deadline.Token
-                        match! ports.Access (AccountAccessCommand.CompleteSteam(flow, profile, steamName settings moderation profile)) timeout deadline.Token with
-                        | AgentAskResult.Replied result -> return steamOutcome result
-                        | AgentAskResult.Full | AgentAskResult.Dropped -> return steamOutcome (Error AccountAccessError.Busy)
-                        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return steamOutcome (Error AccountAccessError.Unavailable)
-                        | AgentAskResult.Faulted failure ->
-                            logger.Error(failure, "Steam sign-in failed")
+                let fields = [ for pair in context.Request.Query do if pair.Key.StartsWith("openid.", StringComparison.Ordinal) then pair.Key, pair.Value.ToString() ]
+                match! ports.Steam.Verify flow fields deadline.Token with
+                | Error SteamVerifyError.UserCanceled -> return 200, "Вход через Steam отменён. Вернитесь в игру."
+                | Error (SteamVerifyError.InvalidAnswer | SteamVerifyError.NotConfirmed) ->
+                    return 400, "Steam не подтвердил вход. Начните вход из игры заново."
+                | Error (SteamVerifyError.Request error) ->
+                    logger.Information("Steam verification dependency failed: {Category}", steamRequestCategory error)
+                    return steamRequestOutcome context error
+                | Ok steamId ->
+                    let! profileResult = ports.Steam.Profile steamId deadline.Token
+                    // Optional profile failure may lose public metadata, never identity.
+                    let profile =
+                        match profileResult with
+                        | Ok profile -> profile
+                        | Error error ->
+                            logger.Information("Optional Steam profile unavailable: {Category}", steamProfileCategory error)
+                            { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+                    let profileCanceled =
+                        match profileResult with
+                        | Error (SteamProfileError.Request SteamRequestError.RequestCanceled) -> true
+                        | Ok _ | Error _ -> false
+                    // Even immediate missing-key profile success cannot complete a
+                    // canceled sign-in; timeout does not prove an ask was unexecuted.
+                    if deadline.IsCancellationRequested || profileCanceled then return steamCanceled context
+                    else
+                        match steamName settings moderation profile with
+                        | Error error ->
+                            logger.Warning("Steam fallback display name is unavailable: {Reason}", error)
                             return steamOutcome (Error AccountAccessError.Unavailable)
-                with
-                | :? OperationCanceledException -> return 504, "Steam не ответил вовремя. Начните вход из игры заново."
-                | :? Net.Http.HttpRequestException -> return 502, "Steam недоступен. Попробуйте позже."
+                        | Ok name ->
+                            match! ports.Access (AccountAccessCommand.CompleteSteam(flow, profile, name)) timeout deadline.Token with
+                            | AgentAskResult.Replied result -> return steamOutcome result
+                            | AgentAskResult.Full | AgentAskResult.Dropped -> return steamOutcome (Error AccountAccessError.Busy)
+                            | AgentAskResult.Closed | AgentAskResult.TimedOut -> return steamOutcome (Error AccountAccessError.Unavailable)
+                            | AgentAskResult.Canceled -> return steamCanceled context
+                            | AgentAskResult.Faulted failure ->
+                                logger.Error(failure, "Steam sign-in failed")
+                                return steamOutcome (Error AccountAccessError.Unavailable)
         }
         do! WebHost.write context (page status message)
     }

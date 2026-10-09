@@ -428,6 +428,137 @@ let tests = testSequenced (testList "Authentication HTTP" [
         })
     })
 
+    case "Steam verification categories and optional profile failures retain identity without logging secrets" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779"; ProxyUrls = [] } } }
+        let unknown id = { SteamId = id; PersonaName = ValueNone; Created = ValueNone }
+        for failure, expected in [
+            SteamVerifyError.UserCanceled, 200
+            SteamVerifyError.InvalidAnswer, 400
+            SteamVerifyError.NotConfirmed, 400
+            SteamVerifyError.Request (SteamRequestError.HttpStatus 503), 502
+            SteamVerifyError.Request (SteamRequestError.Transport (HttpRequestException("canceled"))), 502
+            SteamVerifyError.Request SteamRequestError.TimedOut, 504
+            SteamVerifyError.Request SteamRequestError.RequestCanceled, 504
+        ] do
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Error failure)
+                Profile = fun id _ -> Task.FromResult (Ok (unknown id))
+            }
+            do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status expected response
+                equal 0 received.Count
+            })
+        let secret = "steam-key-secret-never-log"
+        for failure in [
+            SteamProfileError.Request (SteamRequestError.Transport (HttpRequestException(secret)))
+            SteamProfileError.Request (SteamRequestError.HttpStatus 503)
+            SteamProfileError.Request SteamRequestError.TimedOut
+            SteamProfileError.InvalidResponse SteamProfileFormatError.Json
+            SteamProfileError.InvalidResponse SteamProfileFormatError.Identity
+        ] do
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromResult (Error failure)
+            }
+            do! withHostUsingPorts id logs (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status 200 response
+                match received.ToArray() with
+                | [| AccountAccessCommand.CompleteSteam(_, actual, name) |] ->
+                    equal (unknown steamId) actual
+                    equal "Steam 0042" (DisplayName.value name)
+                | other -> failtestf "%A" other
+                let entries = logs.ToArray()
+                check (entries |> Array.exists (fun entry -> entry.MessageTemplate.Text.Contains "Optional Steam profile unavailable")) "Optional failure has a category diagnostic."
+                check (entries |> Array.forall (fun entry -> not (entry.RenderMessage().Contains secret) && isNull entry.Exception)) "Expected optional failure never logs URL/key/cause text."
+            })
+        for failingVerify in [ true; false ] do
+            let original = InvalidOperationException("unexpected Steam port")
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let steam = {
+                Verify = fun _ _ _ -> if failingVerify then Task.FromException<_> original else Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromException<_> original
+            }
+            do! withHostUsingPorts id logs (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status 500 response
+                equal 0 received.Count
+                check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Unexpected Steam port fault remains original Kestrel failure."
+            })
+    })
+
+    case "Steam cancellation prevents completion even after an immediate unknown-profile success" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            { config with Authentication = { config.Authentication with
+                                                Listener = { config.Authentication.Listener with RequestTimeoutSeconds = 1 }
+                                                Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779"; ProxyUrls = [] } } }
+        let unknown = { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+        let steam = {
+            Verify = fun _ _ token -> task {
+                // Deliberately late verified result ignores cancellation; the route
+                // must still guard its next admission, including no-key fast path.
+                let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore)
+                do! canceled.Task.WaitAsync guard
+                return Ok steamId
+            }
+            Profile = fun _ _ -> Task.FromResult (Ok unknown)
+        }
+        do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+            use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+            status 504 response
+            equal 0 received.Count
+        })
+        let entered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let observed = ref None
+        let aborting = {
+            Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+            Profile = fun _ token -> task {
+                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore)
+                entered.TrySetResult() |> ignore
+                do! canceled.Task.WaitAsync guard
+                return Ok unknown
+            }
+        }
+        do! withHostUsing (Some aborting) on (reply signedIn) (fun http received -> task {
+            observed.Value <- Some received
+            use clientAbort = new CancellationTokenSource()
+            let request = http.GetAsync($"auth/steam/return?flow={flow}", clientAbort.Token)
+            do! entered.Task.WaitAsync guard
+            clientAbort.Cancel()
+            let! outcome = terminal request
+            check (outcome |> Option.exists (fun error -> error :? OperationCanceledException)) "Client aborted its HTTP request."
+            do! canceled.Task.WaitAsync guard
+        })
+        equal 0 observed.Value.Value.Count
+    })
+
+    case "a small valid display-name limit rejects only the unavailable Steam fallback" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            { config with Server = { config.Server with ChatInput = { config.Server.ChatInput with DisplayName = 1 } }
+                          Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779"; ProxyUrls = [] } } }
+        for persona, expected in [ ValueNone, 503; ValueSome "Я", 200 ] do
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromResult (Ok { SteamId = steamId; PersonaName = persona; Created = ValueNone })
+            }
+            do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status expected response
+                equal (if expected = 200 then 1 else 0) received.Count
+            })
+    })
+
     case "the browser's return is verified with Steam, named from a clean persona and answered with a page" (fun () -> task {
         let flow = String('f', 43)
         let steamOn (config: ApplicationConfig) =
@@ -437,8 +568,8 @@ let tests = testSequenced (testList "Authentication HTTP" [
         let steam = {
             Verify = fun f fields _ ->
                 let mode = fields |> List.tryFind (fun (key, _) -> key = "openid.mode") |> Option.map snd
-                Task.FromResult(if f = flow && mode = Some "id_res" then Ok steamId elif mode = Some "cancel" then Error "canceled" else Error "bad")
-            Profile = fun id _ -> Task.FromResult { SteamId = id; PersonaName = ValueSome persona.Value; Created = ValueNone }
+                Task.FromResult(if f = flow && mode = Some "id_res" then Ok steamId elif mode = Some "cancel" then Error SteamVerifyError.UserCanceled else Error SteamVerifyError.InvalidAnswer)
+            Profile = fun id _ -> Task.FromResult (Ok { SteamId = id; PersonaName = ValueSome persona.Value; Created = ValueNone })
         }
         let execute command (response: ReplyChannel<_>) =
             match command with

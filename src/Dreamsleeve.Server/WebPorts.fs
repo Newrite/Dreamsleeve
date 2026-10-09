@@ -64,7 +64,7 @@ module WebPorts =
         let key = Environment.GetEnvironmentVariable SteamKeyVariable
         { Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrls flow fields token
           Profile = fun steamId token ->
-            if String.IsNullOrWhiteSpace key then Task.FromResult { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+            if String.IsNullOrWhiteSpace key then Task.FromResult (Ok { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone })
             else SteamOpenId.profile steamHttp.Value key steamId token }
 
     let auth (settings: ApplicationConfig) (authentication: Agent<AuthMessage>) : AuthPorts =
