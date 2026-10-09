@@ -11,6 +11,7 @@ export import Dreamsleeve.Client.MovementView;
 export import Dreamsleeve.Host.Session;
 export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Bubbles;
+export import Dreamsleeve.Host.Notices;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 export import Dreamsleeve.Client.Diagnostics.PhantomTrace;
@@ -33,37 +34,9 @@ export namespace Runtime
   constexpr std::string_view UiConfig        = "ui.toml"sv;
   constexpr std::string_view AliasConfig     = "aliases.toml"sv;
 
-  enum class NoticeKind
-  {
-    NewGame,          // TESQuest::NewGame finished; the world is not ready yet.
-    PreLoadGame,      // A load attempt started under g_loadGameLock.
-    PostLoadGame,     // flag = the load succeeded.
-    SaveGame,         // Sent before the save is written.
-    MenuChanged,      // Recompute visibility from the current menu set.
-    ActivationKey,    // The chat activation key went down.
-    PlayerDeath,      // flag = dead (TESDeathEvent.dead).
-    PlayerActivated,  // formId = the activated object.
-    UiHidden,         // flag = user opt-out from the SKSE menu.
-    ActivationKeyF2,  // flag = F2 instead of Enter, from the SKSE menu.
-    ResumeLogin,      // SKSE menu: sign in with the saved login.
-    Disconnect        // SKSE menu: close the session and stop reconnecting.
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      ,
-    PhantomRecordingStart,
-    PhantomRecordingStop,
-    PhantomReplayStart,
-    PhantomReplayStop
-#endif
-  };
-
-  // A handle is a value: the sink never resolves it, the frame does.
-  struct Notice
-  {
-    NoticeKind          kind{};
-    bool                flag{};
-    std::uint32_t       formId{};
-    RE::ObjectRefHandle handle{};  // PlayerDeath: the killer, if any.
-  };
+  using NoticeKind      = Host::Notices::Kind;
+  using Notice          = Host::Notices::Notice<RE::ObjectRefHandle>;
+  using NoticeAdmission = Host::Notices::Admission;
 
   enum class GameContext
   {
@@ -122,45 +95,25 @@ export namespace Runtime
   namespace Detail
   {
 
-    constexpr std::size_t MaxNotices = 64;
-
-    struct NoticeQueue
+    Host::Notices::Inbox<RE::ObjectRefHandle>& Queue()
     {
-      std::mutex          mutex;
-      std::vector<Notice> notices;
-      bool                overflow{};
-    };
-
-    NoticeQueue& Queue()
-    {
-      static NoticeQueue queue;
+      static Host::Notices::Inbox<RE::ObjectRefHandle> queue;
       return queue;
     }
 
   }
 
-  // Any thread. Overflow drops the notice and is reported to the frame, which
-  // then recomputes everything that notices would only have accelerated.
-  void Post(Notice notice)
+  // Any thread. Reliable controls report Busy before admission; lifecycle
+  // barriers are retained in bounded gaps even when ordinary slots are full.
+  NoticeAdmission Post(Notice notice)
   {
-    auto&           queue = Detail::Queue();
-    std::lock_guard lock{queue.mutex};
-    if (queue.notices.size() >= Detail::MaxNotices)
-    {
-      queue.overflow = true;
-      return;
-    }
-    queue.notices.push_back(notice);
+    return Detail::Queue().Post(std::move(notice));
   }
 
-  // Main thread, once per frame. Returns whether notices were lost since the last take.
+  // Main thread, once per frame. True reports realtime saturation only.
   bool Take(std::vector<Notice>& output)
   {
-    output.clear();
-    auto&           queue = Detail::Queue();
-    std::lock_guard lock{queue.mutex};
-    output.swap(queue.notices);
-    return std::exchange(queue.overflow, false);
+    return Detail::Queue().Take(output);
   }
 
   namespace Detail

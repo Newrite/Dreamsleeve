@@ -18,9 +18,28 @@ namespace SKSEMenu
 
   constexpr auto Section = "Dreamsleeve";
 
+  // Feedback belongs to its renderer and survives subsequent frames. Admission
+  // failure never changes game state and is not automatically retried.
+  struct ControlFeedback
+  {
+    std::atomic<bool> busy{};
+
+    void Post(Runtime::Notice notice)
+    {
+      busy.store(Runtime::Post(std::move(notice)) == Runtime::NoticeAdmission::Busy);
+    }
+
+    void Render() const
+    {
+      if (busy.load())
+        ImGui::TextWrapped("Очередь действий заполнена: действие не принято. Повторите его явно после следующего игрового кадра.");
+    }
+  };
+
   void __stdcall RenderStatus()
   {
-    const auto snapshot = Runtime::ReadMenuSnapshot();
+    static ControlFeedback feedback;
+    const auto             snapshot = Runtime::ReadMenuSnapshot();
     if (!snapshot.available)
     {
       ImGui::TextWrapped("Клиент ещё не запущен. Проверьте Data/SKSE/Plugins/Dreamsleeve/client.toml и лог DreamsleeveClient.");
@@ -47,18 +66,21 @@ namespace SKSEMenu
     if (snapshot.authenticating) ImGui::TextUnformatted("Выполняется вход...");
     if (!snapshot.error.empty()) ImGui::TextWrapped("Ошибка: %s", snapshot.error.c_str());
 
+    feedback.Render();
     ImGui::Separator();
     if (snapshot.savedLogin && !snapshot.authenticating && snapshot.phase != "connected")
-      if (ImGui::Button("Войти сохранённой сессией")) Runtime::Post({Runtime::NoticeKind::ResumeLogin});
+      if (ImGui::Button("Войти сохранённой сессией")) feedback.Post({Runtime::NoticeKind::ResumeLogin});
     if (snapshot.phase != "disconnected" && snapshot.phase != "faulted")
-      if (ImGui::Button("Отключиться")) Runtime::Post({Runtime::NoticeKind::Disconnect});
+      if (ImGui::Button("Отключиться")) feedback.Post({Runtime::NoticeKind::Disconnect});
   }
 
   void __stdcall RenderSettings()
   {
-    const auto snapshot = Runtime::ReadMenuSnapshot();
-    bool       hidden   = snapshot.hideUi;
-    if (ImGui::Checkbox("Отключить чат и интерфейс", &hidden)) Runtime::Post({Runtime::NoticeKind::UiHidden, hidden});
+    static ControlFeedback feedback;
+    const auto             snapshot = Runtime::ReadMenuSnapshot();
+    feedback.Render();
+    bool hidden = snapshot.hideUi;
+    if (ImGui::Checkbox("Отключить чат и интерфейс", &hidden)) feedback.Post({Runtime::NoticeKind::UiHidden, hidden});
     ImGui::TextWrapped("Скрывает окно PrismaUI и отключает клавишу активации. Сеть, онлайн и светлячки продолжают работать.");
 
     ImGui::Separator();
@@ -69,7 +91,7 @@ namespace SKSEMenu
       for (int index = 0; index < 2; ++index)
       {
         const bool selected = (index == 1) == f2;
-        if (ImGui::Selectable(keys[index], selected) && !selected) Runtime::Post({Runtime::NoticeKind::ActivationKeyF2, index == 1});
+        if (ImGui::Selectable(keys[index], selected) && !selected) feedback.Post({Runtime::NoticeKind::ActivationKeyF2, index == 1});
         if (selected) ImGui::SetItemDefaultFocus();
       }
       ImGui::EndCombo();
@@ -83,8 +105,10 @@ namespace SKSEMenu
 #ifdef DREAMSLEEVE_DIAGNOSTICS
   void __stdcall RenderPhantomRecording()
   {
-    namespace D                         = Dreamsleeve::Client::Diagnostics;
-    const auto            snapshot      = Runtime::ReadMenuSnapshot();
+    static ControlFeedback feedback;
+    namespace D         = Dreamsleeve::Client::Diagnostics;
+    const auto snapshot = Runtime::ReadMenuSnapshot();
+    feedback.Render();
     const auto&           s             = snapshot.recording;
     const auto&           replay        = snapshot.replay;
     static int            scenario      = 0;
@@ -102,10 +126,10 @@ namespace SKSEMenu
       }
       ImGui::Checkbox("30 секунд (иначе 15)", &thirtySeconds);
       if (ImGui::Button("Начать запись"))
-        Runtime::Post({Runtime::NoticeKind::PhantomRecordingStart, thirtySeconds, static_cast<std::uint32_t>(scenario)});
+        feedback.Post({Runtime::NoticeKind::PhantomRecordingStart, thirtySeconds, static_cast<std::uint32_t>(scenario)});
     }
     ImGui::TextWrapped("Во время локальной записи публикация вашего фантома приостановлена. Записывается полная поза для анализа сжатия.");
-    if (s.phase == D::Phase::Recording && ImGui::Button("Остановить запись")) Runtime::Post({Runtime::NoticeKind::PhantomRecordingStop});
+    if (s.phase == D::Phase::Recording && ImGui::Button("Остановить запись")) feedback.Post({Runtime::NoticeKind::PhantomRecordingStop});
     constexpr const char* phases[] = {"Не записывается", "Запись (закройте меню)", "Сохранение", "Сохранено", "Ошибка записи"};
     ImGui::Text("%s: %.1f с, %llu кадров, %.1f Гц", phases[static_cast<int>(s.phase)], s.seconds, s.samples, s.sampleHz);
     ImGui::Text("Кодировано: %llu, отправлено в ENet: %llu, movement: %llu", s.encoded, s.sent, s.movements);
@@ -131,9 +155,9 @@ namespace SKSEMenu
     ImGui::TextWrapped(
       "Проверка игрового рендерера на последней завершённой записи выбранного сценария. Сервер не нужен. Встаньте рядом с местом записи в том же мире/интерьере; старый архив не содержит идентификатор мира.");
     if (!busy && !replay.loading && !replay.active && ImGui::Button("Воспроизвести последнюю запись"))
-      Runtime::Post({Runtime::NoticeKind::PhantomReplayStart, false, static_cast<std::uint32_t>(scenario)});
+      feedback.Post({Runtime::NoticeKind::PhantomReplayStart, false, static_cast<std::uint32_t>(scenario)});
     if ((replay.active || replay.loading) && ImGui::Button("Остановить воспроизведение"))
-      Runtime::Post({Runtime::NoticeKind::PhantomReplayStop});
+      feedback.Post({Runtime::NoticeKind::PhantomReplayStop});
     ImGui::TextWrapped("%s", replay.stage.c_str());
     ImGui::Text(
       "%.1f с, отрисовано: %llu, декодировано: %llu, моделей: %llu",

@@ -65,6 +65,9 @@ namespace Logic
   void LeavePlaying(Runtime::GameContext next)
   {
     auto& runtime = Runtime::Get();
+    // Each context needs a fresh readiness window, even if the whole load
+    // completes between frames and no not-ready observation reaches the hook.
+    Get().readySince = {};
     if (runtime.context == Runtime::GameContext::Playing)
     {
       Telemetry::EndContext();
@@ -150,7 +153,11 @@ namespace Logic
   void HandleNotices()
   {
     auto& state = Get();
-    if (Runtime::Take(state.notices)) PrismaUI::RecomputeMenus();
+    if (Runtime::Take(state.notices))
+    {
+      logger::warn("Realtime game notices were dropped because the notice inbox was full");
+      PrismaUI::RecomputeMenus();
+    }
     for (const auto& notice : state.notices)
       Handle(notice);
   }
