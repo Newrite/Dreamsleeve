@@ -249,6 +249,8 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
     },
     // A new session starts without guilds until the server sends them.
     reset() {
+      labels.clear();
+      removals.clear();
       store.setState({ ...idleGuilds });
     },
     select(guildId: string) {

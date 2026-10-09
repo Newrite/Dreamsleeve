@@ -355,6 +355,42 @@ describe("guilds in the chat", () => {
   });
 });
 
+describe("guild request session ownership", () => {
+  const snapshot: HostEvent = {
+    type: "snapshot",
+    serverName: "Next session",
+    channels: [global, system, ravens],
+    messages: [],
+    players: [],
+    selfId: SELF,
+  };
+  it("a new session ignores old guild deletion replies and accepts new ones", () => {
+    const { chat, sent } = inGuilds();
+    chat.guilds.invite("4", "9", "Pending player");
+    chat.guilds.deleteMessage(ravens.id, "2");
+    chat.receive(snapshot);
+    expect(chat.store.getState().guildRequests).toEqual({});
+    const notice = chat.store.getState().notice;
+    chat.receive({ type: "guildResult", requestId: "g1", guildId: "4" });
+    chat.receive({ type: "moderationResult", requestId: "gd2" });
+    expect(chat.store.getState().notice).toBe(notice);
+    chat.guilds.deleteMessage(ravens.id, "3");
+    expect(sent().at(-1)).toMatchObject({
+      type: "deleteChatMessage",
+      requestId: "gd3",
+    });
+    chat.receive({ type: "moderationResult", requestId: "gd3" });
+    expect(chat.store.getState().notice).toBe("Сообщение удалено");
+  });
+  it("a refresh preserves current guild deletion correlation", () => {
+    const { chat } = inGuilds();
+    chat.guilds.deleteMessage(ravens.id, "2");
+    chat.receive({ ...snapshot, refresh: true });
+    chat.receive({ type: "moderationResult", requestId: "gd1" });
+    expect(chat.store.getState().notice).toBe("Сообщение удалено");
+  });
+});
+
 describe("guild events at the bridge", () => {
   const sample = {
     type: "guilds",
