@@ -9,8 +9,11 @@ namespace P = Dreamsleeve::Client::Phantom;
 struct GrowingOutput
 {
   std::unique_ptr<std::uint8_t[]> data{new std::uint8_t[1024]};
-  std::size_t                     capacity{1024}, size{};
-  std::uint64_t                   allocations{1}, copied{};
+  std::size_t                     capacity{1024};
+  std::size_t                     size{};
+
+  std::uint64_t                   allocations{1};
+  std::uint64_t                   copied{};
 
   void Write(std::span<const std::uint8_t> part)
   {
@@ -23,6 +26,7 @@ struct GrowingOutput
       ++allocations;
       data = std::move(next);
     }
+
     std::memcpy(data.get() + size, part.data(), part.size());
     size += part.size();
   }
@@ -39,7 +43,8 @@ struct Measurement
 {
   std::string_view    name;
   std::vector<double> milliseconds;
-  std::uint64_t       allocations{}, copied{};
+  std::uint64_t       allocations{};
+  std::uint64_t       copied{};
 };
 
 int main(int argc, char** argv)
@@ -49,6 +54,7 @@ int main(int argc, char** argv)
     std::cerr << "Usage: Dreamsleeve.NifOutput.Benchmark <native.nif>\n";
     return 2;
   }
+
   std::ifstream input(argv[1], std::ios::binary);
   if (!input) return 2;
   const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(input), {}};
@@ -57,6 +63,7 @@ int main(int argc, char** argv)
     std::cerr << "Invalid NIF fixture\n";
     return 2;
   }
+
   std::array<Measurement, 3> results{
       {{"doubling-plus-copy"}, {"direct-first"}, {"direct-size-hint"}}
   };
@@ -67,7 +74,8 @@ int main(int argc, char** argv)
       const auto                variant = (iteration + order) % results.size();
       auto&                     result  = results[variant];
       std::vector<std::uint8_t> output;
-      std::uint64_t             allocations{}, copied{};
+      std::uint64_t             allocations{};
+      std::uint64_t             copied{};
       const auto                start  = std::chrono::steady_clock::now();
       auto                      replay = [&](auto write) {
         for (std::size_t at = 0; at < bytes.size();)
@@ -77,6 +85,7 @@ int main(int argc, char** argv)
           at += size;
         }
       };
+
       if (variant == 0)
       {
         GrowingOutput buffer;
@@ -102,12 +111,14 @@ int main(int argc, char** argv)
         });
         output = std::move(buffer).Take();
       }
+
       const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
       if (output != bytes)
       {
         std::cerr << "Byte mismatch\n";
         return 1;
       }
+
       if (iteration >= 3)
       {
         result.milliseconds.push_back(elapsed);
@@ -115,6 +126,7 @@ int main(int argc, char** argv)
         result.copied      = copied;
       }
     }
+
   std::cout << "{\"scope\":\"detached-output-only\",\"bytes\":" << bytes.size() << ",\"iterations\":30,\"results\":[";
   for (std::size_t i = 0; i < results.size(); ++i)
   {

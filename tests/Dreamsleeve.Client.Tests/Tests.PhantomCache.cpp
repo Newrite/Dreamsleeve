@@ -81,7 +81,8 @@ TEST_SUITE("Client.PhantomCache")
   TEST_CASE("Disabled and absent cache are intentional absence and skipped writes")
   {
     Directory      directory;
-    P::Cache       disabled({}), absent(directory.path / "not-created");
+    P::Cache       disabled({});
+    P::Cache       absent(directory.path / "not-created");
     const P::Bytes bytes{1, 2, 3};
     for (const auto* cache : {&disabled, &absent})
     {
@@ -106,9 +107,11 @@ TEST_SUITE("Client.PhantomCache")
     REQUIRE(read);
     REQUIRE(*read);
     CHECK(**read == bytes);
+
     auto corrupt = cache.Read(Hash(1), 4);
     REQUIRE_FALSE(corrupt);
     CHECK(corrupt.error().reason == P::Failure::InvalidFormat);
+
     Write(directory.path / (P::Hex(Hash(1)) + ".zst"), {});
     auto empty = cache.Read(Hash(1));
     REQUIRE_FALSE(empty);
@@ -138,7 +141,8 @@ TEST_SUITE("Client.PhantomCache")
   {
     Directory      directory;
     P::Cache       cache(directory.path);
-    const P::Bytes original{1, 2, 3}, replacement{4, 5, 6};
+    const P::Bytes original{1, 2, 3};
+    const P::Bytes replacement{4, 5, 6};
     REQUIRE(cache.Save(Hash(1), original, 100));
     auto replaced = cache.Save(Hash(1), replacement, 100);
     REQUIRE(replaced);
@@ -203,6 +207,7 @@ TEST_SUITE("Client.PhantomCache")
     REQUIRE(Until([&] { return exchange.Find(42)->Asset() != nullptr; }));
     CHECK(exchange.Stats().rejected == 0);
     CHECK_FALSE(exchange.Stats().error.empty());
+
     auto           second = Model(3);
     P::Wire::Offer replacement{42, 2, Describe(second, 2)};
     REQUIRE(exchange.Offer(replacement));
@@ -225,6 +230,7 @@ TEST_SUITE("Client.PhantomCache")
     corrupt.front()   ^= 1;
     P::Cache cache(directory.path);
     REQUIRE(cache.Save(model.hash, corrupt, 1024 * 1024));
+
     P::Exchange    exchange;
     P::Worker      worker(exchange, directory.path);
     P::Wire::Offer offer{42, 1, Describe(model)};

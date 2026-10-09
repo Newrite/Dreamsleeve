@@ -23,17 +23,21 @@ namespace
 TEST_CASE("Saved prototype material exclusions survive the neutral capture port" * doctest::skip(PrototypeFixturePath().empty()))
 {
   namespace C          = Dreamsleeve::Game::PhantomCapture;
-  std::size_t archives = 0, meshes = 0;
+  std::size_t archives = 0;
+  std::size_t meshes = 0;
+
   for (const auto& entry : std::filesystem::directory_iterator(PrototypeFixturePath()))
   {
     if (entry.path().extension() != ".json") continue;
     REQUIRE(++archives <= 64);
     REQUIRE(entry.file_size() < 1024 * 1024);
+
     std::ifstream input(entry.path(), std::ios::binary);
     REQUIRE(input);
     std::string  text{std::istreambuf_iterator<char>(input), {}};
     glz::generic json;
     REQUIRE_FALSE(bool(glz::read_json(json, text)));
+
     const auto& records = json.get<glz::generic::array_t>();
     REQUIRE(records.size() <= 4096);
     for (const auto& record : records)
@@ -57,6 +61,7 @@ TEST_CASE("Saved prototype material exclusions survive the neutral capture port"
       ++meshes;
     }
   }
+
   REQUIRE(archives > 0);
   REQUIRE(meshes > 0);
 }

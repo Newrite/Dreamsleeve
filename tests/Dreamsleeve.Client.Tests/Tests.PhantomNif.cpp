@@ -103,20 +103,26 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
   const auto decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - decodeStart).count();
   CHECK(decoded->Value().nif == asset->Value().nif);
   SaveBytes(dir / "model.zst", *model->compressed);
+
   std::ifstream       poses(dir / "native-poses.bin", std::ios::binary);
   std::array<char, 8> magic{};
   poses.read(magic.data(), 8);
   REQUIRE(std::string_view(magic.data(), 8) == "NIFPOSE2");
-  const auto channels = Scalar<std::uint32_t>(poses), bounds = Scalar<std::uint32_t>(poses), frames = Scalar<std::uint32_t>(poses);
+  const auto channels = Scalar<std::uint32_t>(poses);
+  const auto bounds   = Scalar<std::uint32_t>(poses);
+  const auto frames   = Scalar<std::uint32_t>(poses);
   REQUIRE(channels == asset->Layout().requiredChannels.size());
   REQUIRE(bounds == asset->Layout().bounds.size());
   REQUIRE(frames <= 1001);
+
   auto        shared = std::make_shared<const P::ValidatedAsset>(*asset);
   D::Recorder recorder;
   REQUIRE(recorder.Start(dir / "replay", 1, 30, 20));
   std::ofstream csv(dir / "measurements.csv");
   csv << "sequence,compressed_bytes,packet_bytes,encode_ms,decode_ms,max_position_error,max_rotation_degrees,max_scale_error\n";
-  double positionMax = 0, rotationMax = 0, scaleMax = 0;
+  double positionMax = 0;
+  double rotationMax = 0;
+  double scaleMax    = 0;
   for (std::uint32_t f = 0; f < frames; ++f)
   {
     P::Snapshot pose;
@@ -134,6 +140,7 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
     }
     for (auto& b : pose.bounds)
       b = Scalar<P::Bound>(poses);
+
     const auto e    = Clock::now();
     auto       wire = P::WriteSnapshot(pose, *asset);
     INFO((wire ? "encoded" : wire.error().field));
@@ -143,7 +150,10 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
     auto       read = P::ReadSnapshot(*wire, *decoded);
     REQUIRE(read);
     const auto dms = std::chrono::duration<double, std::milli>(Clock::now() - d).count();
-    double     pe = 0, re = 0, se = 0;
+
+    double     pe = 0;
+    double     re = 0;
+    double     se = 0;
     for (std::size_t i = 0; i < channels; ++i)
     {
       const auto& a = pose.channels[i].world;
@@ -151,9 +161,11 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
       pe            = std::max(
         pe,
         std::hypot(double(a.position.x) - b.position.x, double(a.position.y) - b.position.y, double(a.position.z) - b.position.z));
-      const std::array<double, 4> qa{a.rotation.x, a.rotation.y, a.rotation.z, a.rotation.w},
-        qb{b.rotation.x, b.rotation.y, b.rotation.z, b.rotation.w};
-      double dot = 0, na = 0, nb = 0;
+      const std::array<double, 4> qa{a.rotation.x, a.rotation.y, a.rotation.z, a.rotation.w};
+      const std::array<double, 4> qb{b.rotation.x, b.rotation.y, b.rotation.z, b.rotation.w};
+      double dot = 0;
+      double na  = 0;
+      double nb  = 0;
       for (unsigned q = 0; q < 4; ++q)
       {
         dot += qa[q] * qb[q];
@@ -170,6 +182,7 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
     positionMax = std::max(positionMax, pe);
     rotationMax = std::max(rotationMax, re);
     scaleMax    = std::max(scaleMax, se);
+
     auto packet = P::Wire::Encode(P::Wire::Pose{pose.generation, pose.context, pose.sequence, pose.sampledAtUs, *wire});
     REQUIRE(packet);
     SaveBytes(dir / std::format("pose-{}.zst", f + 1), *wire);
@@ -182,6 +195,7 @@ TEST_CASE("Native recorded poses traverse production codec and diagnostic replay
   }
   recorder.Stop();
   recorder.Shutdown();
+
   const auto status = recorder.Read();
   CHECK(status.samples == frames);
   CHECK(status.dropped == 0);

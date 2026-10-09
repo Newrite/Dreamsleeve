@@ -52,9 +52,11 @@ TEST_CASE("Native phantom model has an exact bounded compressed frame")
   CHECK(read->Value().nif == a->Value().nif);
   CHECK(P::Hex(prepared->hash).size() == 64);
   CHECK_FALSE(P::ReadAsset(*prepared->compressed, prepared->rawBytes + 1));
+
   auto bytes = *prepared->compressed;
   bytes.push_back(0);
   CHECK_FALSE(P::ReadAsset(bytes, prepared->rawBytes));
+
   P::Limits small;
   small.assetBytes = prepared->rawBytes - 1;
   CHECK_FALSE(P::ReadAsset(*prepared->compressed, prepared->rawBytes, small));
@@ -71,11 +73,14 @@ TEST_CASE("Phantom poses require complete matching channels and bounds")
   auto read = P::ReadSnapshot(*bytes, *a);
   REQUIRE(read);
   CHECK(read->channels[0].world.position.x == doctest::Approx(12.25));
+
   auto broken = *bytes;
   broken.resize(broken.size() / 2);
   CHECK_FALSE(P::ReadSnapshot(broken, *a));
+
   p.bounds.clear();
   CHECK_FALSE(P::WriteSnapshot(p, *a));
+
   p                              = Pose(1, 50000, 0);
   p.channels[0].world.position.x = 200000000;
   CHECK_FALSE(P::WriteSnapshot(p, *a));
@@ -94,6 +99,7 @@ TEST_CASE("Phantom playback drops stale samples and bounds extrapolation")
   auto p = playback.At(2075000, settings);
   REQUIRE(p);
   CHECK(p->origin.x == doctest::Approx(5));
+
   p = playback.At(2200000, settings);
   REQUIRE(p);
   CHECK(p->origin.x == doctest::Approx(20));
@@ -137,6 +143,7 @@ TEST_CASE("Phantom clock mapping retains microsecond range and resets after a lo
   const auto sample = playback.At(end, settings);
   REQUIRE(sample);
   CHECK(sample->origin.x == doctest::Approx(5));
+
   playback.Clear();
   REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(1, 1000000, 0)), 2000000, settings));
   REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(Pose(2, 1100000, 10)), 8000000, settings));
@@ -257,7 +264,8 @@ TEST_CASE("Pose extrapolation preserves articulation and translates matching bou
   P::ViewSettings settings;
   settings.delayMs         = 50;
   settings.extrapolationMs = 50;
-  auto a = Pose(1, 1000000, 0), b = Pose(2, 1100000, 10);
+  auto a = Pose(1, 1000000, 0);
+  auto b = Pose(2, 1100000, 10);
   a.channels[1].world.position = {0, 10, 0};
   b.channels[1].world.position = {20, 0, 0};
   REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(a), 2000000, settings));
@@ -274,13 +282,15 @@ TEST_CASE("Pose extrapolation preserves articulation and translates matching bou
 TEST_CASE("Adaptive playout is continuous at insertion and recovers from persistent latency changes")
 {
   Dreamsleeve::Client::PlayoutClock clock;
-  std::uint64_t                     source = 1000000, arrival = 2000000;
+  std::uint64_t                     source = 1000000;
+  std::uint64_t                     arrival = 2000000;
   clock.Push(source, arrival, 1, 100000, 8);
   for (unsigned i = 1; i < 1500; ++i)
   {
     const auto gap  = i % 17 == 0 ? 2ULL : 1ULL;
     source         += gap * 100000;
-    auto next       = source + 1000000 + (i < 400 ? 0 : i < 900 ? 150000 : 0);
+    auto next       = source + 1000000;
+    if (i >= 400 && i < 900) next += 150000;
     if (next <= arrival) continue;  // Superseded packet on the decreasing-delay edge.
     const auto before = clock.At(next);
     clock.Push(source, next, gap, 100000, 8);
@@ -299,21 +309,29 @@ TEST_CASE("Production playout reduces missing right endpoints under jitter and l
   {
     struct Packet
     {
-      std::uint64_t source, arrival, sequence;
+      std::uint64_t source;
+      std::uint64_t arrival;
+      std::uint64_t sequence;
     };
 
     std::vector<Packet>                packets;
     std::mt19937                       random{42};
-    std::uniform_int_distribution<int> jitter(-20000, 20000), loss(0, 999);
+    std::uniform_int_distribution<int> jitter(-20000, 20000);
+    std::uniform_int_distribution<int> loss(0, 999);
     for (std::uint64_t i = 0; i < 3000; ++i)
     {
       auto source  = 1000000 + i * (1000000 / hz);
       auto arrival = static_cast<std::uint64_t>(static_cast<std::int64_t>(source + 1000000) + jitter(random));
       if (loss(random) >= 60) packets.push_back({source, arrival, i + 1});
     }
+
     Dreamsleeve::Client::PlayoutClock clock;
-    std::size_t                       next = 0, fixedMissing = 0, adaptiveMissing = 0, frames = 0;
-    std::uint64_t                     previous = 0, latest = 0;
+    std::size_t                       next = 0;
+    std::size_t                       fixedMissing = 0;
+    std::size_t                       adaptiveMissing = 0;
+    std::size_t                       frames = 0;
+    std::uint64_t                     previous = 0;
+    std::uint64_t                     latest = 0;
     for (auto now = packets.front().arrival; now < packets.back().arrival; now += 16667)
     {
       while (next < packets.size() && packets[next].arrival <= now)
@@ -329,6 +347,7 @@ TEST_CASE("Production playout reduces missing right endpoints under jitter and l
       fixedMissing     += fixed > static_cast<std::int64_t>(latest);
       adaptiveMissing  += clock.At(now) > static_cast<std::int64_t>(latest);
     }
+
     MESSAGE("production playout hz=", hz, " frames=", frames, " fixed_missing=", fixedMissing, " adaptive_missing=", adaptiveMissing);
     CHECK(adaptiveMissing < fixedMissing / 2);
   }

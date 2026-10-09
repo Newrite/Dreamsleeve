@@ -28,15 +28,18 @@ TEST_CASE("Asset delta preserves exact canonical compressed identity and rejects
     state = state * 1664525 + 1013904223;
     b     = static_cast<std::uint8_t>(state >> 24);
   }
+
   auto base    = Pack(raw);
   raw[17000]  ^= 0x55;
   auto target  = Pack(raw);
   auto patch   = P::Delta::Create(base, target);
   REQUIRE(patch);
   CHECK(patch->size() < target.size() / 10);
+
   auto full = P::Delta::Apply(base, *patch, static_cast<std::uint32_t>(raw.size()));
   REQUIRE(full);
   CHECK(*full == target);
+
   CHECK_FALSE(P::Delta::Apply(base, *patch, 1));
   patch->push_back(0);
   CHECK_FALSE(P::Delta::Apply(base, *patch, static_cast<std::uint32_t>(raw.size())));
@@ -50,13 +53,17 @@ TEST_CASE("Asset delta recorded fixture reconstructs byte identical target")
   if (_dupenv_s(&path, &length, "DREAMSLEEVE_DELTA_FIXTURE") != 0 || !path) return;
   const std::filesystem::path root(path);
   std::free(path);
+
   auto read = [](const std::filesystem::path& name) {
     std::ifstream f(name, std::ios::binary);
     REQUIRE(f);
     return P::Bytes(std::istreambuf_iterator<char>(f), {});
   };
-  auto       base = read(root / "base.zst"), target = read(root / "target.zst");
+
+  auto       base = read(root / "base.zst");
+  auto       target = read(root / "target.zst");
   const auto raw   = static_cast<std::uint32_t>(ZSTD_getFrameContentSize(target.data(), target.size()));
+
   const auto begin = std::chrono::steady_clock::now();
   auto       patch = P::Delta::Create(base, target);
   REQUIRE(patch);
@@ -70,6 +77,7 @@ TEST_CASE("Asset delta recorded fixture reconstructs byte identical target")
     patch->size(),
     std::chrono::duration<double, std::milli>(encoded - begin).count(),
     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - encoded).count());
+
   std::ofstream f(root / "patch.zst", std::ios::binary);
   f.write(reinterpret_cast<const char*>(patch->data()), patch->size());
   REQUIRE(f);

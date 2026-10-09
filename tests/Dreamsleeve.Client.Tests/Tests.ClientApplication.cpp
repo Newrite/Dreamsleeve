@@ -28,6 +28,7 @@ namespace
         std::ofstream file{path, std::ios::binary};
         file << source;
       }
+
       return LoadClientSettings(path);
     }
 
@@ -102,12 +103,23 @@ TEST_CASE("Firefly base form settings use plugin-local IDs and preserve defaults
   CHECK(defaults->client.fireflyPlugin == "Skyrim.esm");
   CHECK(defaults->client.fireflyFormId == 0x02EB0F);
   CHECK(defaults->client.fireflyScale == doctest::Approx(0.25f));
+
   auto custom = fixture.Load("[client]\nfireflyPlugin = \"MyGlow.esl\"\nfireflyFormId = 0xABC\nfireflyScale = 1.5\n");
   REQUIRE(custom);
   CHECK(custom->client.fireflyPlugin == "MyGlow.esl");
   CHECK(custom->client.fireflyFormId == 0xABC);
   CHECK(custom->client.fireflyScale == doctest::Approx(1.5f));
-  for (auto bad : {"fireflyScale = 0", "fireflyScale = -1", "fireflyScale = 10.1", "fireflyScale = nan", "fireflyScale = inf", "fireflyFormId = 0", "fireflyFormId = 0xFE000ABC", "fireflyFormId = -1", "fireflyPlugin = ''", "fireflyPlugin = 'dir/MyGlow.esp'"})
+
+  for (auto bad : {"fireflyScale = 0",
+                   "fireflyScale = -1",
+                   "fireflyScale = 10.1",
+                   "fireflyScale = nan",
+                   "fireflyScale = inf",
+                   "fireflyFormId = 0",
+                   "fireflyFormId = 0xFE000ABC",
+                   "fireflyFormId = -1",
+                   "fireflyPlugin = ''",
+                   "fireflyPlugin = 'dir/MyGlow.esp'"})
     CHECK_FALSE(fixture.Accepts(std::string{"[client]\n"} + bad));
 }
 
@@ -143,6 +155,7 @@ TEST_CASE("Keyboard capture is on by default and can be switched off")
   auto            defaults = fixture.Load("version = 1\n");
   REQUIRE(defaults);
   CHECK(defaults->client.captureKeyboard);
+
   auto custom = fixture.Load("[client]\ncaptureKeyboard = false\n");
   REQUIRE(custom);
   CHECK_FALSE(custom->client.captureKeyboard);
@@ -344,6 +357,7 @@ TEST_CASE("Authentication errors are observable and a subsequent explicit login 
   REQUIRE(WaitIdle(**app));
   CHECK_FALSE((*app)->Status().error.empty());
   CHECK((*app)->Status().phase == SessionPhase::Disconnected);
+
   REQUIRE((*app)->Connect({"player", "short"}));
   REQUIRE(WaitIdle(**app));
   (*app)->Stop();
@@ -467,6 +481,7 @@ TEST_CASE("The first run writes the example and never rewrites an existing file"
     std::erase(text, '\r');
     return text;
   }());
+
   {
     std::ofstream file{fixture.path, std::ios::binary | std::ios::trunc};
     file << "serverPort = 9000\n";
@@ -562,11 +577,13 @@ TEST_CASE("Delayed methods replies cannot publish across a route change or ABA")
     (*app)->Exchange().SetRouteChoice(0);
     REQUIRE(waitRoute(0));
   }
+
   gates->firstReleased = true;
   gates->firstRelease.set_value();
   REQUIRE(nextEntered.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
   CHECK(nextEntered.get() == (returnToOriginal ? settings.authUrl : settings.routes[0].authUrl));
   CHECK((*app)->Status().methods == Auth::Methods{});
+
   gates->nextReleased = true;
   gates->nextRelease.set_value();
   const auto          deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};

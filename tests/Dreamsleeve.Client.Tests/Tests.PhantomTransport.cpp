@@ -16,16 +16,19 @@ namespace
     Hosts()
     {
       REQUIRE(enet_initialize() == 0);
+
       ENetAddress address{ENET_HOST_ANY, 0};
       server = enet_host_create(&address, 1, 5, 0, 0);
       client = enet_host_create(nullptr, 1, 5, 0, 0);
       REQUIRE(server);
       REQUIRE(client);
+
       ENetAddress target{};
       enet_address_set_host_ip(&target, "127.0.0.1");
       target.port = server->address.port;
       outgoing    = enet_host_connect(client, &target, 5, 0);
       REQUIRE(outgoing);
+
       const auto deadline  = std::chrono::steady_clock::now() + std::chrono::seconds(2);
       bool       connected = false;
       while ((!incoming || !connected) && std::chrono::steady_clock::now() < deadline)
@@ -36,6 +39,7 @@ namespace
       }
       REQUIRE(incoming);
       REQUIRE(connected);
+
       enet_host_flush(server);
       enet_host_flush(client);
     }
@@ -103,11 +107,13 @@ TEST_CASE("Phantom ENet fragments deliver only complete unreliable snapshots")
   REQUIRE(received);
   CHECK(received->first == large);
   CHECK((received->second & ENET_PACKET_FLAG_RELIABLE) == 0);
+
   hosts.server->intercept = Intercept;
   dropFragment            = true;
   hosts.Send(large, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
   CHECK_FALSE(hosts.Read(150ms));
   CHECK_FALSE(dropFragment);
+
   std::array<std::uint8_t, 3> next{1, 2, 3};
   hosts.Send(next, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
   received = hosts.Read(1s);

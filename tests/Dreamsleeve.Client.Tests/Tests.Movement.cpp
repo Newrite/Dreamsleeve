@@ -113,6 +113,7 @@ TEST_CASE("Visibility loss and restoration inside one batch do not bridge old mo
 
   CHECK(fixture.view->HistorySize(7) == 1);
   CHECK(fixture.view->Sample(7, At(250))->position.X == 30);
+
   REQUIRE(fixture.model.Apply(1, PlayerLocationUpdated{7, std::nullopt}, At(230)));
   REQUIRE(fixture.exchange->Publish(fixture.model));
   fixture.Drain(230);
@@ -309,7 +310,12 @@ TEST_CASE("Snapshot timeline starts at publication rather than delayed consumpti
       .location            = MovementLocation(0),
       .characterGeneration = 1
   };
-  ClientSnapshot   snapshot{.generation = 1, .revision = 1, .players = {player}, .observedAt = At(100)};
+  ClientSnapshot   snapshot{
+      .generation = 1,
+      .revision   = 1,
+      .players    = {player},
+      .observedAt = At(100)
+  };
   ClientStateDelta delta{.generation = 1, .revision = 2};
   delta.movement.push_back({7, 1, At(240), MovementLocation(10, 1100000)});
   StateUpdateBatch batch{
@@ -367,15 +373,18 @@ TEST_CASE("Realtime cannot create visibility or resurrect an old context and rep
   };
   apply(1, 1, 20);  // Overtakes reliable baseline: drop.
   CHECK_FALSE(model.FindPlayer(7)->location);
+
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, MovementLocation(0), 1, 0}, At(100)));
   apply(1, 2, 20);   // Sample 1 was lost; independent sample 2 is enough.
   apply(1, 1, 10);   // Late sample cannot roll back.
   CHECK(model.FindPlayer(7)->location->position.X == 20);
+
   apply(1, 3, 30);   // A subsequent repeat repairs the lost final position.
   const auto sequence = model.FindPlayer(7)->movementSequence;
   apply(1, 3, 999);  // Server repeating the same source sample cannot add motion.
   CHECK(model.FindPlayer(7)->location->position.X == 30);
   CHECK(model.FindPlayer(7)->movementSequence == sequence);
+
   REQUIRE(model.Apply(generation, PlayerLocationUpdated{7, std::nullopt, 2, 0}));
   apply(1, 100, 100);
   CHECK_FALSE(model.FindPlayer(7)->location);
@@ -384,6 +393,7 @@ TEST_CASE("Realtime cannot create visibility or resurrect an old context and rep
   CHECK(model.FindPlayer(7)->location->position.X == 50);
   apply(3, 1, 60);
   CHECK(model.FindPlayer(7)->location->position.X == 60);
+
   REQUIRE(model.Apply(generation, PlayerRemoved{7}));
   apply(3, 2, 70);
   CHECK_FALSE(model.FindPlayer(7));

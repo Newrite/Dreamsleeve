@@ -51,9 +51,11 @@ namespace
       fields += std::format("  {}: {};\n", key, TypeOf<Field>(key));
       values += std::format("  {}: {},\n", key, LiteralOf(value));
     });
+
     std::string limits;
     for (const auto& rule : NumberRules)
       limits += std::format("  {}: {{ min: {}, max: {} }},\n", rule.key, rule.min, rule.max);
+
     std::string instant;
     for (const auto key : InstantKeys)
       instant += std::format("  \"{}\",\n", key);
@@ -218,6 +220,7 @@ TEST_CASE("UI saves preserve foreign temporary paths and clean only their own re
   CHECK_FALSE(SaveUiFile(path, {}));
   CHECK(ReadText(path) == "preserve destination");
   CHECK(ReadText(temporary) == "preserve foreign temporary");
+
   std::filesystem::remove(temporary);
   std::filesystem::create_directory(temporary);
   {

@@ -36,6 +36,7 @@ TEST_CASE("Native channel budget bounds the asset before engine loading")
   auto decoded = P::ReadAsset(*encoded->compressed, encoded->rawBytes);
   REQUIRE(decoded);
   CHECK(decoded->Layout().bounds.size() == 267);
+
   P::Limits limits;
   limits.nodes = 267;
   CHECK_FALSE(P::ValidatedAsset::Parse(std::move(raw), limits));
@@ -48,6 +49,7 @@ TEST_CASE("Decoded pose histories and interpolation remain within the admitted w
   REQUIRE(asset);
   auto model = P::Prepare(*asset);
   REQUIRE(model);
+
   P::Snapshot pose;
   pose.generation  = {1};
   pose.sequence    = {1};
@@ -55,12 +57,14 @@ TEST_CASE("Decoded pose histories and interpolation remain within the admitted w
   pose.sampledAtUs = 50000;
   pose.channels.resize(4096);
   pose.bounds.resize(4095);
+
   auto encoded = P::WriteSnapshot(pose, *asset);
   REQUIRE(encoded);
   auto decoded = P::ReadSnapshot(*encoded, *asset);
   REQUIRE(decoded);
   const auto frameBytes =
     sizeof(P::Snapshot) + decoded->channels.capacity() * sizeof(P::Channel) + decoded->bounds.capacity() * sizeof(P::Bound);
+
   P::Exchange    exchange;
   const auto     budget = exchange.Settings().memoryBytes;
   P::Wire::Offer offer{
@@ -73,6 +77,7 @@ TEST_CASE("Decoded pose histories and interpolation remain within the admitted w
   // Independent allocation lower bound: reader histories stay alive while
   // live playback advances; codec and interpolation each own another frame.
   CHECK(debit >= (4 * P::BufferedPoseCount + 2) * frameBytes + asset->MemoryBytes() + model->rawBytes + encoded->size());
+
   auto settings        = exchange.Settings();
   settings.memoryBytes = debit - 1;
   exchange.Reset();
@@ -86,6 +91,7 @@ TEST_CASE("RAM cache metadata obeys the same validation as cold model decode")
   REQUIRE(asset);
   auto model = P::Prepare(*asset);
   REQUIRE(model);
+
   P::Exchange    exchange;
   P::Worker      worker(exchange, {});
   P::Wire::Offer original{
@@ -96,6 +102,7 @@ TEST_CASE("RAM cache metadata obeys the same validation as cold model decode")
   REQUIRE(exchange.Offer(original));
   REQUIRE(worker.Queue(original, model->compressed));
   REQUIRE(Until([&] { return exchange.Find(1)->State() == P::Representation::Ready; }));
+
   auto next             = original;
   next.player           = 2;
   next.asset.generation = {2};
@@ -108,6 +115,7 @@ TEST_CASE("RAM cache metadata obeys the same validation as cold model decode")
   {
     ++next.asset.channels;
   }
+
   CHECK_FALSE(exchange.AssetFor(next.asset));
   REQUIRE(exchange.Offer(next));
   REQUIRE(worker.Queue(next, model->compressed));

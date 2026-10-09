@@ -95,9 +95,11 @@ TEST_CASE("One browser opener remains owned after its consumer is abandoned")
   REQUIRE(first);
   REQUIRE(entry.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
   CHECK_FALSE((*first)->Read());
+
   std::weak_ptr<const Browser::Opening> abandoned = *first;
   first->reset();
   CHECK(abandoned.expired());
+
   for (int attempt = 0; attempt < 4; ++attempt)
   {
     auto busy = Browser::Testing::Start(page, [calls](std::string_view) -> Auth::Result<std::string> {
@@ -108,11 +110,13 @@ TEST_CASE("One browser opener remains owned after its consumer is abandoned")
     CHECK(busy.error().kind == Browser::Failure::Busy);
   }
   CHECK(*calls == 1);
+
   cleanup.Open();
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
   while (Browser::Testing::Pending() && std::chrono::steady_clock::now() < deadline)
     std::this_thread::sleep_for(std::chrono::milliseconds{1});
   REQUIRE_FALSE(Browser::Testing::Pending());
+
   auto next = Browser::Testing::Start(page, [calls](std::string_view) -> Auth::Result<std::string> {
     ++*calls;
     return std::unexpected{"OS opener refused"};
@@ -138,12 +142,14 @@ TEST_CASE("Rejected browser thread creation releases admission without opening o
   };
   CHECK_FALSE(Browser::Testing::Start("calc.exe", open));
   CHECK(*calls == 0);
+
   Browser::Testing::FailNextLaunch();
   auto rejected = Browser::Testing::Start(page, open);
   REQUIRE_FALSE(rejected);
   CHECK(rejected.error().kind == Browser::Failure::Launch);
   CHECK_FALSE(rejected.error().detail.empty());
   CHECK(*calls == 0);
+
   auto accepted = Browser::Testing::Start(page, open);
   REQUIRE(accepted);
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};

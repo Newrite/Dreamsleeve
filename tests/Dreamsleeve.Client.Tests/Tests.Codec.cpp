@@ -73,6 +73,7 @@ TEST_CASE("Client encoding preserves raw input and full width correlation for se
   CHECK(packet.open_session().session_ticket() == std::string(43, 'A'));
   // The ticket's shape is the server's to judge, like every content rule.
   CHECK(codec.Encode(W::OpenSession{1, std::string(43, '/')}));
+
   auto chat = codec.Encode(SendChat{std::numeric_limits<std::uint64_t>::max(), 1, "Привет\nworld"});
   REQUIRE(chat);
   REQUIRE(packet.ParseFromArray(chat->DataBytesView().data(), static_cast<int>(chat->Size())));
@@ -99,6 +100,7 @@ TEST_CASE("Own and broadcast chat decode into the same owned normal chat event")
   CHECK(first.messages == second.messages);
   CHECK(first.messages[0].messageId == std::numeric_limits<std::uint64_t>::max());
   CHECK(Domain::ToUnixMilliseconds(first.messages[0].sentAt) == -1);
+
   packet.Clear();
   CHECK(first.messages[0].messageText == "Привет\nworld");
 }
@@ -173,6 +175,7 @@ TEST_CASE("A mute and the end of a session decode without correlation, with the 
   auto decoded = codec.Decode(Bytes(muted));
   REQUIRE(decoded);
   CHECK(std::get<W::MuteChanged>(*decoded).mute == Domain::MuteState{"Флуд", 1700000900000});
+
   muted.mutable_mute_changed()->clear_mute();
   decoded = codec.Decode(Bytes(muted));
   REQUIRE(decoded);
@@ -231,6 +234,7 @@ TEST_CASE("Welcome decoding returns ordinary player and chat data without applyi
   CHECK(codec.Decode(
     Bytes(packet),
     packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));  // Store/state policy is not repeated in the codec.
+
   packet.clear_request_id();
   CHECK_FALSE(codec.Decode(Bytes(packet), packet.has_chat_published() ? W::Channel::Chat : W::Channel::Control));
 }
@@ -423,6 +427,7 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   CHECK(movement.location().sampled_at_us() == 123456789);
   CHECK(movement.location().position().x() == 1);
   CHECK(movement.location().camera_direction().z() == doctest::Approx(3.14));
+
   encoded = codec.Encode(W::UpdatePlayer{52, values});
   REQUIRE(encoded);
   REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
@@ -463,6 +468,7 @@ TEST_CASE("Player update encoding retains full samples explicit zero resource va
   CHECK(rich.activity().target_name() == "Chest");
   CHECK(rich.place().nearby_marker_name() == "Dragonsreach");
   CHECK(rich.game_started_at_unix_ms() == 123456789);
+
   details.place.reset();
   encoded = codec.Encode(W::UpdatePlayer{53, PlayerDetailsChanged{details}});
   REQUIRE(encoded);
@@ -1132,14 +1138,17 @@ TEST_CASE(
   master->set_online(true);
   master->mutable_mute()->set_reason("Флуд");
   master->set_joined_at_unix_ms(1000);
+
   auto message = Published().chat_published().message();
   message.set_channel_id(channel);
   *guild->add_recent_messages() = message;
+
   auto* invite                  = guilds->add_invites();
   invite->set_guild_id(5);
   invite->set_guild_name("Гильдия");
   invite->set_invited_by_player_id(9);
   invite->set_expires_at_unix_ms(2000);
+
   guilds->mutable_limits()->set_max_guilds_per_player(3);
   guilds->mutable_limits()->set_max_members(64);
   guilds->mutable_limits()->set_name_min_length(3);
@@ -1257,6 +1266,7 @@ TEST_CASE("The codec refuses only what would close the connection: a zero reques
     CHECK(encoded.error().code == W::ErrorCode::InvalidPayload);
     CHECK(encoded.error().field == field);
   }
+
   const auto unnumbered = codec.Encode(ChangeDisplayName{Domain::InvalidId, "Name"});
   REQUIRE_FALSE(unnumbered);
   CHECK(unnumbered.error().code == W::ErrorCode::InvalidEnvelope);

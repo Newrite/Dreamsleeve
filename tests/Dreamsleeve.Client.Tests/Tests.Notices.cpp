@@ -14,6 +14,7 @@ TEST_CASE("Saturation preserves an admitted disconnect and the later world barri
   REQUIRE(inbox.Post({N::Kind::Disconnect}) == N::Admission::Queued);
   for (std::uint32_t id = 1; id < N::MaxOrdinaryNotices; ++id)
     REQUIRE(inbox.Post({N::Kind::PlayerActivated, false, id}) == N::Admission::Queued);
+
   CHECK(inbox.Post({N::Kind::ResumeLogin}) == N::Admission::Busy);
   CHECK(inbox.Post({N::Kind::PlayerDeath}) == N::Admission::Dropped);
   CHECK(inbox.Post({N::Kind::PreLoadGame}) == N::Admission::Queued);
@@ -44,6 +45,7 @@ TEST_CASE("Every SKSE menu control reports admission refusal without replacing a
   N::Inbox<std::uint32_t> inbox;
   for (std::uint32_t id = 0; id < N::MaxOrdinaryNotices; ++id)
     REQUIRE(inbox.Post({N::Kind::ActivationKey, false, id}) == N::Admission::Queued);
+
   const auto controls = std::array{
       N::Kind::UiHidden,
       N::Kind::ActivationKeyF2,
@@ -162,6 +164,7 @@ TEST_CASE("Notice handoff retains owned values and releases rejected values with
   CHECK_FALSE(owner.expired());
   for (std::size_t index = 1; index < N::MaxOrdinaryNotices; ++index)
     REQUIRE(inbox.Post({N::Kind::ActivationKey}) == N::Admission::Queued);
+
   auto                             rejected = std::make_shared<const std::string>("rejected value");
   std::weak_ptr<const std::string> refused  = rejected;
   CHECK(inbox.Post({N::Kind::Disconnect, false, 0, std::move(rejected)}) == N::Admission::Busy);
@@ -172,6 +175,7 @@ TEST_CASE("Notice handoff retains owned values and releases rejected values with
   REQUIRE(notices.front().handle);
   CHECK(*notices.front().handle == "owned killer handle");
   CHECK_FALSE(owner.expired());
+
   notices.clear();
   CHECK(owner.expired());
 }

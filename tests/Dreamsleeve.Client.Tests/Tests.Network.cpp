@@ -468,6 +468,7 @@ TEST_CASE("Configured host packet limits apply to clients servers and broadcast 
     CHECK(info->maxPacketBytes == limit);
     CHECK(info->maxWaitingData == limit * 2);
   }
+
   const std::vector<std::byte> bytes(limit, std::byte{0x2a});
   REQUIRE(connected.clientPeer.PushSpan(bytes, 0));
   connected.clientHost.FlushPackets();
@@ -492,15 +493,19 @@ TEST_CASE("Invalid host packet budgets are rejected before creating a socket")
   auto config           = NetConfig::Default();
   config.maxPacketBytes = 0;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+
   config.maxPacketBytes = 2048;
   config.maxWaitingData = 2047;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+
   config.maxPacketBytes = DreamNetPacket::MaxDataSize + 1;
   config.maxWaitingData = config.maxPacketBytes;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+
   config                    = NetConfig::Default();
   config.receiveBufferBytes = 0;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));
+
   config                 = NetConfig::Default();
   config.sendBufferBytes = static_cast<std::size_t>((std::numeric_limits<int>::max)()) + 1;
   CHECK_FALSE(DreamNetHost::TryCreateClient(config));

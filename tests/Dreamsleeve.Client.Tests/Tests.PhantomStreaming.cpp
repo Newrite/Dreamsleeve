@@ -193,7 +193,11 @@ TEST_CASE("Late phantom admission replies do not cancel a newer context with the
   })));
   REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
     auto* c = p.mutable_complete();
-    c->set_request_id(2); c->set_player_id(123); c->set_generation(1); c->set_upload(true); c->set_accepted(true);
+    c->set_request_id(2);
+    c->set_player_id(123);
+    c->set_generation(1);
+    c->set_upload(true);
+    c->set_accepted(true);
   })));
   exchange.Encoded(exchange.Epoch(), exchange.TakeWork().poseRevision, Pose(*model));
   CHECK(std::ranges::none_of(Models(stream.Poll()), [](const auto& p) { return p.has_publish(); }));
@@ -301,6 +305,7 @@ TEST_CASE("Phantom replacement owns two generations and failed preparation resto
   CHECK(work.previousGeneration == P::Generation{1});
   CHECK(exchange.Capturing(P::Generation{1}));
   CHECK_FALSE(exchange.Submit(1, P::Generation{3}, model->asset));
+
   exchange.PreparationFailed(work.epoch, work.localRevision, "test preparation failure");
   CHECK(exchange.Capturing(P::Generation{1}));
   CHECK_FALSE(exchange.Capturing(P::Generation{2}));
@@ -308,6 +313,7 @@ TEST_CASE("Phantom replacement owns two generations and failed preparation resto
   auto restored = exchange.TakeWork();
   CHECK(restored.generation == P::Generation{1});
   CHECK_FALSE(restored.previousGeneration);
+
   REQUIRE(exchange.Submit(1, P::Generation{2}, model->asset));
   exchange.RestartCapture();
   CHECK_FALSE(exchange.Capturing(P::Generation{1}));
@@ -341,6 +347,7 @@ TEST_CASE("Phantom remote replacement retains live previous poses and accounts i
   REQUIRE(pose);
   exchange.Pose(exchange.Epoch(), {1, 2, wire}, std::make_shared<const P::Snapshot>(*pose), 50000);
   CHECK(exchange.Find(1)->previous->playback.At(50000, exchange.Settings()));
+
   exchange.Displayed({1, 1, {2}});
   CHECK(exchange.Find(1)->previous);
   exchange.Displayed({1, 2, {2}});
@@ -374,6 +381,7 @@ TEST_CASE("Phantom replacement waits for RAM without losing its view or old pose
   REQUIRE(pose);
   exchange.Pose(exchange.Epoch(), {1, 2, wire}, std::make_shared<const P::Snapshot>(*pose), 50000);
   CHECK(exchange.Find(1)->previous->playback.At(50000, exchange.Settings()));
+
   REQUIRE(exchange.SceneMemory(1, 0));
   REQUIRE(exchange.Offer(next));
   CHECK_FALSE(exchange.Find(1)->WaitingBudget());
@@ -416,6 +424,7 @@ TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a la
   REQUIRE(restored.ParseFromArray(sent->bytes.data(), static_cast<int>(sent->bytes.size())));
   CHECK(restored.sample().generation() == 1);
   CHECK_FALSE(restored.has_previous_sample());
+
   auto fresh       = Pose(*model);
   fresh.sequence   = {2};
   fresh.previous   = std::make_shared<const P::Wire::Pose>(fresh);
@@ -565,7 +574,8 @@ TEST_CASE("Model compression cannot stall remote poses or the committed local ge
   auto asset = std::make_shared<const P::ValidatedAsset>(model->asset);
   exchange.Loaded(exchange.Epoch(), offer, asset, false);
   {
-    std::promise<void> started, release;
+    std::promise<void> started;
+    std::promise<void> release;
     auto               wait = release.get_future().share();
     P::Worker          worker(exchange, {}, [&](P::ValidatedAsset value) {
       started.set_value();
@@ -614,7 +624,8 @@ TEST_CASE("Model compression cannot stall remote poses or the committed local ge
 TEST_CASE("Capture waits for matching movement space and rejects late capture completion")
 {
   P::Exchange              exchange;
-  const Domain::LocationId interior{"skyrim.esm", 1}, world{"skyrim.esm", 2};
+  const Domain::LocationId interior{"skyrim.esm", 1};
+  const Domain::LocationId world{"skyrim.esm", 2};
   auto                     model = std::make_shared<const P::PreparedAsset>(Model());
   exchange.Context(1, true, interior);
   REQUIRE(exchange.CaptureContext(interior) == 1);
@@ -736,9 +747,13 @@ TEST_CASE("Transient publication admission preserves delta on retry")
   REQUIRE(publication->publish().has_delta());
   const auto request = publication->publish().request_id();
   REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
-    auto* c=p.mutable_complete();
-    c->set_request_id(request); c->set_player_id(123); c->set_generation(1); c->set_upload(true);
-    c->set_reason("initial display pending"); c->set_retry_after_ms(10);
+    auto* c = p.mutable_complete();
+    c->set_request_id(request);
+    c->set_player_id(123);
+    c->set_generation(1);
+    c->set_upload(true);
+    c->set_reason("initial display pending");
+    c->set_retry_after_ms(10);
   })));
   packets = Models(stream.Poll(Clock::now()+std::chrono::seconds(1)));
   publication = std::ranges::find_if(packets, [](const auto& p) { return p.has_publish(); });

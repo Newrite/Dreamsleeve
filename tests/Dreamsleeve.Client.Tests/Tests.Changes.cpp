@@ -58,12 +58,14 @@ TEST_CASE("ChangeBatch.Clear resets markers and retains reusable buffers")
 {
   ChangeBatch changes;
   CHECK(changes.Empty());
+
   changes.players.reserve(64);
   changes.chats.reserve(32);
   changes.resetChats.reserve(16);
   const auto playerCapacity = changes.players.capacity();
   const auto chatCapacity   = changes.chats.capacity();
   const auto resetCapacity  = changes.resetChats.capacity();
+
   changes.generation        = 4;
   changes.revision          = 9;
   changes.requiresSnapshot  = true;
@@ -385,6 +387,7 @@ TEST_CASE("Metadata replacement preserves movement and publishes the changed pla
   REQUIRE(model.Apply(generation, PlayerUpserted{original}));
   ChangeBatch changes;
   model.TakeChanges(changes);
+
   Domain::PlayerDetailsPatch details;
   details.level = std::optional<std::uint32_t>{0};
   REQUIRE(model.Apply(generation, PlayerMetadataUpdated{7, std::nullopt, details}));
@@ -393,6 +396,7 @@ TEST_CASE("Metadata replacement preserves movement and publishes the changed pla
   CHECK(player->location == original.location);
   CHECK(player->actorValues == original.actorValues);
   CHECK(player->details.level == 0);
+
   Domain::ActorValuesPatch cleared;
   for (const auto& [key, info] : original.actorValues)
     cleared.removed.push_back(key);

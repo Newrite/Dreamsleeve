@@ -80,7 +80,8 @@ namespace
     return std::make_shared<const P::Snapshot>(std::move(pose));
   }
 
-  bool dropFragment{}, fragmentDropped{};
+  bool dropFragment{};
+  bool fragmentDropped{};
 
   int DropOnePoseFragment(ENetHost* host, ENetEvent*)
   {
@@ -104,15 +105,44 @@ namespace
     P::Streaming                                            stream;
     std::unique_ptr<ENetHost, decltype(&enet_host_destroy)> host{nullptr, &enet_host_destroy};
     ENetPeer*                                               peer{};
-    bool                                                    connected{}, welcomed{}, located{}, policy{}, chatReceived{};
-    std::uint64_t                                           self{}, readyGeneration{}, offerRevision{}, removeRevision{}, poseSequence{};
-    std::uint64_t                                           chunksSent{}, downloadedBytes{}, uploadId{}, uploadSent{}, uploadAcknowledged{};
-    std::uint32_t                                           windowChunks{}, deltaUploads{}, deltaDownloads{};
-    std::uint64_t                                           modelControlBytes{};
-    std::size_t                                             largestPose{};
-    std::uint64_t                                       chatSentAt{}, chatReceivedAt{}, firstChunkAt{}, lastChunkAt{}, uploadAcceptedAt{};
-    std::uint64_t                                       lastPumpUs{}, pumpCount{}, pumpTotalUs{}, pumpMaxUs{}, maxChunkBatch{};
-    std::uint64_t                                       traceAt{}, ackDelayUs{};
+
+    bool connected{};
+    bool welcomed{};
+    bool located{};
+    bool policy{};
+    bool chatReceived{};
+
+    std::uint64_t self{};
+    std::uint64_t readyGeneration{};
+    std::uint64_t offerRevision{};
+    std::uint64_t removeRevision{};
+    std::uint64_t poseSequence{};
+
+    std::uint64_t chunksSent{};
+    std::uint64_t downloadedBytes{};
+    std::uint64_t uploadId{};
+    std::uint64_t uploadSent{};
+    std::uint64_t uploadAcknowledged{};
+    std::uint32_t windowChunks{};
+    std::uint32_t deltaUploads{};
+    std::uint32_t deltaDownloads{};
+    std::uint64_t modelControlBytes{};
+    std::size_t   largestPose{};
+
+    std::uint64_t chatSentAt{};
+    std::uint64_t chatReceivedAt{};
+    std::uint64_t firstChunkAt{};
+    std::uint64_t lastChunkAt{};
+    std::uint64_t uploadAcceptedAt{};
+
+    std::uint64_t lastPumpUs{};
+    std::uint64_t pumpCount{};
+    std::uint64_t pumpTotalUs{};
+    std::uint64_t pumpMaxUs{};
+    std::uint64_t maxChunkBatch{};
+    std::uint64_t traceAt{};
+    std::uint64_t ackDelayUs{};
+
     std::deque<std::pair<std::uint64_t, std::uint64_t>> sentTimes;
     std::string                                         modelHash;
     std::unordered_set<std::uint64_t>                   requests;
@@ -219,7 +249,11 @@ namespace
         }
         if (value.has_transfer())
         {
-          if(value.transfer().has_delta()) { if(value.transfer().upload()) ++deltaUploads; else ++deltaDownloads; }
+          if (value.transfer().has_delta())
+          {
+            if (value.transfer().upload()) ++deltaUploads;
+            else ++deltaDownloads;
+          }
           REQUIRE(requests.contains(value.transfer().request_id()));
           REQUIRE(value.transfer().player_id() == 1);
           if (value.transfer().upload())
@@ -293,6 +327,7 @@ namespace
         }
         if (event.type == ENET_EVENT_TYPE_RECEIVE) Receive(event);
       }
+
       if (welcomed && policy)
         for (const auto& value : stream.Poll())
         {
@@ -327,6 +362,7 @@ namespace
             Send(value.lane, value.bytes, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
           }
         }
+
       maxChunkBatch = std::max(maxChunkBatch, chunksSent - beforeChunks);
       enet_host_flush(host.get());
       if (uploadId && pumpAt >= traceAt + 1000000)
@@ -484,11 +520,13 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   CHECK(bob.poseSequence == 1);
+
   bob.host->intercept = nullptr;
   alice.exchange.Submit(Pose(1, 3));
   Await(alice, bob, "next independent complete pose after loss", [&] { return Played(bob, 3); });
 
-  const auto oldView = bob.offerRevision, downloaded = bob.downloadedBytes;
+  const auto oldView    = bob.offerRevision;
+  const auto downloaded = bob.downloadedBytes;
   auto       settings = bob.exchange.Settings();
   settings.receive    = false;
   bob.exchange.Configure(settings);
@@ -545,33 +583,37 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   Await(alice, bob, "HTTP reentry after canceled callbacks", [&] { return Loaded(bob, 3); });
   bob.exchange.Displayed({1, bob.offerRevision, P::Generation{3}});
   Await(alice, bob, "replacement generation displayed", [&] { return alice.exchange.CanReplace(); });
-  const auto deltaUp=alice.deltaUploads, deltaDown=bob.deltaDownloads;
-  auto fourth=P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount,66));
+
+  const auto deltaUp   = alice.deltaUploads;
+  const auto deltaDown = bob.deltaDownloads;
+  auto fourth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 66));
   REQUIRE(fourth);
-  REQUIRE(alice.exchange.Submit(10,P::Generation{4},std::move(*fourth)));
-  Await(alice,bob,"native delta upload/server reconstruction/download",[&] { return alice.readyGeneration==4 && Loaded(bob,4); });
+  REQUIRE(alice.exchange.Submit(10, P::Generation{4}, std::move(*fourth)));
+  Await(alice, bob, "native delta upload/server reconstruction/download", [&] { return alice.readyGeneration == 4 && Loaded(bob, 4); });
   CHECK(alice.deltaUploads > deltaUp);
   CHECK(bob.deltaDownloads > deltaDown);
   std::cout << "PHANTOM_DELTA_PASS upload=" << alice.deltaUploads << " download=" << bob.deltaDownloads << " bodyBytes=" << alice.uploadSent << '\n';
   bob.exchange.Displayed({1, bob.offerRevision, P::Generation{4}});
-  Await(alice,bob,"fourth generation settled",[&] { return alice.exchange.CanReplace(); });
+  Await(alice, bob, "fourth generation settled", [&] { return alice.exchange.CanReplace(); });
   settings.downloadBytesPerSecond = 65536;
   bob.exchange.Configure(settings);
-  auto pendingContext=P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount,67));
+  auto pendingContext = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 67));
   REQUIRE(pendingContext);
-  REQUIRE(alice.exchange.Submit(10,P::Generation{5},std::move(*pendingContext)));
-  Await(alice,bob,"pending replacement before context switch",[&] { return alice.readyGeneration==5; });
-  REQUIRE_FALSE(Loaded(bob,5));
-  settings.downloadBytesPerSecond = 5*1024*1024;
+  REQUIRE(alice.exchange.Submit(10, P::Generation{5}, std::move(*pendingContext)));
+  Await(alice, bob, "pending replacement before context switch", [&] { return alice.readyGeneration == 5; });
+  REQUIRE_FALSE(Loaded(bob, 5));
+  settings.downloadBytesPerSecond = 5 * 1024 * 1024;
   bob.exchange.Configure(settings);
   alice.Move(12, 61);
   bob.Move(12, 61);
-  Await(alice,bob,"new location authority",[&] { return alice.located && bob.located; });
-  const auto contextDeltaUp=alice.deltaUploads, contextDeltaDown=bob.deltaDownloads;
-  auto fifth=P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount,68));
+  Await(alice, bob, "new location authority", [&] { return alice.located && bob.located; });
+
+  const auto contextDeltaUp   = alice.deltaUploads;
+  const auto contextDeltaDown = bob.deltaDownloads;
+  auto fifth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 68));
   REQUIRE(fifth);
-  REQUIRE(alice.exchange.Submit(12,P::Generation{6},std::move(*fifth)));
-  Await(alice,bob,"context transition delta upload and download",[&] { return alice.readyGeneration==6 && Loaded(bob,6); });
+  REQUIRE(alice.exchange.Submit(12, P::Generation{6}, std::move(*fifth)));
+  Await(alice, bob, "context transition delta upload and download", [&] { return alice.readyGeneration == 6 && Loaded(bob, 6); });
   CHECK(alice.deltaUploads > contextDeltaUp);
   CHECK(bob.deltaDownloads > contextDeltaDown);
   std::cout << "PHANTOM_CONTEXT_DELTA_PASS\n";

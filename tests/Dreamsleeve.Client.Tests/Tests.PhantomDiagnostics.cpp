@@ -151,21 +151,25 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
   CHECK(s.lastCaptureError == "native.asset-pending [mesh=Hair]");
   CHECK(s.queuedBytes == 0);
   CHECK(s.dropped == 0);
+
   auto   bytes = File(std::filesystem::path(s.directory) / "capture.phdiag");
   Reader r{bytes};
   r.Data(8);
   CHECK(r.Get<std::uint32_t>() == 2);
   r.Data(8);
-  unsigned models = 0, samples = 0;
+  unsigned models  = 0;
+  unsigned samples = 0;
   while (r.at < bytes.size())
   {
-    const auto type = r.Get<std::uint32_t>(), n = r.Get<std::uint32_t>();
+    const auto type = r.Get<std::uint32_t>();
+    const auto n    = r.Get<std::uint32_t>();
     Reader     record{r.Data(n)};
     if (type == 1)
     {
       ++models;
       record.Get<std::uint64_t>();
-      const auto raw = record.Get<std::uint32_t>(), compressed = record.Get<std::uint32_t>();
+      const auto raw        = record.Get<std::uint32_t>();
+      const auto compressed = record.Get<std::uint32_t>();
       auto       digest = record.Data(32);
       auto       model  = record.Data(compressed);
       auto       hash   = P::Hash(model);
@@ -178,9 +182,12 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
       record.Get<double>();
       const auto first = record.Get<std::uint8_t>();
       record.Data(48);
-      const auto originalN = record.Get<std::uint32_t>(), rawN = record.Get<std::uint32_t>(), zstN = record.Get<std::uint32_t>();
+      const auto originalN = record.Get<std::uint32_t>();
+      const auto rawN      = record.Get<std::uint32_t>();
+      const auto zstN      = record.Get<std::uint32_t>();
       Reader     original{record.Data(originalN)};
-      auto       raw = record.Data(rawN), compressed = record.Data(zstN);
+      auto       raw        = record.Data(rawN);
+      auto       compressed = record.Data(zstN);
       auto       decoded = P::ReadSnapshot(compressed, *f.asset);
       REQUIRE(decoded);
       if (samples++ == 0)
@@ -274,6 +281,7 @@ TEST_CASE("Diagnostic shutdown drains data and completed recordings can restart"
   recorder.Stop();
   const auto first = Finished(recorder);
   REQUIRE(first.phase == D::Phase::Complete);
+
   REQUIRE(recorder.Start(f.root, 2, 30, 40));
   recorder.Sample(f.asset, f.Pose(2), {}, .1, false);
   recorder.Shutdown();
@@ -360,6 +368,7 @@ TEST_CASE("Diagnostic queue retains shared model storage once for a burst of dis
   CHECK(result.samples == 64);
   CHECK(result.dropped == 0);
   CHECK(result.queuedBytes == 0);
+
   REQUIRE(recorder.Start(f.root, 0, 15, 20));
   auto pose = std::make_shared<P::Snapshot>(*f.Pose(1));
   recorder.Sample(f.asset, std::move(pose), {}, 1, false);
@@ -423,6 +432,7 @@ TEST_CASE("Diagnostic replay decodes archived wire bytes and can cancel a full r
     CHECK(frames[i].pose->channels[0].world.position.x == 0.0625f);
     CHECK(P::CheckSnapshot(*frames[i].pose, *frames[i].asset));
   }
+
   REQUIRE(reader.Start(f.root, 0));
   const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   while (reader.Read().frames < 4 && std::chrono::steady_clock::now() < until)
@@ -516,7 +526,8 @@ TEST_CASE("Diagnostic replay cannot skip a truncated trailing record as clean EO
   const auto file = std::filesystem::path(std::u8string(saved.directory.begin(), saved.directory.end())) / "capture.phdiag";
   {
     std::ofstream       out(file, std::ios::binary | std::ios::app);
-    const std::uint32_t kind = 3, size = 7;
+    const std::uint32_t kind = 3;
+    const std::uint32_t size = 7;
     out.write(reinterpret_cast<const char*>(&kind), sizeof(kind));
     out.write(reinterpret_cast<const char*>(&size), sizeof(size));
     out << "xx";
@@ -559,7 +570,8 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
   REQUIRE(reader.Start(std::filesystem::path(root), 1));
   // Consume without retaining the entire user's archive in the test process.
   const auto    until  = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-  std::uint64_t frames = 0, last = 0;
+  std::uint64_t frames = 0;
+  std::uint64_t last   = 0;
   std::ofstream measurements;
   const char*   output = std::getenv("DREAMSLEEVE_PHANTOM_REPLAY_MEASUREMENTS");
   if (output)
@@ -589,7 +601,8 @@ TEST_CASE("Diagnostic replay decodes the recorded full character archive when su
           CHECK(decoded->channels[i].world.position == frame->pose->channels[i].world.position);
           CHECK(decoded->channels[i].hidden == frame->pose->channels[i].hidden);
           CHECK(decoded->channels[i].world.scale == frame->pose->channels[i].world.scale);
-          const auto a = decoded->channels[i].world.rotation, b = frame->pose->channels[i].world.rotation;
+          const auto a = decoded->channels[i].world.rotation;
+          const auto b = frame->pose->channels[i].world.rotation;
           CHECK(std::abs(a.x - b.x) + std::abs(a.y - b.y) + std::abs(a.z - b.z) + std::abs(a.w - b.w) < 0.00013f);
         }
         CHECK(decoded->bounds == frame->pose->bounds);
@@ -652,7 +665,8 @@ TEST_CASE("continuous trace retains packet slices and excludes control payloads"
   }
   std::istringstream file(content);
   std::string        line;
-  int                packets = 0, metrics = 0;
+  int                packets = 0;
+  int                metrics = 0;
   while (std::getline(file, line))
   {
     if (line.find("\"event\":\"packet\"") == std::string::npos)
@@ -676,6 +690,7 @@ TEST_CASE("continuous trace retains packet slices and excludes control payloads"
   }
   CHECK(packets == 4);
   CHECK(metrics == 1);
+
   REQUIRE(T::Start(path));
   REQUIRE(T::Stop() == T::StopOutcome::Stopped);
   std::filesystem::remove_all(path);

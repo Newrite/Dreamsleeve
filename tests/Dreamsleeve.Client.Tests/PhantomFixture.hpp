@@ -50,12 +50,14 @@ namespace PhantomFixture
   {
     channels = std::max<std::size_t>(2, channels);
     std::vector<Writer> blocks(channels + 2);
+
     auto&               root = blocks[0];
     root.AV();
     root.Put(std::uint32_t(channels - 1));
     for (std::uint32_t i = 1; i < channels; ++i)
       root.Put(i);
     root.Put(0u);
+
     std::uint32_t random = 0x81724631;
     for (std::size_t i = 1; i < channels; ++i)
     {
@@ -86,6 +88,7 @@ namespace PhantomFixture
       s.Put(std::uint16_t(2));
       s.Put(0u);
     }
+
     auto& light = blocks[channels];
     light.Put(0u);
     light.Net();
@@ -97,6 +100,7 @@ namespace PhantomFixture
     light.Put(0u);
     light.Floats(9);
     blocks.back().Put(0u);
+
     Writer w;
     w.Text("Gamebryo File Format, Version 20.2.0.7\n");
     w.Put(0x14020007u);
@@ -106,6 +110,7 @@ namespace PhantomFixture
     w.Put(100u);
     for (unsigned i = 0; i < 3; ++i)
       w.Put(std::uint8_t(0));
+
     constexpr std::array<std::string_view, 4> types{"NiNode", "BSTriShape", "BSLightingShaderProperty", "BSShaderTextureSet"};
     w.Put(std::uint16_t(types.size()));
     for (auto t : types)
@@ -120,8 +125,10 @@ namespace PhantomFixture
     w.Put(0u);
     w.Put(0u);
     w.Put(0u);
+
     for (auto& b : blocks)
       w.data.insert(w.data.end(), b.data.begin(), b.data.end());
+
     w.Put(1u);
     w.Put(0u);
     return {std::move(w.data)};

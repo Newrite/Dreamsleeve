@@ -75,6 +75,7 @@ TEST_CASE("Phantom recording waits through missing 3D without losing its coordin
   CHECK(context.Observe({}) == O::Waiting);
   CHECK(context.Observe(C::Context::Space{91, true}) == O::Changed);
   CHECK(context.Observe(C::Context::Space{91, false}) == O::Changed);
+
   context.Reset();
   CHECK(context.Observe(C::Context::Space{60, false}) == O::Ready);
 }
@@ -102,12 +103,14 @@ TEST_CASE("Phantom cadence skips missed slots without replaying a frame and supp
   CHECK_FALSE(cadence.Due(start + 825ms, 20));
   CHECK_FALSE(cadence.Due(start + 849ms, 20));
   CHECK(cadence.Due(start + 850ms, 20));
+
   cadence.Defer(start + 850ms);
   CHECK_FALSE(cadence.Due(start + 1849ms, 20));
   CHECK(cadence.Due(start + 1850ms, 20));
   CHECK(cadence.Due(start + 1900ms, 40));
   CHECK_FALSE(cadence.Due(start + 1924ms, 40));
   CHECK(cadence.Due(start + 1925ms, 40));
+
   cadence.Reset();
   CHECK(cadence.Due(start + 1926ms, 40));
 }
