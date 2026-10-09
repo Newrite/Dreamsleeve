@@ -126,7 +126,11 @@ module AgentSupervisor =
     type private OwnedChild<'Child>(child: SupervisedChild<'Child>, failureSink: exn -> unit) =
         let gate = obj()
         let mutable stopping: TaskCompletionSource<unit> option = None
+        let mutable outcomeHandled = false
+
         member _.Child = child
+        member _.OutcomeHandled = Volatile.Read &outcomeHandled
+        member _.MarkOutcomeHandled() = Volatile.Write(&outcomeHandled, true)
         member _.Stop() : Task =
             let pending, selected =
                 lock gate (fun () ->
@@ -179,7 +183,7 @@ module AgentSupervisor =
 
     /// Observer callbacks belong to the supervisor lifecycle. Failed callbacks
     /// stop supervision and release/join the acquired child, without restarting it.
-    let private startCheckedWithTimeProvider (time: TimeProvider) name policy (start: CancellationToken -> Task<Result<SupervisedChild<'Child>, 'StartError>>)
+    let private startCheckedWithTimeProvider (waitForCompletion: Task -> Task -> Task<Task>) (time: TimeProvider) name policy (start: CancellationToken -> Task<Result<SupervisedChild<'Child>, 'StartError>>)
                               (observe: SupervisorEvent<'Child, 'StartError> -> unit) =
         let current = ref (None: 'Child option)
         let exhausted = ref (None: exn option)
@@ -237,11 +241,11 @@ module AgentSupervisor =
             let cleanup _ = task {
                 let detached = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
                 use registration = context.DispatchStopped.Register(fun () -> detached.TrySetResult() |> ignore)
-                let! completed = Task.WhenAny(child.Completion, detached.Task)
-                if not (Object.ReferenceEquals(completed, child.Completion)) then
+                let! completed = waitForCompletion child.Completion detached.Task
+                if not (Object.ReferenceEquals(completed, child.Completion)) && not owned.OutcomeHandled then
                     do! owned.Stop()
-                // Already terminated children are joined. Their known outcome
-                // goes to ChildStopped and the existing reconstruction policy.
+                // Reconstruction owns an outcome once ChildStopped handles it.
+                // A delayed waiter must not register that fault again as cleanup.
             }
             context.StartDelivery cleanup
             owned
@@ -334,6 +338,7 @@ module AgentSupervisor =
                         do! owned.Stop()
             | SupervisorMessage.ChildStopped(generation, _) when generation <> state.Generation || state.Stopping -> ()
             | SupervisorMessage.ChildStopped(_, outcome) ->
+                state.Child |> ValueOption.iter (fun child -> child.MarkOutcomeHandled())
                 serve ValueNone
                 let failure =
                     match outcome with
@@ -366,7 +371,7 @@ module AgentSupervisor =
             AgentSupervisor(agent, (fun () -> Volatile.Read(&current.contents)), fun error ->
                 Volatile.Read(&exhausted.contents) |> Option.exists (fun original -> Object.ReferenceEquals(original, error))))
 
-    let tryStartWithTimeProvider (time: TimeProvider) name policy start observe =
+    let internal tryStartWithOwnershipWait waitForCompletion (time: TimeProvider) name policy start observe =
         if isNull time then
             Error (AgentStartError.NullArgument "time")
         elif isNull (box start) then
@@ -375,6 +380,9 @@ module AgentSupervisor =
             Error (AgentStartError.NullArgument "observe")
         else
             RestartPolicy.tryValidate policy
-            |> Result.bind (fun policy -> startCheckedWithTimeProvider time name policy start observe)
+            |> Result.bind (fun policy -> startCheckedWithTimeProvider waitForCompletion time name policy start observe)
+
+    let tryStartWithTimeProvider time name policy start observe =
+        tryStartWithOwnershipWait (fun child detached -> Task.WhenAny(child, detached)) time name policy start observe
 
     let tryStart name policy start observe = tryStartWithTimeProvider TimeProvider.System name policy start observe

@@ -59,7 +59,65 @@ type private Clock() =
     override _.GetTimestamp() = Volatile.Read &timestamp
     override _.CreateTimer(callback, state, due, period) = TimeProvider.System.CreateTimer(callback, state, due, period)
 
+// Force the ownership waiter to resume after Watch has delivered the child's
+// failure and reconstruction has closed dispatch.
+let private deferredOwnershipWaitExhaustion observerFails = task {
+    let completion, waitInstalled = gate<unit>(), gate<unit>()
+    let original = InvalidOperationException "handled child failure"
+    let observerFault = InvalidOperationException "GaveUp observer failure"
+    let mutable stops = 0
+    let child = {
+        SupervisedChild.Value = 1
+        SupervisedChild.Completion = completion.Task
+        SupervisedChild.Stop = fun () ->
+            Interlocked.Increment(&stops) |> ignore
+            Task.CompletedTask
+    }
+    let wait (_: Task) (detached: Task) = task {
+        waitInstalled.TrySetResult() |> ignore
+        do! detached
+        return detached
+    }
+    let observe = function
+        | SupervisorEvent.GaveUp _ when observerFails -> raise observerFault
+        | SupervisorEvent.Started _ | SupervisorEvent.StartFailed _ | SupervisorEvent.StartRejected _
+        | SupervisorEvent.Stopped _ | SupervisorEvent.Restarting _ | SupervisorEvent.GaveUp _ -> ()
+    let supervisor: AgentSupervisor<int, string> =
+        AgentSupervisor.tryStartWithOwnershipWait wait TimeProvider.System "deferred-ownership-wait"
+            { immediate with MaxRestarts = 0 } (fun _ -> Task.FromResult(Ok child)) observe
+        |> expectStarted
+    do! serving supervisor 1
+    do! awaitUnit waitInstalled.Task
+    completion.SetException original
+    let! failure = terminal supervisor.Completion
+    match failure with
+    | Some (:? SupervisorGaveUpException<string> as exhaustion) ->
+        check (Object.ReferenceEquals(original, exhaustion.InnerException)) "Exhaustion retains the handled child fault."
+    | other -> failtestf "Expected own exhaustion, got %A" other
+
+    let errors = supervisor.Completion.Exception.InnerExceptions
+    equal (if observerFails then 2 else 1) errors.Count
+    check (errors |> Seq.forall (fun error -> not (Object.ReferenceEquals(original, error)))) "Handled failure is not registered again as cleanup."
+    if observerFails then
+        check (errors |> Seq.exists (fun error -> Object.ReferenceEquals(observerFault, error))) "Independent observer fault survives."
+    equal 0 (Volatile.Read &stops)
+    equal None supervisor.Current
+    for _ in 1 .. 2 do
+        let! stopFailure = terminal (supervisor.StopAsync())
+        if observerFails then
+            check (Option.isSome stopFailure) "Stop must retain the additional observer fault."
+        else
+            equal None stopFailure
+}
+
 let tests = testList "Supervisor" [
+    testTask "handled exhaustion survives a delayed ownership wait without duplicate cleanup faults" {
+        do! deferredOwnershipWaitExhaustion false
+    }
+
+    testTask "a delayed ownership wait preserves a distinct GaveUp observer fault" {
+        do! deferredOwnershipWaitExhaustion true
+    }
     testTask "restarts a child that fails or ends on its own and serves the new one" {
         let children = Children()
         let supervisor, events = supervise immediate (fromChildren children)
