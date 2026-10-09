@@ -191,6 +191,16 @@ type ChatSnapshot = {
     HistoryCapacity: int
 }
 
+/// Checked retained-message count shared by future guild channels.
+[<Struct>]
+type ChatHistoryCapacity = private ChatHistoryCapacity of int
+
+[<RequireQualifiedAccess>]
+module ChatHistoryCapacity =
+    let create value =
+        if value < 1 then Error (DomainError.InvalidLimit("historyCapacity", value))
+        else Ok (ChatHistoryCapacity value)
+
 /// Mutable state owned exclusively by one agent. All operations, including reads,
 /// must run inside that owner. No function exposes its live collections.
 [<NoEquality; NoComparison>]
@@ -211,22 +221,27 @@ type Chat =
 
 [<RequireQualifiedAccess>]
 module Chat =
+    let private createChecked channelId kind (ChatHistoryCapacity historyCapacity) =
+        {
+            channelId = channelId
+            kind = kind
+            historyCapacity = historyCapacity
+            players = HashSet<PlayerId>()
+            messages = Queue<ChatMessage>()
+            lastAcceptedId = ValueNone
+            lastEvictedId = ValueNone
+        }
+
     /// The channel ID must name a channel of the kind (ChatChannels.classify).
     let create channelId kind historyCapacity =
-        if historyCapacity <= 0 then
-            Error (DomainError.InvalidLimit ("historyCapacity", historyCapacity))
-        elif ChatChannels.kindOf channelId <> ValueSome kind then
-            Error DomainError.ChannelMismatch
-        else
-            Ok {
-                channelId = channelId
-                kind = kind
-                historyCapacity = historyCapacity
-                players = HashSet<PlayerId>()
-                messages = Queue<ChatMessage>()
-                lastAcceptedId = ValueNone
-                lastEvictedId = ValueNone
-            }
+        ChatHistoryCapacity.create historyCapacity
+        |> Result.bind (fun capacity ->
+            if ChatChannels.kindOf channelId <> ValueSome kind then Error DomainError.ChannelMismatch
+            else Ok (createChecked channelId kind capacity))
+
+    /// A checked guild ID determines its channel; capacity was checked before owner startup.
+    let createGuild capacity guild =
+        createChecked (ChatChannels.ofGuild guild) ChatChannelKind.Guild capacity
 
     /// Returns true only when membership was added.
     let join playerId (chat: Chat) =

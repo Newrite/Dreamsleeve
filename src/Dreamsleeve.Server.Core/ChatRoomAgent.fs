@@ -94,7 +94,7 @@ module ChatRoomAgent =
 
     /// Assigns the next ID and time, stores and relays. The requesting
     /// connection, when there is one, receives the correlated acceptance.
-    let inline private append (state: State) (context: AgentContext<ChatRoomCommand>) ([<InlineIfLambda>] create: ChatMessageId -> DateTimeOffset -> ChatMessage) (requester: struct (Guid * uint64) voption) =
+    let inline private append (state: State) (context: ReliableAgentContext<ChatRoomCommand>) ([<InlineIfLambda>] create: ChatMessageId -> DateTimeOffset -> ChatMessage) (requester: struct (Guid * uint64) voption) =
         match ChatMessageId.create state.NextMessageId with
         | Error _ -> context.Abort()
         | Ok messageId ->
@@ -156,7 +156,7 @@ module ChatRoomAgent =
                 deliver state context recipient (ChatRoomEvent.Removed(ValueNone, message)) |> ignore
             respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Removed(ValueSome request.RequestId, message))
 
-    let private detach state (context: AgentContext<ChatRoomCommand>) (request: SessionDetach) =
+    let private detach state (context: ReliableAgentContext<ChatRoomCommand>) (request: SessionDetach) =
         remove state request.ConnectionId
 
         // The recipient reserves control admission. If even that is exhausted, stop
@@ -165,7 +165,7 @@ module ChatRoomAgent =
         | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
         | AgentTryDeliveryResult.Full -> context.Abort()
 
-    let private handle state (context: AgentContext<ChatRoomCommand>) command = task {
+    let private handle state (context: ReliableAgentContext<ChatRoomCommand>) command = task {
         match command with
         | ChatRoomCommand.Join subscription -> join state context subscription
         | ChatRoomCommand.Publish request -> publish state context request
@@ -176,6 +176,11 @@ module ChatRoomAgent =
         | ChatRoomCommand.Remove request -> removeMessage state context request
     }
 
+    [<RequireQualifiedAccess>]
+    type StartError =
+        | Channel of DomainError
+        | Agent of AgentStartError
+
     /// One owner per server-wide channel; its ID follows from the kind. The
     /// options come checked by GameSettings.create; the history itself is the domain's.
     let start (config: ChatRoomOptions) kind (host: ReliableAgentRef<SessionHostCommand>) =
@@ -183,21 +188,25 @@ module ChatRoomAgent =
             match kind with
             | ChatChannelKind.Global -> Ok ChatChannels.globalId
             | ChatChannelKind.System -> Ok ChatChannels.systemId
-            | ChatChannelKind.Guild -> Error DomainError.ChannelMismatch
+            | ChatChannelKind.Guild -> Error (StartError.Channel DomainError.ChannelMismatch)
         channelId
-        |> Result.bind (fun channelId -> Chat.create channelId kind config.HistoryCapacity)
-        |> Result.map (fun chat ->
-            let state = {
-                Chat = chat
-                Members = Dictionary()
-                Players = Dictionary()
-                Senders = RateLimit.create config.Rate
-                Options = config
-                Host = AgentOutbox(config.MaxControlDeliveries, host)
-                NextMessageId = 1UL
-            }
-            let options = {
-                AgentOptions.create $"chat-room-{ChatChannelId.value chat.ChannelId}" with
-                    Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
-            }
-            Agent.Start(options, handle state, isControl = isControl))
+        |> Result.bind (fun channelId -> Chat.create channelId kind config.HistoryCapacity |> Result.mapError StartError.Channel)
+        |> Result.bind (fun chat ->
+            AgentOutbox<SessionHostCommand>.TryCreate(config.MaxControlDeliveries, host)
+            |> Result.mapError StartError.Agent
+            |> Result.bind (fun hostOutbox ->
+                let state = {
+                    Chat = chat
+                    Members = Dictionary()
+                    Players = Dictionary()
+                    Senders = RateLimit.create config.Rate
+                    Options = config
+                    Host = hostOutbox
+                    NextMessageId = 1UL
+                }
+                let options = {
+                    AgentOptions.create $"chat-room-{ChatChannelId.value chat.ChannelId}" with
+                        Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
+                }
+                Agent.TryStartReliable(options, handle state, isControl = isControl)
+                |> Result.mapError StartError.Agent))

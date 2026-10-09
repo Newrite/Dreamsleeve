@@ -244,7 +244,8 @@ module AuthService =
         /// Steam sign-ins by flow; bounded by MaxTickets and SteamFlowSeconds.
         Flows: Dictionary<string, SteamFlow>
         Pending: Dictionary<Guid, Pending>
-        Workers: Agent<AccountWorkRequest>
+        Workers: ReliableAgent<AccountWorkRequest>
+        ChangesCapacity: AgentDeliveryCapacity
         Outbox: AgentOutbox<AccountWorkRequest>
         mutable Exclusive: bool
         mutable Changes: AgentOutbox<AccountChange> option
@@ -598,7 +599,7 @@ module AuthService =
                     Ok ticket.Player
         { OperationId = request.OperationId; Result = result }
 
-    let private completeIfStopped state (context: AgentContext<AuthMessage>) =
+    let private completeIfStopped state (context: ReliableAgentContext<AuthMessage>) =
         if state.Stopping && state.Pending.Count = 0 then
             if state.WorkersStopped then context.Complete() |> ignore
             else state.Workers.Complete() |> ignore
@@ -742,7 +743,7 @@ module AuthService =
                 logger.LogInformation("Request from {Address} refused: the range {Range} is banned", ClientAddress.text address, AddressRange.key ban.Range))
             ban
 
-    let private access options (clock: TimeProvider) (logger: ILogger) state (context: AgentContext<AuthMessage>) command (requester: Requester) =
+    let private access options (clock: TimeProvider) (logger: ILogger) state (context: ReliableAgentContext<AuthMessage>) command (requester: Requester) =
         let settleWith = settle logger requester
         if state.Stopping then settleWith (Error AccountAccessError.Unavailable)
         else
@@ -761,7 +762,7 @@ module AuthService =
                         let operationId = Guid.NewGuid()
                         let request = {
                             OperationId = operationId; Command = work
-                            ReplyTo = context.Ref.TryReliable().Value.Map AuthMessage.Finished
+                            ReplyTo = context.Ref.Map AuthMessage.Finished
                         }
                         state.Exclusive <- exclusive work
                         state.Pending.Add(operationId, { Command = command; Requester = requester })
@@ -840,7 +841,7 @@ module AuthService =
     // Live sessions must follow: an undelivered change stops the service rather
     // than leave a banned or muted player playing. A stopped runtime has no
     // sessions left; that failure is handled with ChangeFailed.
-    let private delivered state (context: AgentContext<AuthMessage>) change result =
+    let private delivered state (context: ReliableAgentContext<AuthMessage>) change result =
         let posted =
             match state.Changes with
             | None -> true // No game runtime: tools, tests, or between its restarts.
@@ -852,7 +853,7 @@ module AuthService =
             context.Abort()
             Error AccountAccessError.Unavailable
 
-    let private finished options clock (logger: ILogger) state (context: AgentContext<AuthMessage>) (completion: AccountWorkReply) =
+    let private finished options clock (logger: ILogger) state (context: ReliableAgentContext<AuthMessage>) (completion: AccountWorkReply) =
         match state.Pending.TryGetValue completion.OperationId with
         | false, _ -> ()
         | true, pending ->
@@ -961,11 +962,11 @@ module AuthService =
             settleCommand logger state pending.Command pending.Requester result
             completeIfStopped state context
 
-    let private handle options clock (logger: ILogger) state consumeRequest (context: AgentContext<AuthMessage>) message = task {
+    let private handle options clock (logger: ILogger) state consumeRequest (context: ReliableAgentContext<AuthMessage>) message = task {
         match message with
         | AuthMessage.SetChangeTarget target ->
             state.ChangeTarget <- state.ChangeTarget + 1
-            let outbox = AgentOutbox(options.MailboxCapacity, target)
+            let outbox = AgentOutbox.Create(state.ChangesCapacity, target)
             state.Changes <- Some outbox
             // A runtime starts without bans: it learns the ones in force first.
             let generation = state.ChangeTarget
@@ -1022,37 +1023,60 @@ module AuthService =
         | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ -> true
         | AuthMessage.Access _ | AuthMessage.ConsumeTicket _ | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> false
 
-    let private startWithBans options database (logger: ILogger) (clock: TimeProvider) bans =
+    [<RequireQualifiedAccess>]
+    type StartError =
+        | Storage of AccountStoreError
+        | Agent of AgentStartError
+
+    /// Validate all derived Agent budgets before storage, hashing or worker startup.
+    let private preflight options =
+        if int64 options.MaxConcurrentOperations + 2L > int64 Int32.MaxValue then
+            Error (AgentStartError.CapacityOverflow(options.MaxConcurrentOperations, 2))
+        else
+            let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+            let settings = {
+                AgentOptions.create "authentication" with
+                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
+            }
+            match Agent<AccountWorkRequest>.TryCheckReliable workerOptions,
+                  Agent<AuthMessage>.TryCheckReliable(settings, isControl = isControl),
+                  AgentDeliveryCapacity.TryCreate options.MaxConcurrentOperations,
+                  AgentDeliveryCapacity.TryCreate options.MailboxCapacity with
+            | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error
+            | Ok worker, Ok owner, Ok operations, Ok changes -> Ok (worker, owner, operations, changes)
+
+    let private startWithBans options database (logger: ILogger) (clock: TimeProvider) bans
+                              (worker: ReliableAgentConfiguration<AccountWorkRequest>, owner: ReliableAgentConfiguration<AuthMessage>,
+                               operations: AgentDeliveryCapacity, changes: AgentDeliveryCapacity) =
         let dummyHash = (hasher options).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
-        let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
-        let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AccountWorkRequest) -> request.ReplyTo)
+        let work = AgentReplyDispatcher.createAsyncHandler operations (fun (request: AccountWorkRequest) -> request.ReplyTo)
                        (execute options database dummyHash clock logger)
-        let workers = Agent.Start(workerOptions, work)
+        let workers = worker.Start work
         let state = {
             Tickets = Dictionary(); Flows = Dictionary(); Pending = Dictionary(); Workers = workers
-            Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
+            Outbox = AgentOutbox.Create(operations, workers.Ref)
+            ChangesCapacity = changes
             Exclusive = false; Changes = None; ChangeTarget = 0; Stopping = false; WorkersStopped = false
             AddressBans = bans
         }
-        let consumeRequest = AgentReplyDispatcher.createHandler options.MailboxCapacity
+        let consumeRequest = AgentReplyDispatcher.createHandler changes
                                  (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) (consume options clock state)
-        let settings = {
-            AgentOptions.create "authentication" with
-                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
-        }
-        let agent = Agent.Start(settings, handle options clock logger state consumeRequest, isControl = isControl)
+        let agent = owner.Start(handle options clock logger state consumeRequest)
         agent.TryPost AuthMessage.Start |> ignore
         agent
 
-    /// Checked configuration; a failed ban read creates no workers or service.
+    /// A rejected Agent configuration or failed ban read starts no workers.
     let start options database (logger: ILogger) (clock: TimeProvider) =
-        match SqliteAddressStore.active database (clock.GetUtcNow()) CancellationToken.None with
-        | Error error -> Error error
-        | Ok bans -> Ok(startWithBans options database logger clock bans)
+        preflight options
+        |> Result.mapError StartError.Agent
+        |> Result.bind (fun configuration ->
+            SqliteAddressStore.active database (clock.GetUtcNow()) CancellationToken.None
+            |> Result.mapError StartError.Storage
+            |> Result.map (fun bans -> startWithBans options database logger clock bans configuration))
 
-    let authenticator (agent: Agent<AuthMessage>) = {
-        Requests = agent.Ref.TryReliable().Value.Map AuthMessage.ConsumeTicket
-        Profiles = agent.Ref.TryReliable().Value.Map AuthMessage.ChangeProfile
-        Moderation = agent.Ref.TryReliable().Value.Map AuthMessage.Moderate
+    let authenticator (agent: ReliableAgent<AuthMessage>) = {
+        Requests = agent.Ref.Map AuthMessage.ConsumeTicket
+        Profiles = agent.Ref.Map AuthMessage.ChangeProfile
+        Moderation = agent.Ref.Map AuthMessage.Moderate
         Completion = agent.Completion
     }

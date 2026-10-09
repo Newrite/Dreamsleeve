@@ -185,4 +185,4 @@ module SqliteGuildStore =
     /// Guilds.MaxPendingWrites, checked with the configuration.
     let startWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "guild-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.Start(options, handle config logger)
+        Agent.TryStart(options, handle config logger)

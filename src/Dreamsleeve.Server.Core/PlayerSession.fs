@@ -118,8 +118,6 @@ module PlayerSession =
         Logger: ILogger
     }
 
-    let private reliable (context: AgentContext<PlayerSessionMessage>) = context.Ref.TryReliable()
-
     // Every outbound projection of this player passes here: a withheld game
     // name never reaches presence, bootstrap snapshots or chat messages, and
     // while the player hides their names only the pseudonym leaves this owner.
@@ -168,14 +166,14 @@ module PlayerSession =
         | Active player -> ownView state player snapshot
         | Starting | Resolving _ | Reserving _ | Closing -> snapshot
 
-    let private completeIfDetached state (context: AgentContext<PlayerSessionMessage>) =
+    let private completeIfDetached state (context: ReliableAgentContext<PlayerSessionMessage>) =
         match state.Phase with
         | Closing when not state.ChatAttached && not state.SystemAttached && not state.PresenceAttached && not state.GroundMarksAttached
                        && not state.GuildsAttached ->
             context.Complete() |> ignore
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private stop (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
+    let private stop (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) =
         match state.Phase with
         | Closing -> ()
         | Starting | Resolving _ | Reserving _ ->
@@ -186,33 +184,31 @@ module PlayerSession =
             state.Phase <- Closing
             state.Pending.Clear()
 
-            match reliable context with
-            | None -> context.Abort()
-            | Some address ->
-                let detach reply = { ConnectionId = request.ConnectionId; ReplyTo = reply }
-                if state.ChatAttached then
-                    let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.ChatDetached))
-                    if not (state.Chat.TrySend(context, command)) then context.Abort()
+            let address = context.Ref
+            let detach reply = { ConnectionId = request.ConnectionId; ReplyTo = reply }
+            if state.ChatAttached then
+                let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.ChatDetached))
+                if not (state.Chat.TrySend(context, command)) then context.Abort()
 
-                if state.SystemAttached then
-                    let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.SystemDetached))
-                    if not (state.System.TrySend(context, command)) then context.Abort()
+            if state.SystemAttached then
+                let command = ChatRoomCommand.Detach(detach (address.Map PlayerSessionMessage.SystemDetached))
+                if not (state.System.TrySend(context, command)) then context.Abort()
 
-                if state.PresenceAttached then
-                    let command = PresenceCommand.Detach(detach (address.Map PlayerSessionMessage.PresenceDetached))
-                    if not (state.Presence.TrySend(context, command)) then context.Abort()
+            if state.PresenceAttached then
+                let command = PresenceCommand.Detach(detach (address.Map PlayerSessionMessage.PresenceDetached))
+                if not (state.Presence.TrySend(context, command)) then context.Abort()
 
-                if state.GroundMarksAttached then
-                    let command = GroundMarkCommand.Detach(detach (address.Map PlayerSessionMessage.GroundMarksDetached))
-                    if not (state.GroundMarks.TrySend(context, command)) then context.Abort()
+            if state.GroundMarksAttached then
+                let command = GroundMarkCommand.Detach(detach (address.Map PlayerSessionMessage.GroundMarksDetached))
+                if not (state.GroundMarks.TrySend(context, command)) then context.Abort()
 
-                if state.GuildsAttached then
-                    let command = GuildCommand.Detach(detach (address.Map PlayerSessionMessage.GuildsDetached))
-                    if not (state.Guilds.TrySend(context, command)) then context.Abort()
+            if state.GuildsAttached then
+                let command = GuildCommand.Detach(detach (address.Map PlayerSessionMessage.GuildsDetached))
+                if not (state.Guilds.TrySend(context, command)) then context.Abort()
 
-                completeIfDetached state context
+            completeIfDetached state context
 
-    let private close (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) reason =
+    let private close (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) reason =
         if not state.CloseSent then
             state.CloseSent <- true
             // Same FIFO as rejection/Activate/data: close cannot overtake them.
@@ -226,14 +222,14 @@ module PlayerSession =
             state.Host.AbortAfterDrain context
         | Opening _ | Active _ | Closing -> stop request state context
 
-    let private emit (options: PlayerSessionOptions) (request: SessionOpenRequest) state context command =
+    let private emit (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) command =
         if state.Host.Count >= options.MaxPendingOutput || not (state.Host.TrySend(context, command)) then
             close request state context "Session output is full."
             false
         else
             true
 
-    let private send (options: PlayerSessionOptions) (request: SessionOpenRequest) state context response =
+    let private send (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) response =
         emit options request state context (SessionHostCommand.Send(request.ConnectionId, response)) |> ignore
 
     // The account for the log; 0 until the ticket is resolved.
@@ -242,7 +238,7 @@ module PlayerSession =
 
     // Every refusal of this session passes here. The level says who should
     // notice: words and frequency concern moderators, overload the operator.
-    let private sendRefusal (options: PlayerSessionOptions) (request: SessionOpenRequest) state context lane requestId (rejection: RequestRejection) =
+    let private sendRefusal (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) lane requestId (rejection: RequestRejection) =
         let level =
             match rejection.Code with
             | RequestRejectionCode.TextNotAllowed | RequestRejectionCode.RateLimited -> LogLevel.Information
@@ -252,7 +248,7 @@ module PlayerSession =
                          accountId state, request.ConnectionId, requestId, rejection.Code, rejection.Field, rejection.Message)
         send options request state context (ProtocolCodec.refusal lane requestId rejection)
 
-    let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
+    let private reject (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId code message =
         sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
 
     let private muted state = state.Mute |> ValueOption.exists (Sanction.activeAt DateTimeOffset.UtcNow)
@@ -264,9 +260,10 @@ module PlayerSession =
 
     // The audit line of content a moderator removed through another owner.
     // It settles nothing: a full admission loses the line with a warning.
-    let private audit state context action target details =
-        match selfId state, reliable context with
-        | ValueSome moderator, Some address ->
+    let private audit state (context: ReliableAgentContext<PlayerSessionMessage>) action target details =
+        let address = context.Ref
+        match selfId state with
+        | ValueSome moderator ->
             let request = {
                 OperationId = Guid.NewGuid()
                 Command = ModerationCommand.Record(moderator, AuditRecord.create action (AuditTarget.Player target) details)
@@ -274,24 +271,25 @@ module PlayerSession =
             }
             if not (state.AccountModeration.TrySend(context, request)) then
                 state.Logger.LogWarning("Audit line {Action} of moderator {PlayerId} was not admitted", AdminAction.key action, PlayerId.value moderator)
-        | ValueNone, _ | _, None -> ()
+        | ValueNone -> ()
 
     // A muted player's writing is refused whole; the client shows the mute it was told.
     let private mutedRejection = { Code = RequestRejectionCode.Muted; Message = "The player is muted."; Field = "" }
 
-    let private rejectChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId code message =
+    let private rejectChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId code message =
         sendRefusal options request state context DeliveryLane.Chat requestId { Code = code; Message = message; Field = "" }
 
-    let private rejectOpening (options: PlayerSessionOptions) (request: SessionOpenRequest) state context code message =
+    let private rejectOpening (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) code message =
         reject options request state context request.RequestId code message
         close request state context message
 
-    let private beginResolve (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) =
-        match state.Phase, reliable context with
-        | Starting, Some _ when HiddenIdentity.isHidden request.Hiding && not state.Settings.Identity.AllowHiddenIdentity ->
+    let private beginResolve (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) =
+        let address = context.Ref
+        match state.Phase with
+        | Starting when HiddenIdentity.isHidden request.Hiding && not state.Settings.Identity.AllowHiddenIdentity ->
             // Refused before the ticket is spent: the player may reconnect with names shown.
             rejectOpening options request state context RequestRejectionCode.HiddenIdentityNotAllowed "The server does not let players hide their names."
-        | Starting, Some address ->
+        | Starting ->
             let operationId = Guid.NewGuid()
             state.Phase <- Resolving operationId
             let query = {
@@ -300,14 +298,14 @@ module PlayerSession =
                 ReplyTo = address.Map PlayerSessionMessage.Authenticated
             }
             if not (state.Authentication.TrySend(context, query)) then context.Abort()
-        | Starting, None -> context.Abort()
-        | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, _ | Closing, _ -> ()
+        | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private authenticated (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: SessionAuthenticationReply) =
+    let private authenticated (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) (reply: SessionAuthenticationReply) =
         match state.Phase with
         | Resolving operationId when reply.OperationId = operationId ->
-            match reply.Result, reliable context with
-            | Ok stored, Some address ->
+            let address = context.Ref
+            match reply.Result with
+            | Ok stored ->
                 state.Account <- ValueSome stored.Profile
                 state.Role <- stored.Role
                 state.Mute <- stored.Mute
@@ -321,19 +319,18 @@ module PlayerSession =
                     (SessionHostCommand.Reserve(request.ConnectionId, profile, request.Hiding, stored.SignedInFrom,
                         address.Map PlayerSessionMessage.IdentityReplied)) |> ignore
 
-            | Error SessionAuthenticationError.InvalidTicket, _ ->
+            | Error SessionAuthenticationError.InvalidTicket ->
                 rejectOpening options request state context RequestRejectionCode.AuthenticationFailed "Session ticket is invalid or expired."
-            | Error SessionAuthenticationError.Unavailable, _ ->
+            | Error SessionAuthenticationError.Unavailable ->
                 rejectOpening options request state context RequestRejectionCode.Overloaded "Authentication is temporarily unavailable."
-            | Ok _, None ->
-                close request state context "Authentication reply cannot be applied."
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private identityReply (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) reply =
+    let private identityReply (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) reply =
         match state.Phase with
         | Reserving player ->
-            match reply, reliable context with
-            | IdentityAdmission.Reserved pseudonym, Some address ->
+            let address = context.Ref
+            match reply with
+            | IdentityAdmission.Reserved pseudonym ->
                 // Decided before anyone hears of this player: the first Joined already hides the names.
                 state.Pseudonym <- pseudonym
                 state.Hiding <- if pseudonym.IsSome then request.Hiding else HiddenIdentity.Shown
@@ -368,14 +365,14 @@ module PlayerSession =
                 if not state.ChatAttached || not state.SystemAttached || not state.PresenceAttached || not state.GroundMarksAttached
                    || not state.GuildsAttached then
                     close request state context "Subscription admission failed."
-            | IdentityAdmission.AlreadyInUse, _ ->
+            | IdentityAdmission.AlreadyInUse ->
                 rejectOpening options request state context RequestRejectionCode.SessionAlreadyOpen "Player already has a session."
-            | IdentityAdmission.Closed, _ | IdentityAdmission.Reserved _, None ->
+            | IdentityAdmission.Closed ->
                 state.Logger.LogDebug("Session {ConnectionId} of player {PlayerId} lost its reservation; stopping", request.ConnectionId, accountId state)
                 stop request state context
         | Starting | Resolving _ | Opening _ | Active _ | Closing -> ()
 
-    let private activate (options: PlayerSessionOptions) (request: SessionOpenRequest) state context =
+    let private activate (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) =
         match state.Phase with
         | Opening opening ->
             match opening.Chat, opening.System, opening.Online with
@@ -401,7 +398,7 @@ module PlayerSession =
             | None, _, _ | _, None, _ | _, _, None -> ()
         | Starting | Resolving _ | Reserving _ | Active _ | Closing -> ()
 
-    let private publish (options: PlayerSessionOptions) (request: SessionOpenRequest) state context response =
+    let private publish (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) response =
         match state.Phase with
         | Opening opening ->
             if opening.Buffered.Count >= options.MaxBootstrapEvents then
@@ -411,7 +408,7 @@ module PlayerSession =
         | Active _ -> send options request state context response
         | Starting | Resolving _ | Reserving _ | Closing -> ()
 
-    let private chatEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+    let private chatEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) event =
         match event with
         | ChatRoomEvent.Joined snapshot ->
             match state.Phase, snapshot.Kind with
@@ -459,7 +456,7 @@ module PlayerSession =
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ ->
                 close request state context "Unexpected chat removal."
 
-    let private presenceEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+    let private presenceEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) event =
         match event with
         | PresenceEvent.Snapshot(players, kinds) ->
             match state.Phase with
@@ -481,7 +478,7 @@ module PlayerSession =
                 state.Host.TrySend(context, SessionHostCommand.Send(request.ConnectionId, ServerResponse.PlayersMoved movements)) |> ignore
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private groundMarkEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+    let private groundMarkEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) event =
         let settle requestId reply =
             match state.Phase with
             | Active _ when state.Pending.Remove requestId -> reply ()
@@ -509,13 +506,13 @@ module PlayerSession =
 
     // Visibility of marks follows the player's own position; a lost update is
     // repaired by the next one, since the owner compares with what it last saw.
-    let private observeMarks (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (player: Player) =
+    let private observeMarks (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) (player: Player) =
         if state.GroundMarks.Count < options.MaxPendingUpdates then
             state.GroundMarks.TrySend(context, GroundMarkCommand.Observe(request.ConnectionId, player.CharacterGeneration, player.Location)) |> ignore
 
     /// Position rule (soft), word list and flags here; quotas, frequency,
     /// density and the ID belong to the mark owner, which also answers.
-    let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (body: GroundMarkBody) placement gameDate =
+    let private placeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (body: GroundMarkBody) placement gameDate =
         let refuse code message field =
             sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = field }
         match state.Phase with
@@ -552,7 +549,7 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready." ""
 
-    let private removeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId id =
+    let private removeMark (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId id =
         match state.Phase with
         | Active _ ->
             if requestId = 0UL || state.Pending.Contains requestId then
@@ -568,9 +565,10 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ ->
             reject options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
-    let private sendChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId channelId text =
-        match state.Phase, reliable context with
-        | Active player, Some address ->
+    let private sendChat (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId channelId text =
+        let address = context.Ref
+        match state.Phase with
+        | Active player ->
             let channel = ChatChannels.classify channelId
             if requestId = 0UL || state.Pending.Contains requestId then
                 // A second reply with this ID could settle the original request.
@@ -608,17 +606,18 @@ module PlayerSession =
                     state.Pending.Add requestId |> ignore
                 else
                     rejectChat options request state context requestId RequestRejectionCode.Overloaded "Channel admission is full."
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             rejectChat options request state context requestId RequestRejectionCode.SessionNotReady "Session is not ready."
 
     /// Same path as chat into the system channel: origin admission here, then the
     /// word list before the channel sees anything; the channel applies its rate limit.
-    let private postAnnouncement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (announcement: AnnouncementRequest) =
+    let private postAnnouncement (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (announcement: AnnouncementRequest) =
         let refuse code message field =
             sendRefusal options request state context DeliveryLane.Chat requestId { Code = code; Message = message; Field = field }
-        match state.Phase, reliable context with
-        | Active player, Some address ->
+        let address = context.Ref
+        match state.Phase with
+        | Active player ->
             let text = ChatMessageText.value announcement.Text
             let signature = announcement.Signature |> ValueOption.map AnnouncementSignature.value
             if requestId = 0UL || state.Pending.Contains requestId then
@@ -653,8 +652,8 @@ module PlayerSession =
                             state.Pending.Add requestId |> ignore
                         else
                             refuse RequestRejectionCode.Overloaded "Channel admission is full." ""
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready." ""
 
     let private validUpdate maxActorValues command (player: Player) =
@@ -668,7 +667,7 @@ module PlayerSession =
         | PlayerUpdate.SetActorValues values ->
             player.CharacterName.IsSome && values.Count <= maxActorValues
 
-    let private update (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state context requestId command =
+    let private update (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId command =
         match state.Phase with
         | Active player ->
             if requestId = 0UL || state.Pending.Contains requestId then
@@ -709,11 +708,12 @@ module PlayerSession =
 
     /// Only the choice comes from the client; the runtime picks the pseudonym.
     /// Asking for the current state settles at once and is not a switch.
-    let private setIdentity (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId hiding =
+    let private setIdentity (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId hiding =
         let refuse code message =
             sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "hidden" }
-        match state.Phase, reliable context with
-        | Active _, Some address ->
+        let address = context.Ref
+        match state.Phase with
+        | Active _ ->
             let now = Environment.TickCount64
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
@@ -731,14 +731,14 @@ module PlayerSession =
                     state.Pending.Add requestId |> ignore
                     state.IdentityRequest <- ValueSome(struct (requestId, hiding))
                     state.LastIdentitySwitch <- ValueSome now
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
     /// Messages and marks sent from now on carry the new identity; presence
     /// spreads it like a rename. The presence outbox keeps two slots beyond
     /// the update budget, so this send only fails when the owner is gone.
-    let private identityChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId pseudonym =
+    let private identityChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId pseudonym =
         match state.Phase with
         | Active player when (match state.IdentityRequest with ValueSome(struct (id, _)) -> id = requestId | ValueNone -> false)
                              && state.Pending.Remove requestId ->
@@ -757,7 +757,7 @@ module PlayerSession =
     /// Same path as a pseudonym switch: the host updates the names shown online,
     /// presence spreads the new identity as an updated player. own: the player's own
     /// change rather than an administrator's.
-    let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state context own (stored: PlayerData) =
+    let private profileChanged (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) own (stored: PlayerData) =
         let apply (player: Player) =
             match Player.withProfile (Moderation.publicProfile state.Moderation stored) player with
             | Error error ->
@@ -787,7 +787,7 @@ module PlayerSession =
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
     /// Hands one own profile change to the account service; false when it has no room.
-    let private requestProfileChange state context (address: ReliableAgentRef<PlayerSessionMessage>) requestId (player: Player) change =
+    let private requestProfileChange state (context: ReliableAgentContext<PlayerSessionMessage>) (address: ReliableAgentRef<PlayerSessionMessage>) requestId (player: Player) change =
         let operationId = Guid.NewGuid()
         let request = {
             OperationId = operationId
@@ -803,11 +803,12 @@ module PlayerSession =
 
     /// Only the new name comes from the client. The word list is checked here,
     /// like chat text; storage and the change interval belong to the account service.
-    let private changeDisplayName (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (name: DisplayName) =
+    let private changeDisplayName (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (name: DisplayName) =
         let refuse code message =
             sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "display_name" }
-        match state.Phase, reliable context with
-        | Active player, Some address ->
+        let address = context.Ref
+        match state.Phase with
+        | Active player ->
             if requestId = 0UL || state.Pending.Contains requestId then
                 close request state context "Request ID is invalid or already pending."
             elif muted state then
@@ -825,17 +826,18 @@ module PlayerSession =
                 let change = ProfileChange.DisplayName(name, IdentityOptions.displayNameInterval state.Settings.Identity)
                 if not (requestProfileChange state context address requestId player change) then
                     refuse RequestRejectionCode.Overloaded "Display name admission is full."
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
     /// Readability and the change interval are checked here; the account
     /// service stores the color. A mute does not stop it: the color writes nothing.
-    let private setNameColor (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (color: NameColor) =
+    let private setNameColor (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (color: NameColor) =
         let refuse code message =
             sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "name_color" }
-        match state.Phase, reliable context with
-        | Active player, Some address ->
+        let address = context.Ref
+        match state.Phase with
+        | Active player ->
             let interval = int64 state.Settings.Identity.NameColorIntervalMs
             let wait = state.LastColorChange |> ValueOption.map (fun last -> interval - (Environment.TickCount64 - last))
             if requestId = 0UL || state.Pending.Contains requestId then
@@ -855,13 +857,13 @@ module PlayerSession =
                 | ValueSome _ | ValueNone ->
                     if not (requestProfileChange state context address requestId player (ProfileChange.NameColor color)) then
                         refuse RequestRejectionCode.Overloaded "Profile change admission is full."
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
     /// The role is checked here; whether a moderator outranks the target is the
     /// account service's to decide against the stored roles.
-    let private moderate (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (action: ModerationAction) =
+    let private moderate (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (action: ModerationAction) =
         let lane =
             match action with
             | ModerationAction.DeleteMessage _ -> DeliveryLane.Chat
@@ -869,8 +871,9 @@ module PlayerSession =
             | ModerationAction.ListMarks _ | ModerationAction.ClearMarks _ -> DeliveryLane.Control
         let refuse code message = sendRefusal options request state context lane requestId { Code = code; Message = message; Field = "" }
         let admitted sent = if sent then state.Pending.Add requestId |> ignore else refuse RequestRejectionCode.Overloaded "Moderation admission is full."
-        match state.Phase, reliable context with
-        | Active player, Some address ->
+        let address = context.Ref
+        match state.Phase with
+        | Active player ->
             let self = player.Data.PlayerId
             let ask command =
                 let operationId = Guid.NewGuid()
@@ -912,12 +915,12 @@ module PlayerSession =
                         admitted (state.Guilds.TrySend(context, GuildCommand.Remove(guild, removal)))
                     | ValueSome(struct (ChatChannelKind.Guild, ValueNone)) | ValueNone ->
                         refuse RequestRejectionCode.ChannelNotFound "Channel does not exist."
-        | Closing, _ -> ()
-        | Starting, _ | Resolving _, _ | Reserving _, _ | Opening _, _ | Active _, None ->
+        | Closing -> ()
+        | Starting | Resolving _ | Reserving _ | Opening _ ->
             refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
     /// A member's guild request: the guild owner decides it, the session settles it.
-    let private guildRequest (options: PlayerSessionOptions) (request: SessionOpenRequest) state context requestId (action: GuildAction) =
+    let private guildRequest (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) requestId (action: GuildAction) =
         let refuse code message =
             sendRefusal options request state context DeliveryLane.Control requestId { Code = code; Message = message; Field = "" }
         match state.Phase with
@@ -933,7 +936,7 @@ module PlayerSession =
         | Closing -> ()
         | Starting | Resolving _ | Reserving _ | Opening _ -> refuse RequestRejectionCode.SessionNotReady "Session is not ready."
 
-    let private guildEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state context event =
+    let private guildEvent (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) event =
         match event with
         | GuildEvent.Snapshot guilds -> publish options request state context (ServerResponse.GuildsSnapshot guilds)
         | GuildEvent.Changed change -> publish options request state context (ServerResponse.GuildChanged change)
@@ -949,7 +952,7 @@ module PlayerSession =
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild refusal."
 
-    let private moderationReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: ModerationReply) =
+    let private moderationReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) (reply: ModerationReply) =
         match state.ModerationRequests.TryGetValue reply.OperationId with
         | false, _ -> () // An audit line: nothing waits for it.
         | true, struct (requestId, action) ->
@@ -973,7 +976,7 @@ module PlayerSession =
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected moderation reply."
 
-    let private profileReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state context (reply: ProfileChangeReply) =
+    let private profileReplied (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) (reply: ProfileChangeReply) =
         match state.ProfileRequest with
         | ValueSome(struct (requestId, operationId, change)) when operationId = reply.OperationId ->
             state.ProfileRequest <- ValueNone
@@ -1014,7 +1017,7 @@ module PlayerSession =
         | Active player -> view player AdminSessionPhase.Active
         | Starting | Resolving _ | Reserving _ | Closing -> None
 
-    let private sampleMovement (options: PlayerSessionOptions) (request: SessionOpenRequest) state context sample =
+    let private sampleMovement (options: PlayerSessionOptions) (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) sample =
         match state.Phase with
         | Active player when state.Presence.Count < options.MaxPendingUpdates ->
             match Player.tryApplyMovement sample player with
@@ -1026,7 +1029,7 @@ module PlayerSession =
             | ValueNone -> ()
         | Starting | Resolving _ | Reserving _ | Opening _ | Active _ | Closing -> ()
 
-    let private handle (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state (context: AgentContext<PlayerSessionMessage>) message = task {
+    let private handle (options: PlayerSessionOptions) maxActorValues (request: SessionOpenRequest) state (context: ReliableAgentContext<PlayerSessionMessage>) message = task {
         match message with
         | PlayerSessionMessage.Begin -> beginResolve options request state context
         | PlayerSessionMessage.Authenticated reply -> authenticated options request state context reply
@@ -1143,44 +1146,71 @@ module PlayerSession =
     let start (settings: GameSettings) moderation authentication profiles accountModeration chat system presence marks guilds host (logger: ILogger) (request: SessionOpenRequest) =
         let options = settings.Runtime.Player
         let reserve = PlayerSessionOptions.OutboxReserve
-        let state = {
-            Phase = Starting
-            ChatAttached = false
-            SystemAttached = false
-            PresenceAttached = false
-            GroundMarksAttached = false
-            GuildsAttached = false
-            CloseSent = false
-            CharacterWithheld = false
-            Pseudonym = ValueNone
-            Hiding = HiddenIdentity.Shown
-            IdentityRequest = ValueNone
-            LastIdentitySwitch = ValueNone
-            Account = ValueNone
-            Role = PlayerRole.Player
-            Mute = ValueNone
-            OpenedAt = DateTimeOffset.UtcNow
-            ProfileRequest = ValueNone
-            LastColorChange = ValueNone
-            Moderation = moderation
-            Settings = settings
-            Pending = HashSet()
-            Authentication = AgentOutbox(1, authentication)
-            Profiles = AgentOutbox(1, profiles)
-            AccountModeration = AgentOutbox(options.MaxPendingChat + reserve, accountModeration)
-            ModerationRequests = Dictionary()
-            Chat = AgentOutbox(options.MaxPendingChat + reserve, chat)
-            System = AgentOutbox(options.MaxPendingChat + reserve, system)
-            Presence = AgentOutbox(options.MaxPendingUpdates + reserve, presence)
-            GroundMarks = AgentOutbox(options.MaxPendingUpdates + options.MaxPendingChat + reserve, marks)
-            Guilds = AgentOutbox(options.MaxPendingChat + reserve, guilds)
-            Host = AgentOutbox(options.MaxPendingOutput + reserve, host)
-            Logger = logger
-        }
         let agentOptions = {
             AgentOptions.create $"player-{request.ConnectionId}" with
                 Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
         }
-        let agent = Agent.Start(agentOptions, handle options settings.Server.PlayerInput.MaxActorValues request state, isControl = isControl)
-        agent.TryPost PlayerSessionMessage.Begin |> ignore
-        agent
+        // The ground-mark route carries both update and request budgets plus control.
+        let combined = int64 options.MaxPendingUpdates + int64 options.MaxPendingChat + int64 reserve
+        if combined > int64 Int32.MaxValue then
+            Error (AgentStartError.CapacityOverflow(options.MaxPendingUpdates, options.MaxPendingChat + reserve))
+        else
+            match Agent<PlayerSessionMessage>.TryCheckReliable(agentOptions, isControl = isControl),
+                  AgentOutbox<SessionAuthenticationRequest>.TryCreate(1, authentication),
+                  AgentOutbox<ProfileChangeRequest>.TryCreate(1, profiles),
+                  AgentOutbox<ModerationRequest>.TryCreate(options.MaxPendingChat + reserve, accountModeration),
+                  AgentOutbox<ChatRoomCommand>.TryCreate(options.MaxPendingChat + reserve, chat),
+                  AgentOutbox<ChatRoomCommand>.TryCreate(options.MaxPendingChat + reserve, system),
+                  AgentOutbox<PresenceCommand>.TryCreate(options.MaxPendingUpdates + reserve, presence),
+                  AgentOutbox<GroundMarkCommand>.TryCreate(int combined, marks),
+                  AgentOutbox<GuildCommand>.TryCreate(options.MaxPendingChat + reserve, guilds),
+                  AgentOutbox<SessionHostCommand>.TryCreate(options.MaxPendingOutput + reserve, host) with
+            | Error error, _, _, _, _, _, _, _, _, _
+            | _, Error error, _, _, _, _, _, _, _, _
+            | _, _, Error error, _, _, _, _, _, _, _
+            | _, _, _, Error error, _, _, _, _, _, _
+            | _, _, _, _, Error error, _, _, _, _, _
+            | _, _, _, _, _, Error error, _, _, _, _
+            | _, _, _, _, _, _, Error error, _, _, _
+            | _, _, _, _, _, _, _, Error error, _, _
+            | _, _, _, _, _, _, _, _, Error error, _
+            | _, _, _, _, _, _, _, _, _, Error error -> Error error
+            | Ok configuration, Ok authenticationOutbox, Ok profilesOutbox, Ok moderationOutbox,
+              Ok chatOutbox, Ok systemOutbox, Ok presenceOutbox, Ok marksOutbox, Ok guildsOutbox, Ok hostOutbox ->
+                let state = {
+                    Phase = Starting
+                    ChatAttached = false
+                    SystemAttached = false
+                    PresenceAttached = false
+                    GroundMarksAttached = false
+                    GuildsAttached = false
+                    CloseSent = false
+                    CharacterWithheld = false
+                    Pseudonym = ValueNone
+                    Hiding = HiddenIdentity.Shown
+                    IdentityRequest = ValueNone
+                    LastIdentitySwitch = ValueNone
+                    Account = ValueNone
+                    Role = PlayerRole.Player
+                    Mute = ValueNone
+                    OpenedAt = DateTimeOffset.UtcNow
+                    ProfileRequest = ValueNone
+                    LastColorChange = ValueNone
+                    Moderation = moderation
+                    Settings = settings
+                    Pending = HashSet()
+                    Authentication = authenticationOutbox
+                    Profiles = profilesOutbox
+                    AccountModeration = moderationOutbox
+                    ModerationRequests = Dictionary()
+                    Chat = chatOutbox
+                    System = systemOutbox
+                    Presence = presenceOutbox
+                    GroundMarks = marksOutbox
+                    Guilds = guildsOutbox
+                    Host = hostOutbox
+                    Logger = logger
+                }
+                let agent = configuration.Start(handle options settings.Server.PlayerInput.MaxActorValues request state)
+                agent.TryPost PlayerSessionMessage.Begin |> ignore
+                Ok agent

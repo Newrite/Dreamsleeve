@@ -25,6 +25,7 @@ type PlayerStateError =
 /// the profile is not known yet, never a failure or an elapsed deadline.
 [<RequireQualifiedAccess>]
 type SessionDescribeError =
+    | InvalidRequest of AgentRequestError
     | Full
     | Closed
     | Canceled

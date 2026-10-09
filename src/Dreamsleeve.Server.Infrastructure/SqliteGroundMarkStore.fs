@@ -193,4 +193,4 @@ module SqliteGroundMarkStore =
     /// capacity is GroundMarks.MaxPendingWrites, checked with the configuration.
     let startWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.Start(options, write config logger)
+        Agent.TryStart(options, write config logger)

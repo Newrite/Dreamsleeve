@@ -26,7 +26,7 @@ module internal SessionTable =
         mutable Phase: RuntimeSessionPhase
         mutable Deadline: int64
         mutable PlayerId: PlayerId option
-        mutable Child: Agent<PlayerSessionMessage> option
+        mutable Child: ReliableAgent<PlayerSessionMessage> option
         mutable ChildStopped: bool
         mutable TransportClosed: bool
         mutable ChatDetached: bool

@@ -67,14 +67,14 @@ type ServerRuntimeMessage =
 [<RequireQualifiedAccess>]
 module ServerRuntime =
     type private Sources = {
-        Chat: Agent<ChatRoomCommand>
+        Chat: ReliableAgent<ChatRoomCommand>
         /// Owner of the system channel: announcements.
-        System: Agent<ChatRoomCommand>
-        Presence: Agent<PresenceCommand>
+        System: ReliableAgent<ChatRoomCommand>
+        Presence: ReliableAgent<PresenceCommand>
         /// Owner of the marks on the ground.
-        GroundMarks: Agent<GroundMarkCommand>
+        GroundMarks: ReliableAgent<GroundMarkCommand>
         /// Owner of the guilds and their channels.
-        Guilds: Agent<GuildCommand>
+        Guilds: ReliableAgent<GuildCommand>
         ChatCleanup: AgentOutbox<ChatRoomCommand>
         SystemCleanup: AgentOutbox<ChatRoomCommand>
         PresenceCleanup: AgentOutbox<PresenceCommand>
@@ -101,6 +101,8 @@ module ServerRuntime =
         mutable Stopping: bool
         mutable StopDeadline: int64
         mutable SourcesStopping: bool
+        TickInterval: AgentTickerInterval
+        CleanupCapacity: AgentDeliveryCapacity
         mutable Ticker: AgentTicker option
         mutable LastTick: int64
         /// From the account service (AccountChange.AddressBans); empty until it sends them.
@@ -142,13 +144,14 @@ module ServerRuntime =
                 false
         | ValueSome _ | ValueNone -> false
 
-    let private fail state (context: AgentContext<ServerRuntimeMessage>) (reason: string) =
+    let private fail state (context: ReliableAgentContext<ServerRuntimeMessage>) (reason: string) =
         state.Logger.LogError("Server runtime failed: {Reason}", reason)
         context.Abort()
 
-    let private cleanup state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
-        match state.Sources, context.Ref.TryReliable() with
-        | Some sources, Some self ->
+    let private cleanup state (context: ReliableAgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
+        let self = context.Ref
+        match state.Sources with
+        | Some sources ->
             let detach source = {
                 ConnectionId = entry.ConnectionId
                 ReplyTo = self.Map(fun id -> ServerRuntimeMessage.Detached(source, id))
@@ -161,7 +164,7 @@ module ServerRuntime =
             let marks = sources.GroundMarksCleanup.TrySend(context, GroundMarkCommand.Detach(detach SessionSource.GroundMarks), ServerRuntimeMessage.CleanupFailed)
             let guilds = sources.GuildsCleanup.TrySend(context, GuildCommand.Detach(detach SessionSource.Guilds), ServerRuntimeMessage.CleanupFailed)
             if not chat || not system || not presence || not marks || not guilds then fail state context "Session cleanup capacity exhausted."
-        | None, _ | _, None -> fail state context "Session cleanup has no sources."
+        | None -> fail state context "Session cleanup has no sources."
 
     // The public (moderated) username of a reserved player, for the log.
     let private username state playerId =
@@ -169,7 +172,7 @@ module ServerRuntime =
         | ValueSome profile -> Username.value profile.Username
         | ValueNone -> "?"
 
-    let private close (options: ServerRuntimeOptions) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
+    let private close (options: ServerRuntimeOptions) state (context: ReliableAgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) =
         if entry.Phase <> RuntimeSessionPhase.Closing then
             match entry.Phase, entry.PlayerId with
             | RuntimeSessionPhase.Ready, Some playerId ->
@@ -355,23 +358,27 @@ module ServerRuntime =
             state.Logger.LogWarning("Slow consumer {ConnectionId}", connectionId)
             SessionTable.find connectionId state.Table |> Option.iter (close options state context)
 
-    let private openSession (options: ServerRuntimeOptions) (authenticator: SessionAuthenticator) state (context: AgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket hiding =
-        match state.Sources, context.Ref.TryReliable() with
-        | Some sources, Some self ->
+    let private openSession (options: ServerRuntimeOptions) (authenticator: SessionAuthenticator) state (context: ReliableAgentContext<ServerRuntimeMessage>) (entry: SessionTable.Entry) requestId sessionTicket hiding =
+        let self = context.Ref
+        match state.Sources with
+        | Some sources ->
             let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
-            let child =
+            let started =
                 PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.Profiles authenticator.Moderation
-                    (sources.Chat.Ref.TryReliable().Value) (sources.System.Ref.TryReliable().Value) (sources.Presence.Ref.TryReliable().Value)
-                    (sources.GroundMarks.Ref.TryReliable().Value) (sources.Guilds.Ref.TryReliable().Value)
+                    (sources.Chat.Ref) (sources.System.Ref) (sources.Presence.Ref)
+                    (sources.GroundMarks.Ref) (sources.Guilds.Ref)
                     (self.Map ServerRuntimeMessage.Host) state.Logger request
-            entry.Child <- Some child
-            entry.Phase <- RuntimeSessionPhase.Opening
-            // Authentication has its own time from the request: a guest may have
-            // been connected for hours.
-            entry.Deadline <- now () + int64 options.OpenTimeoutMs
-            context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
-            state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
-        | None, _ | _, None ->
+            match started with
+            | Error error ->
+                state.Logger.LogError("Session {ConnectionId} construction failed: {Error}", entry.ConnectionId, error)
+                close options state context entry
+            | Ok child ->
+                entry.Child <- Some child
+                entry.Phase <- RuntimeSessionPhase.Opening
+                entry.Deadline <- now () + int64 options.OpenTimeoutMs
+                context.Own(child, fun outcome -> ServerRuntimeMessage.PlayerStopped(entry.ConnectionId, outcome))
+                state.Logger.LogDebug("Session {ConnectionId} is opening (request {RequestId}, hides names: {Hiding})", entry.ConnectionId, requestId, hiding)
+        | None ->
             state.Logger.LogWarning("Cannot open session {ConnectionId}: runtime sources are not running", entry.ConnectionId)
             close options state context entry
 
@@ -513,50 +520,63 @@ module ServerRuntime =
 
     let private schedule (options: ServerRuntimeOptions) state context =
         if state.Ticker.IsNone then
-            state.Ticker <- Some (AgentTicker.start (TimeSpan.FromMilliseconds(int64 options.PollIntervalMs)) context ServerRuntimeMessage.Tick)
+            state.Ticker <- Some (AgentTicker.start state.TickInterval context ServerRuntimeMessage.Tick)
 
-    let private initialize (options: ServerRuntimeOptions) authenticator state (context: AgentContext<ServerRuntimeMessage>) =
-        match context.Ref.TryReliable() with
-        | None -> fail state context "Runtime requires a reliable mailbox."
-        | Some self ->
-            let output = self.Map ServerRuntimeMessage.Host
-            let game = state.Settings
-            let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat game.Announcements) ChatChannelKind.System output
-            match ChatRoomAgent.start options.Chat ChatChannelKind.Global output, system with
-            | Error error, _ | _, Error error -> fail state context $"Chat startup failed: {error}"
-            | Ok chat, Ok system ->
-                context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
-                context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
-                let marks = GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
-                let guilds = GuildsAgent.start game.Guilds game.GuildLimits state.Moderation options.Chat.Rate state.Guilds output state.Logger
-                match marks, guilds with
-                | Error error, _ -> fail state context $"Ground marks startup failed: {error}"
-                | Ok marks, Error error ->
-                    marks.Abort()
-                    fail state context $"Guilds startup failed: {error}"
-                | Ok marks, Ok guilds ->
-                    let observation = state.Phantoms |> Option.map PhantomAgent.observationMode |> Option.defaultValue PhantomObservationMode.Disabled
-                    let presence = PresenceAgent.startObserved observation options.Presence output
-                    context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
-                    context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
-                    context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
-                    // A failed guild write stops the writer: the supervisor restarts the game from storage.
-                    context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
-                    context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
-                    state.Sources <- Some {
-                        Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
-                        ChatCleanup = AgentOutbox(options.MaxSessions, chat.Ref.TryReliable().Value)
-                        SystemCleanup = AgentOutbox(options.MaxSessions, system.Ref.TryReliable().Value)
-                        PresenceCleanup = AgentOutbox(options.MaxSessions, presence.Ref.TryReliable().Value)
-                        GroundMarksCleanup = AgentOutbox(options.MaxSessions, marks.Ref.TryReliable().Value)
-                        GuildsCleanup = AgentOutbox(options.MaxSessions, guilds.Ref.TryReliable().Value)
-                        ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
-                    }
-                    state.Transport.SetReadyHandler(fun () ->
-                        context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentPostResult.Posted)
-                    schedule options state context
-                    state.Logger.LogDebug("Server runtime started: up to {MaxSessions} connections, open timeout {OpenTimeoutMs} ms",
-                                          options.MaxSessions, options.OpenTimeoutMs)
+    [<RequireQualifiedAccess>]
+    type private SourceStartError =
+        | Chat of ChatRoomAgent.StartError
+        | GroundMarks of GroundMarksAgent.StartError
+        | Guilds of GuildsAgent.StartError
+        | Presence of AgentStartError
+
+    let private initialize (options: ServerRuntimeOptions) authenticator state (context: ReliableAgentContext<ServerRuntimeMessage>) = task {
+        let output = context.Ref.Map ServerRuntimeMessage.Host
+        let game = state.Settings
+        let started = ResizeArray<(unit -> unit) * System.Threading.Tasks.Task>()
+        let track (agent: ReliableAgent<'Message>) =
+            started.Add(agent.Abort, agent.Completion)
+            agent
+        let chat = ChatRoomAgent.start options.Chat ChatChannelKind.Global output |> Result.map track |> Result.mapError SourceStartError.Chat
+        let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat game.Announcements) ChatChannelKind.System output
+                     |> Result.map track |> Result.mapError SourceStartError.Chat
+        let marks = GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
+                    |> Result.map track |> Result.mapError SourceStartError.GroundMarks
+        let guilds = GuildsAgent.start game.Guilds game.GuildLimits state.Moderation options.Chat.Rate state.Guilds output state.Logger
+                     |> Result.map track |> Result.mapError SourceStartError.Guilds
+        let observation = state.Phantoms |> Option.map PhantomAgent.observationMode |> Option.defaultValue PhantomObservationMode.Disabled
+        let presence = PresenceAgent.startObserved observation options.Presence output |> Result.map track |> Result.mapError SourceStartError.Presence
+        match chat, system, marks, guilds, presence with
+        | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
+        | _, _, _, Error error, _ | _, _, _, _, Error error ->
+            // Every successful sibling is owned until its actual cleanup has finished.
+            for abort, _ in started do abort ()
+            try
+                do! System.Threading.Tasks.Task.WhenAll(started |> Seq.map snd)
+            with :? OperationCanceledException -> ()
+            fail state context $"Source startup failed: {error}"
+        | Ok chat, Ok system, Ok marks, Ok guilds, Ok presence ->
+            context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
+            context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
+            context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
+            context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
+            context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
+            context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
+            context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
+            state.Sources <- Some {
+                Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
+                ChatCleanup = AgentOutbox.Create(state.CleanupCapacity, chat.Ref)
+                SystemCleanup = AgentOutbox.Create(state.CleanupCapacity, system.Ref)
+                PresenceCleanup = AgentOutbox.Create(state.CleanupCapacity, presence.Ref)
+                GroundMarksCleanup = AgentOutbox.Create(state.CleanupCapacity, marks.Ref)
+                GuildsCleanup = AgentOutbox.Create(state.CleanupCapacity, guilds.Ref)
+                ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
+            }
+            state.Transport.SetReadyHandler(fun () ->
+                context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentTryDeliveryResult.Posted)
+            schedule options state context
+            state.Logger.LogDebug("Server runtime started: up to {MaxSessions} connections, open timeout {OpenTimeoutMs} ms",
+                                  options.MaxSessions, options.OpenTimeoutMs)
+    }
 
     let private stopped (options: ServerRuntimeOptions) state context connectionId (outcome: Result<unit, exn>) =
         match SessionTable.find connectionId state.Table with
@@ -694,7 +714,7 @@ module ServerRuntime =
         if state.Stopping && time >= state.StopDeadline && (state.Table.Connections.Count > 0 || not sourcesStopped) then
             fail state context "Server shutdown timed out."
 
-    let private finish state (context: AgentContext<ServerRuntimeMessage>) =
+    let private finish state (context: ReliableAgentContext<ServerRuntimeMessage>) =
         if state.Stopping && (state.Table.Connections.Values |> Seq.forall SessionTable.domainClean) then
             match state.Sources with
             | None -> context.Complete() |> ignore
@@ -727,10 +747,10 @@ module ServerRuntime =
                 | Some sources, SessionSource.Guilds -> sources.GuildsStopped <- true
                 | Some _, (SessionSource.GuildStorage | SessionSource.Authentication) | None, _ -> ()
 
-    let private handle (options: ServerRuntimeOptions) authenticator state (context: AgentContext<ServerRuntimeMessage>) message = task {
+    let private handle (options: ServerRuntimeOptions) authenticator state (context: ReliableAgentContext<ServerRuntimeMessage>) message = task {
         match message with
         | ServerRuntimeMessage.Start ->
-            if state.Sources.IsNone && not state.Stopping then initialize options authenticator state context
+            if state.Sources.IsNone && not state.Stopping then do! initialize options authenticator state context
         | ServerRuntimeMessage.TransportReady -> drain options authenticator state context
         | ServerRuntimeMessage.Tick notification ->
             let started = Stopwatch.GetTimestamp()
@@ -792,7 +812,7 @@ module ServerRuntime =
             reply.Reply [
                 for entry in state.Table.Connections.Values do
                     { ConnectionId = entry.ConnectionId; Address = entry.Address; Proxy = entry.Proxy; PlayerId = entry.PlayerId; Phase = entry.Phase
-                      ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.Ref }
+                      ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.GeneralRef }
             ]
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
@@ -808,7 +828,7 @@ module ServerRuntime =
         | ServerRuntimeMessage.FindPlayer(connectionId, reply) ->
             let player =
                 SessionTable.find connectionId state.Table
-                |> Option.bind (fun entry -> if entry.Phase = RuntimeSessionPhase.Ready then entry.Child |> Option.map _.Ref else None)
+                |> Option.bind (fun entry -> if entry.Phase = RuntimeSessionPhase.Ready then entry.Child |> Option.map _.GeneralRef else None)
             reply.Reply player
 
         finish state context
@@ -832,19 +852,24 @@ module ServerRuntime =
     let private startWithStorage storage (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
               (guilds: GuildPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let options = settings.Runtime
-        let state = {
-            Table = SessionTable.create pseudonyms; RouteScratch = Array.empty
-            Settings = settings; Moderation = moderation; Persistence = persistence; Guilds = guilds
-            Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
-            Transport = transport; Logger = logger
-            Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; LastTick = 0L; StopDeadline = 0L
-            AddressBans = []
-            Phantoms = storage |> Option.map (fun (storage, http) -> PhantomAgent.create settings.Phantoms storage http transport.Send)
-        }
         let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
-        let agent = Agent.Start(agentOptions, handle options authenticator state, isControl = isControl)
-        agent.TryPost ServerRuntimeMessage.Start |> ignore
-        agent
+        match Agent<ServerRuntimeMessage>.TryCheckReliable(agentOptions, isControl = isControl),
+              AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.PollIntervalMs)),
+              AgentDeliveryCapacity.TryCreate options.MaxSessions with
+        | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+        | Ok configuration, Ok interval, Ok cleanup ->
+            let state = {
+                Table = SessionTable.create pseudonyms; RouteScratch = Array.empty
+                Settings = settings; Moderation = moderation; Persistence = persistence; Guilds = guilds
+                Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
+                Transport = transport; Logger = logger
+                Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; TickInterval = interval; CleanupCapacity = cleanup; LastTick = 0L; StopDeadline = 0L
+                AddressBans = []
+                Phantoms = storage |> Option.map (fun (storage, http) -> PhantomAgent.create settings.Phantoms storage http transport.Send)
+            }
+            let agent = configuration.Start(handle options authenticator state)
+            agent.TryPost ServerRuntimeMessage.Start |> ignore
+            Ok agent
 
     let start settings moderation pseudonyms persistence guilds authenticator transport logger =
         startWithStorage None settings moderation pseudonyms persistence guilds authenticator transport logger

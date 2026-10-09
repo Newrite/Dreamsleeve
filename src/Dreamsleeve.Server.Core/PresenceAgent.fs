@@ -49,6 +49,7 @@ module PresenceAgent =
         mutable LastKind: uint64
         /// Members removed so far; a tick filters its shared parts only after one.
         mutable Removals: int64
+        TickInterval: AgentTickerInterval
         mutable Ticker: AgentTicker option
         mutable LastFlush: int64
         VisibilityDistanceSquared: double
@@ -180,7 +181,7 @@ module PresenceAgent =
             notifyHost state context (SessionHostCommand.SlowConsumer subscriber.ConnectionId)
             removed
 
-    let private broadcastLeft state (context: AgentContext<PresenceCommand>) playerId =
+    let private broadcastLeft state (context: ReliableAgentContext<PresenceCommand>) playerId =
         // A failed recipient can cause another Left. Each removed member contributes
         // at most one delta, and no healthy recipient waits for the slow one.
         let pending = Queue<PlayerId>()
@@ -437,7 +438,7 @@ module PresenceAgent =
 
     let private schedule (config: PresenceOptions) state context =
         if state.Ticker.IsNone then
-            state.Ticker <- Some (AgentTicker.start (TimeSpan.FromMilliseconds(int64 config.ReplicationIntervalMs)) context PresenceCommand.Flush)
+            state.Ticker <- Some (AgentTicker.start state.TickInterval context PresenceCommand.Flush)
 
     let private update config state context connectionId (value: PlayerSnapshot) =
         match state.Members.TryGetValue connectionId with
@@ -451,7 +452,7 @@ module PresenceAgent =
             state.Dirty.Add value.Identity.PlayerId |> ignore
             schedule config state context
 
-    let private detach state (context: AgentContext<PresenceCommand>) (request: SessionDetach) =
+    let private detach state (context: ReliableAgentContext<PresenceCommand>) (request: SessionDetach) =
         match remove state request.ConnectionId with
         | Some playerId -> broadcastLeft state context playerId
         | None -> ()
@@ -460,7 +461,7 @@ module PresenceAgent =
         | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
         | AgentTryDeliveryResult.Full -> context.Abort()
 
-    let private handle config state (context: AgentContext<PresenceCommand>) command = task {
+    let private handle config state (context: ReliableAgentContext<PresenceCommand>) command = task {
         match command with
         | PresenceCommand.Join subscription ->
             join state context subscription
@@ -492,20 +493,24 @@ module PresenceAgent =
 
     /// The options come checked by GameSettings.create.
     let private startWithObservation mode (config: PresenceOptions) (host: ReliableAgentRef<SessionHostCommand>) =
-        let state = {
-            Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
-            Candidates = HashSet(); Movements = ResizeArray()
-            LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
-            Kinds = Dictionary(); Unused = HashSet(); KindIds = None; LastKind = 0UL; Removals = 0L
-            VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
-            Ticker = None; LastFlush = 0L; Host = AgentOutbox(config.MaxControlDeliveries, host)
-            PhantomObservation = mode; PhantomObservations = ResizeArray()
-        }
-        let options = {
-            AgentOptions.create "presence" with
-                Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
-        }
-        Agent.Start(options, handle config state, isControl = isControl)
+        match AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 config.ReplicationIntervalMs)),
+              AgentOutbox<SessionHostCommand>.TryCreate(config.MaxControlDeliveries, host) with
+        | Error error, _ | _, Error error -> Error error
+        | Ok interval, Ok hostOutbox ->
+            let state = {
+                Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
+                Candidates = HashSet(); Movements = ResizeArray()
+                LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
+                Kinds = Dictionary(); Unused = HashSet(); KindIds = None; LastKind = 0UL; Removals = 0L
+                VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
+                Ticker = None; TickInterval = interval; LastFlush = 0L; Host = hostOutbox
+                PhantomObservation = mode; PhantomObservations = ResizeArray()
+            }
+            let options = {
+                AgentOptions.create "presence" with
+                    Mailbox = AgentMailbox.boundedWithControl config.MailboxCapacity config.ControlReserve
+            }
+            Agent.TryStartReliable(options, handle config state, isControl = isControl)
 
     let start config host = startWithObservation PhantomObservationMode.Disabled config host
     let startObserved mode config host = startWithObservation mode config host

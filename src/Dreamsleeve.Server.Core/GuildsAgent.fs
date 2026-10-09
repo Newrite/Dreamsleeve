@@ -14,6 +14,8 @@ open Dreamsleeve.Server.Domain
 module GuildsAgent =
     type private State = {
         Options: GuildOptions
+        HistoryCapacity: ChatHistoryCapacity
+        TickInterval: AgentTickerInterval
         Book: GuildBook
         Moderation: ModerationRules
         /// Moderated profile of every member and invited player, for the wire
@@ -39,7 +41,7 @@ module GuildsAgent =
 
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
-    let private persist state (context: AgentContext<GuildCommand>) write =
+    let private persist state (context: ReliableAgentContext<GuildCommand>) write =
         if state.Writer.TrySend(context, write) then true
         else
             state.Logger.LogError("Guild persistence queue is full; stopping the owner")
@@ -155,12 +157,10 @@ module GuildsAgent =
         match state.Chats.TryGetValue guild.Id with
         | true, chat -> chat
         | false, _ ->
-            match Chat.create (ChatChannels.ofGuild guild.Id) ChatChannelKind.Guild state.Options.HistoryCapacity with
-            | Error error -> invalidOp $"Guild chat cannot start: %A{error}"
-            | Ok chat ->
-                for membership in guild.Members do Chat.join membership.Player chat |> ignore
-                state.Chats[guild.Id] <- chat
-                chat
+            let chat = Chat.createGuild state.HistoryCapacity guild.Id
+            for membership in guild.Members do Chat.join membership.Player chat |> ignore
+            state.Chats[guild.Id] <- chat
+            chat
 
     let private joinChat state guild playerId =
         match state.Chats.TryGetValue guild with
@@ -417,7 +417,7 @@ module GuildsAgent =
             deliver state context subscription (GuildEvent.Snapshot(snapshotOf state playerId (now ())))
             announcePresence state context playerId
 
-    let private detach state (context: AgentContext<GuildCommand>) (request: SessionDetach) =
+    let private detach state (context: ReliableAgentContext<GuildCommand>) (request: SessionDetach) =
         match state.Subscribers.TryGetValue request.ConnectionId with
         | true, subscriber ->
             let playerId = subscriber.Profile.PlayerId
@@ -494,9 +494,9 @@ module GuildsAgent =
 
     let private schedule state context =
         if state.Ticker.IsNone then
-            state.Ticker <- Some(AgentTicker.start (TimeSpan.FromMilliseconds(float state.Options.InviteCheckIntervalMs)) context GuildCommand.Expire)
+            state.Ticker <- Some(AgentTicker.start state.TickInterval context GuildCommand.Expire)
 
-    let private handle state (context: AgentContext<GuildCommand>) command = task {
+    let private handle state (context: ReliableAgentContext<GuildCommand>) command = task {
         schedule state context
         match command with
         | GuildCommand.Join subscription -> join state context subscription
@@ -515,39 +515,57 @@ module GuildsAgent =
         | GuildCommand.Join _ | GuildCommand.Expire _ | GuildCommand.Detach _ -> true
         | GuildCommand.Act _ | GuildCommand.Publish _ | GuildCommand.Remove _ | GuildCommand.Rename _ | GuildCommand.Admin _ -> false
 
+    [<RequireQualifiedAccess>]
+    type StartError =
+        | StoredData of string
+        | Chat of DomainError
+        | Agent of AgentStartError
+
     /// The options and limits come checked by GameSettings.create; the stored
     /// guilds stay as they are, limits lowered since bind nobody.
     let start (options: GuildOptions) (limits: GuildLimits) (rules: ModerationRules) (chatRate: RateLimitOptions)
               (persistence: GuildPersistence) (host: ReliableAgentRef<SessionHostCommand>) (logger: ILogger) =
-        let highest = persistence.Loaded |> List.fold (fun highest guild -> max highest (GuildId.value guild.Id)) 0UL
-        let names = persistence.Loaded |> List.map (fun guild -> GuildName.key guild.Name)
-        if highest >= max persistence.NextId 1UL then
-            Error(sprintf "Stored guild ID %d is not below the next ID %d." highest persistence.NextId)
-        elif (List.distinct names).Length <> names.Length then Error "Stored guilds repeat a name."
-        else
-            let state = {
-                Options = options
-                Book = GuildBook.restore limits persistence.Loaded
-                Moderation = rules
-                Profiles = Dictionary()
-                Chats = Dictionary()
-                NextMessageIds = Dictionary()
-                Subscribers = Dictionary()
-                Online = Dictionary()
-                Failed = HashSet()
-                Senders = RateLimit.create chatRate
-                Writer = AgentOutbox(options.MaxPendingWrites, persistence.Writer)
-                Host = AgentOutbox(options.MaxControlDeliveries, host)
-                Logger = logger
-                NextId = max persistence.NextId 1UL
-                Ticker = None
-            }
-            for profile in persistence.Profiles do state.Profiles[profile.PlayerId] <- profile
-            let settings = {
-                AgentOptions.create "guilds" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
-            }
-            let agent = Agent.Start(settings, handle state, isControl = isControl)
-            let tick = System.Diagnostics.Stopwatch.GetTimestamp()
-            agent.TryPost(GuildCommand.Expire { DueTimestamp = tick; QueuedTimestamp = tick }) |> ignore
-            Ok agent
+        let settings = {
+            AgentOptions.create "guilds" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+        }
+        let construction =
+            match Agent<GuildCommand>.TryCheckReliable(settings, isControl = isControl),
+                  AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.InviteCheckIntervalMs)),
+                  AgentOutbox<GuildWrite>.TryCreate(options.MaxPendingWrites, persistence.Writer),
+                  AgentOutbox<SessionHostCommand>.TryCreate(options.MaxControlDeliveries, host) with
+            | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error (StartError.Agent error)
+            | Ok configuration, Ok interval, Ok writerOutbox, Ok hostOutbox -> Ok (configuration, interval, writerOutbox, hostOutbox)
+        construction
+        |> Result.bind (fun (configuration, interval, writerOutbox, hostOutbox) ->
+            ChatHistoryCapacity.create options.HistoryCapacity
+            |> Result.mapError StartError.Chat
+            |> Result.bind (fun history ->
+                let highest = persistence.Loaded |> List.fold (fun highest guild -> max highest (GuildId.value guild.Id)) 0UL
+                let names = persistence.Loaded |> List.map (fun guild -> GuildName.key guild.Name)
+                if highest >= max persistence.NextId 1UL then
+                    Error(StartError.StoredData(sprintf "Stored guild ID %d is not below the next ID %d." highest persistence.NextId))
+                elif (List.distinct names).Length <> names.Length then Error (StartError.StoredData "Stored guilds repeat a name.")
+                else
+                    let state = {
+                        Options = options; HistoryCapacity = history; TickInterval = interval
+                        Book = GuildBook.restore limits persistence.Loaded
+                        Moderation = rules
+                        Profiles = Dictionary()
+                        Chats = Dictionary()
+                        NextMessageIds = Dictionary()
+                        Subscribers = Dictionary()
+                        Online = Dictionary()
+                        Failed = HashSet()
+                        Senders = RateLimit.create chatRate
+                        Writer = writerOutbox
+                        Host = hostOutbox
+                        Logger = logger
+                        NextId = max persistence.NextId 1UL
+                        Ticker = None
+                    }
+                    for profile in persistence.Profiles do state.Profiles[profile.PlayerId] <- profile
+                    let agent = configuration.Start(handle state)
+                    let tick = System.Diagnostics.Stopwatch.GetTimestamp()
+                    agent.TryPost(GuildCommand.Expire { DueTimestamp = tick; QueuedTimestamp = tick }) |> ignore
+                    Ok agent))

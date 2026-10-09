@@ -384,10 +384,14 @@ module private AdmissionTasks =
         | AgentPostResult.Dropped -> dropped
         | AgentPostResult.Full -> full
 
+    let private delivered = Task.FromResult AgentDeliveryResult.Posted
+    let private deliveryClosed = Task.FromResult AgentDeliveryResult.Closed
+    let private deliveryCanceled = Task.FromResult AgentDeliveryResult.Canceled
+
     let delivery = function
-        | AgentDeliveryResult.Posted -> Task.FromResult AgentDeliveryResult.Posted
-        | AgentDeliveryResult.Closed -> Task.FromResult AgentDeliveryResult.Closed
-        | AgentDeliveryResult.Canceled -> Task.FromResult AgentDeliveryResult.Canceled
+        | AgentDeliveryResult.Posted -> delivered
+        | AgentDeliveryResult.Closed -> deliveryClosed
+        | AgentDeliveryResult.Canceled -> deliveryCanceled
 
     let generalTryDelivery = function
         | AgentTryDeliveryResult.Posted -> AgentPostResult.Posted
@@ -527,8 +531,9 @@ and [<Sealed>] ReliableAgentContext<'Message> internal (context: AgentContext<'M
                 with error -> return Error error
             }
             if not token.IsCancellationRequested then
-                let! _ = address.PostAsync(toMessage result, cancellationToken = token)
-                ()
+                let! delivered = address.PostAsync(toMessage result, cancellationToken = token)
+                match delivered with
+                | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
         }
         this.StartDelivery deliver
 
@@ -1105,15 +1110,24 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
         checkOptions options handler isControl
         |> Result.map (fun checkedOptions -> AgentPlan<'Message>(fun () -> new Agent<'Message>(checkedOptions, fun context _ message -> handler context message)))
 
-    static member TryPrepareReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>,
-                                     ?isControl: 'Message -> bool) =
-        checkOptions options handler isControl
+    /// Preflight actual derived configuration before starting dependent workers.
+    /// The resulting token accepts only trusted local handlers; raw handlers use TryStartReliable.
+    static member TryCheckReliable(options: AgentOptions, ?isControl: 'Message -> bool) =
+        checkOptions options (fun () -> ()) isControl
         |> Result.bind (fun checkedOptions ->
             if not checkedOptions.IsReliable then Error AgentStartError.DroppingMailbox
-            else
-                Ok (ReliableAgentPlan<'Message>(fun () ->
-                    let agent = new Agent<'Message>(checkedOptions, fun _ context message -> handler context message)
-                    new ReliableAgent<'Message>(agent, agent.ReliableAddress))))
+            else Ok (ReliableAgentConfiguration<'Message> checkedOptions))
+
+    static member internal StartReliableChecked(checkedOptions: CheckedAgentOptions<'Message>, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>) =
+        let agent = new Agent<'Message>(checkedOptions, fun _ context message -> handler context message)
+        new ReliableAgent<'Message>(agent, agent.ReliableAddress)
+
+    static member TryPrepareReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>,
+                                     ?isControl: 'Message -> bool) =
+        if isNull (box handler) then Error (AgentStartError.NullArgument "handler")
+        else
+            Agent<'Message>.TryCheckReliable(options, ?isControl = isControl)
+            |> Result.map (fun configuration -> ReliableAgentPlan<'Message>(fun () -> configuration.Start handler))
 
     static member TryStartReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>,
                                    ?isControl: 'Message -> bool) =
@@ -1132,6 +1146,8 @@ and [<Sealed>] AgentPlan<'Message> internal (start: unit -> Agent<'Message>) =
 /// A non-dropping facade over one Agent owner; it adds no queue or lifecycle state.
 and [<Sealed>] ReliableAgent<'Message> internal (agent: Agent<'Message>, address: ReliableAgentRef<'Message>) =
     member _.Ref = address
+    member _.GeneralRef = agent.Ref
+    member _.Owner = agent
     member _.Name = agent.Name
     member _.Completion = agent.Completion
     member _.QueueLength = agent.QueueLength
@@ -1155,6 +1171,12 @@ and [<Sealed>] ReliableAgent<'Message> internal (agent: Agent<'Message>, address
 
 and [<Sealed>] ReliableAgentPlan<'Message> internal (start: unit -> ReliableAgent<'Message>) =
     member _.Start() = start ()
+
+/// Checked reusable configuration for resource-ordering preflight. Start is a trusted
+/// construction path for local handlers already known nonnull, not a raw input boundary.
+and [<Sealed>] ReliableAgentConfiguration<'Message> internal (checkedOptions: CheckedAgentOptions<'Message>) =
+    member _.Start(handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>) =
+        Agent<'Message>.StartReliableChecked(checkedOptions, handler)
 
 /// <summary>
 /// Represents a state transition returned by a stateful agent's command handler.

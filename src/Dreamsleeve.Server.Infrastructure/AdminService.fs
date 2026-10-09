@@ -120,7 +120,7 @@ module AdminService =
 
     type private State = {
         Pending: Dictionary<Guid, Pending>
-        Workers: Agent<AdminWorkRequest>
+        Workers: ReliableAgent<AdminWorkRequest>
         Outbox: AgentOutbox<AdminWorkRequest>
         Attempts: Dictionary<string, struct (DateTimeOffset * int)>
         mutable Codes: AdminCodes
@@ -260,7 +260,7 @@ module AdminService =
         return { OperationId = request.OperationId; Result = result }
     }
 
-    let private completeIfStopped state (context: AgentContext<AdminMessage>) =
+    let private completeIfStopped state (context: ReliableAgentContext<AdminMessage>) =
         if state.Stopping && state.Pending.Count = 0 then
             if state.WorkersStopped then context.Complete() |> ignore
             else state.Workers.Complete() |> ignore
@@ -324,7 +324,7 @@ module AdminService =
         | AdminCommand.SearchPlayers _ | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _
         | AdminCommand.PlayerSanctions _ | AdminCommand.ActiveSanctions -> Ok ValueNone
 
-    let private access options clock state (context: AgentContext<AdminMessage>) command (reply: ReplyChannel<Result<AdminReply, AdminServiceError>>) =
+    let private access options clock state (context: ReliableAgentContext<AdminMessage>) command (reply: ReplyChannel<Result<AdminReply, AdminServiceError>>) =
         if state.Stopping then reply.Reply(Error AdminServiceError.Unavailable)
         elif state.Exclusive || (exclusive command && state.Pending.Count <> 0) || state.Pending.Count >= options.MaxConcurrentOperations then
             reply.Reply(Error AdminServiceError.Busy)
@@ -335,7 +335,7 @@ module AdminService =
                 let operationId = Guid.NewGuid()
                 let request = {
                     OperationId = operationId; Command = command; Redeemed = redeemed
-                    ReplyTo = context.Ref.TryReliable().Value.Map AdminMessage.Finished
+                    ReplyTo = context.Ref.Map AdminMessage.Finished
                 }
                 state.Exclusive <- exclusive command
                 state.Pending.Add(operationId, { Command = command; Reply = reply })
@@ -348,7 +348,7 @@ module AdminService =
     let private logAction (logger: ILogger) (admin: AdminAccount) action (target: string) =
         logger.LogInformation("Admin {Admin}: {Action} {Target}", Username.value admin.Username, AdminAction.key action, target)
 
-    let private finished options (clock: TimeProvider) (logger: ILogger) state (context: AgentContext<AdminMessage>) (completion: AdminWorkReply) =
+    let private finished options (clock: TimeProvider) (logger: ILogger) state (context: ReliableAgentContext<AdminMessage>) (completion: AdminWorkReply) =
         match state.Pending.TryGetValue completion.OperationId with
         | false, _ -> ()
         | true, pending ->
@@ -382,7 +382,7 @@ module AdminService =
             pending.Reply.Reply result
             completeIfStopped state context
 
-    let private handle options clock (logger: ILogger) state (context: AgentContext<AdminMessage>) message = task {
+    let private handle options clock (logger: ILogger) state (context: ReliableAgentContext<AdminMessage>) message = task {
         match message with
         | AdminMessage.Start -> context.Own(state.Workers, AdminMessage.WorkersStopped)
         | AdminMessage.Access(command, reply) -> access options clock state context command reply
@@ -407,23 +407,31 @@ module AdminService =
         | AdminMessage.Start | AdminMessage.Finished _ | AdminMessage.WorkersStopped _ | AdminMessage.Stop -> true
         | AdminMessage.Access _ -> false
 
-    /// The options come checked with the configuration.
+    /// Check both mailboxes and the outstanding operation budget before starting workers.
     let start options database (logger: ILogger) (clock: TimeProvider) =
-        let dummyHash = (Secrets.hasher options.PasswordIterations).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
-        let workerOptions = { AgentOptions.create "admin-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
-        let work = AgentReplyDispatcher.createAsyncHandler options.MaxConcurrentOperations (fun (request: AdminWorkRequest) -> request.ReplyTo)
-                       (execute options database dummyHash clock logger)
-        let workers = Agent.Start(workerOptions, work)
-        let state = {
-            Pending = Dictionary(); Workers = workers
-            Outbox = AgentOutbox(options.MaxConcurrentOperations, workers.Ref.TryReliable().Value)
-            Attempts = Dictionary(); Codes = AdminCodes.empty
-            Exclusive = false; Stopping = false; WorkersStopped = false
-        }
-        let settings = {
-            AgentOptions.create "admin" with
-                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
-        }
-        let agent = Agent.Start(settings, handle options clock logger state, isControl = isControl)
-        agent.TryPost AdminMessage.Start |> ignore
-        agent
+        if int64 options.MaxConcurrentOperations + 2L > int64 Int32.MaxValue then
+            Error (AgentStartError.CapacityOverflow(options.MaxConcurrentOperations, 2))
+        else
+            let workerOptions = { AgentOptions.create "admin-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+            let settings = {
+                AgentOptions.create "admin" with
+                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
+            }
+            match Agent<AdminWorkRequest>.TryCheckReliable workerOptions,
+                  Agent<AdminMessage>.TryCheckReliable(settings, isControl = isControl),
+                  AgentDeliveryCapacity.TryCreate options.MaxConcurrentOperations with
+            | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+            | Ok worker, Ok owner, Ok operations ->
+                let dummyHash = (Secrets.hasher options.PasswordIterations).HashPassword(null, Convert.ToBase64String(RandomNumberGenerator.GetBytes 32))
+                let work = AgentReplyDispatcher.createAsyncHandler operations (fun (request: AdminWorkRequest) -> request.ReplyTo)
+                               (execute options database dummyHash clock logger)
+                let workers = worker.Start work
+                let state = {
+                    Pending = Dictionary(); Workers = workers
+                    Outbox = AgentOutbox.Create(operations, workers.Ref)
+                    Attempts = Dictionary(); Codes = AdminCodes.empty
+                    Exclusive = false; Stopping = false; WorkersStopped = false
+                }
+                let agent = owner.Start(handle options clock logger state)
+                agent.TryPost AdminMessage.Start |> ignore
+                Ok agent
