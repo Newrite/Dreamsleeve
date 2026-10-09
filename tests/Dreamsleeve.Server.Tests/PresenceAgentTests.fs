@@ -12,28 +12,49 @@ open BackgroundTests
 
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
-    PresenceCommand.Flush { DueTimestamp = now; QueuedTimestamp = now }
+    PresenceCommand.Flush {
+        DueTimestamp = now
+        QueuedTimestamp = now
+    }
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
-let private config = { MailboxCapacity = 4; ControlReserve = 2; MaxControlDeliveries = 4; ReplicationIntervalMs = 60000; VisibilityDistance = 8192.0f }
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
+let private config = {
+    MailboxCapacity = 4
+    ControlReserve = 2
+    MaxControlDeliveries = 4
+    ReplicationIntervalMs = 60000
+    VisibilityDistance = 8192.0f
+}
+
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
         (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok) NameColor.unknown
+
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
 }
+
 let private receive (output: Channel<'T>) = output.Reader.ReadAsync().AsTask().WaitAsync guard
+
 let private post (agent: Agent<'T>) value = task {
     let! result = agent.PostAsync value
     equal AgentPostResult.Posted result
 }
+
 let private stop (agent: Agent<'T>) = task {
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
 }
+
 let private subscription number (agent: Agent<PresenceEvent>) = {
-    ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile number)); Events = agent.Ref.TryReliable().Value
+    ConnectionId = Guid.NewGuid()
+    Snapshot = Player.snapshot (Player.create (profile number))
+    Events = agent.Ref.TryReliable().Value
 }
+
 let private snapshot = function
     | PresenceEvent.Snapshot(profiles, _) -> profiles
     | other -> failwithf "Expected presence snapshot: %A" other
@@ -48,27 +69,51 @@ let private joinedEvent player = changedBy { PresenceChange.empty with Joined = 
 let private updatedEvent player = changedBy { PresenceChange.empty with Updated = [ player ] }
 let private leftEvent playerId = changedBy { PresenceChange.empty with Left = [ playerId ] }
 let private detailsEvent playerId previous latest =
-    changedBy { PresenceChange.empty with Metadata = [ { PlayerId = playerId; ActorValues = ValueNone; Details = DetailsPatch.between previous latest } ] }
+    changedBy {
+        PresenceChange.empty with
+            Metadata = [ {
+                PlayerId = playerId
+                ActorValues = ValueNone
+                Details = DetailsPatch.between previous latest
+            } ]
+    }
 
 let private actorKey value = ActorValueKey.create 128 value |> ok
 let private actorName value = ActorValueName.create 64 value |> ok
 let private reading name current = ActorValueInfo.create (actorName name) (ActorValueState.resource current 100)
-let private kind id key name : ActorValueKind = { Id = id; Key = actorKey key; DisplayName = actorName name }
+let private kind id key name : ActorValueKind = {
+    Id = id
+    Key = actorKey key
+    DisplayName = actorName name
+}
+
 let private idsOf (kinds: ActorValueKind list) = ActorValueKindIndex.Create kinds
+
 let private valuesPatch playerId removed set : MetadataPatch =
-    { PlayerId = playerId; Details = ValueNone; ActorValues = ValueSome { Removed = removed; Set = set } }
+    {
+        PlayerId = playerId
+        Details = ValueNone
+        ActorValues = ValueSome {
+            Removed = removed
+            Set = set
+        }
+    }
 
 type private SlowMessage<'T> =
     | Hold of TaskCompletionSource<unit> * TaskCompletionSource<unit>
     | Value of 'T
     | Filler
+
 let private slow (events: Channel<'T>) (context: AgentContext<SlowMessage<'T>>) = function
     | Hold(entered, release) -> task {
         entered.TrySetResult() |> ignore
         do! release.Task.WaitAsync context.CancellationToken
       }
-    | Value event -> task { check (events.Writer.TryWrite event) "Test output closed." }
+    | Value event -> task {
+        check (events.Writer.TryWrite event) "Test output closed."
+      }
     | Filler -> Task.FromResult()
+
 let private block (agent: Agent<SlowMessage<'T>>) = task {
     let entered, release = gate<unit>(), gate<unit>()
     do! post agent (Hold(entered, release))
@@ -107,9 +152,16 @@ let private withPresenceUsing settings initialize run = task {
     let! _ = receive bobEvents
     let! _ = receive aliceEvents
     do! run {
-        Presence = presence; Host = hostEvents; Alice = a; Bob = b; Late = subscription 3UL late
-        AliceEvents = aliceEvents; BobEvents = bobEvents; LateEvents = lateEvents
-        Cleanup = cleanup.Ref.TryReliable().Value; Acknowledgments = acknowledgments
+        Presence = presence
+        Host = hostEvents
+        Alice = a
+        Bob = b
+        Late = subscription 3UL late
+        AliceEvents = aliceEvents
+        BobEvents = bobEvents
+        LateEvents = lateEvents
+        Cleanup = cleanup.Ref.TryReliable().Value
+        Acknowledgments = acknowledgments
     }
     do! stop presence
 }
@@ -175,7 +227,8 @@ let private view fixture subscription events = task {
         match event with
         | PresenceEvent.Snapshot(players, _) -> result <- Some players
         | PresenceEvent.Moved movements ->
-            for movement in movements do changes.Add(PresenceEvent.Moved [|movement|])
+            for movement in movements do
+                changes.Add(PresenceEvent.Moved [|movement|])
         | other -> changes.Add other
     return List.ofSeq changes, result.Value
 }
@@ -193,7 +246,11 @@ let private spaces events =
         | PresenceEvent.Changed _ | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> None)
 
 let private changeCount events =
-    events |> List.filter (function PresenceEvent.Changed _ -> true | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> false) |> List.length
+    events
+    |> List.filter (function
+        | PresenceEvent.Changed _ -> true
+        | PresenceEvent.Snapshot _ | PresenceEvent.Moved _ -> false)
+    |> List.length
 
 let private flushViewsNow fixture = task {
     do! post fixture.Presence (tick ())
@@ -211,12 +268,21 @@ let private observationModeCase mode = case $"dense128 phantom observation mode 
             | PhantomObservation.Batch values ->
                 largestArray <- max largestArray values.Length
                 let mutable facts = 0
-                for value in values do facts <- facts + visit value
+                for value in values do
+                    facts <- facts + visit value
                 facts
-            | PhantomObservation.Member _ -> members <- members + 1; 1
-            | PhantomObservation.Departed _ -> departed <- departed + 1; 1
-            | PhantomObservation.View _ -> views <- views + 1; 1
-            | PhantomObservation.Hidden _ -> hidden <- hidden + 1; 1
+            | PhantomObservation.Member _ ->
+                members <- members + 1
+                1
+            | PhantomObservation.Departed _ ->
+                departed <- departed + 1
+                1
+            | PhantomObservation.View _ ->
+                views <- views + 1
+                1
+            | PhantomObservation.Hidden _ ->
+                hidden <- hidden + 1
+                1
         visit observation
     use host = TestAgent.Start(AgentOptions.create "phantom-observation-host", fun _ command ->
         match command with
@@ -226,20 +292,33 @@ let private observationModeCase mode = case $"dense128 phantom observation mode 
         Task.FromResult())
     use events = TestAgent.Start(AgentOptions.create "dense-presence-events", fun _ (_: PresenceEvent) -> Task.FromResult())
     use cleanup = TestAgent.Start(AgentOptions.create "dense-presence-cleanup", fun _ (_: Guid) -> Task.FromResult())
-    let settings = { config with MailboxCapacity = 512; ControlReserve = 128; MaxControlDeliveries = 1024 }
+    let settings = {
+        config with
+            MailboxCapacity = 512
+            ControlReserve = 128
+            MaxControlDeliveries = 1024
+    }
     use presence = PresenceAgent.startObserved mode settings (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
     let subscriptions = Array.init 128 (fun index ->
         let value = subscription (uint64 index + 1UL) events
         { value with Snapshot = character value |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome(location (float32 index)))) |> Player.snapshot })
-    for value in subscriptions do do! post presence (PresenceCommand.Join value)
+    for value in subscriptions do
+        do! post presence (PresenceCommand.Join value)
     do! post presence (tick())
     // Move every endpoint to exercise a full dense authority/distance turn.
     for index in 0 .. subscriptions.Length - 1 do
         let previous = subscriptions[index]
-        let changed = { previous.Snapshot with Location = ValueSome(location (float32 index + 1.0f)); MovementContext = if index = 0 then 2UL else 1UL }
+        let changed = {
+            previous.Snapshot with
+                Location = ValueSome(location (float32 index + 1.0f))
+                MovementContext = if index = 0 then 2UL else 1UL
+        }
         do! post presence (PresenceCommand.Update(previous.ConnectionId, changed))
     do! post presence (tick())
-    do! post presence (PresenceCommand.Detach { ConnectionId = subscriptions[0].ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+    do! post presence (PresenceCommand.Detach {
+        ConnectionId = subscriptions[0].ConnectionId
+        ReplyTo = cleanup.Ref.TryReliable().Value
+    })
     do! stop presence
     do! stop host
     do! stop events
@@ -247,11 +326,19 @@ let private observationModeCase mode = case $"dense128 phantom observation mode 
     equal 0 closes
     match mode with
     | PhantomObservationMode.Disabled ->
-        equal 0 members; equal 0 departed; equal 0 views; equal 0 hidden; equal 0 largestArray
+        equal 0 members
+        equal 0 departed
+        equal 0 views
+        equal 0 hidden
+        equal 0 largestArray
     | PhantomObservationMode.Membership ->
-        equal 256 members; equal 1 departed; equal 0 views; equal 0 hidden
+        equal 256 members
+        equal 1 departed
+        equal 0 views
+        equal 0 hidden
     | PhantomObservationMode.Full ->
-        equal 256 members; equal 1 departed
+        equal 256 members
+        equal 1 departed
         equal (2 * 128 * 127) views // Initial membership and one movement turn; idle ticks emit no duplicate views.
         check (largestTurn >= 128 * 127) "A dense authority turn remains one atomic host message."
         check (largestArray <= 4096) "Batch reference arrays stay off the large object heap."
@@ -272,7 +359,10 @@ let tests = testList "PresenceAgent" [
         use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a, b = subscription 1UL alice, subscription 2UL bob
-        let detach = { ConnectionId = a.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value }
+        let detach = {
+            ConnectionId = a.ConnectionId
+            ReplyTo = cleanup.Ref.TryReliable().Value
+        }
         do! post presence (PresenceCommand.Join a)
         let! first = receive aliceEvents
         equal [a.Snapshot] (snapshot first)
@@ -300,7 +390,11 @@ let tests = testList "PresenceAgent" [
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let old = subscription 1UL player
         let replacement = { old with ConnectionId = Guid.NewGuid() }
-        let detach connectionId = post presence (PresenceCommand.Detach { ConnectionId = connectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+        let detach connectionId =
+            post presence (PresenceCommand.Detach {
+                ConnectionId = connectionId
+                ReplyTo = cleanup.Ref.TryReliable().Value
+            })
         do! post presence (PresenceCommand.Join old)
         let! _ = receive events
         do! post presence (PresenceCommand.Join replacement)
@@ -329,7 +423,11 @@ let tests = testList "PresenceAgent" [
         use newcomer = TestAgent.Start(AgentOptions.create "newcomer", collect nextEvents)
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a, n = subscription 1UL fast, subscription 3UL newcomer
-        let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
+        let s = {
+            ConnectionId = Guid.NewGuid()
+            Snapshot = Player.snapshot (Player.create (profile 2UL))
+            Events = receiver.Ref.TryReliable().Value.Map Value
+        }
         do! post presence (PresenceCommand.Join a)
         let! _ = receive fastEvents
         do! post presence (PresenceCommand.Join s)
@@ -365,11 +463,18 @@ let tests = testList "PresenceAgent" [
         do! post presence (PresenceCommand.Join(subscription 1UL healthy))
         let! _ = receive events
         let! release = block receiver
-        let rejected = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
+        let rejected = {
+            ConnectionId = Guid.NewGuid()
+            Snapshot = Player.snapshot (Player.create (profile 2UL))
+            Events = receiver.Ref.TryReliable().Value.Map Value
+        }
         do! post presence (PresenceCommand.Join rejected)
         let! failed = receive hostEvents
         equal (SessionHostCommand.SlowConsumer rejected.ConnectionId) failed
-        do! post presence (PresenceCommand.Detach { ConnectionId = rejected.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+        do! post presence (PresenceCommand.Detach {
+            ConnectionId = rejected.ConnectionId
+            ReplyTo = cleanup.Ref.TryReliable().Value
+        })
         let! _ = receive acknowledgments
         equal 0 events.Reader.Count
         release.SetResult()
@@ -383,7 +488,10 @@ let tests = testList "PresenceAgent" [
         use cleanup = TestAgent.Start(options "blocked-cleanup" (AgentMailbox.boundedWait 1), slow ignored)
         let! release = block cleanup
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
-        do! post presence (PresenceCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
+        do! post presence (PresenceCommand.Detach {
+            ConnectionId = Guid.NewGuid()
+            ReplyTo = cleanup.Ref.TryReliable().Value.Map Value
+        })
         let! _ = terminal presence.Completion
         check presence.Completion.IsCanceled "Cleanup failure was swallowed."
         release.SetResult()
@@ -393,7 +501,10 @@ let tests = testList "PresenceAgent" [
         withPresence config (fun fixture -> task {
             let latest = character fixture.Alice |> Player.snapshot
             do! changed fixture latest
-            do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
+            do! post fixture.Presence (PresenceCommand.Detach {
+                ConnectionId = fixture.Alice.ConnectionId
+                ReplyTo = fixture.Cleanup
+            })
             let! _ = receive fixture.Acknowledgments
             let! departed = receive fixture.BobEvents
             equal (leftEvent latest.Identity.PlayerId) departed
@@ -474,7 +585,11 @@ let tests = testList "PresenceAgent" [
         use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a = subscription 1UL fast
-        let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
+        let s = {
+            ConnectionId = Guid.NewGuid()
+            Snapshot = Player.snapshot (Player.create (profile 2UL))
+            Events = receiver.Ref.TryReliable().Value.Map Value
+        }
         do! post presence (PresenceCommand.Join a)
         let! _ = receive fastEvents
         do! post presence (PresenceCommand.Join s)
@@ -521,7 +636,11 @@ let tests = testList "PresenceAgent" [
             let! _, (_, initial) = flushViewsNow fixture
             let original = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
             check original.Location.IsSome "Radius boundary is inclusive."
-            let moved = { fixture.Alice.Snapshot with Location = ValueSome (location -1.0f); MovementSequence = 1UL }
+            let moved = {
+                fixture.Alice.Snapshot with
+                    Location = ValueSome (location -1.0f)
+                    MovementSequence = 1UL
+            }
             do! changed fixture moved
             let! _, (events, hiddenSnapshot) = flushViewsNow fixture
             let clears = visibilityOf original.Identity.PlayerId events
@@ -530,7 +649,11 @@ let tests = testList "PresenceAgent" [
             equal [ ValueNone ] (spaces events)
             check (clears.Head.ViewRevision > original.ViewRevision) "Clear advances the observer revision."
             equal ValueNone (hiddenSnapshot |> List.find (fun value -> value.Identity.PlayerId = original.Identity.PlayerId)).Location
-            do! changed fixture { moved with Location = original.Location; MovementSequence = 2UL }
+            do! changed fixture {
+                moved with
+                    Location = original.Location
+                    MovementSequence = 2UL
+            }
             let! _, (restoredEvents, _) = flushViewsNow fixture
             let restored = visibilityOf original.Identity.PlayerId restoredEvents |> List.head
             check (restored.ViewRevision > clears.Head.ViewRevision) "Reentry cannot accept stale packets from the previous view."
@@ -541,7 +664,11 @@ let tests = testList "PresenceAgent" [
 
     case "observer movement reveals a stationary source and space change clears it" (fun () ->
         withPositions { config with VisibilityDistance = 10.0f } (ValueSome (location 0.0f)) (ValueSome (location 20.0f)) (fun fixture -> task {
-            let observer = { fixture.Bob.Snapshot with Location = ValueSome (location 5.0f); MovementSequence = 1UL }
+            let observer = {
+                fixture.Bob.Snapshot with
+                    Location = ValueSome (location 5.0f)
+                    MovementSequence = 1UL
+            }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, observer))
             let! _, (events, _) = flushViewsNow fixture
             let baseline = visibilityOf fixture.Alice.Snapshot.Identity.PlayerId events |> List.head
@@ -549,7 +676,12 @@ let tests = testList "PresenceAgent" [
             equal [ observer.Location |> ValueOption.map _.Location ] (spaces events)
             let key = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 61u |> ok)
             let elsewhere = PlayerLocation.create (Location.create key (LocationName.create 128 "Elsewhere" |> ok)) Position.zero CameraDirection.zero
-            do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, { observer with Location = ValueSome elsewhere; MovementContext = 2UL; MovementSequence = 0UL }))
+            do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, {
+                observer with
+                    Location = ValueSome elsewhere
+                    MovementContext = 2UL
+                    MovementSequence = 0UL
+            }))
             let! _, (events, _) = flushViewsNow fixture
             check (visibilityOf baseline.PlayerId events |> List.exists _.Pose.IsNone) "Space change clears stationary remote players reliably."
             // The observer's own baseline in the new space travels with the clear.
@@ -560,7 +692,11 @@ let tests = testList "PresenceAgent" [
         withPositions config (ValueSome (location 1.0f)) (ValueSome (location 2.0f)) (fun fixture -> task {
             let! _, (_, initial) = flushViewsNow fixture
             let before = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
-            let reset = { fixture.Alice.Snapshot with CharacterGeneration = fixture.Alice.Snapshot.CharacterGeneration + 1UL; MovementContext = 2UL }
+            let reset = {
+                fixture.Alice.Snapshot with
+                    CharacterGeneration = fixture.Alice.Snapshot.CharacterGeneration + 1UL
+                    MovementContext = 2UL
+            }
             do! changed fixture reset
             let! _, (events, _) = flushViewsNow fixture
             let baseline = visibilityOf before.Identity.PlayerId events |> List.head
@@ -577,10 +713,18 @@ let tests = testList "PresenceAgent" [
 
     case "loss of a stopped player's last packet repairs on the next complete period" (fun () ->
         withPositions config (ValueSome (location 1.0f)) (ValueSome (location 2.0f)) (fun fixture -> task {
-            let stopped = { fixture.Alice.Snapshot with Location = ValueSome (location 7.0f); MovementSequence = 4UL }
+            let stopped = {
+                fixture.Alice.Snapshot with
+                    Location = ValueSome (location 7.0f)
+                    MovementSequence = 4UL
+            }
             do! changed fixture stopped
             let! _ = flushViewsNow fixture // Deliberately lose all packets of this period.
-            let moving = { fixture.Bob.Snapshot with Location = ValueSome (location 8.0f); MovementSequence = 5UL }
+            let moving = {
+                fixture.Bob.Snapshot with
+                    Location = ValueSome (location 8.0f)
+                    MovementSequence = 5UL
+            }
             do! post fixture.Presence (PresenceCommand.Update(fixture.Bob.ConnectionId, moving))
             let! _, (events, _) = flushViewsNow fixture
             let repaired = events |> List.pick (function PresenceEvent.Moved [|value|] when value.PlayerId = stopped.Identity.PlayerId -> Some value | _ -> None)
@@ -604,7 +748,10 @@ let tests = testList "PresenceAgent" [
         withPositions config (ValueSome (location 1.0f)) (ValueSome (location 2.0f)) (fun fixture -> task {
             let! _, (_, initial) = flushViewsNow fixture
             let before = initial |> List.find (fun value -> value.Identity.PlayerId = fixture.Alice.Snapshot.Identity.PlayerId)
-            do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
+            do! post fixture.Presence (PresenceCommand.Detach {
+                ConnectionId = fixture.Alice.ConnectionId
+                ReplyTo = fixture.Cleanup
+            })
             let! _ = receive fixture.Acknowledgments
             let! _ = receive fixture.BobEvents
             let replacement = { fixture.Alice with ConnectionId = Guid.NewGuid() }
@@ -622,14 +769,21 @@ let tests = testList "PresenceAgent" [
         use cleanup = TestAgent.Start(AgentOptions.create "barrier", collect acknowledgments)
         use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let positioned = Player.create (profile 1UL) |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome (location 0.0f))) |> Player.snapshot
-        let subscriber = { ConnectionId = Guid.NewGuid(); Snapshot = positioned; Events = receiver.Ref.TryReliable().Value.Map Value }
+        let subscriber = {
+            ConnectionId = Guid.NewGuid()
+            Snapshot = positioned
+            Events = receiver.Ref.TryReliable().Value.Map Value
+        }
         do! post presence (PresenceCommand.Join subscriber)
         let! _ = receive events
         let! release = block receiver
         do! post presence (tick ())
         do! post presence (tick ())
         let barrier = Guid.NewGuid()
-        do! post presence (PresenceCommand.Detach { ConnectionId = barrier; ReplyTo = cleanup.Ref.TryReliable().Value })
+        do! post presence (PresenceCommand.Detach {
+            ConnectionId = barrier
+            ReplyTo = cleanup.Ref.TryReliable().Value
+        })
         let! _ = receive acknowledgments
         equal 0 hostEvents.Reader.Count
         check (not receiver.Completion.IsCompleted) "Realtime pressure cannot terminate a session."
@@ -686,7 +840,11 @@ let tests = testList "PresenceAgent" [
             let health = kind 1UL "skyrim:health" "Health"
             let aliceId, bobId = fixture.Alice.Snapshot.Identity.PlayerId, fixture.Bob.Snapshot.Identity.PlayerId
             let metadata = [
-                ({ PlayerId = aliceId; ActorValues = ValueNone; Details = DetailsPatch.between PlayerDetails.empty details }: MetadataPatch)
+                ({
+                    PlayerId = aliceId
+                    ActorValues = ValueNone
+                    Details = DetailsPatch.between PlayerDetails.empty details
+                }: MetadataPatch)
                 valuesPatch bobId [] [ health.Key, reading "Health" -15 ]
             ]
             let expected = PresenceEvent.Changed({ PresenceChange.empty with Metadata = metadata }, { Ids = idsOf [ health ]; Defined = [ health ] })
@@ -786,7 +944,10 @@ let tests = testList "PresenceAgent" [
             do! changed fixture (publishes fixture.Alice [ "skyrim:health", "Здоровье", 50 ])
             do! post fixture.Presence (tick ())
             let change = { PresenceChange.empty with Metadata = [ valuesPatch alice [ struct (health.Key, health.DisplayName) ] [ relabelled.Key, reading "Здоровье" 50 ] ] }
-            let kinds = { Ids = idsOf [ health; relabelled ]; Defined = [ relabelled ] }
+            let kinds = {
+                Ids = idsOf [ health; relabelled ]
+                Defined = [ relabelled ]
+            }
             for events in [ fixture.AliceEvents; fixture.BobEvents ] do
                 let! event = receive events
                 equal (PresenceEvent.Changed(change, kinds)) event
@@ -809,7 +970,10 @@ let tests = testList "PresenceAgent" [
             for events in [ fixture.AliceEvents; fixture.BobEvents ] do
                 let! published = receive events
                 equal [ health; magicka ] (snd (changeOf published)).Defined
-            do! post fixture.Presence (PresenceCommand.Detach { ConnectionId = fixture.Alice.ConnectionId; ReplyTo = fixture.Cleanup })
+            do! post fixture.Presence (PresenceCommand.Detach {
+                ConnectionId = fixture.Alice.ConnectionId
+                ReplyTo = fixture.Cleanup
+            })
             let! _ = receive fixture.Acknowledgments
             let! departed = receive fixture.BobEvents
             equal (leftEvent fixture.Alice.Snapshot.Identity.PlayerId) departed
