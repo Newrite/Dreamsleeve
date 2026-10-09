@@ -46,7 +46,11 @@ type SignInOrigin = {
 
 [<RequireQualifiedAccess>]
 module SignInOrigin =
-    let none = { Address = ValueNone; Device = ValueNone; Proxy = ValueNone }
+    let none = {
+        Address = ValueNone
+        Device = ValueNone
+        Proxy = ValueNone
+    }
 
     let ofAddress (address: IPAddress) = { none with Address = if isNull address then ValueNone else ValueSome address }
 
@@ -212,7 +216,11 @@ type AuthMessage =
 /// agent owns ticket issuance/consumption and request orchestration.
 [<RequireQualifiedAccess>]
 module AuthService =
-    type private Ticket = { Player: AuthenticatedPlayer; CreatedAt: int64; RememberKey: string }
+    type private Ticket = {
+        Player: AuthenticatedPlayer
+        CreatedAt: int64
+        RememberKey: string
+    }
 
     /// Who waits for an admitted operation: an HTTP or trusted caller, or a game session.
     [<RequireQualifiedAccess>]
@@ -221,7 +229,10 @@ module AuthService =
         | Session of ProfileChangeRequest
         | Moderator of ModerationRequest
 
-    type private Pending = { Command: AccountAccessCommand; Requester: Requester }
+    type private Pending = {
+        Command: AccountAccessCommand
+        Requester: Requester
+    }
 
     /// A Steam sign-in between its start and the client collecting how it ended.
     type private SteamFlow = {
@@ -259,10 +270,19 @@ module AuthService =
     }
 
     let defaults = {
-        MailboxCapacity = 256; MaxConcurrentOperations = 4; MaxTickets = 4096
-        TicketLifetimeSeconds = 60; PasswordIterations = 210000
-        SavedLoginDays = 30; MaxSavedLogins = 8; ResetLifetimeMinutes = 15; DisplayNameHistory = 20
-        SetupLifetimeHours = 72; SignInHistoryDays = 30; SteamFlowSeconds = 600
+        MailboxCapacity = 256
+        MaxConcurrentOperations = 4
+        MaxTickets = 4096
+        TicketLifetimeSeconds = 60
+        PasswordIterations = 210000
+
+        SavedLoginDays = 30
+        MaxSavedLogins = 8
+        ResetLifetimeMinutes = 15
+        DisplayNameHistory = 20
+        SetupLifetimeHours = 72
+        SignInHistoryDays = 30
+        SteamFlowSeconds = 600
     }
 
     let validate options = [
@@ -294,7 +314,11 @@ module AuthService =
             AccountAccessError.Unavailable
 
     let private identity (account: StoredAccount) : StoredIdentity =
-        { AccountId = account.AccountId; Profile = account.Profile; Role = account.Role }
+        {
+            AccountId = account.AccountId
+            Profile = account.Profile
+            Role = account.Role
+        }
 
     // No ticket while a ban holds; the mute in force goes into the ticket.
     let private admit database (clock: TimeProvider) logger token (account: StoredIdentity) =
@@ -305,7 +329,12 @@ module AuthService =
             match Sanction.find SanctionKind.Ban now sanctions with
             | ValueSome ban -> Error (AccountAccessError.Banned ban)
             | ValueNone ->
-                Ok { Profile = account.Profile; Role = account.Role; Mute = Sanction.find SanctionKind.Mute now sanctions; SignedInFrom = ValueNone }
+                Ok {
+                    Profile = account.Profile
+                    Role = account.Role
+                    Mute = Sanction.find SanctionKind.Mute now sanctions
+                    SignedInFrom = ValueNone
+                }
 
     let private verify options database dummyHash logger token username password =
         match SqliteAccountStore.find database username token with
@@ -430,30 +459,37 @@ module AuthService =
                             |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Login(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
-                    else deviceRefusal database clock logger token origin
-                         |> Result.bind (fun () -> verify options database dummyHash logger token username password)
-                         |> Result.bind (admit database clock logger token)
-                         |> Result.map (fun player -> AccountWorkResult.Verified(player, ""))
-                         |> signedIn options database logger clock token origin
+                    else
+                        deviceRefusal database clock logger token origin
+                        |> Result.bind (fun () -> verify options database dummyHash logger token username password)
+                        |> Result.bind (admit database clock logger token)
+                        |> Result.map (fun player -> AccountWorkResult.Verified(player, ""))
+                        |> signedIn options database logger clock token origin
                 | AccountAccessCommand.RememberLogin(username, password, origin) ->
                     if not (validPassword password) then Error AccountAccessError.InvalidCredentials
-                    else deviceRefusal database clock logger token origin
-                         |> Result.bind (fun () -> verify options database dummyHash logger token username password)
-                         |> Result.bind (fun account ->
-                             admit database clock logger token account |> Result.bind (savedLogin options database now logger token account))
-                         |> signedIn options database logger clock token origin
+                    else
+                        deviceRefusal database clock logger token origin
+                        |> Result.bind (fun () -> verify options database dummyHash logger token username password)
+                        |> Result.bind (fun account ->
+                            admit database clock logger token account
+                            |> Result.bind (savedLogin options database now logger token account))
+                        |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Resume(secret, origin) ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
-                    else deviceRefusal database clock logger token origin
-                         |> Result.bind (fun () -> SqliteAccountStore.resume database (ticketKey secret) now token |> Result.mapError (storageError logger))
-                         |> Result.bind (admit database clock logger token)
-                         |> Result.map (fun player -> AccountWorkResult.Verified(player, secret))
-                         |> signedIn options database logger clock token origin
+                    else
+                        deviceRefusal database clock logger token origin
+                        |> Result.bind (fun () ->
+                            SqliteAccountStore.resume database (ticketKey secret) now token
+                            |> Result.mapError (storageError logger))
+                        |> Result.bind (admit database clock logger token)
+                        |> Result.map (fun player -> AccountWorkResult.Verified(player, secret))
+                        |> signedIn options database logger clock token origin
                 | AccountAccessCommand.Logout secret ->
                     if not (validToken secret) then Error AccountAccessError.InvalidCredentials
-                    else SqliteAccountStore.logout database (ticketKey secret) token
-                         |> Result.map (fun () -> AccountWorkResult.LoggedOut(ticketKey secret))
-                         |> Result.mapError (storageError logger)
+                    else
+                        SqliteAccountStore.logout database (ticketKey secret) token
+                        |> Result.map (fun () -> AccountWorkResult.LoggedOut(ticketKey secret))
+                        |> Result.mapError (storageError logger)
                 | AccountAccessCommand.ResetPassword(code, password) ->
                     if not (validToken code && validPassword password) then Error AccountAccessError.InvalidCredentials
                     else
@@ -569,7 +605,10 @@ module AuthService =
             | error ->
                 logger.LogError(error, "Account operation failed")
                 Error AccountAccessError.Unavailable
-        return { OperationId = request.OperationId; Result = result }
+        return {
+            OperationId = request.OperationId
+            Result = result
+        }
     }
 
     let private expire options (clock: TimeProvider) state =
@@ -586,8 +625,20 @@ module AuthService =
         if state.Tickets.Count >= options.MaxTickets then Error AccountAccessError.Busy
         else
             let ticket = newToken ()
-            state.Tickets.Add(ticketKey ticket, { Player = player; CreatedAt = clock.GetTimestamp(); RememberKey = if rememberToken.Length = 0 then "" else ticketKey rememberToken })
-            Ok (AccountAccessResult.SignedIn { Profile = player.Profile; SessionTicket = ticket; ExpiresInSeconds = options.TicketLifetimeSeconds; RememberToken = rememberToken })
+            state.Tickets.Add(
+                ticketKey ticket,
+                {
+                    Player = player
+                    CreatedAt = clock.GetTimestamp()
+                    RememberKey = if rememberToken.Length = 0 then "" else ticketKey rememberToken
+                })
+            Ok(
+                AccountAccessResult.SignedIn {
+                    Profile = player.Profile
+                    SessionTicket = ticket
+                    ExpiresInSeconds = options.TicketLifetimeSeconds
+                    RememberToken = rememberToken
+                })
 
     let private consume options clock state (request: SessionAuthenticationRequest) : SessionAuthenticationReply =
         expire options clock state
@@ -600,7 +651,10 @@ module AuthService =
                 | true, ticket ->
                     state.Tickets.Remove(ticketKey request.Ticket) |> ignore
                     Ok ticket.Player
-        { OperationId = request.OperationId; Result = result }
+        {
+            OperationId = request.OperationId
+            Result = result
+        }
 
     let private completeIfStopped state (context: ReliableAgentContext<AuthMessage>) =
         if state.Stopping && state.Pending.Count = 0 then
@@ -637,7 +691,10 @@ module AuthService =
                 | Error AccountAccessError.Busy -> Error ProfileChangeError.Busy
                 | Ok _ | Error _ -> Error ProfileChangeError.Unavailable
             // A control message of the session: it has room even when the session is busy.
-            match request.ReplyTo.TryPost { OperationId = request.OperationId; Result = answer } with
+            match request.ReplyTo.TryPost {
+                OperationId = request.OperationId
+                Result = answer
+            } with
             | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
             | AgentTryDeliveryResult.Full ->
                 logger.LogWarning("Profile change reply for player {PlayerId} was not delivered: the session is full", PlayerId.value request.PlayerId)
@@ -657,7 +714,10 @@ module AuthService =
                 logger.LogWarning("Audit line {Action} of moderator {PlayerId} was lost: the account service was busy",
                                   AdminAction.key record.Action, PlayerId.value moderator)
             | _, (Ok _ | Error _) -> ()
-            match request.ReplyTo.TryPost { OperationId = request.OperationId; Result = answer } with
+            match request.ReplyTo.TryPost {
+                OperationId = request.OperationId
+                Result = answer
+            } with
             | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
             | AgentTryDeliveryResult.Full -> logger.LogWarning("A moderation reply was not delivered: the session is full")
 
@@ -714,8 +774,17 @@ module AuthService =
             if state.Flows.Count >= options.MaxTickets then Admission.Settled(Error AccountAccessError.Busy)
             else
                 let flow, secret = newToken (), newToken ()
-                state.Flows.Add(flow, { SecretKey = ticketKey secret; Origin = origin; Remember = remember; Started = clock.GetTimestamp()
-                                        Completing = false; Outcome = ValueNone })
+                state.Flows.Add(
+                    flow,
+                    {
+                        SecretKey = ticketKey secret
+                        Origin = origin
+                        Remember = remember
+                        Started = clock.GetTimestamp()
+
+                        Completing = false
+                        Outcome = ValueNone
+                    })
                 Admission.Settled(Ok (AccountAccessResult.SteamStarted(flow, secret, options.SteamFlowSeconds)))
         | AccountAccessCommand.PollSteam(flow, secret) ->
             pruneFlows options clock state
@@ -764,11 +833,17 @@ module AuthService =
                     | ValueNone ->
                         let operationId = Guid.NewGuid()
                         let request = {
-                            OperationId = operationId; Command = work
+                            OperationId = operationId
+                            Command = work
                             ReplyTo = context.Ref.Map AuthMessage.Finished
                         }
                         state.Exclusive <- exclusive work
-                        state.Pending.Add(operationId, { Command = command; Requester = requester })
+                        state.Pending.Add(
+                            operationId,
+                            {
+                                Command = command
+                                Requester = requester
+                            })
                         if not (state.Outbox.TrySend(context, request)) then
                             state.Exclusive <- false
                             state.Pending.Remove operationId |> ignore
@@ -839,7 +914,23 @@ module AuthService =
 
     let private withMute mute state playerId =
         for key in ticketsOf state playerId do
-            state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Mute = mute } }
+            state.Tickets[key] <- {
+                state.Tickets[key] with
+                    Player = {
+                        state.Tickets[key].Player with
+                            Mute = mute
+                    }
+            }
+
+    let private withProfile state (profile: PlayerData) =
+        for key in ticketsOf state profile.PlayerId do
+            state.Tickets[key] <- {
+                state.Tickets[key] with
+                    Player = {
+                        state.Tickets[key].Player with
+                            Profile = profile
+                    }
+            }
 
     // Live sessions must follow: an undelivered change stops the service rather
     // than leave a banned or muted player playing. A stopped runtime has no
@@ -863,6 +954,7 @@ module AuthService =
             state.Exclusive <- false
             state.Pending.Remove completion.OperationId |> ignore
             logOutcome logger pending.Command completion.Result
+
             let result =
                 match completion.Result with
                 | Ok (AccountWorkResult.Registered profile) ->
@@ -883,7 +975,7 @@ module AuthService =
                     issue options clock state player rememberToken
                 | Ok (AccountWorkResult.Renamed(previous, profile, changedBy)) ->
                     // Outstanding tickets would open a session with the old name.
-                    for key in ticketsOf state profile.PlayerId do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
+                    withProfile state profile
                     if previous <> profile.DisplayName then
                         match changedBy with
                         | ValueSome admin ->
@@ -896,7 +988,7 @@ module AuthService =
                                                   DisplayName.value previous, DisplayName.value profile.DisplayName)
                     Ok (AccountAccessResult.ProfileChanged profile)
                 | Ok (AccountWorkResult.Recolored profile) ->
-                    for key in ticketsOf state profile.PlayerId do state.Tickets[key] <- { state.Tickets[key] with Player = { state.Tickets[key].Player with Profile = profile } }
+                    withProfile state profile
                     logger.LogInformation("Player {PlayerId} {Username} changed name color to #{Color:X6}", PlayerId.value profile.PlayerId,
                                           Username.value profile.Username, NameColor.value profile.NameColor)
                     Ok (AccountAccessResult.ProfileChanged profile)
@@ -935,7 +1027,9 @@ module AuthService =
                     let now = clock.GetUtcNow()
                     state.AddressBans <- ban :: state.AddressBans |> List.filter (AddressBan.activeAt now)
                     logger.LogInformation("IP range {Range} banned until {Until}: {Reason}", AddressRange.key ban.Range,
-                                          (match ban.Expires with ValueSome expires -> expires.ToString("u") | ValueNone -> "lifted"),
+                                          (match ban.Expires with
+                                           | ValueSome expires -> expires.ToString("u")
+                                           | ValueNone -> "lifted"),
                                           SanctionReason.value ban.Reason)
                     delivered state context (AccountChange.AddressBans state.AddressBans) (Ok (AccountAccessResult.AddressesBanned ban))
                 | Ok (AccountWorkResult.AddressBanLifted ban) ->
@@ -950,7 +1044,10 @@ module AuthService =
                 | Ok (AccountWorkResult.Registration mode) ->
                     match pending.Command with
                     | AccountAccessCommand.SetRegistration(_, changedBy) ->
-                        let who = match changedBy with ValueSome admin -> $"admin {AdminId.value admin}" | ValueNone -> "the console"
+                        let who =
+                            match changedBy with
+                            | ValueSome admin -> $"admin {AdminId.value admin}"
+                            | ValueNone -> "the console"
                         logger.LogInformation("Registration mode set to {Mode} by {Who}", RegistrationMode.key mode, who)
                     | _ -> ()
                     Ok (AccountAccessResult.Registration mode)
@@ -962,6 +1059,7 @@ module AuthService =
                         withMute ValueNone state sanction.Target
                         delivered state context (AccountChange.MuteChanged(sanction.Target, ValueNone)) (Ok (AccountAccessResult.SanctionLifted sanction))
                 | Error error -> Error error
+
             settleCommand logger state pending.Command pending.Requester result
             completeIfStopped state context
 
@@ -1036,7 +1134,10 @@ module AuthService =
         if int64 options.MaxConcurrentOperations + 2L > int64 Int32.MaxValue then
             Error (AgentStartError.CapacityOverflow(options.MaxConcurrentOperations, 2))
         else
-            let workerOptions = { AgentOptions.create "account-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+            let workerOptions = {
+                AgentOptions.create "account-storage" with
+                    Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations
+            }
             let settings = {
                 AgentOptions.create "authentication" with
                     Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
@@ -1056,10 +1157,18 @@ module AuthService =
                        (execute options database dummyHash clock logger)
         let workers = worker.Start work
         let state = {
-            Tickets = Dictionary(); Flows = Dictionary(); Pending = Dictionary(); Workers = workers
+            Tickets = Dictionary()
+            Flows = Dictionary()
+            Pending = Dictionary()
+            Workers = workers
             Outbox = AgentOutbox.Create(operations, workers.Ref)
             ChangesCapacity = changes
-            Exclusive = false; Changes = None; ChangeTarget = 0; Stopping = false; WorkersStopped = false
+
+            Exclusive = false
+            Changes = None
+            ChangeTarget = 0
+            Stopping = false
+            WorkersStopped = false
             AddressBans = bans
         }
         let consumeRequest = AgentReplyDispatcher.createHandler changes
