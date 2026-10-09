@@ -17,6 +17,7 @@ type Distribution() =
     let mutable count = 0L
     let mutable maximum = 0.
     let mutable total = 0.
+
     member _.Add(value: float) =
         if Double.IsFinite value && value >= 0. then
             let index = min (bins.Length - 1) (int (log (1. + value) / scale))
@@ -27,16 +28,25 @@ type Distribution() =
 
     member _.Summary() =
         let percentile fraction =
-            if count = 0L then 0.
+            if count = 0L then
+                0.
             else
                 let target = int64 (ceil (fraction * float count))
                 let mutable seen = 0L
                 let mutable index = 0
+
                 while seen < target && index < bins.Length do
                     seen <- seen + bins[index]
                     index <- index + 1
+
                 min maximum (exp (float index * scale) - 1.)
-        {| count = count; sum = total; p50 = percentile 0.5; p95 = percentile 0.95; p99 = percentile 0.99; max = maximum |}
+
+        {| count = count
+           sum = total
+           p50 = percentile 0.5
+           p95 = percentile 0.95
+           p99 = percentile 0.99
+           max = maximum |}
 
 // Benchmark-only phase sampling. The runner marks phases through a shared file;
 // transitions have up to 100 ms uncertainty. Histograms never retain raw events.
@@ -60,16 +70,22 @@ type Recorder(output: string) =
                     let text = reader.ReadToEnd().Trim()
                     if text <> "" then phase <- text
                 with :? IOException -> ()
+
             let memory = GC.GetGCMemoryInfo()
             let udp = IPGlobalProperties.GetIPGlobalProperties().GetUdpIPv4Statistics()
             samples.Add(box {|
-                elapsedMs = clock.Elapsed.TotalMilliseconds; phase = phase
+                elapsedMs = clock.Elapsed.TotalMilliseconds
+                phase = phase
                 allocatedBytes = GC.GetTotalAllocatedBytes(false)
                 udpReceiveErrors = udp.IncomingDatagramsWithErrors
-                udpReceived = udp.DatagramsReceived; udpSent = udp.DatagramsSent
+                udpReceived = udp.DatagramsReceived
+                udpSent = udp.DatagramsSent
                 gcPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds
-                gen0 = GC.CollectionCount(0); gen1 = GC.CollectionCount(1); gen2 = GC.CollectionCount(2)
-                heapBytes = memory.HeapSizeBytes; fragmentedBytes = memory.FragmentedBytes
+                gen0 = GC.CollectionCount(0)
+                gen1 = GC.CollectionCount(1)
+                gen2 = GC.CollectionCount(2)
+                heapBytes = memory.HeapSizeBytes
+                fragmentedBytes = memory.FragmentedBytes
                 threadPoolThreads = ThreadPool.ThreadCount
                 threadPoolPending = ThreadPool.PendingWorkItemCount
             |}))
@@ -83,6 +99,7 @@ type Recorder(output: string) =
                     let created = Dictionary()
                     measurements.Add(phase, created)
                     created
+
             let distribution =
                 match values.TryGetValue instrument.Name with
                 | true, existing -> existing
@@ -91,14 +108,19 @@ type Recorder(output: string) =
                     values.Add(instrument.Name, created)
                     created
             distribution.Add value
+
             if slowEvents.Count < 2048 && instrument.Name.EndsWith(".duration") && value >= 20. then
-                slowEvents.Add(box {| elapsedMs = clock.Elapsed.TotalMilliseconds; phase = phase; name = instrument.Name; durationMs = value |}))
+                slowEvents.Add(box {| elapsedMs = clock.Elapsed.TotalMilliseconds
+                                      phase = phase
+                                      name = instrument.Name
+                                      durationMs = value |}))
 
     do
         listener.InstrumentPublished <- fun instrument owner ->
             if instrument.Meter.Name = "Dreamsleeve.Server" || instrument.Meter.Name = "Dreamsleeve.Transport"
                || instrument.Meter.Name = "Dreamsleeve.Transport.Owner" || instrument.Meter.Name = "Dreamsleeve.Phantoms" then
                 owner.EnableMeasurementEvents instrument
+
         listener.SetMeasurementEventCallback<double>(fun instrument value _ _ -> record instrument value)
         listener.SetMeasurementEventCallback<int>(fun instrument value _ _ -> record instrument (double value))
         listener.SetMeasurementEventCallback<int64>(fun instrument value _ _ -> record instrument (double value))
@@ -110,10 +132,15 @@ type Recorder(output: string) =
         member _.Dispose() =
             timer.DisposeAsync().AsTask().GetAwaiter().GetResult()
             listener.Dispose()
+
             lock gate (fun () ->
                 let phases = measurements |> Seq.map (fun phase ->
                     phase.Key, (phase.Value |> Seq.map (fun pair -> pair.Key, pair.Value.Summary()) |> dict)) |> dict
-                let result = {| schemaVersion = 2; byPhase = phases; runtimeSamples = samples; slowEvents = slowEvents |}
+                let result =
+                    {| schemaVersion = 2
+                       byPhase = phases
+                       runtimeSamples = samples
+                       slowEvents = slowEvents |}
                 File.WriteAllText(output, JsonSerializer.Serialize(result, JsonSerializerOptions(WriteIndented = true))))
 
 let runServer config output =
