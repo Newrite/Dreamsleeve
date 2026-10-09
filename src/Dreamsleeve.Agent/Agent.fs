@@ -234,12 +234,13 @@ type AgentOptions =
         DefaultAskTimeout: TimeSpan option
         /// <summary>
         /// Optional callback invoked on the background processing loop when it starts.
-        /// Receives the agent's name.
+        /// Receives the agent's name. A notification fault stops the owner before dispatch.
         /// </summary>
         OnStarted: (string -> unit) option
         /// <summary>
         /// Optional callback invoked exactly once after processing and cleanup stop, before Completion settles.
-        /// Receives the agent's name and the reason it stopped. Must not wait for Completion.
+        /// Receives the name and sealed stop reason. A failure faults Completion without
+        /// changing that reason. Must not wait for Completion.
         /// </summary>
         OnStopped: (string * AgentStopReason -> unit) option
         /// <summary>
@@ -271,9 +272,6 @@ module AgentOptions =
 
 [<AutoOpen>]
 module internal AgentInternals =
-    let inline safeInvoke (callback: unit -> unit) =
-        try callback () with _ -> ()
-
     // Preserve the public Ask deadline contract; dependency timers truncate milliseconds.
     let invalidTimeout timeout =
         match timeout with
@@ -456,6 +454,7 @@ type AgentContext<'Message>
             postAsyncImpl: 'Message -> CancellationToken -> Task<AgentPostResult>,
             completeImpl: unit -> bool,
             abortImpl: unit -> unit,
+            failImpl: exn -> unit,
             startBackgroundImpl: (CancellationToken -> Task<unit>) -> unit,
             reliableRef: ReliableAgentRef<'Message> option
         ) =
@@ -471,6 +470,7 @@ type AgentContext<'Message>
     member this.TryReliable() = reliableRef |> Option.map (fun address -> ReliableAgentContext<'Message>(this, address))
 
     member internal _.DispatchStopped = dispatchStoppedToken
+    member internal _.Fail(error: exn) = failImpl error
 
     // Library workers only. Application state remains in the handler.
     member internal _.StartDelivery(operation: CancellationToken -> Task<unit>) =
@@ -518,6 +518,7 @@ and [<Sealed>] ReliableAgentContext<'Message> internal (context: AgentContext<'M
     member _.TryPost(message) = address.TryPost message
     member _.PostAsync(message, ?cancellationToken: CancellationToken) = address.PostAsync(message, ?cancellationToken = cancellationToken)
     member internal _.DispatchStopped = context.DispatchStopped
+    member internal _.Fail(error: exn) = context.Fail error
     member internal _.StartDelivery(operation) = context.StartDelivery operation
 
     /// Call only from this owner's handler. Work receives detached immutable inputs.
@@ -600,6 +601,12 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
     let mutable stopSealed = false
     let mutable stopReason: AgentStopReason option = None
     let mutable cancellationTask: Task = Task.CompletedTask
+    // Protected by lifecycleGate. The same original failure can reach the sink
+    // through delivery and a later join; retain it once, by reference identity.
+    let failures = ResizeArray<exn>()
+    let recordFailure error =
+        if not (failures |> Seq.exists (fun previous -> Object.ReferenceEquals(previous, error))) then
+            failures.Add error
 
     let mailboxDropsWrites =
         match options.Mailbox with
@@ -637,11 +644,6 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
     let getStopReason () = lock lifecycleGate (fun () -> stopReason)
     let isAcceptingMessages () = Volatile.Read(&accepting) = 1
     let isImmediateStopRequested () = Volatile.Read(&immediateStop) <> 0
-    let isAbortRequested () =
-        match getStopReason () with
-        | Some AgentStopReason.Aborted -> true
-        | _ -> false
-
     let completeCore () =
         if Interlocked.Exchange(&accepting, 0) = 1 then
             let completed = channel.Writer.TryComplete()
@@ -653,6 +655,9 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
     let requestImmediateStop reason =
         let selected, cancellation =
             lock lifecycleGate (fun () ->
+                match reason with
+                | AgentStopReason.Faulted error -> recordFailure error
+                | AgentStopReason.Completed | AgentStopReason.Aborted -> ()
                 // Deliveries can fail or be aborted while graceful shutdown joins work.
                 // Escalate until the final reason and cancellation callbacks are sealed.
                 let escalation =
@@ -692,15 +697,37 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
                         try
                             let callbacks = lock lifecycleGate (fun () -> lifetime.CancelAsync())
                             do! callbacks
-                        with _ -> ()
+                        with error ->
+                            // CancelAsync's aggregate owns all callback faults, not just
+                            // the exception selected by an await.
+                            lock lifecycleGate (fun () ->
+                                match error with
+                                | :? AggregateException as aggregate ->
+                                    for failure in aggregate.InnerExceptions do recordFailure failure
+                                | error -> recordFailure error)
                         pending.TrySetResult() |> ignore
                     }
-                // Every exception from user cancellation callbacks is observed above. The finish
+                // Every exception from user cancellation callbacks is retained above. The finish
                 // path awaits pending before disposal, including when CancelAsync starts late.
                 cancelAndObserve |> ignore
             termination.TrySetResult(reason) |> ignore
 
     let abortCore () = requestImmediateStop AgentStopReason.Aborted
+    let failCore error = requestImmediateStop (AgentStopReason.Faulted error)
+
+    let attempt (operation: unit -> unit) =
+        try operation () with error -> failCore error
+
+    let attemptAsync (operation: unit -> Task) = task {
+        let mutable work: Task = null
+        try
+            work <- operation ()
+            do! work
+        with error ->
+            if not (isNull work) && work.IsFaulted then
+                for failure in work.Exception.InnerExceptions do failCore failure
+            else failCore error
+    }
 
     let tryWriteReliable (envelope: MailboxEnvelope<'Message>) =
         if not (isAcceptingMessages ()) then
@@ -829,8 +856,9 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
         let runWork () : Task = task {
             try
                 do! operation lifetimeToken
-            with error ->
-                requestImmediateStop (AgentStopReason.Faulted error)
+            with
+            | :? OperationCanceledException when lifetimeToken.IsCancellationRequested -> ()
+            | error -> failCore error
         }
 
         background.Add(Task.Run(Func<Task>(runWork)))
@@ -841,22 +869,30 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
 
     let context =
         AgentContext<'Message>(
-            options.Name, lifetimeToken, dispatchStopped.Token, tryPostCore, postAsyncCore, completeCore, abortCore, startBackground, reliableAddress)
+            options.Name, lifetimeToken, dispatchStopped.Token, tryPostCore, postAsyncCore, completeCore, abortCore, failCore, startBackground, reliableAddress)
 
     let reliableContext = ReliableAgentContext<'Message>(context, ReliableAgentRef<'Message>(tryReliablePostCore, postReliableAsyncCore))
 
     let signalStarted () =
-        safeInvoke (fun () -> startedEvent.Trigger(options.Name))
-        options.OnStarted |> Option.iter (fun callback -> safeInvoke (fun () -> callback options.Name))
+        attempt (fun () -> startedEvent.Trigger(options.Name))
+        options.OnStarted |> Option.iter (fun callback -> attempt (fun () -> callback options.Name))
 
     let reportHandlerError error =
-        safeInvoke (fun () -> errorEvent.Trigger(options.Name, error))
+        let reportFailure callbackError =
+            failCore error
+            failCore callbackError
+        try errorEvent.Trigger(options.Name, error)
+        with callbackError -> reportFailure callbackError
 
-        match options.OnError with
-        | Some decide ->
-            try decide (options.Name, error)
-            with _ -> AgentErrorAction.Stop
-        | None -> AgentErrorAction.Stop
+        let decision =
+            match options.OnError with
+            | Some decide ->
+                try decide (options.Name, error)
+                with callbackError ->
+                    reportFailure callbackError
+                    AgentErrorAction.Stop
+            | None -> AgentErrorAction.Stop
+        if isImmediateStopRequested () then AgentErrorAction.Stop else decision
 
     let tryTakeNext () =
         // Dispatch and Abort are ordered at this gate. At most the current dispatched handler
@@ -872,57 +908,59 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
                     Some envelope
                 | false, _ -> None)
 
-    let finish () =
-        task {
-            let reason =
-                lock lifecycleGate (fun () ->
-                    finishing <- true
-                    Interlocked.Exchange(&accepting, 0) |> ignore
-                    let reason = defaultArg stopReason AgentStopReason.Completed
-                    stopReason <- Some reason
-                    reason)
+    let finish () = task {
+        let reason =
+            lock lifecycleGate (fun () ->
+                finishing <- true
+                Interlocked.Exchange(&accepting, 0) |> ignore
+                let reason = defaultArg stopReason AgentStopReason.Completed
+                stopReason <- Some reason
+                reason)
 
-            channel.Writer.TryComplete() |> ignore
-            notifyAdmission ()
-            // The sole reader is now done dispatching. Drop references and settle queued requests.
-            let mutable draining = true
-            while draining do
-                match channel.Reader.TryRead() with
-                | true, envelope ->
-                    Interlocked.Decrement(&queueLength) |> ignore
-                    releaseAdmission envelope
-                    envelope.Discard reason
-                | false, _ -> draining <- false
-            termination.TrySetResult(reason) |> ignore
+        channel.Writer.TryComplete() |> ignore
+        notifyAdmission ()
+        // Independently settle every queued request and release its reservation.
+        let mutable draining = true
+        while draining do
+            match channel.Reader.TryRead() with
+            | true, envelope ->
+                Interlocked.Decrement(&queueLength) |> ignore
+                attempt (fun () -> releaseAdmission envelope)
+                attempt (fun () -> envelope.Discard reason)
+            | false, _ -> draining <- false
+        termination.TrySetResult(reason) |> ignore
 
-            // Detach non-owning observations and close forwarding scopes before joining children.
-            do! dispatchStopped.CancelAsync()
-            do! Task.WhenAll(background)
+        // A failing detach/cancellation callback cannot bypass child joins.
+        do! attemptAsync (fun () -> dispatchStopped.CancelAsync())
+        do! attemptAsync (fun () -> Task.WhenAll(background))
 
-            // Joining work can escalate graceful completion to failure or cancellation.
-            // Capture cancellation after the join so its callbacks cannot outlive the CTS.
-            let reason, callbacks =
-                lock lifecycleGate (fun () ->
-                    stopSealed <- true
-                    defaultArg stopReason reason, cancellationTask)
+        // Seal only after all launched work has returned through the fault sink.
+        let reason, callbacks =
+            lock lifecycleGate (fun () ->
+                stopSealed <- true
+                defaultArg stopReason reason, cancellationTask)
+        do! attemptAsync (fun () -> callbacks)
+        attempt (fun () -> dispatchStopped.Dispose())
+        attempt (fun () -> lock lifecycleGate (fun () -> lifetime.Dispose()))
 
-            try do! callbacks with _ -> ()
-            dispatchStopped.Dispose()
-            lock lifecycleGate (fun () -> lifetime.Dispose())
+        // Every notification sees this same sealed reason. Later notification
+        // faults affect Completion, without rewriting a reason already delivered.
+        attempt (fun () -> stoppedEvent.Trigger(options.Name, reason))
+        options.OnStopped |> Option.iter (fun callback -> attempt (fun () -> callback (options.Name, reason)))
 
-            safeInvoke (fun () -> stoppedEvent.Trigger(options.Name, reason))
-            options.OnStopped |> Option.iter (fun callback -> safeInvoke (fun () -> callback (options.Name, reason)))
-
+        let errors = lock lifecycleGate (fun () -> failures.ToArray())
+        if errors.Length > 0 then completion.TrySetException(errors) |> ignore
+        else
             match reason with
             | AgentStopReason.Completed -> completion.TrySetResult() |> ignore
             | AgentStopReason.Aborted -> completion.TrySetCanceled(lifetimeToken) |> ignore
             | AgentStopReason.Faulted error -> completion.TrySetException(error) |> ignore
-        }
+    }
 
     let runLoop () =
         task {
-            signalStarted ()
             try
+                signalStarted ()
                 let mutable running = true
                 while running && not (isImmediateStopRequested ()) do
                     let! canRead = channel.Reader.WaitToReadAsync(lifetimeToken)
@@ -937,8 +975,14 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
                                 try
                                     do! handler context reliableContext envelope.Message
                                 with
-                                | :? OperationCanceledException when isAbortRequested () ->
-                                    envelope.Discard AgentStopReason.Aborted
+                                | :? OperationCanceledException as error when isImmediateStopRequested () && lifetimeToken.IsCancellationRequested ->
+                                    // A lifetime fault can cancel the current handler just as
+                                    // Abort can. Settle with that chosen cause, not its OCE.
+                                    match getStopReason () with
+                                    | Some reason -> envelope.Discard reason
+                                    | None ->
+                                        envelope.Fault error
+                                        failCore error
                                 | error ->
                                     envelope.Fault error
 
@@ -947,7 +991,7 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
                                     | AgentErrorAction.Stop ->
                                         requestImmediateStop (AgentStopReason.Faulted error)
             with
-            | :? OperationCanceledException when isAbortRequested () -> ()
+            | :? OperationCanceledException when isImmediateStopRequested () && lifetimeToken.IsCancellationRequested -> ()
             | error -> requestImmediateStop (AgentStopReason.Faulted error)
             do! finish ()
         }
@@ -1029,7 +1073,8 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
 
     /// <summary>
     /// Completes after dispatch, queue cleanup, cancellation callbacks, and stopped callbacks finish.
-    /// Succeeds for Completed, is canceled for Aborted, and faults for Faulted.
+    /// Retains original and secondary lifecycle failures. With no such failures,
+    /// succeeds for Completed or is canceled for Aborted. StopReason is sealed before notifications.
     /// Lifecycle callbacks must not block waiting for this task.
     /// </summary>
     member _.Completion : Task = completion.Task :> Task
@@ -1329,7 +1374,11 @@ type StatefulAgent<'State, 'Command>
     let applyState nextState =
         let previous = state
         state <- nextState
-        options.OnTransition |> Option.iter (fun callback -> safeInvoke (fun () -> callback (previous, nextState)))
+        options.OnTransition |> Option.iter (fun callback -> callback (previous, nextState))
+
+    let applyCommandState (context: AgentContext<StatefulEnvelope<'State, 'Command>>) nextState =
+        try applyState nextState
+        with error -> context.Fail error
 
     let onError (name, error) =
         match options.OnUnhandled with
@@ -1364,10 +1413,10 @@ type StatefulAgent<'State, 'Command>
 
                         match transition with
                         | StatefulTransition.Stay -> ()
-                        | StatefulTransition.SetState nextState -> applyState nextState
+                        | StatefulTransition.SetState nextState -> applyCommandState agentContext nextState
                         | StatefulTransition.Stop -> agentContext.Complete() |> ignore
                         | StatefulTransition.StopWithState nextState ->
-                            applyState nextState
+                            applyCommandState agentContext nextState
                             agentContext.Complete() |> ignore
                 })
 

@@ -290,4 +290,204 @@ let tests = testList "Lifetimes" [
         do! finish caller
         do! finish target
     })
+
+    case "startup callback fault settles pending requests and stops before dispatch" (fun () -> task {
+        let entered, release = gate<unit>(), gate<unit>()
+        let original = InvalidOperationException("startup notification")
+        let seen = ConcurrentQueue<int>()
+        let options = { AgentOptions.create "startup-fault" with
+                            OnStarted = Some(fun _ ->
+                                entered.TrySetResult() |> ignore
+                                release.Task.GetAwaiter().GetResult()
+                                raise original) }
+        use agent = TestAgent.Start(options, fun _ reply -> task { seen.Enqueue reply })
+        try
+            do! awaitUnit entered.Task
+            let pending: Task<AgentAskResult<int>> = agent.TryAskAsync(fun _ -> 1)
+            equal AgentPostResult.Posted (agent.TryPost 2)
+            release.TrySetResult() |> ignore
+            let! result = awaitResult pending
+            expectFault original result
+            let! failure = terminal agent.Completion
+            check (failure |> Option.exists (fun actual -> Object.ReferenceEquals(original, actual))) "Startup cause remains original."
+            expectStopFault original agent.StopReason
+            equal AgentPostResult.Closed (agent.TryPost 3)
+            equal 0 seen.Count
+            equal 0 agent.QueueLength
+        finally release.TrySetResult() |> ignore
+    })
+
+    case "committed transition callback fault cannot enter recovery or process the next command" (fun () -> task {
+        let entered, release = gate<unit>(), gate<unit>()
+        let original = InvalidOperationException("transition notification")
+        let committed = ConcurrentQueue<int * int>()
+        let mutable calls, recoveries = 0, 0
+        let options = { StatefulAgentOptions.create "transition-fault" with
+                            OnUnhandled = Some(fun _ -> recoveries <- recoveries + 1; StatefulErrorAction.KeepStateAndContinue)
+                            OnTransition = Some(fun states -> committed.Enqueue states; raise original) }
+        use agent = TestStatefulAgent.Start(options, 0, fun _ state command -> task {
+            calls <- calls + 1
+            entered.TrySetResult() |> ignore
+            do! release.Task
+            return StatefulTransition.SetState(state + command)
+        })
+        try
+            equal AgentPostResult.Posted (agent.TryPost 1)
+            do! awaitUnit entered.Task
+            equal AgentPostResult.Posted (agent.TryPost 10)
+            release.TrySetResult() |> ignore
+            let! _ = terminal agent.Completion
+            expectStopFault original agent.StopReason
+            equal [| (0, 1) |] (committed.ToArray())
+            equal 1 calls
+            equal 0 recoveries
+            equal AgentPostResult.Closed (agent.TryPost 20)
+            equal 0 agent.QueueLength
+        finally release.TrySetResult() |> ignore
+    })
+
+    case "clean completion stop notifications share sealed reason and retain each failure" (fun () -> task {
+        let configured = InvalidOperationException("configured stop")
+        let observed = InvalidOperationException("stop event")
+        let reasons = ConcurrentQueue<AgentStopReason>()
+        use agent = TestAgent.Start({ AgentOptions.create "stop-notifications" with
+                                        OnStopped = Some(fun (_, reason) -> reasons.Enqueue reason; raise configured) }, fun _ (_: int) -> task { () })
+        agent.Stopped.Add(fun (_, reason) -> reasons.Enqueue reason; raise observed)
+        agent.Complete() |> ignore
+        let! _ = terminal agent.Completion
+        equal (Some AgentStopReason.Completed) agent.StopReason
+        equal [| AgentStopReason.Completed; AgentStopReason.Completed |] (reasons.ToArray())
+        let errors = agent.Completion.Exception.Flatten().InnerExceptions
+        check (errors |> Seq.exists (fun error -> Object.ReferenceEquals(observed, error))) "Event failure remains original."
+        check (errors |> Seq.exists (fun error -> Object.ReferenceEquals(configured, error))) "Separate callback is attempted and retained."
+    })
+
+    case "primary handler fault joins background and retains cancellation and stop notification failures" (fun () -> task {
+        let working, release, canceled = gate<unit>(), gate<unit>(), gate<unit>()
+        let primary = InvalidOperationException("primary handler")
+        let cancel = InvalidOperationException("owned cancellation")
+        let stopped = InvalidOperationException("secondary stopped")
+        let mutable joined = false
+        let handle (context: ReliableAgentContext<int>) _ = task {
+            context.PipeToSelf((fun token -> task {
+                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore; raise cancel)
+                working.TrySetResult() |> ignore
+                do! release.Task
+                joined <- true
+                return ()
+            }), fun _ -> 2)
+            do! working.Task
+            return raise primary
+        }
+        use agent = TestAgent.StartReliable({ AgentOptions.create "primary-and-cleanup" with OnStopped = Some(fun _ -> raise stopped) }, handle)
+        try
+            equal AgentPostResult.Posted (agent.TryPost 1)
+            do! awaitUnit working.Task
+            do! awaitUnit canceled.Task
+            check (not agent.Completion.IsCompleted) "Failure cannot skip the owned background join."
+            release.TrySetResult() |> ignore
+            let! _ = terminal agent.Completion
+            check joined "Owned work was joined despite a cancellation callback failure."
+            expectStopFault primary agent.StopReason
+            let errors = agent.Completion.Exception.Flatten().InnerExceptions
+            for expected in [primary; cancel; stopped] do
+                equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
+        finally release.TrySetResult() |> ignore
+    })
+
+    case "mutable recovery callback fault retains handler cause and never reuses changed state" (fun () -> task {
+        let entered, release = gate<unit>(), gate<unit>()
+        let primary = InvalidOperationException("mutable handler")
+        let policy = InvalidOperationException("mutable recovery callback")
+        let state = ResizeArray<int>()
+        let options = { MutableStatefulAgentOptions.create "mutable-recovery-fault" with OnUnhandled = Some(fun _ -> raise policy) }
+        use agent = TestMutableAgent.Start(options, state, fun _ state command -> task {
+            state.Add command
+            entered.TrySetResult() |> ignore
+            do! release.Task
+            return raise primary
+        })
+        try
+            equal AgentPostResult.Posted (agent.TryPost 1)
+            do! awaitUnit entered.Task
+            equal AgentPostResult.Posted (agent.TryPost 2)
+            release.TrySetResult() |> ignore
+            let! _ = terminal agent.Completion
+            expectStopFault primary agent.StopReason
+            equal [| 1 |] (state.ToArray())
+            equal AgentPostResult.Closed (agent.TryPost 3)
+            let errors = agent.Completion.Exception.Flatten().InnerExceptions
+            for expected in [primary; policy] do
+                check (errors |> Seq.exists (fun actual -> Object.ReferenceEquals(expected, actual))) "Original handler/policy cause is retained."
+        finally release.TrySetResult() |> ignore
+    })
+
+
+    case "error observer failure overrides Continue after invoking the configured policy" (fun () -> task {
+        let entered, release = gate<unit>(), gate<unit>()
+        let primary = InvalidOperationException("reported handler")
+        let observer = InvalidOperationException("error observer")
+        let seen = ConcurrentQueue<int>()
+        let mutable policies = 0
+        let policy (_, error) =
+            check (Object.ReferenceEquals(primary, error)) "Policy still receives original handler fault."
+            policies <- policies + 1
+            AgentErrorAction.Continue
+        let options = { AgentOptions.create "error-observer-fault" with OnError = Some policy }
+        use agent = TestAgent.Start(options, fun _ number -> task {
+            seen.Enqueue number
+            entered.TrySetResult() |> ignore
+            do! release.Task
+            return raise primary
+        })
+        agent.Errored.Add(fun _ -> raise observer)
+        try
+            equal AgentPostResult.Posted (agent.TryPost 1)
+            do! awaitUnit entered.Task
+            equal AgentPostResult.Posted (agent.TryPost 2)
+            release.TrySetResult() |> ignore
+            let! _ = terminal agent.Completion
+            equal 1 policies
+            equal [| 1 |] (seen.ToArray())
+            equal 0 agent.QueueLength
+            equal AgentPostResult.Closed (agent.TryPost 3)
+            expectStopFault primary agent.StopReason
+            let errors = agent.Completion.Exception.Flatten().InnerExceptions
+            for expected in [primary; observer] do
+                equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
+        finally release.TrySetResult() |> ignore
+    })
+
+
+    case "owned handler cancellation after a background fault settles with that original cause" (fun () -> task {
+        let entered, fail = gate<unit>(), gate<unit>()
+        let original = InvalidOperationException("background mapper")
+        let handle (context: ReliableAgentContext<ReplyChannel<int>>) _ = task {
+            context.PipeToSelf((fun _ -> task { do! fail.Task }), fun _ -> raise original)
+            entered.TrySetResult() |> ignore
+            do! Task.Delay(Timeout.Infinite, context.CancellationToken)
+        }
+        use agent = TestAgent.StartReliable(AgentOptions.create "background-cancel-handler", handle)
+        let current = agent.TryAskAsync id
+        do! awaitUnit entered.Task
+        let queued = agent.TryAskAsync id
+        fail.TrySetResult() |> ignore
+        let! result = awaitResult current
+        expectFault original result
+        let! result = awaitResult queued
+        expectFault original result
+        let! failure = terminal agent.Completion
+        check (failure |> Option.exists (fun actual -> Object.ReferenceEquals(original, actual))) "Completion retains original singleton cause."
+        equal 1 agent.Completion.Exception.InnerExceptions.Count
+        expectStopFault original agent.StopReason
+        equal 0 agent.QueueLength
+
+        let unowned = OperationCanceledException("unowned while healthy")
+        use healthy = TestAgent.Start(AgentOptions.create "unowned-cancellation", fun _ (_: int) -> task { return raise unowned })
+        healthy.TryPost 1 |> ignore
+        let! failure = terminal healthy.Completion
+        check (failure |> Option.exists (fun actual -> Object.ReferenceEquals(unowned, actual))) "Unowned cancellation still faults."
+        expectStopFault unowned healthy.StopReason
+    })
+
 ]

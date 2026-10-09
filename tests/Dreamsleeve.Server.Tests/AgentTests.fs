@@ -397,11 +397,12 @@ let gracefulCompleteDrainsAndIsStable () = task {
 }
 
 let throwingCancellationCallbackCannotStrandWriter () = task {
-    let entered, release = gate<unit> (), gate<unit> ()
+    let entered, release, canceled = gate<unit> (), gate<unit> (), gate<unit> ()
     let seen = ConcurrentQueue<int>()
+    let original = InvalidOperationException "cancel callback"
     use agent = TestAgent.Start(options "throwing-cancel" (AgentMailbox.boundedWait 1), fun context number -> task {
         if number = 0 then
-            use registration = context.CancellationToken.Register(fun () -> raise (InvalidOperationException "cancel callback"))
+            use registration = context.CancellationToken.Register(fun () -> canceled.TrySetResult() |> ignore; raise original)
             entered.TrySetResult() |> ignore
             // Deliberately noncooperative: Abort must release writers before this finishes.
             do! release.Task
@@ -416,6 +417,7 @@ let throwingCancellationCallbackCannotStrandWriter () = task {
         agent.Abort()
         let! result = awaitResult blocked
         equal AgentPostResult.Closed result
+        do! awaitUnit canceled.Task
         check (not agent.Completion.IsCompleted) "Abort cannot forcibly terminate a running handler."
     finally
         release.TrySetResult() |> ignore
@@ -423,6 +425,8 @@ let throwingCancellationCallbackCannotStrandWriter () = task {
     equal 0 seen.Count
     equal 0 agent.QueueLength
     equal (Some AgentStopReason.Aborted) agent.StopReason
+    check agent.Completion.IsFaulted "Cancellation callback fault is retained after Abort."
+    check (agent.Completion.Exception.Flatten().InnerExceptions |> Seq.exists (fun error -> Object.ReferenceEquals(original, error))) "Original callback fault remains observable."
 }
 
 let faultDiscardsAndSettlesQueuedRequests () = task {
