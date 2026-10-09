@@ -77,16 +77,19 @@ public:
         return std::unexpected{
             Error{Failure::InvalidPage, "Not a Steam sign-in page"}
         };
+
       auto            owner = Shared();
       std::lock_guard lock{owner->mutex};
       if (owner->pending)
         return std::unexpected{
             Error{Failure::Busy, "A previous browser opening is still pending; copy this link to sign in"}
         };
+
       auto   state = std::make_shared<Opening::State>();
       Handle consumer{new Opening{state}};
       auto   job = std::make_unique<Job>(std::move(page), std::move(open), state, owner);
       auto*  raw = job.release();
+
       // _beginthread owns its automatically-closed handle; never wait/close it.
       // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/beginthread-beginthreadex
       const bool refused = owner->failNextLaunch.exchange(false);
@@ -96,11 +99,12 @@ public:
         job.reset(raw);
         return std::unexpected{
             Error{
-                  Failure::Launch,
-                  "Cannot start browser opener: " + std::error_code{refused ? EAGAIN : errno, std::generic_category()}.message()
+              Failure::Launch,
+              "Cannot start browser opener: " + std::error_code{refused ? EAGAIN : errno, std::generic_category()}.message()
             }
         };
       }
+
       owner->pending = std::move(state);
       return consumer;
     }
@@ -145,6 +149,7 @@ private:
     {
       std::unique_ptr<Job> job{static_cast<Job*>(value)};
       auto                 result = job->open(job->page);
+
       std::lock_guard      lock{job->owner->mutex};
       job->owner->pending.reset();
       std::lock_guard completion{job->state->mutex};

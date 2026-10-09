@@ -35,12 +35,14 @@ export namespace Dreamsleeve::Client::Device
     const std::size_t length = table[4] | (table[5] << 8) | (table[6] << 16) | (std::size_t{table[7]} << 24);
     auto              data   = table.subspan(8);
     if (length < data.size()) data = data.first(length);
+
     std::size_t at = 0;
     while (at + 4 <= data.size())
     {
       const auto type      = data[at];
       const auto formatted = std::size_t{data[at + 1]};
       if (formatted < 4 || at + formatted > data.size()) return std::nullopt;
+
       // The UUID is at offset 8 since SMBIOS 2.1, which made the structure 0x19 bytes long.
       if (type == 1 && formatted >= 0x19)
       {
@@ -50,6 +52,7 @@ export namespace Dreamsleeve::Client::Device
         return uuid;
       }
       if (type == 127) return std::nullopt;  // End of table.
+
       // The strings follow the formatted area and end with an empty one.
       auto next = at + formatted;
       while (next + 1 < data.size() && (data[next] != 0 || data[next + 1] != 0))
@@ -69,6 +72,7 @@ export namespace Dreamsleeve::Client::Device
     input.insert(input.end(), bytes, bytes + scope.size() * sizeof(wchar_t));
     input.push_back(0);
     input.insert(input.end(), uuid.begin(), uuid.end());
+
     std::array<std::uint8_t, 32> digest{};
     const auto                   status = BCryptHash(
       BCRYPT_SHA256_ALG_HANDLE,
@@ -79,6 +83,7 @@ export namespace Dreamsleeve::Client::Device
       digest.data(),
       static_cast<ULONG>(digest.size()));
     if (!BCRYPT_SUCCESS(status)) return {};
+
     std::string text;
     text.reserve(digest.size() * 2);
     for (const auto value : digest)
@@ -91,6 +96,7 @@ export namespace Dreamsleeve::Client::Device
     constexpr DWORD Rsmb = 0x52534D42;  // 'RSMB': the raw SMBIOS table.
     const auto      size = GetSystemFirmwareTable(Rsmb, 0, nullptr, 0);
     if (size == 0) return std::nullopt;
+
     std::vector<std::uint8_t> table(size);
     if (GetSystemFirmwareTable(Rsmb, 0, table.data(), size) != size) return std::nullopt;
     return SystemUuid(table);
@@ -101,6 +107,7 @@ export namespace Dreamsleeve::Client::Device
   {
     const auto uuid = BoardUuid();
     if (!uuid) return std::nullopt;
+
     auto hash = Hash(scope, *uuid);
     if (hash.empty()) return std::nullopt;
     return hash;

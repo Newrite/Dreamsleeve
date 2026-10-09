@@ -28,6 +28,7 @@ export namespace Dreamsleeve::Client::Wire
     ErrorCode   code;
     std::string field;
   };
+
   template <class T>
   using Result = std::expected<T, Error>;
 
@@ -133,6 +134,7 @@ public:
       for (const auto& player : players)
         for (const auto& [key, info] : player.actorValues)
           used.emplace(key, info.displayName);
+
       std::erase_if(kinds, [&](const auto& entry) { return !used.contains({entry.second.key, entry.second.displayName}); });
     }
 
@@ -153,17 +155,22 @@ private:
   {
     std::uint64_t               requestId;
     Domain::PlayerId            selfPlayerId;
+
     std::vector<Domain::Player> players;
     std::vector<ChannelOpened>  channels;
+
     std::string                 serverName;
     Domain::AnnouncementPolicy  announcements;
+
     // What the others see while this player's names are hidden; the self entry
     // in players keeps the real profile.
     std::optional<std::string> ownPseudonym;
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+
     // The receiver's mute when the session opened.
     std::optional<Domain::MuteState> mute;
     Domain::PlayerRole               role{Domain::PlayerRole::Player};
+
     // Every kind the players use: the session's table starts from these.
     std::vector<ActorValueKind> kinds;
   };
