@@ -23,7 +23,7 @@ export namespace Dreamsleeve::Client
   // The detached auth-method request port; the production adapter is the default.
   struct ApplicationPorts
   {
-    std::function<Auth::Result<Auth::Methods>(std::string_view, bool)> readMethods = Auth::ReadMethods;
+    std::function<std::expected<Auth::Methods, Auth::Failure>(std::string_view, bool)> readMethods = Auth::ReadMethods;
   };
 
   // All public calls, including destruction, belong to the application main

@@ -517,7 +517,7 @@ TEST_CASE("Delayed methods replies cannot publish across a route change or ABA")
   auto             firstRelease = gates->firstRelease.get_future().share();
   auto             nextRelease  = gates->nextRelease.get_future().share();
   ApplicationPorts ports;
-  ports.readMethods = [gates, firstRelease, nextRelease](std::string_view url, bool) -> Auth::Result<Auth::Methods> {
+  ports.readMethods = [gates, firstRelease, nextRelease](std::string_view url, bool) -> std::expected<Auth::Methods, Auth::Failure> {
     if (++gates->calls == 1)
     {
       gates->firstEntered.set_value();
