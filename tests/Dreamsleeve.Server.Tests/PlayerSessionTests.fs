@@ -9,20 +9,33 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private playerSnapshot profile = Player.snapshot (Player.create profile)
 let private globalId = ChatChannels.globalId
 let private systemId = ChatChannels.systemId
-let private options = { ServerRuntimeOptions.defaults.Player with MaxPendingChat = 1; MaxBootstrapEvents = 4; MaxPendingOutput = 16 }
+let private options = {
+    ServerRuntimeOptions.defaults.Player with
+        MaxPendingChat = 1
+        MaxBootstrapEvents = 4
+        MaxPendingOutput = 16
+}
+
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
 }
+
 let private receive (output: Channel<'T>) = output.Reader.ReadAsync().AsTask().WaitAsync guard
+
 let private deliver (address: ReliableAgentRef<'T>) value = task {
     let! result = address.PostAsync value
     equal AgentDeliveryResult.Posted result
 }
+
 let private post (player: Agent<PlayerSessionMessage>) message = deliver (player.Ref.TryReliable().Value) message
+
 let private read (player: Agent<PlayerSessionMessage>) = task {
     let! result = player.TryAskAsync PlayerSessionMessage.Read |> awaitResult
     match result with
@@ -47,8 +60,16 @@ type private Fixture = {
 }
 
 let private rules =
-    Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
-    |> Moderation.withFlags { Words = ["flagword"]; Substrings = []; Exceptions = [] }
+    Moderation.create {
+        Words = ["badword"]
+        Substrings = []
+        Exceptions = []
+    }
+    |> Moderation.withFlags {
+        Words = ["flagword"]
+        Substrings = []
+        Exceptions = []
+    }
 
 let private withIdentityPlayer moderation announcements identity hideIdentity settings (createPresence: Channel<PresenceCommand> -> Agent<PresenceCommand>) run = task {
     let queries = Channel.CreateUnbounded<SessionAuthenticationRequest>()
@@ -81,12 +102,23 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
                      (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (guilds.Ref.TryReliable().Value)
                      (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> expectStarted |> fun owner -> owner.Owner
-    let fixture = { Request = request; Player = player; Authentication = queries;
-                    Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Guilds = guildCommands
-                    GuildEvents = ref None; Host = hostCommands
-                    Names = nameRequests; Moderation = moderationRequests }
+    let fixture = {
+        Request = request
+        Player = player
+        Authentication = queries
+        Chat = chatCommands
+        System = systemCommands
+        Presence = presenceCommands
+        Marks = markCommands
+        Guilds = guildCommands
+        GuildEvents = ref None
+        Host = hostCommands
+        Names = nameRequests
+        Moderation = moderationRequests
+    }
     do! run fixture
-    if not player.Completion.IsCompleted then player.Abort()
+    if not player.Completion.IsCompleted then
+        player.Abort()
     let! _ = terminal player.Completion
     authentication.Complete() |> ignore
     chat.Complete() |> ignore
@@ -124,7 +156,15 @@ let private resolve fixture = task {
     equal fixture.Request.SessionTicket query.Ticket
     let profile = PlayerData.create (PlayerId.create 42UL |> ok)
                       (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) NameColor.unknown
-    do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
+    do! deliver query.ReplyTo {
+        OperationId = query.OperationId
+        Result = Ok {
+            Profile = profile
+            Role = PlayerRole.Player
+            Mute = ValueNone
+            SignedInFrom = ValueNone
+        }
+    }
     let! command = receive fixture.Host
     match command with
     | SessionHostCommand.Reserve(connectionId, reserved, hidden, _, reply) ->
@@ -155,7 +195,11 @@ let private joinsAs pseudonym fixture = task {
     match chatCommand, systemCommand, presenceCommand, markCommand, guildCommand with
     | ChatRoomCommand.Join chat, ChatRoomCommand.Join system, PresenceCommand.Join presence, GroundMarkCommand.Join _, GuildCommand.Join guilds ->
         fixture.GuildEvents.Value <- Some guilds.Events
-        do! deliver system.Events (ChatRoomEvent.Joined { snapshot profile with ChannelId = systemId; Kind = ChatChannelKind.System })
+        do! deliver system.Events (ChatRoomEvent.Joined {
+            snapshot profile with
+                ChannelId = systemId
+                Kind = ChatChannelKind.System
+        })
         return profile, chat, presence
     | other -> return failwithf "Expected subscriptions: %A" other
 }
@@ -208,7 +252,10 @@ let private finish fixture = task {
     let! systemCommand = receive fixture.System
     let! presenceCommand = receive fixture.Presence
     // Position updates reach the mark owner before the detach; only the detach matters here.
-    let mutable markCommand = GroundMarkCommand.Expire { DueTimestamp = 0L; QueuedTimestamp = 0L }
+    let mutable markCommand = GroundMarkCommand.Expire {
+        DueTimestamp = 0L
+        QueuedTimestamp = 0L
+    }
     while (match markCommand with GroundMarkCommand.Detach _ -> false | _ -> true) do
         let! next = receive fixture.Marks
         markCommand <- next
@@ -571,11 +618,21 @@ let tests = testList "PlayerSession" ([
             let! query = receive fixture.Authentication
             let stored = PlayerData.create (PlayerId.create 42UL |> ok)
                              (Username.create 32 "bad.word" |> ok) (DisplayName.create 64 "Sir Badword" |> ok) NameColor.unknown
-            do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Ok { Profile = stored; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
+            do! deliver query.ReplyTo {
+                OperationId = query.OperationId
+                Result = Ok {
+                    Profile = stored
+                    Role = PlayerRole.Player
+                    Mute = ValueNone
+                    SignedInFrom = ValueNone
+                }
+            }
             let! reserve = receive fixture.Host
             let reply =
                 match reserve with
-                | SessionHostCommand.Reserve(_, reserved, _, _, reply) -> equal stored.PlayerId reserved.PlayerId; reply
+                | SessionHostCommand.Reserve(_, reserved, _, _, reply) ->
+                    equal stored.PlayerId reserved.PlayerId
+                    reply
                 | other -> failwithf "Expected Reserve: %A" other
             do! deliver reply (IdentityAdmission.Reserved ValueNone)
             let! chatCommand = receive fixture.Chat
@@ -674,7 +731,10 @@ let tests = testList "PlayerSession" ([
             // Kinds the session already knows stay known: presence leaves them undefined.
             let patch: MetadataPatch = {
                 PlayerId = neighbour.PlayerId
-                ActorValues = ValueSome { Removed = []; Set = [ key, health -20 ] }
+                ActorValues = ValueSome {
+                    Removed = []
+                    Set = [ key, health -20 ]
+                }
                 Details = ValueNone
             }
             let change = { PresenceChange.empty with Metadata = [ patch ] }
@@ -702,7 +762,11 @@ let tests = testList "PlayerSession" ([
             | other -> failwithf "%A" other
             equal 0 fixture.Chat.Reader.Count
 
-            let rejection = { Code = RequestRejectionCode.NotChannelMember; Message = "refused"; Field = "" }
+            let rejection = {
+                Code = RequestRejectionCode.NotChannelMember
+                Message = "refused"
+                Field = ""
+            }
             do! deliver chat.Events (ChatRoomEvent.Rejected(2UL, rejection))
             let! rejected = receive fixture.Host
             equal (SessionHostCommand.Send(fixture.Request.ConnectionId, ServerResponse.ChatRejected(2UL, rejection))) rejected
@@ -769,7 +833,10 @@ let tests = testList "PlayerSession" ([
             let! query = receive fixture.Authentication
             do! post fixture.Player PlayerSessionMessage.Stop
             let! _ = terminal fixture.Player.Completion
-            let! late = query.ReplyTo.PostAsync { OperationId = query.OperationId; Result = Error SessionAuthenticationError.Unavailable }
+            let! late = query.ReplyTo.PostAsync {
+                OperationId = query.OperationId
+                Result = Error SessionAuthenticationError.Unavailable
+            }
             equal AgentDeliveryResult.Closed late
             equal 0 fixture.Host.Reader.Count
         }))
@@ -825,7 +892,11 @@ let tests = testList "PlayerSession" ([
             equal Map.empty fresh.ActorValues
             do! update PlayerUpdate.LeaveGame
             let! cleared = read fixture.Player
-            equal { fresh with CharacterName = ValueNone; CharacterGeneration = fresh.CharacterGeneration + 1UL } (ok cleared)
+            equal {
+                fresh with
+                    CharacterName = ValueNone
+                    CharacterGeneration = fresh.CharacterGeneration + 1UL
+            } (ok cleared)
             equal 0 fixture.Host.Reader.Count
             do! post fixture.Player PlayerSessionMessage.Stop
             do! finish fixture
@@ -837,8 +908,17 @@ let tests = testList "PlayerSession" ([
             let name = CharacterName.create 128 "Nerevar" |> ok
             let form = FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)
             let location = PlayerLocation.create (Location.create form (LocationName.create 128 "Whiterun" |> ok)) Position.zero CameraDirection.zero
-            let pose = { Position = Position.create 10.0f 20.0f 30.0f |> ok; CameraDirection = CameraDirection.zero; SampledAtUs = 0UL }
-            let sample context sequence = PlayerSessionMessage.SampleMovement { ContextRevision = context; Sequence = sequence; Pose = pose }
+            let pose = {
+                Position = Position.create 10.0f 20.0f 30.0f |> ok
+                CameraDirection = CameraDirection.zero
+                SampledAtUs = 0UL
+            }
+            let sample context sequence =
+                PlayerSessionMessage.SampleMovement {
+                    ContextRevision = context
+                    Sequence = sequence
+                    Pose = pose
+                }
             do! post fixture.Player (sample 1UL 1UL)
             let! _ = read fixture.Player
             equal 0 fixture.Host.Reader.Count
@@ -907,7 +987,10 @@ let tests = testList "PlayerSession" ([
         ] do
             do! withPlayer options (fun fixture -> task {
                 let! query = receive fixture.Authentication
-                do! deliver query.ReplyTo { OperationId = query.OperationId; Result = Error failure }
+                do! deliver query.ReplyTo {
+                    OperationId = query.OperationId
+                    Result = Error failure
+                }
                 let! rejected = receive fixture.Host
                 match rejected with
                 | SessionHostCommand.Send(connectionId, ServerResponse.RequestRejected(requestId, rejection)) ->
@@ -937,8 +1020,10 @@ let tests = testList "PlayerSession" ([
         use presence = TestAgent.Start(AgentOptions.create "presence", collect presenceCommands)
         use host = TestAgent.Start(AgentOptions.create "host", collect hostCommands)
         let request = {
-            ConnectionId = Guid.NewGuid(); RequestId = 1UL
-            SessionTicket = String('b', 43); Hiding = HiddenIdentity.Shown
+            ConnectionId = Guid.NewGuid()
+            RequestId = 1UL
+            SessionTicket = String('b', 43)
+            Hiding = HiddenIdentity.Shown
         }
         use marks = TestAgent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
         use names = TestAgent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<ProfileChangeRequest>()))
@@ -1054,6 +1139,7 @@ let tests = testList "PlayerSession" ([
             release.SetResult()
         })
     })
+
     case "a display name change passes the word list, goes to the account service and spreads through presence" (fun () ->
         let identity = { IdentityOptions.defaults with DisplayNameChangeIntervalMinutes = 60 }
         withIdentityPlayer rules AnnouncementOptions.defaults identity HiddenIdentity.Shown options
@@ -1087,7 +1173,10 @@ let tests = testList "PlayerSession" ([
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(5UL, name "Другое"))
             let! _ = refusal 5UL RequestRejectionCode.Overloaded
             let stored = PlayerData.withDisplayName (name "Новое Имя") profile
-            do! deliver request.ReplyTo { OperationId = request.OperationId; Result = Ok stored }
+            do! deliver request.ReplyTo {
+                OperationId = request.OperationId
+                Result = Ok stored
+            }
             let! host = receive fixture.Host
             equal (SessionHostCommand.UpdateProfile(fixture.Request.ConnectionId, stored, true)) host
             let! update = receive fixture.Presence
@@ -1104,7 +1193,10 @@ let tests = testList "PlayerSession" ([
             // Too soon: the account service refuses and nothing changes.
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(6UL, name "Третье"))
             let! second = receive fixture.Names
-            do! deliver second.ReplyTo { OperationId = second.OperationId; Result = Error (ProfileChangeError.TooSoon(TimeSpan.FromMinutes 29.5)) }
+            do! deliver second.ReplyTo {
+                OperationId = second.OperationId
+                Result = Error (ProfileChangeError.TooSoon(TimeSpan.FromMinutes 29.5))
+            }
             let! message = refusal 6UL RequestRejectionCode.RateLimited
             check (message.Contains "30 min") $"The refusal names the wait: {message}"
             let! unchanged = read fixture.Player
@@ -1147,7 +1239,10 @@ let tests = testList "PlayerSession" ([
             | SessionHostCommand.Send(_, ServerResponse.RequestRejected(5UL, rejection)) -> equal RequestRejectionCode.Overloaded rejection.Code
             | other -> failwithf "Expected a refusal: %A" other
             let stored = PlayerData.withNameColor (color 0xE57373u) profile
-            do! deliver request.ReplyTo { OperationId = request.OperationId; Result = Ok stored }
+            do! deliver request.ReplyTo {
+                OperationId = request.OperationId
+                Result = Ok stored
+            }
             let! host = receive fixture.Host
             equal (SessionHostCommand.UpdateProfile(fixture.Request.ConnectionId, stored, true)) host
             let! update = receive fixture.Presence
@@ -1217,14 +1312,27 @@ let tests = testList "PlayerSession" ([
             do! post fixture.Player (PlayerSessionMessage.Moderate(3UL, ModerationAction.Kick(bob, reason)))
             let! kick = receive fixture.Moderation
             equal (ModerationCommand.Kick(bob, reason, profile.PlayerId)) kick.Command
-            do! deliver kick.ReplyTo { OperationId = kick.OperationId; Result = Error(ModerationError.Refused SanctionError.NotAllowed) }
+            do! deliver kick.ReplyTo {
+                OperationId = kick.OperationId
+                Result = Error(ModerationError.Refused SanctionError.NotAllowed)
+            }
             do! refused 3UL RequestRejectionCode.NotPermitted
             do! post fixture.Player (PlayerSessionMessage.Moderate(4UL, ModerationAction.Sanction(bob, SanctionKind.Mute, SanctionTerm.UntilLifted, reason, false)))
             let! sanction = receive fixture.Moderation
-            let order = { Target = bob; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted; Reason = reason; IssuedBy = SanctionIssuer.Moderator profile.PlayerId; Devices = false }
+            let order = {
+                Target = bob
+                Kind = SanctionKind.Mute
+                Term = SanctionTerm.UntilLifted
+                Reason = reason
+                IssuedBy = SanctionIssuer.Moderator profile.PlayerId
+                Devices = false
+            }
             equal (ModerationCommand.Sanction order) sanction.Command
             let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
-            do! deliver sanction.ReplyTo { OperationId = sanction.OperationId; Result = Ok(ModerationResult.Sanctioned mute) }
+            do! deliver sanction.ReplyTo {
+                OperationId = sanction.OperationId
+                Result = Ok(ModerationResult.Sanctioned mute)
+            }
             let! issued = receive fixture.Host
             equal (sent (ServerResponse.SanctionIssued(4UL, mute))) issued
             // A chat removal goes to the channel owner; the requester's copy settles it.
@@ -1232,7 +1340,10 @@ let tests = testList "PlayerSession" ([
             let message = publication author 9UL
             do! post fixture.Player (PlayerSessionMessage.Moderate(5UL, ModerationAction.DeleteMessage(globalId, message.MessageId)))
             let! command = receive fixture.Chat
-            let removal = match command with ChatRoomCommand.Remove removal -> removal | other -> failwithf "Expected a removal: %A" other
+            let removal =
+                match command with
+                | ChatRoomCommand.Remove removal -> removal
+                | other -> failwithf "Expected a removal: %A" other
             equal (5UL, message.MessageId) (removal.RequestId, removal.MessageId)
             do! deliver removal.ReplyTo (ChatRoomEvent.Removed(ValueSome 5UL, message))
             let! removed = receive fixture.Host
@@ -1259,7 +1370,10 @@ let tests = testList "PlayerSession" ([
             equal (sent (ServerResponse.PlayerMarksCleared(7UL, bob, 1))) cleared
             let! line = audited AdminAction.ClearedGroundMarks "1 marks"
             // An audit line's answer settles nothing.
-            do! deliver line.ReplyTo { OperationId = line.OperationId; Result = Ok ModerationResult.Recorded }
+            do! deliver line.ReplyTo {
+                OperationId = line.OperationId
+                Result = Ok ModerationResult.Recorded
+            }
             let! current = read fixture.Player
             check (Result.isOk current) "An audit answer leaves the session open."
             equal 0 fixture.Moderation.Reader.Count
@@ -1283,8 +1397,14 @@ let tests = testList "PlayerSession" ([
     case "a muted player reads but does not write; a death mark still goes and a lifted mute writes again" (fun () ->
         withIdentity IdentityOptions.defaults HiddenIdentity.Shown (fun fixture -> task {
             let! profile, _, _ = ready fixture
-            let order = { Target = profile.PlayerId; Kind = SanctionKind.Mute; Term = SanctionTerm.UntilLifted
-                          Reason = SanctionReason.create "Флуд" |> ok; IssuedBy = SanctionIssuer.Moderator(PlayerId.create 99UL |> ok); Devices = false }
+            let order = {
+                Target = profile.PlayerId
+                Kind = SanctionKind.Mute
+                Term = SanctionTerm.UntilLifted
+                Reason = SanctionReason.create "Флуд" |> ok
+                IssuedBy = SanctionIssuer.Moderator(PlayerId.create 99UL |> ok)
+                Devices = false
+            }
             let mute = Sanction.issue (SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
             do! post fixture.Player (PlayerSessionMessage.MuteChanged(ValueSome mute))
             let! told = receive fixture.Host
