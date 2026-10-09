@@ -66,6 +66,27 @@ file; 301 исходная поза движения и replay боя (301 по�
 контрольный NIF сохранил прежний SHA-256. Это проверка формата и обработки
 отказов, не новый игровой визуальный тест и не доказательство ускорения захвата.
 
+09.10: серверные storage/HTTP outcomes типизированы без изменения protocol26.
+Storage отдельно фиксирует проверенный canonical файл; actor отдельно фиксирует
+Ready после проверки актуального transfer. Подготовка дельты предшествует
+canonical rename, и её I/O-отказ больше не оставляет отвергнутый canonical файл.
+Cancel/завершение имеют одного владельца cleanup и счётчиков, контрольный допуск
+ожидает место вместо потерянного TryWrite. Shutdown закрывает новые admissions
+до snapshot и ждёт lease gates; поздний cancel проверяет захваченную identity.
+
+Broad catch вокруг mutable операций заменён narrow filesystem adapters и
+границами supervision worker/HTTP lifetime. Неожиданный fault или незавершённый
+cleanup прекращает владельца через OwnerFailure → PhantomAgent.failure →
+существующий ServerRuntime fail/Abort. Такой fault не обычный отказ для retry;
+cleanup error после canonical commit не отменяет зафиксированный content.
+Подробные ownership/retry границы приведены в [PhantomsRu.md](PhantomsRu.md).
+
+К regression coverage добавлены реальные сбои rename дельты/canonical,
+сохранение canonical после HTTP cancel и fault cleanup, двойные final chunks/
+cancel с точным повторным quota admission, неожиданный borrowed destination
+fault с освобождением handles, HTTP stream IO/fault и сохранение wire reason,
+retry и TransferId=0. Это тесты владения/ошибок, не новый игровой визуальный QA.
+
 Записи ниже — история codex/phantom-replication. P-06 geometry cap и P-07
 neutral factories больше не описывают актуальную архитектуру.
 

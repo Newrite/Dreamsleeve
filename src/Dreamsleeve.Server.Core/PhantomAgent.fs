@@ -37,8 +37,8 @@ module PhantomAgent =
         PoseCredit: Credit; PoseSamples: Credit; ReplicationCredit: Credit; OutgoingPoseCredit: Credit; Commands: Credit; Outbox: Queue<TransportPacket>
     }
     type private Phase =
-        | StartingUpload of Task<Result<bool, string>>
-        | StartingDownload of Task<Result<PhantomDelta option, string>>
+        | StartingUpload of Task<Result<bool, PhantomStorageError>>
+        | StartingDownload of Task<Result<PhantomDelta option, PhantomStorageError>>
         | StreamingHttp of PhantomHttpLease
     type private Transfer = {
         Id: PhantomTransferId; Request: PhantomRequestId; Owner: Guid; Source: PlayerId; Manifest: PhantomManifest
@@ -50,7 +50,7 @@ module PhantomAgent =
         Options: PhantomOptions; Storage: PhantomStoragePort; Http: PhantomHttpPort; Send: Guid * TransportPacket -> Result<unit, TransportSendError>
         Members: Dictionary<Guid, Member>; Players: Dictionary<PlayerId, Guid>; Transfers: Dictionary<PhantomTransferId, Transfer>
         Audiences: Dictionary<PlayerId, HashSet<Guid>>
-        Cleanup: ResizeArray<Task<unit>>; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
+        Cleanup: ResizeArray<Task<Result<unit, exn>>>; OutgoingPoseCredit: Credit; mutable NextTransfer: uint64; mutable LastTick: int64; mutable LastDispatch: int64; FanoutCredit: Credit; mutable Cursor: int
     }
 
     let private credit at rate = { At = at; Available = double rate }
@@ -85,22 +85,85 @@ module PhantomAgent =
         let mutable memberState = Unchecked.defaultof<Member>
         if state.Players.TryGetValue(player, &id) && state.Members.TryGetValue(id, &memberState) then ValueSome memberState
         else ValueNone
-    let private cancel state id accepted reason =
+    type private Completion =
+        | Accepted
+        | SourceChanged | ContextChanged | ViewRemoved | Disconnected | Cancelled
+        | StaleTransfer | Superseded | TransferTimeout
+        | StorageFailure of PhantomStorageError
+        | HttpFailure of PhantomHttpError
+
+    let private completion = function
+        | Accepted -> true, "", false
+        | SourceChanged -> false, "source changed", false
+        | ContextChanged -> false, "context changed", false
+        | ViewRemoved -> false, "view removed", false
+        | Disconnected -> false, "disconnected", false
+        | Cancelled -> false, "cancelled", false
+        | StaleTransfer -> false, "stale transfer", false
+        | Superseded -> false, "superseded", false
+        | TransferTimeout -> false, "transfer timeout", true
+        | StorageFailure error -> false, PhantomStorageError.message error, PhantomStorageError.retryable error
+        | HttpFailure error -> false, PhantomHttpError.message error, PhantomHttpError.retryable error
+
+    // A cleanup boundary observes faults while still trying each ownership release.
+    // The result is lifecycle failure, never a successful command rejection.
+    let private releaseTransfer state (transfer: Transfer) =
+        // Detach immutable handles/task identity before leaving the actor turn.
+        let http, storage, id = state.Http, state.Storage, transfer.Id
+        let pending: Task option =
+            match transfer.Phase with
+            | StartingUpload work -> Some work
+            | StartingDownload work -> Some work
+            | StreamingHttp _ -> None
+        task {
+            let mutable first = None
+            let observe (operation: unit -> Task) = task {
+                try do! operation()
+                with error -> if first.IsNone then first <- Some error
+            }
+            match pending with
+            | Some work -> do! observe (fun () -> work)
+            | None -> ()
+            do! observe (fun () -> http.Cancel id)
+            do! observe (fun () -> storage.Cancel id)
+            return match first with Some error -> Error error | None -> Ok ()
+        }
+
+    let failure state =
+        let mutable failed = None
+        if state.Storage.OwnerFailure.IsCompletedSuccessfully then failed <- Some state.Storage.OwnerFailure.Result
+        elif state.Http.OwnerFailure.IsCompletedSuccessfully then failed <- Some state.Http.OwnerFailure.Result
+        for cleanup in state.Cleanup do
+            if cleanup.IsFaulted then
+                let observed = cleanup.Exception.GetBaseException()
+                if failed.IsNone then failed <- Some observed
+            elif failed.IsNone && cleanup.IsCanceled then failed <- Some (Threading.Tasks.TaskCanceledException(cleanup))
+            elif failed.IsNone && cleanup.IsCompletedSuccessfully then
+                match cleanup.Result with Error error -> failed <- Some error | Ok () -> ()
+        for transfer in state.Transfers.Values do
+            let work: Task =
+                match transfer.Phase with
+                | StartingUpload pending -> pending
+                | StartingDownload pending -> pending
+                | StreamingHttp lease -> lease.Completion
+            if work.IsFaulted then
+                let observed = work.Exception.GetBaseException()
+                if failed.IsNone then failed <- Some observed
+            elif failed.IsNone && work.IsCanceled then failed <- Some (Threading.Tasks.TaskCanceledException(work))
+        failed
+
+    let private completedCleanup (pending: Task<Result<unit, exn>>) =
+        pending.IsCompletedSuccessfully && Result.isOk pending.Result
+
+    let private cancel state id outcome =
         match state.Transfers.TryGetValue id with
         | true, transfer ->
+            let accepted, reason, retryable = completion outcome
             trace (if accepted then "transfer_complete" else "transfer_cancel") transfer.Source transfer.Context transfer.Manifest.Generation.Value transfer.View reason
             state.Transfers.Remove id |> ignore
-            state.Cleanup.Add(task {
-                do! state.Http.Cancel id
-                do! state.Storage.Cancel id
-            })
-            let terminal =
-                match reason with
-                | "source changed" | "context changed" | "view removed" | "disconnected" | "cancelled" | "chunk admission"
-                | "stale transfer" | "superseded" | "hash mismatch" | "cache integrity" | "chunk offset/size" | "read bounds" -> true
-                | _ -> false
+            state.Cleanup.Add(releaseTransfer state transfer)
             let completion = { Target = { Player = transfer.Source; Generation = transfer.Manifest.Generation }
-                               Upload = transfer.Upload; RetryAfterMs = if accepted || terminal then 0 else (if transfer.Upload then max 1 state.Options.PublishCooldownMs else 1000) }
+                               Upload = transfer.Upload; RetryAfterMs = if retryable then (if transfer.Upload then max 1 state.Options.PublishCooldownMs else 1000) else 0 }
             let reason = if Text.Encoding.UTF8.GetByteCount reason <= 256 then reason else "storage failure"
             let responseId = match transfer.Phase with StartingUpload _ | StartingDownload _ -> PhantomTransferId 0UL | _ -> id
             emit state transfer.Owner (PhantomResponse.Complete(responseId, accepted, reason, transfer.Request, Some completion))
@@ -112,7 +175,7 @@ module PhantomAgent =
         memberState.Settled <- None
         memberState.Latest <- None
         let affected = state.Transfers.Values |> Seq.filter (fun item -> item.Source = memberState.Player) |> Seq.map _.Id |> Seq.toArray
-        for id in affected do cancel state id false "source changed"
+        for id in affected do cancel state id SourceChanged
     let private valid state (transfer: Transfer) =
         match state.Members.TryGetValue transfer.Owner, source state transfer.Source with
         | (true, owner), ValueSome current when owner.Active && current.Active && current.Located
@@ -160,14 +223,14 @@ module PhantomAgent =
                     subscribers[player] <- subscribers[player] - 1
                     emit state id (PhantomResponse.Remove(player, nextRevision observer))
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
-                        cancel state transfer.Id false "view removed"
+                        cancel state transfer.Id ViewRemoved
                 else
                     match source state player with
                     | ValueSome current when current.Ready.IsSome && current.Ready.Value <> selected.Asset ->
                         // An appearance replacement is not an AOI departure. Keep
                         // the receiver's previous scene until this offer is ready.
                         for transfer in state.Transfers.Values |> Seq.filter (fun item -> not item.Upload && item.Owner = id && item.Source = player) |> Seq.toArray do
-                            cancel state transfer.Id false "superseded"
+                            cancel state transfer.Id Superseded
                         let replacement = { selected with Revision = nextRevision observer; Asset = current.Ready.Value; SentSequence = 0UL; SentGeneration = None; DisplayProgressAt = max current.CommittedAt state.LastTick; DisplayProgressBytes = 0 }
                         observer.Selected[player] <- replacement
                         traceFor (uint64 observer.Player) "offer" player current.Context replacement.Asset.Generation.Value replacement.Revision "replacement"
@@ -219,7 +282,7 @@ module PhantomAgent =
         match state.Members.TryGetValue id with
         | true, memberState ->
             clearSource state memberState
-            for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Owner = id) |> Seq.toArray do cancel state transfer.Id false "disconnected"
+            for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Owner = id) |> Seq.toArray do cancel state transfer.Id Disconnected
             for player in memberState.Selected.Keys do
                 match state.Audiences.TryGetValue player with
                 | true, audience ->
@@ -262,7 +325,7 @@ module PhantomAgent =
                     memberState.DispatchedPose <- None
                     memberState.Previous <- None; memberState.PreviousSequence <- 0UL
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Source = memberState.Player) |> Seq.toArray do
-                        cancel state transfer.Id false "context changed"
+                        cancel state transfer.Id ContextChanged
                 memberState.Character <- value.CharacterGeneration
                 memberState.Context <- value.MovementContext
                 memberState.Located <- value.Location.IsSome && value.MovementContext <> 0UL
@@ -316,7 +379,7 @@ module PhantomAgent =
         | PhantomObservation.Batch observations -> for observation in observations do observe state observation
 
     let private transferAvailable state owner =
-        state.Cleanup.RemoveAll(Predicate(fun pending -> pending.IsCompleted)) |> ignore
+        state.Cleanup.RemoveAll(Predicate(completedCleanup)) |> ignore
         let count = state.Transfers.Values |> Seq.filter (fun item -> item.Owner = owner) |> Seq.length
         state.Transfers.Count + state.Cleanup.Count < state.Options.MaxTransfers && count < state.Options.TransfersPerPlayer
 
@@ -385,7 +448,7 @@ module PhantomAgent =
                     // Pending publication owns no visible scene. Supersede only
                     // uploads; current poses and downloads remain usable meanwhile.
                     for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Upload && item.Owner = id) |> Seq.toArray do
-                        cancel state transfer.Id false "superseded"
+                        cancel state transfer.Id Superseded
                     memberState.Previous <- memberState.Ready |> Option.map _.Generation
                     match memberState.LastPose with
                     | Some struct (generation, sequence) when memberState.Previous = Some generation -> memberState.PreviousSequence <- sequence
@@ -405,12 +468,12 @@ module PhantomAgent =
                 | (true, selected), ValueSome current when selected.Asset.Generation = generation ->
                     let previous = state.Transfers.Values |> Seq.filter (fun item -> item.Owner = id && not item.Upload && item.Source = player) |> Seq.toArray
                     if previous |> Array.forall (fun item -> item.Request <> request) then
-                        for transfer in previous do cancel state transfer.Id false "superseded"
+                        for transfer in previous do cancel state transfer.Id Superseded
                         startTransfer state at id player selected.Asset current.Character current.Context selected.Revision false request None basis
                 | _ -> refuse state id player generation false request 1000 "view unavailable"
             | PhantomRequest.Cancel transferId ->
                 match state.Transfers.TryGetValue transferId with
-                | true, transfer when transfer.Owner = id -> cancel state transferId false "cancelled"
+                | true, transfer when transfer.Owner = id -> cancel state transferId Cancelled
                 | _ -> deny()
         | _ -> deny()
 
@@ -470,8 +533,8 @@ module PhantomAgent =
             | Error _ -> sending <- false
 
     let private settle state at (transfer: Transfer) =
-        if not (valid state transfer) then cancel state transfer.Id false "stale transfer"
-        elif at - transfer.Touched > int64 state.Options.TransferTimeoutMs then cancel state transfer.Id false "transfer timeout"
+        if not (valid state transfer) then cancel state transfer.Id StaleTransfer
+        elif at - transfer.Touched > int64 state.Options.TransferTimeoutMs then cancel state transfer.Id TransferTimeout
         else
             let ready () =
                 let owner = state.Members[transfer.Owner]
@@ -484,20 +547,20 @@ module PhantomAgent =
                 if basis <> Some transfer.Manifest.Hash then owner.Bases <- struct (Some transfer.Manifest.Hash, basis)
                 owner.Ready <- Some transfer.Manifest
                 owner.CommittedAt <- at
-                cancel state transfer.Id true ""
+                cancel state transfer.Id Accepted
             let beginHttp () =
                 let lease = state.Http.Admit(transfer.Owner, transfer.Id, transfer.Manifest, transfer.Upload, transfer.Delta)
                 transfer.Phase <- StreamingHttp lease
                 emit state transfer.Owner (PhantomResponse.Transfer(transfer.Id, transfer.Manifest, transfer.Source, transfer.Upload, transfer.Request, lease.Token, transfer.Delta))
             match transfer.Phase with
-            | StartingUpload pending when pending.IsCompleted ->
+            | StartingUpload pending when pending.IsCompletedSuccessfully ->
                 match pending.Result with
-                | Error reason -> cancel state transfer.Id false reason
+                | Error reason -> cancel state transfer.Id (StorageFailure reason)
                 | Ok true -> ready()
                 | Ok false -> beginHttp()
-            | StartingDownload pending when pending.IsCompleted ->
+            | StartingDownload pending when pending.IsCompletedSuccessfully ->
                 match pending.Result with
-                | Error reason -> cancel state transfer.Id false reason
+                | Error reason -> cancel state transfer.Id (StorageFailure reason)
                 | Ok change -> transfer.Delta <- change; beginHttp()
             | StreamingHttp lease ->
                 let progress = lease.Progress
@@ -512,17 +575,17 @@ module PhantomAgent =
                             selected.DisplayProgressBytes <- progress
                             selected.DisplayProgressAt <- at
                         | _ -> ()
-                if lease.Completion.IsCompleted then
+                if lease.Completion.IsCompletedSuccessfully then
                     match lease.Completion.Result with
-                    | Error reason -> cancel state transfer.Id false reason
+                    | Error reason -> cancel state transfer.Id (HttpFailure reason)
                     | Ok () when transfer.Upload -> ready()
-                    | Ok () -> cancel state transfer.Id true ""
+                    | Ok () -> cancel state transfer.Id Accepted
             | StartingUpload _ | StartingDownload _ -> ()
 
-    let tick state at =
+    let private tickActive state at =
         // Cleanup completions are bounded by admitted transfers, and drained even
         // when publishing is disabled. No file work runs inside this turn.
-        state.Cleanup.RemoveAll(Predicate(fun pending -> pending.IsCompleted)) |> ignore
+        state.Cleanup.RemoveAll(Predicate(completedCleanup)) |> ignore
         let transfers = state.Transfers.Values |> Seq.toArray
         for transfer in transfers do settle state at transfer
         let period = int64 state.Options.ReplicationIntervalMs
@@ -620,6 +683,9 @@ module PhantomAgent =
                         current.ReplicationCredit.Available <- current.ReplicationCredit.Available - 1.0
                         current.DispatchedPose <- Some identity
             state.Cursor <- (state.Cursor + visitedSources) % ServerConfig.MaxPeerLimit
+
+    let tick state at =
+        if (failure state).IsNone then tickActive state at
 
     let stop state =
         for id in state.Members.Keys |> Seq.toArray do detach state id

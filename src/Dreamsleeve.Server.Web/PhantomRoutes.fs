@@ -40,10 +40,11 @@ module PhantomRoutes =
                     context.Response.ContentLength <- Nullable()
                     context.Response.StatusCode <-
                         match reason with
-                        | "HTTP capability" -> 403
-                        | "HTTP length" -> 400
-                        | "HTTP canceled" -> 409
-                        | _ -> 503
+                        | PhantomHttpError.Capability -> 403
+                        | PhantomHttpError.Length -> 400
+                        | PhantomHttpError.Canceled -> 409
+                        | PhantomHttpError.Closed | PhantomHttpError.Truncated | PhantomHttpError.Io
+                        | PhantomHttpError.StorageCompletion | PhantomHttpError.StorageLength | PhantomHttpError.Storage _ -> 503
                 | Error _ -> context.Abort()
     }
     let endpoints current = [ put "/phantoms/content" (handle current true); get "/phantoms/content" (handle current false) ]

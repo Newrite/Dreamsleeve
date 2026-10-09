@@ -151,6 +151,43 @@ GPU-only правки сторонних модов остаются огран�
 PhantomAgent владеет допуском, session/AOI/generation и Ready/Latest; HTTP registry
 владеет одноразовым ключом, отменой и ходом I/O. Эти состояния не дублируют
 готовность модели. Actor опрашивает прогресс/результат lease, не читает диск.
+Storage фиксирует содержимое и PhantomAgent фиксирует Ready в разные моменты.
+Канонический файл появляется только после SHA-256/flush и подготовки optional
+дельты; registry/accounting принадлежат одному worker. Публикация дельты
+выполняется перед каноническим rename, поэтому её ожидаемый I/O-отказ не
+оставляет отвергнутый полный файл. Ошибка части закрывает всю upload lease,
+удаляет временные файлы и освобождает reservation/pin один раз. Cancel ждёт
+реального cleanup через отдельный гарантированный допуск, а не означает лишь
+постановку команды в переполненную очередь. Borrower удерживает файловый gate
+до завершения; последний borrower закрытой lease освобождает semaphore.
+
+Типы `PhantomStorageError` и `PhantomHttpError` описывают ожидаемые исходы.
+Статические wire reason, ограничение256 UTF-8 байт, TransferId=0 до выдачи
+capability и прежние retry_after_ms сохраняются. Решение retry больше не
+зависит от текста исключения: hash mismatch, неверное смещение/размер части
+и read bounds терминальны; прежние cache/delta hash mismatch остаются
+повторяемыми отказами. После отмены HTTP канонический файл уже может быть
+зафиксирован: canceled/timeout не доказывает откат. Повтор целого неизменного
+manifest может получить cache hit, но отдельная допущенная часть автоматически
+не переотправляется. Ready всё равно требует актуальной session/context/view.
+
+Неожиданный fault worker/body либо неудачный cleanup после commit закрывает
+допуск владельца. `OwnerFailure` сохраняет исходную ошибку; принятые ответы и
+HTTP lease завершаются fault, HTTP Finished завершается во всех путях.
+PhantomAgent наблюдает также fault/cancellation pending и cleanup tasks, а
+ServerRuntime использует свой fail/Abort: частично изменённое состояние не
+продолжает работу и не превращается в обычный retryable Complete. После остановки
+HTTP registry отзывается, storage disposer ждёт gates, закрывает оставшиеся
+handles и освобождает pins/reservations; supervisor создаёт нового владельца.
+Обычные IOException/access errors переводятся только файловым/stream адаптером.
+
+Очередь registry и ожидающие control операции ограничены договором вызывающих
+владельцев: actor учитывает active+cleanup в MaxTransfers и удаляет ID перед
+единственным cleanup; повторный Cancel больше не получает transfer. Одноразовый
+HTTP token исключает второй pump, а каждый pump ждёт завершения одной части
+перед следующей. Таким образом ожидание места control не создаёт отдельную
+неограниченную очередь; внутренний storage port не является внешним HTTP API.
+
 На Windows Http владеет ограниченными async WinHTTP jobs; callback только
 сигнализирует владельцу задачи. Буферы живут до HANDLE_CLOSING. Streaming
 совмещает HTTP тело и accepted ENet Complete по request/transfer identity;

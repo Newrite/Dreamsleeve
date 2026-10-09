@@ -38,6 +38,10 @@ type private BlockedBody() =
         entered.TrySetResult() |> ignore
         ValueTask<int>(TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously).Task.WaitAsync cancellation)
 
+type private FailedBody(error: exn) =
+    inherit MemoryStream()
+    override _.ReadAsync(_: Memory<byte>, _: CancellationToken) = ValueTask<int>(Task.FromException<int>(error))
+
 let private deltaFixture = fixture "native prefix delta reconstructs canonical archive and serves full or delta by exact base" (fun options storage http -> task {
     let directory = Environment.GetEnvironmentVariable "DREAMSLEEVE_DELTA_FIXTURE"
     let basis, target, patch =
@@ -72,6 +76,17 @@ let private deltaFixture = fixture "native prefix delta reconstructs canonical a
     }
     let! full = upload (PhantomTransferId 1UL) baseAsset None basis
     Expect.equal full (Ok ()) "Base committed."
+    // Force the real patch rename dependency to fail before canonical commit.
+    let blockedPatch = Path.Combine(options.StoragePath, asset.Hash.Hex + ".delta")
+    Directory.CreateDirectory blockedPatch |> ignore
+    let! failedPublication = upload (PhantomTransferId 2UL) asset (Some delta) patch
+    match failedPublication with
+    | Error (PhantomHttpError.Storage (PhantomStorageError.Io _)) -> ()
+    | other -> failtestf "Expected patch filesystem failure, got %A" other
+    Expect.isFalse (File.Exists(Path.Combine(options.StoragePath, asset.Hash.Hex + ".zst"))) "No rejected canonical target."
+    Expect.equal (Directory.GetFiles(options.StoragePath, "*.tmp").Length) 0 "Failed publication releases temporary file."
+    Expect.isTrue (File.Exists(Path.Combine(options.StoragePath, baseAsset.Hash.Hex + ".zst"))) "Usable base retained."
+    Directory.Delete blockedPatch
     let! restored = upload (PhantomTransferId 2UL) asset (Some delta) patch
     Expect.equal restored (Ok ()) "Delta committed only after canonical target hash."
     Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(options.StoragePath,asset.Hash.Hex+".zst"))) target "Exact compressed target."
@@ -152,16 +167,16 @@ let tests = testList "Phantom HTTP" [
         Expect.equal lease.Token.Length 64 "256 random bits."
         use input = new MemoryStream(bytes)
         let! unknown = http.Serve(request asset.Hash.Hex true (Some(int64 bytes.Length)) input)
-        Expect.equal unknown (Error "HTTP capability") "Content hash is not authorization."
+        Expect.equal unknown (Error PhantomHttpError.Capability) "Content hash is not authorization."
         let! wrongMethod = http.Serve(request lease.Token false None input)
-        Expect.equal wrongMethod (Error "HTTP capability") "Direction cannot change."
+        Expect.equal wrongMethod (Error PhantomHttpError.Capability) "Direction cannot change."
         let! wrongSize = http.Serve(request lease.Token true (Some 4L) input)
-        Expect.equal wrongSize (Error "HTTP length") "No body read for mismatched size."
+        Expect.equal wrongSize (Error PhantomHttpError.Length) "No body read for mismatched size."
         Expect.equal input.Position 0L "Rejected requests do no I/O."
         let! success = http.Serve(request lease.Token true (Some(int64 bytes.Length)) input)
         Expect.equal success (Ok ()) "Valid request can still use admission."
         let! repeated = http.Serve(request lease.Token true (Some(int64 bytes.Length)) input)
-        Expect.equal repeated (Error "HTTP capability") "No second body."
+        Expect.equal repeated (Error PhantomHttpError.Capability) "No second body."
         Expect.equal lease.Completion.Result (Ok ()) "One terminal completion."
         Expect.equal lease.Progress bytes.Length "Full persisted size."
     })
@@ -189,10 +204,10 @@ let tests = testList "Phantom HTTP" [
         do! input.Entered.WaitAsync(TimeSpan.FromSeconds 2.)
         use duplicate = new MemoryStream([|1uy;2uy;3uy;4uy|])
         let! rejected = http.Serve(request lease.Token true (Some 4L) duplicate)
-        Expect.equal rejected (Error "HTTP capability") "Only first request owns body."
+        Expect.equal rejected (Error PhantomHttpError.Capability) "Only first request owns body."
         do! (http.Cancel id).WaitAsync(TimeSpan.FromSeconds 2.)
         let! stopped = running
-        Expect.equal stopped (Error "HTTP canceled") "Abort reaches pending read."
+        Expect.equal stopped (Error PhantomHttpError.Canceled) "Abort reaches pending read."
         Expect.equal lease.Completion.Result stopped "Cancellation is observable to actor."
     })
     fixture "slow upload does not prevent another transfer's disk I/O" (fun _ storage http -> task {
@@ -221,7 +236,100 @@ let tests = testList "Phantom HTTP" [
         do! http.Cancel id
         use input = new MemoryStream([|1uy|])
         let! denied = http.Serve(request lease.Token true (Some 1L) input)
-        Expect.equal denied (Error "HTTP capability") "No request after departure."
+        Expect.equal denied (Error PhantomHttpError.Capability) "No request after departure."
         Expect.isError lease.Completion.Result "Actor can drain canceled admission."
     })
+    fixture "ordinary body IO failure remains typed and releases the claimed capability" (fun _ storage http -> task {
+        let id = PhantomTransferId 1UL
+        let asset = manifest [|1uy;2uy;3uy;4uy|]
+        let! _ = storage.StartUpload(id, asset, None)
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
+        use body = new FailedBody(IOException "dependency read failure")
+        let! result = http.Serve(request lease.Token true (Some 4L) body)
+        Expect.equal result (Error PhantomHttpError.Io) "Expected stream failure has stable wire category."
+        Expect.equal (PhantomHttpError.message PhantomHttpError.Io) "HTTP I/O" "Wire text unchanged."
+        Expect.isFalse http.OwnerFailure.IsCompleted "Ordinary IO does not poison registry."
+        do! (http.Cancel id).WaitAsync(TimeSpan.FromSeconds 2.)
+        do! storage.Cancel id
+        let! next = storage.StartUpload(PhantomTransferId 2UL, asset, None)
+        Expect.equal next (Ok false) "Failed body has not committed and reservation is reusable."
+    })
+    fixture "unexpected body fault settles lifetime and closes registry without a retryable rejection" (fun _ storage http -> task {
+        let id = PhantomTransferId 1UL
+        let asset = manifest [|1uy;2uy;3uy;4uy|]
+        let! _ = storage.StartUpload(id, asset, None)
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
+        let original = InvalidOperationException "unexpected dependency fault"
+        use body = new FailedBody(original)
+        let mutable seen = None
+        try let! _ = http.Serve(request lease.Token true (Some 4L) body) in ()
+        with error -> seen <- Some error
+        Expect.isTrue (seen |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Original fault observed."
+        let! failed = http.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
+        Expect.isTrue (Object.ReferenceEquals(failed, original)) "Lifecycle owner receives original fault."
+        Expect.isTrue lease.Completion.IsFaulted "Lease has no fabricated expected rejection."
+        do! (http.Cancel id).WaitAsync(TimeSpan.FromSeconds 2.)
+        Expect.isTrue lease.Completion.IsFaulted "Cancel cannot replace first completion."
+        use retry = new MemoryStream([|1uy;2uy;3uy;4uy|])
+        let! denied = http.Serve(request lease.Token true (Some 4L) retry)
+        Expect.equal denied (Error PhantomHttpError.Capability) "Revoked capability preserves HTTP contract."
+    })
+    fixture "HTTP cancellation after canonical commit retains content and cannot prove rollback" (fun options storage _ -> task {
+        use stop = new CancellationTokenSource()
+        let wrapped = {
+            storage with
+                WriteChunk = fun args -> task {
+                    let! written = storage.WriteChunk args
+                    match written with Ok true -> stop.Cancel() | Ok false | Error _ -> ()
+                    return written
+                }
+        }
+        let http = PhantomHttp.create options wrapped
+        try
+            let bytes = [|1uy;2uy;3uy;4uy|]
+            let asset = manifest bytes
+            let id = PhantomTransferId 1UL
+            let! _ = storage.StartUpload(id, asset, None)
+            let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
+            use body = new MemoryStream(bytes)
+            let! result = http.Serve { request lease.Token true (Some 4L) body with Cancellation = stop.Token }
+            Expect.equal result (Error PhantomHttpError.Canceled) "Existing canceled outcome retained."
+            Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(options.StoragePath, asset.Hash.Hex + ".zst"))) bytes "Durable content remains committed."
+            do! http.Cancel id
+            do! storage.Cancel id
+            let! warm = storage.StartUpload(PhantomTransferId 2UL, asset, None)
+            Expect.equal warm (Ok true) "Whole manifest retry observes canonical cache; no second body."
+        finally http.Dispose().GetAwaiter().GetResult()
+    })
+
+    fixture "storage cleanup IO fault after commit faults HTTP lease instead of HTTP IO rejection" (fun options _ _ -> task {
+        let directory = Path.Combine(options.StoragePath, "postcommit")
+        let store = PhantomStorage.create { options with StoragePath = directory }
+        let http = PhantomHttp.create options store
+        let bytes = [|1uy;2uy;3uy;4uy|]
+        let asset = manifest bytes
+        let id = PhantomTransferId 1UL
+        let! _ = store.StartUpload(id, asset, None)
+        let temporary = Directory.GetFiles(directory, "*.tmp") |> Array.exactlyOne
+        Directory.CreateDirectory(temporary + ".delta") |> ignore
+        let lease = http.Admit(Guid.NewGuid(), id, asset, true, None)
+        use body = new MemoryStream(bytes)
+        let mutable observed = None
+        try let! _ = http.Serve(request lease.Token true (Some 4L) body) in ()
+        with error -> observed <- Some error
+        Expect.isSome observed "Cleanup fault is not an ordinary body IOException result."
+        let! original = store.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
+        let! forwarded = http.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
+        Expect.isTrue (Object.ReferenceEquals(original, forwarded)) "Original storage fault crosses lifetime boundary."
+        Expect.isTrue (observed |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Caller receives lifecycle fault."
+        Expect.isTrue lease.Completion.IsFaulted "No retryable lease result after committed effect."
+        do! (http.Cancel id).WaitAsync(TimeSpan.FromSeconds 2.)
+        do! http.Dispose()
+        let mutable released = false
+        try do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
+        with error -> released <- Object.ReferenceEquals(error, original)
+        Expect.isTrue released "Storage teardown reports original fault after cleanup."
+        Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(directory, asset.Hash.Hex + ".zst"))) bytes "Canonical content still committed."
+    })
+
 ]

@@ -62,17 +62,89 @@ type ServerTransport = {
     Dispose: unit -> unit
 }
 
+/// Expected storage failures; diagnostic text never decides retry policy.
+[<RequireQualifiedAccess>]
+type PhantomStorageError =
+    | Closed | QueueFull | TransferLimit | CacheHashMismatch | DeltaBaseUnavailable
+    | AssetUnavailable | DiskQuota | HashMismatch | HashSizeConflict | DeltaHashMismatch
+    | DeltaReconstruction | DeltaTargetHash | UnknownUpload | UploadClosed
+    | ChunkOffsetOrSize | ReadBounds | UnknownDownload | DownloadClosed
+    | CacheSizeChanged | CacheTruncated
+    | Io of exn
+
+[<RequireQualifiedAccess>]
+module PhantomStorageError =
+    let message = function
+        | PhantomStorageError.Closed -> "storage closed"
+        | PhantomStorageError.QueueFull -> "storage queue full"
+        | PhantomStorageError.TransferLimit -> "transfer limit"
+        | PhantomStorageError.CacheHashMismatch -> "cache hash mismatch"
+        | PhantomStorageError.DeltaBaseUnavailable -> "delta base unavailable"
+        | PhantomStorageError.AssetUnavailable -> "asset unavailable"
+        | PhantomStorageError.DiskQuota -> "disk quota"
+        | PhantomStorageError.HashMismatch -> "hash mismatch"
+        | PhantomStorageError.HashSizeConflict -> "hash size conflict"
+        | PhantomStorageError.DeltaHashMismatch -> "delta hash mismatch"
+        | PhantomStorageError.DeltaReconstruction -> "delta reconstruction"
+        | PhantomStorageError.DeltaTargetHash -> "delta target hash"
+        | PhantomStorageError.UnknownUpload -> "unknown upload"
+        | PhantomStorageError.UploadClosed -> "upload closed"
+        | PhantomStorageError.ChunkOffsetOrSize -> "chunk offset/size"
+        | PhantomStorageError.ReadBounds -> "read bounds"
+        | PhantomStorageError.UnknownDownload -> "unknown download"
+        | PhantomStorageError.DownloadClosed -> "download closed"
+        | PhantomStorageError.CacheSizeChanged -> "cache size changed"
+        | PhantomStorageError.CacheTruncated -> "cache truncated"
+        | PhantomStorageError.Io error -> error.Message
+
+    let retryable = function
+        | PhantomStorageError.HashMismatch | PhantomStorageError.ChunkOffsetOrSize
+        | PhantomStorageError.ReadBounds -> false
+        | PhantomStorageError.Closed | PhantomStorageError.QueueFull | PhantomStorageError.TransferLimit
+        | PhantomStorageError.CacheHashMismatch | PhantomStorageError.DeltaBaseUnavailable
+        | PhantomStorageError.AssetUnavailable | PhantomStorageError.DiskQuota | PhantomStorageError.HashSizeConflict | PhantomStorageError.DeltaHashMismatch
+        | PhantomStorageError.DeltaReconstruction | PhantomStorageError.DeltaTargetHash
+        | PhantomStorageError.UnknownUpload | PhantomStorageError.UploadClosed
+        | PhantomStorageError.UnknownDownload | PhantomStorageError.DownloadClosed
+        | PhantomStorageError.CacheSizeChanged | PhantomStorageError.CacheTruncated | PhantomStorageError.Io _ -> true
+
+[<RequireQualifiedAccess>]
+type PhantomHttpError =
+    | Closed | Capability | Length | Truncated | Canceled | Io
+    | StorageCompletion | StorageLength | Storage of PhantomStorageError
+
+[<RequireQualifiedAccess>]
+module PhantomHttpError =
+    let message = function
+        | PhantomHttpError.Closed -> "HTTP closed"
+        | PhantomHttpError.Capability -> "HTTP capability"
+        | PhantomHttpError.Length -> "HTTP length"
+        | PhantomHttpError.Truncated -> "HTTP truncated"
+        | PhantomHttpError.Canceled -> "HTTP canceled"
+        | PhantomHttpError.Io -> "HTTP I/O"
+        | PhantomHttpError.StorageCompletion -> "HTTP storage completion"
+        | PhantomHttpError.StorageLength -> "HTTP storage length"
+        | PhantomHttpError.Storage error -> PhantomStorageError.message error
+
+    let retryable = function
+        | PhantomHttpError.Storage error -> PhantomStorageError.retryable error
+        | PhantomHttpError.Closed | PhantomHttpError.Capability | PhantomHttpError.Length
+        | PhantomHttpError.Truncated | PhantomHttpError.Canceled | PhantomHttpError.Io
+        | PhantomHttpError.StorageCompletion | PhantomHttpError.StorageLength -> true
+
 /// One admitted HTTP body. The actor owns admission/cancellation; the HTTP
 /// operation owns bytes and publishes monotonic progress plus one completion.
+/// Unexpected faults fault Completion and also stop the owning HTTP registry.
 type PhantomHttpLease(token: string, size: int) =
     let mutable progress = 0
-    let completion = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+    let completion = TaskCompletionSource<Result<unit, PhantomHttpError>>(TaskCreationOptions.RunContinuationsAsynchronously)
     member _.Token = token
     member _.Size = size
     member _.Progress = Threading.Volatile.Read(&progress)
     member _.Completion = completion.Task
     member _.Advance(count) = Threading.Volatile.Write(&progress, count)
     member _.Finish(result) = completion.TrySetResult result |> ignore
+    member _.Fault(error: exn) = completion.TrySetException error |> ignore
 
 type PhantomHttpRequest = {
     Token: string
@@ -83,24 +155,27 @@ type PhantomHttpRequest = {
     Cancellation: Threading.CancellationToken
 }
 
-/// HTTP handling never reads or changes actor state. Admission gives a scoped
-/// single-use capability, and cancellation revokes both waiting and active I/O.
+/// Failure completes only for an unexpected owner fault. Admission closes;
+/// ServerRuntime must stop/reconstruct the subsystem, never retry its mutation.
 type PhantomHttpPort = {
     Admit: Guid * PhantomTransferId * PhantomManifest * bool * PhantomDelta option -> PhantomHttpLease
     Cancel: PhantomTransferId -> Task<unit>
-    Serve: PhantomHttpRequest -> Task<Result<unit, string>>
+    Serve: PhantomHttpRequest -> Task<Result<unit, PhantomHttpError>>
     Dispose: unit -> Task<unit>
+    OwnerFailure: Task<exn>
 }
 
-/// Operations are detached and serialized by the storage worker. A completed
-/// upload is a verified compressed file; false means more bytes are required.
+/// Metadata is worker-owned; body I/O is serialized by each admitted lease.
+/// true is a verified canonical file; false requires more body bytes. Buffers
+/// remain borrowed until the returned task completes. Cancel awaits cleanup.
 type PhantomStoragePort = {
-    StartUpload: PhantomTransferId * PhantomManifest * PhantomDelta option -> Task<Result<bool, string>>
-    WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, string>>
-    StartDownload: PhantomTransferId * PhantomManifest * AssetHash option -> Task<Result<PhantomDelta option, string>>
-    ReadChunk: PhantomTransferId * int * Memory<byte> -> Task<Result<int, string>>
+    StartUpload: PhantomTransferId * PhantomManifest * PhantomDelta option -> Task<Result<bool, PhantomStorageError>>
+    WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, PhantomStorageError>>
+    StartDownload: PhantomTransferId * PhantomManifest * AssetHash option -> Task<Result<PhantomDelta option, PhantomStorageError>>
+    ReadChunk: PhantomTransferId * int * Memory<byte> -> Task<Result<int, PhantomStorageError>>
     Cancel: PhantomTransferId -> Task<unit>
     Dispose: unit -> Task<unit>
+    OwnerFailure: Task<exn>
 }
 
 [<RequireQualifiedAccess>]

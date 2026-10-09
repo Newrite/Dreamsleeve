@@ -45,11 +45,13 @@ module PhantomHttp =
         let peers = Dictionary<Guid, PeerBudget>()
         let globalBudget = HttpByteBudget(options.ModelBytesPerSecond)
         let mutable closed = false
+        let failure = TaskCompletionSource<exn>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let failOwner error = lock gate (fun () -> closed <- true; failure.TrySetResult error |> ignore)
         let admit (owner, id, manifest: PhantomManifest, upload, change: PhantomDelta option) =
             lock gate (fun () ->
                 let token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes 32)
                 let lease = PhantomHttpLease(token, change |> Option.map _.CompressedBytes |> Option.defaultValue manifest.CompressedBytes)
-                if closed then lease.Finish(Error "HTTP closed")
+                if closed then lease.Finish(Error PhantomHttpError.Closed)
                 else
                     let budget =
                         match peers.TryGetValue owner with
@@ -64,6 +66,18 @@ module PhantomHttp =
                                      Admitted = Stopwatch.GetTimestamp(); Generation = manifest.Generation.Value }
                     transfers.Add(id, transfer); tokens.Add(token, transfer)
                 lease)
+        let readBody (body: Stream) (memory: Memory<byte>) cancellation = task {
+            try
+                let! count = body.ReadAsync(memory, cancellation)
+                return Ok count
+            with :? IOException -> return Error PhantomHttpError.Io
+        }
+        let writeBody (body: Stream) (memory: Memory<byte>) cancellation = task {
+            try
+                do! body.WriteAsync(memory, cancellation)
+                return Ok ()
+            with :? IOException -> return Error PhantomHttpError.Io
+        }
         let pump (transfer: Transfer) (request: PhantomHttpRequest) = task {
             use linked = CancellationTokenSource.CreateLinkedTokenSource(request.Cancellation, transfer.Stop.Token)
             let cancellation = linked.Token
@@ -108,10 +122,14 @@ module PhantomHttp =
                     let mutable ended = false
                     while read < count && not ended do
                         let bodyAt = stamp ()
-                        let! received = request.Body.ReadAsync(buffer.AsMemory(read, count - read), cancellation)
+                        let! received = readBody request.Body (buffer.AsMemory(read, count - read)) cancellation
                         measured 3 "read" bodyAt
-                        if received = 0 then ended <- true else read <- read + received
-                    if read <> count then outcome <- Error "HTTP truncated"
+                        match received with
+                        | Error error -> outcome <- Error error; ended <- true
+                        | Ok 0 -> ended <- true
+                        | Ok count -> read <- read + count
+                    if Result.isError outcome then ()
+                    elif read <> count then outcome <- Error PhantomHttpError.Truncated
                     else
                         // The current storage port retains each chunk until its
                         // completion; reuse only after that task has completed.
@@ -120,48 +138,56 @@ module PhantomHttp =
                         let! written = storage.WriteChunk(transfer.Id, offset, bytes)
                         measured 2 "storage_write" storageAt
                         match written with
-                        | Error reason -> outcome <- Error reason
-                        | Ok complete when complete <> (offset + count = transfer.Lease.Size) -> outcome <- Error "HTTP storage completion"
+                        | Error reason -> outcome <- Error (PhantomHttpError.Storage reason)
+                        | Ok complete when complete <> (offset + count = transfer.Lease.Size) -> outcome <- Error PhantomHttpError.StorageCompletion
                         | Ok _ -> offset <- offset + count
                 else
                     let storageAt = stamp ()
                     let! content = storage.ReadChunk(transfer.Id, offset, buffer.AsMemory(0, count))
                     measured 2 "storage_read" storageAt
                     match content with
-                    | Error reason -> outcome <- Error reason
-                    | Ok read when read <> count -> outcome <- Error "HTTP storage length"
+                    | Error reason -> outcome <- Error (PhantomHttpError.Storage reason)
+                    | Ok read when read <> count -> outcome <- Error PhantomHttpError.StorageLength
                     | Ok _ ->
                         let bodyAt = stamp ()
-                        do! request.Body.WriteAsync(buffer.AsMemory(0, count), cancellation)
+                        let! written = writeBody request.Body (buffer.AsMemory(0, count)) cancellation
                         measured 3 "write" bodyAt
-                        offset <- offset + count
+                        match written with
+                        | Error error -> outcome <- Error error
+                        | Ok () -> offset <- offset + count
                 if offset = count then emit "first_body" 0.
                 transfer.Lease.Advance offset
-            return if cancellation.IsCancellationRequested then Error "HTTP canceled" else outcome
+            return if cancellation.IsCancellationRequested then Error PhantomHttpError.Canceled else outcome
         }
         let serve (request: PhantomHttpRequest) = task {
             let admitted = lock gate (fun () ->
-                match tokens.TryGetValue request.Token with
-                | true, transfer when not transfer.Claimed && transfer.Upload = request.Upload ->
-                    if transfer.Upload && request.Length <> Some(int64 transfer.Lease.Size) then Error "HTTP length"
+                match closed, tokens.TryGetValue request.Token with
+                | false, (true, transfer) when not transfer.Claimed && transfer.Upload = request.Upload ->
+                    if transfer.Upload && request.Length <> Some(int64 transfer.Lease.Size) then Error PhantomHttpError.Length
                     else
                         transfer.Claimed <- true
                         tokens.Remove request.Token |> ignore
                         Ok transfer
-                | _ -> Error "HTTP capability")
+                | _ -> Error PhantomHttpError.Capability)
             match admitted with
             | Error reason -> return Error reason
             | Ok transfer ->
-                let! outcome = task {
-                    try return! pump transfer request
-                    with
-                    | :? OperationCanceledException -> return Error "HTTP canceled"
-                    | :? IOException -> return Error "HTTP I/O"
-                    | error -> return Error ("HTTP boundary: " + error.GetType().Name)
-                }
-                transfer.Lease.Finish outcome
-                transfer.Finished.TrySetResult() |> ignore
-                return outcome
+                // HTTP operation supervision owns completion on every path. Narrow
+                // dependency errors are expected; other faults stop the registry.
+                try
+                    try
+                        let! outcome = task {
+                            try return! pump transfer request
+                            with
+                            | :? OperationCanceledException when request.Cancellation.IsCancellationRequested || transfer.Stop.IsCancellationRequested -> return Error PhantomHttpError.Canceled
+                        }
+                        transfer.Lease.Finish outcome
+                        return outcome
+                    with error ->
+                        failOwner error
+                        transfer.Lease.Fault error
+                        return! Task.FromException<Result<unit, PhantomHttpError>>(error)
+                finally transfer.Finished.TrySetResult() |> ignore
         }
         let cancel id = task {
             let found = lock gate (fun () ->
@@ -178,13 +204,33 @@ module PhantomHttp =
             match found with
             | None -> ()
             | Some transfer ->
-                transfer.Stop.Cancel()
-                do! transfer.Finished.Task
-                transfer.Lease.Finish(Error "HTTP canceled")
-                transfer.Stop.Dispose()
+                let! canceled = task {
+                    try
+                        do! transfer.Stop.CancelAsync()
+                        return None
+                    with error ->
+                        failOwner error
+                        return Some error
+                }
+                try
+                    do! transfer.Finished.Task
+                    transfer.Lease.Finish(Error PhantomHttpError.Canceled)
+                    // The owner fault signal retains the original failure. Observe
+                    // its lease task even when shutdown removed actor correlation.
+                    if transfer.Lease.Completion.IsFaulted then transfer.Lease.Completion.Exception |> ignore
+                    match canceled with
+                    | Some error -> return! Task.FromException<unit>(error)
+                    | None -> return ()
+                finally transfer.Stop.Dispose()
         }
         let dispose () = task {
             let ids = lock gate (fun () -> closed <- true; transfers.Keys |> Seq.toArray)
-            for id in ids do do! cancel id
+            let mutable first = None
+            for id in ids do
+                try do! cancel id
+                with error -> if first.IsNone then first <- Some error
+            match first with
+            | Some error -> return! Task.FromException<unit>(error)
+            | None -> return ()
         }
-        { Admit = admit; Cancel = cancel; Serve = serve; Dispose = dispose }
+        { Admit = admit; Cancel = cancel; Serve = serve; Dispose = dispose; OwnerFailure = failure.Task }

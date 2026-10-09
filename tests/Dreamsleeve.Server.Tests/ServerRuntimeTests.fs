@@ -269,6 +269,7 @@ let tests = testList "ServerRuntime" [
             ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
+            OwnerFailure = TaskCompletionSource<exn>().Task
         }
         let disabled = { PhantomOptions.defaults with Enabled = false }
         do! withRuntimeConfiguredAndPhantoms (Some (disabled, storage)) ServerRuntimeOptions.defaults IdentityOptions.defaults
@@ -303,6 +304,7 @@ let tests = testList "ServerRuntime" [
             ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
+            OwnerFailure = TaskCompletionSource<exn>().Task
         }
         do! withRuntimeConfiguredAndPhantoms (Some (PhantomOptions.defaults, storage)) ServerRuntimeOptions.defaults IdentityOptions.defaults
                 Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn [] createAuthentication (fun fixture -> task {
