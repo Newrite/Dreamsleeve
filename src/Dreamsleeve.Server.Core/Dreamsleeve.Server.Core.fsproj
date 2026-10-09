@@ -9,6 +9,7 @@
     <ItemGroup>
         <Compile Include="Config.fs" />
         <Compile Include="RuntimeMetrics.fs" />
+        <Compile Include="OwnedCleanup.fs" />
         <Compile Include="Protocol/ProtocolTypes.fs" />
         <Compile Include="Protocol/PlayerCodec.fs" />
         <Compile Include="Protocol/ChatCodec.fs" />
