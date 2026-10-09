@@ -63,7 +63,9 @@ type private FakeAdmin() =
             Ok (AdminReply.Player(Some { Profile = stored; Role = PlayerRole.Player }))
         | AdminCommand.IssueSetupCode | AdminCommand.IssueResetCode _ | AdminCommand.ResetPassword _ | AdminCommand.CreateApiToken _
         | AdminCommand.ListApiTokens | AdminCommand.RevokeApiToken _ | AdminCommand.SetRole _ | AdminCommand.SearchPlayers _
-        | AdminCommand.FindPlayer _ | AdminCommand.NameHistory _ | AdminCommand.PlayerSanctions _ -> Error AdminServiceError.Unavailable
+        | AdminCommand.FindPlayer _ -> Error AdminServiceError.Unavailable
+        | AdminCommand.NameHistory _ -> Ok (AdminReply.Names [])
+        | AdminCommand.PlayerSanctions _ -> Ok (AdminReply.Sanctions [])
         | AdminCommand.ActiveSanctions -> Ok (AdminReply.ActiveSanctions [])
 
 // One hidden player online; its real names only the panel may show.
@@ -90,32 +92,48 @@ type private Panel = {
     /// Requests to the guild owner, answered by GuildReply.
     Guilds: ConcurrentQueue<GuildAdminCommand>
     GuildReply: (GuildAdminCommand -> GuildAdminResult) ref
+    AdminReply: (AdminCommand -> Result<AdminReply, AdminServiceError>) ref
+    SnapshotReply: AgentAskResult<ServerRuntimeSnapshot> ref
+    SessionsReply: AgentAskResult<RuntimeSessionRow list> ref
+    DescribeReply: (RuntimeSessionRow -> Result<AdminPlayerView option, SessionDescribeError>) ref
+    Logs: ConcurrentQueue<Serilog.Events.LogEvent>
 }
 
 let private withPanel customize run = task {
     let admin = FakeAdmin()
     let announcements = ConcurrentQueue<ServerAnnouncement>()
     let accounts = ConcurrentQueue<AccountAccessCommand>()
-    let accountReply = ref (fun (_: AccountAccessCommand) -> Error AccountAccessError.Unavailable)
+    let accountReply = ref (function
+        | AccountAccessCommand.AddressHistory _ -> Ok (AccountAccessResult.Addresses [])
+        | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices [])
+        | _ -> Error AccountAccessError.Unavailable)
     let guildCommands = ConcurrentQueue<GuildAdminCommand>()
-    let guildReply = ref (fun (_: GuildAdminCommand) -> GuildAdminResult.Refused GuildError.NotFound)
+    let guildReply = ref (function
+        | GuildAdminCommand.PlayerGuilds _ -> GuildAdminResult.PlayerGuilds []
+        | _ -> GuildAdminResult.Refused GuildError.NotFound)
+    let adminReply = ref admin.Handle
+    let snapshotReply: AgentAskResult<ServerRuntimeSnapshot> ref = ref (AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
+    let sessionsReply = ref (AgentAskResult.Replied [ hiddenRow ])
+    let describeReply = ref (fun (row: RuntimeSessionRow) -> Ok (if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None))
+    let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
     let ports = {
-        Admin = fun command _ _ -> Task.FromResult(AgentAskResult.Replied(admin.Handle command))
+        Admin = fun command _ _ -> Task.FromResult(AgentAskResult.Replied(adminReply.Value command))
         Account = fun command _ _ ->
             accounts.Enqueue command
             Task.FromResult(AgentAskResult.Replied(accountReply.Value command))
-        Snapshot = fun _ _ -> Task.FromResult(AgentAskResult.Replied { Connections = 1; Guests = 0; Ready = 1; Reservations = 1; Closing = 0; Stopping = false })
+        Snapshot = fun _ _ -> Task.FromResult snapshotReply.Value
         Guilds = fun command _ _ ->
             guildCommands.Enqueue command
             Task.FromResult(AgentAskResult.Replied(guildReply.Value command))
-        Sessions = fun _ _ -> Task.FromResult(AgentAskResult.Replied [ hiddenRow ])
-        Describe = fun _ row -> Task.FromResult(if row.ConnectionId = hiddenRow.ConnectionId then Some hiddenView else None)
+        Sessions = fun _ _ -> Task.FromResult sessionsReply.Value
+        Describe = fun _ row -> Task.FromResult(describeReply.Value row)
         Announce = fun announcement -> announcements.Enqueue announcement; true
         ApplyRole = fun _ _ -> true
         ApplyProfile = fun _ -> true
         Configuration = fun () -> []
     }
-    use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
+    let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
+    use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let panel = Configuration.defaults.Admin
     let config = customize { Configuration.defaults with Admin = { panel with Listener = { panel.Listener with ListenUrl = "http://127.0.0.1:0" } } }
     let app = AdminRoutes.build (WebPorts.adminListener config) (WebPorts.adminRoutes config Moderation.empty) ports logger
@@ -126,7 +144,8 @@ let private withPanel customize run = task {
             use handler = new HttpClientHandler(CookieContainer = cookies, UseCookies = true, AllowAutoRedirect = false)
             use http = new HttpClient(handler, BaseAddress = Uri(Seq.head app.Urls), Timeout = guard)
             do! run { Http = http; Cookies = cookies; Admin = admin; Announcements = announcements; Accounts = accounts; AccountReply = accountReply
-                      Guilds = guildCommands; GuildReply = guildReply }
+                      Guilds = guildCommands; GuildReply = guildReply; AdminReply = adminReply; SnapshotReply = snapshotReply
+                      SessionsReply = sessionsReply; DescribeReply = describeReply; Logs = logs }
             return Ok ()
         with failure -> return Error failure
     }
@@ -161,7 +180,84 @@ let private signIn panel = task {
     status 303 response
 }
 
+let private api panel (path: string) = task {
+    use request = new HttpRequestMessage(HttpMethod.Get, path)
+    request.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", apiToken)
+    return! panel.Http.SendAsync request
+}
+
 let tests = testSequenced (testList "Admin HTTP" [
+    case "description absence, timeout and original fault remain distinct from available player data" (fun () ->
+        withPanel id (fun panel -> task {
+            let missing = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None; Phase = RuntimeSessionPhase.Guest }
+            let slow = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None }
+            let failed = { hiddenRow with ConnectionId = Guid.NewGuid(); PlayerId = None }
+            let failure = InvalidOperationException("description-owner-fault")
+            panel.SessionsReply.Value <- AgentAskResult.Replied [ hiddenRow; missing; slow; failed ]
+            panel.DescribeReply.Value <- fun row ->
+                if row.ConnectionId = hiddenRow.ConnectionId then Ok (Some hiddenView)
+                elif row.ConnectionId = missing.ConnectionId then Ok None
+                elif row.ConnectionId = slow.ConnectionId then Error SessionDescribeError.TimedOut
+                else Error (SessionDescribeError.Faulted failure)
+            use! response = api panel "/api/v1/online"
+            status 200 response
+            let! body = response.Content.ReadAsStringAsync()
+            use json = JsonDocument.Parse body
+            let rows = json.RootElement.EnumerateArray() |> Seq.map (fun row -> row.GetProperty("connectionId").GetString(), row) |> dict
+            for id, expected in [ hiddenRow.ConnectionId, "available"; missing.ConnectionId, "not_open"; slow.ConnectionId, "unavailable"; failed.ConnectionId, "unavailable" ] do
+                let row = rows[string id]
+                equal expected (row.GetProperty("descriptionStatus").GetString())
+                equal (expected = "available") (row.GetProperty("described").GetBoolean())
+            check (panel.Logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(entry.Exception, failure))) "Original owner fault is logged, not replaced."
+        }))
+
+    case "runtime failure cannot claim empty sessions, offline players or a completed range check" (fun () ->
+        withPanel id (fun panel -> task {
+            do! signIn panel
+            panel.SessionsReply.Value <- AgentAskResult.Closed
+            use! online = api panel "/api/v1/online"
+            status 503 online
+            use! card = panel.Http.GetAsync "/players/7"
+            status 503 card
+            use! range = submit panel "/address-bans/check" [ "range", "203.0.113.0/24"; "term", ""; "reason", "Проверка" ] []
+            status 503 range
+            use! overview = panel.Http.GetAsync "/"
+            status 200 overview
+            let! html = overview.Content.ReadAsStringAsync()
+            check (html.Contains "Онлайн (недоступно)" && not (html.Contains "Онлайн (0)")) "Unavailable does not assert zero online."
+            let original = InvalidOperationException("snapshot-owner-fault")
+            panel.SnapshotReply.Value <- AgentAskResult.Faulted original
+            use! snapshot = api panel "/api/v1/status"
+            status 503 snapshot
+            check (panel.Logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(entry.Exception, original))) "Original runtime fault is logged."
+        }))
+
+    case "required card histories distinguish genuine empty replies from failures and wrong reply shapes" (fun () ->
+        withPanel id (fun panel -> task {
+            do! signIn panel
+            use! empty = api panel "/api/v1/players/7"
+            status 200 empty
+            let! body = empty.Content.ReadAsStringAsync()
+            use json = JsonDocument.Parse body
+            for field in [ "names"; "sanctions"; "addresses"; "devices"; "guilds" ] do
+                equal 0 (json.RootElement.GetProperty(field).GetArrayLength())
+            let original = panel.AdminReply.Value
+            panel.AdminReply.Value <- function AdminCommand.NameHistory _ -> Error AdminServiceError.Unavailable | command -> original command
+            use! names = api panel "/api/v1/players/7"
+            status 503 names
+            panel.AdminReply.Value <- function AdminCommand.NameHistory _ -> Ok AdminReply.Completed | command -> original command
+            use! wrong = panel.Http.GetAsync "/players/7"
+            status 503 wrong
+            panel.AdminReply.Value <- original
+            panel.AccountReply.Value <- function AccountAccessCommand.AddressHistory _ -> Error AccountAccessError.Unavailable | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices []) | _ -> Error AccountAccessError.Unavailable
+            use! addresses = api panel "/api/v1/players/7"
+            status 503 addresses
+            panel.AccountReply.Value <- function AccountAccessCommand.AddressHistory _ -> Ok (AccountAccessResult.Addresses []) | AccountAccessCommand.DeviceHistory _ -> Ok (AccountAccessResult.Devices []) | _ -> Error AccountAccessError.Unavailable
+            panel.GuildReply.Value <- fun _ -> GuildAdminResult.Refused GuildError.NotFound
+            use! guilds = api panel "/api/v1/players/7"
+            status 503 guilds
+        }))
+
     case "setup needs the console code, happens once and signs the administrator in" (fun () ->
         withPanel id (fun panel -> task {
             use! page = panel.Http.GetAsync "/setup"

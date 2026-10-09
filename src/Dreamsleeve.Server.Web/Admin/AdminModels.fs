@@ -30,8 +30,10 @@ type OnlineModel = {
     PlayerId: Nullable<uint64>
     Phase: string
     ConnectedAt: DateTimeOffset
-    /// False when the session did not answer: the row shows "нет данных".
+    /// Kept for API compatibility; true exactly when DescriptionStatus is available.
     Described: bool
+    /// available, not_open, or unavailable; absence and request failure are distinct.
+    DescriptionStatus: string
     Username: string
     DisplayName: string
     CharacterName: string
@@ -292,17 +294,18 @@ module AdminModels =
         | Some address -> ClientAddress.text address
         | None -> null
 
-    let online (row: RuntimeSessionRow) (view: AdminPlayerView option) : OnlineModel =
+    let online (row: RuntimeSessionRow) (view: Result<AdminPlayerView option, SessionDescribeError>) : OnlineModel =
         let playerId = row.PlayerId |> Option.map PlayerId.value |> Option.toNullable
         match view with
-        | None ->
+        | Ok None | Error _ ->
+            let status = match view with Ok None -> "not_open" | Error _ -> "unavailable" | Ok (Some _) -> "available"
             { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row; PlayerId = playerId; Phase = phase row.Phase
-              ConnectedAt = row.ConnectedAt; Described = false; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
+              ConnectedAt = row.ConnectedAt; Described = false; DescriptionStatus = status; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
               Hidden = null; Pseudonym = null; Role = null; Location = null; Level = Nullable() }
-        | Some view ->
+        | Ok (Some view) ->
             { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row
               PlayerId = Nullable(PlayerId.value view.PlayerId); Phase = phase row.Phase
-              ConnectedAt = row.ConnectedAt; Described = true
+              ConnectedAt = row.ConnectedAt; Described = true; DescriptionStatus = "available"
               Username = Username.value view.Username; DisplayName = DisplayName.value view.DisplayName
               CharacterName = view.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.defaultValue null
               CharacterWithheld = view.CharacterWithheld

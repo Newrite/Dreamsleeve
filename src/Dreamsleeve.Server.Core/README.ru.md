@@ -238,11 +238,15 @@ Runtime после завершения сессии шлёт `Detach` и мет
 - `ServerRuntimeMessage.ListSessions` отвечает строками `RuntimeSessionRow` (ConnectionId,
   PlayerId, фаза `Waiting/Guest/Opening/Ready/Closing`, время подключения, адрес сессии) — без имён.
   `ServerRuntimeSnapshot.Guests` считает гостей; они входят в `Connections`.
-- `PlayerSessionMessage.Describe` отвечает `AdminPlayerView` из состояния сессии (хранимый
-  профиль до заместителей модерации, имя персонажа, псевдоним и вариант, роль, место) или
-  `None` до получения профиля. HTTP-обработчик спрашивает все сессии параллельно через
-  `SessionDescriber` с таймаутом 1 с; неответившая строка остаётся «без данных». `Describe`
-  — обычное сообщение: переполненная сессия не отвечает, но и не закрывается.
+- `PlayerSessionMessage.Describe` отвечает `Ok (Some AdminPlayerView)` из состояния сессии
+  (хранимый профиль до заместителей модерации, имя персонажа, псевдоним и вариант, роль,
+  место) или `Ok None` до получения профиля. `SessionDescriber` передаёт reply channel
+  напрямую и не ждёт сессию, поэтому HTTP-обработчик спрашивает их параллельно с
+  ограниченным таймаутом. Переполнение, закрытие, отмена, timeout и неожиданный отказ
+  представлены `SessionDescribeError`; это не отсутствие профиля. Неудачный `TryPost`
+  не закрывает сессию и возвращает отказ текущему административному запросу. Поздний
+  ответ не вызывает повторной отправки. `DescriptionStatus` в модели панели различает
+  `available`, `not_open` и `unavailable`; исходное исключение владельца сохраняется.
 - Роль: `SessionAuthenticationReply` несёт `AuthenticatedPlayer { Profile; Role; Mute }` (роль
   читается из `player_roles`, действующий мут — из `sanctions` при входе и resume; оба хранятся
   в билете). `SetPlayerRole(playerId, role)` — после записи в БД: runtime запоминает её в `SessionTable.Roles` и передаёт

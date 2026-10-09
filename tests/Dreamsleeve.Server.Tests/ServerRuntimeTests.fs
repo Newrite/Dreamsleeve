@@ -1133,7 +1133,8 @@ let private playerId value = Dreamsleeve.Server.Domain.PlayerId.create value |> 
 let private describePlayer fixture (describer: Agent<DescribeRequest>) id = task {
     let! rows = fixture.Runtime.TryAskAsync ServerRuntimeMessage.ListSessions |> awaitReply
     let row = rows |> List.find (fun row -> row.PlayerId = Some id)
-    return! SessionDescriber.describe describer guard row.Session.Value
+    let! result = SessionDescriber.describe describer guard row.Session.Value
+    return result |> ok
 }
 
 let private describeUntil fixture describer id (accept: Dreamsleeve.Server.Domain.AdminPlayerView -> bool) = task {
@@ -1149,6 +1150,88 @@ let private describeUntil fixture describer id (accept: Dreamsleeve.Server.Domai
 }
 
 let adminTests = testList "ServerRuntime admin panel" [
+    testTask "description relay distinguishes unopened profile from closed session and preserves relay fault" {
+        use describer = SessionDescriber.start 4
+        use session = Agent.Start(AgentOptions.create "description-unopened", fun _ message -> task {
+            match message with
+            | PlayerSessionMessage.Describe reply -> reply.Reply(Ok None)
+            | _ -> ()
+        })
+        let! unopened = SessionDescriber.describe describer guard session.Ref
+        equal (Ok None) unopened
+        session.Abort()
+        let! _ = terminal session.Completion
+        let! closed = SessionDescriber.describe describer guard session.Ref
+        equal (Error SessionDescribeError.Closed) closed
+        let original = InvalidOperationException("description-relay-fault")
+        use failed = Agent.Start(AgentOptions.create "description-failed-relay", fun _ (_: DescribeRequest) -> Task.FromException<unit> original)
+        let! failure = SessionDescriber.describe failed guard session.Ref
+        match failure with
+        | Error (SessionDescribeError.Faulted actual) -> check (obj.ReferenceEquals(original, actual)) "Original relay lifetime fault is preserved."
+        | result -> failtestf "Expected original fault, received %A" result
+        let! _ = terminal failed.Completion
+        ()
+    }
+
+    testTask "one timed out description does not block another session or retry admitted work" {
+        let entered = gate<unit>()
+        let release = gate<unit>()
+        let completed = gate<unit>()
+        let mutable calls = 0
+        use describer = SessionDescriber.start 4
+        use slow = Agent.Start(AgentOptions.create "description-slow", fun _ message -> task {
+            match message with
+            | PlayerSessionMessage.Describe reply ->
+                calls <- calls + 1
+                entered.TrySetResult() |> ignore
+                do! release.Task
+                reply.Reply(Ok None)
+                completed.TrySetResult() |> ignore
+            | _ -> ()
+        })
+        use available = Agent.Start(AgentOptions.create "description-independent", fun _ message -> task {
+            match message with
+            | PlayerSessionMessage.Describe reply -> reply.Reply(Ok None)
+            | _ -> ()
+        })
+        try
+            // Use the existing deadlock guard as the bounded deadline; the entry gate,
+            // not a short scheduling window, establishes that the handler ran.
+            let pending = SessionDescriber.describe describer guard slow.Ref
+            do! awaitResult entered.Task
+            let! current = SessionDescriber.describe describer guard available.Ref
+            equal (Ok None) current
+            let! elapsed = awaitResult pending
+            equal (Error SessionDescribeError.TimedOut) elapsed
+            release.TrySetResult() |> ignore
+            do! awaitResult completed.Task
+            equal 1 calls
+        finally
+            release.TrySetResult() |> ignore
+    }
+
+    testTask "known full session admission returns full without fabricated profile absence" {
+        let entered = gate<unit>()
+        let release = gate<unit>()
+        use describer = SessionDescriber.start 4
+        use full = Agent.Start({ AgentOptions.create "description-full" with Mailbox = AgentMailbox.boundedWait 1 }, fun _ message -> task {
+            match message with
+            | PlayerSessionMessage.Begin ->
+                entered.TrySetResult() |> ignore
+                do! release.Task
+            | PlayerSessionMessage.Describe reply -> reply.Reply(Ok None)
+            | _ -> ()
+        })
+        try
+            do! post full PlayerSessionMessage.Begin
+            do! awaitResult entered.Task
+            equal AgentPostResult.Posted (full.Ref.TryPost PlayerSessionMessage.Begin)
+            let! rejected = SessionDescriber.describe describer guard full.Ref
+            equal (Error SessionDescribeError.Full) rejected
+        finally
+            release.TrySetResult() |> ignore
+    }
+
     testTask "sessions list with phases and describe the real identity of a hidden player next to the pseudonym" {
         let accounts = [ "alice", "alice.real", "Алиса Настоящая", Dreamsleeve.Server.Domain.PlayerRole.Moderator
                          "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player ]

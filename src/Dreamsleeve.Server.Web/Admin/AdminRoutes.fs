@@ -124,23 +124,35 @@ module AdminRoutes =
 
     let private snapshot routes (context: HttpContext) = task {
         match! routes.Ports.Snapshot (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied value -> return Some (AdminModels.status value)
-        | AgentAskResult.Faulted _ | AgentAskResult.Dropped | AgentAskResult.Full | AgentAskResult.Closed
-        | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return None
+        | AgentAskResult.Replied value -> return Ok (AdminModels.status value)
+        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Faulted error ->
+            routes.Logger.Error(error, "Runtime snapshot request from the panel failed")
+            return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
     }
 
     let private sessions routes (context: HttpContext) = task {
         match! routes.Ports.Sessions (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied rows -> return Some rows
-        | AgentAskResult.Faulted _ | AgentAskResult.Dropped | AgentAskResult.Full | AgentAskResult.Closed
-        | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return None
+        | AgentAskResult.Replied rows -> return Ok rows
+        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Faulted error ->
+            routes.Logger.Error(error, "Runtime sessions request from the panel failed")
+            return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
     }
 
-    /// Sessions are asked in parallel; one that does not answer in time becomes
-    /// a row without data and never fails the page.
+    /// Parallel bounded asks preserve each row. A legitimate missing profile and
+    /// a failed request have distinct presentation; one slow session cannot block others.
     let private describe routes (rows: RuntimeSessionRow list) = task {
         let wait = TimeSpan.FromMilliseconds(float routes.Settings.DescribeTimeoutMs)
         let! views = rows |> List.map (routes.Ports.Describe wait) |> Task.WhenAll
+        for row, view in List.zip rows (List.ofArray views) do
+            match view with
+            | Error (SessionDescribeError.Faulted error) ->
+                routes.Logger.Error(error, "Session description from the panel failed for {ConnectionId}", row.ConnectionId)
+            | Ok _ | Error SessionDescribeError.Full | Error SessionDescribeError.Closed | Error SessionDescribeError.Canceled
+            | Error SessionDescribeError.Dropped | Error SessionDescribeError.TimedOut -> ()
         return
             List.map2 AdminModels.online rows (List.ofArray views)
             |> List.sortBy (fun row -> (if row.PlayerId.HasValue then row.PlayerId.Value else UInt64.MaxValue), row.ConnectedAt)
@@ -148,10 +160,10 @@ module AdminRoutes =
 
     let private online routes context = task {
         match! sessions routes context with
-        | Some rows ->
+        | Ok rows ->
             let! models = describe routes rows
-            return models, true
-        | None -> return [], false
+            return Ok models
+        | Error error -> return Error error
     }
 
     // --- Sign-in state ---------------------------------------------------
@@ -341,17 +353,17 @@ module AdminRoutes =
 
     let private overview routes admin : HttpHandler = fun context -> task {
         let! status = snapshot routes context
-        let! rows, available = online routes context
-        return! html 200 (AdminViews.overview admin status rows available) context
+        let! rows = online routes context
+        return! html 200 (AdminViews.overview admin status rows) context
     }
 
     let private onlinePartial routes (_: AdminAccount) : HttpHandler = fun context -> task {
-        let! rows, available = online routes context
-        return! fragment (AdminViews.online rows available) context
+        let! rows = online routes context
+        return! fragment (AdminViews.online rows) context
     }
 
-    let private onlineIds (rows: RuntimeSessionRow list option) =
-        let ids = rows |> Option.defaultValue [] |> List.choose _.PlayerId |> Set.ofList
+    let private onlineIds (rows: RuntimeSessionRow list) =
+        let ids = rows |> List.choose _.PlayerId |> Set.ofList
         fun playerId -> ids.Contains playerId
 
     let private pageNumber (context: HttpContext) =
@@ -367,8 +379,9 @@ module AdminRoutes =
         let query = searchQuery context
         match! ask routes context (AdminCommand.SearchPlayers(query, pageNumber context)) with
         | Ok (AdminReply.Players page) ->
-            let! rows = sessions routes context
-            return Ok (AdminModels.page query (onlineIds rows) page)
+            match! sessions routes context with
+            | Ok rows -> return Ok (AdminModels.page query (onlineIds rows) page)
+            | Error error -> return Error error
         | Ok _ -> return Error AdminServiceError.Unavailable
         | Error error -> return Error error
     }
@@ -392,21 +405,29 @@ module AdminRoutes =
     }
 
     let private card routes context (record: PlayerRecord) = task {
-        let! rows = sessions routes context
-        let own = rows |> Option.defaultValue [] |> List.filter (fun row -> row.PlayerId = Some record.Profile.PlayerId)
-        let! described = describe routes own
-        let! names = ask routes context (AdminCommand.NameHistory record.Profile.PlayerId)
-        let names = match names with Ok (AdminReply.Names changes) -> changes |> List.map AdminModels.nameChange | Ok _ | Error _ -> []
-        let! sanctions = ask routes context (AdminCommand.PlayerSanctions record.Profile.PlayerId)
-        let sanctions = match sanctions with Ok (AdminReply.Sanctions active) -> active |> List.map AdminModels.sanction | Ok _ | Error _ -> []
-        let! addresses = account routes context (AccountAccessCommand.AddressHistory record.Profile.PlayerId)
-        let addresses = match addresses with Ok (AccountAccessResult.Addresses entries) -> entries |> List.map AdminModels.signInAddress | Ok _ | Error _ -> []
-        let! devices = account routes context (AccountAccessCommand.DeviceHistory record.Profile.PlayerId)
-        let devices = match devices with Ok (AccountAccessResult.Devices entries) -> entries |> List.map AdminModels.signInDevice | Ok _ | Error _ -> []
-        let! memberships = guilds routes context (GuildAdminCommand.PlayerGuilds record.Profile.PlayerId)
-        let memberships = match memberships with Ok (GuildAdminResult.PlayerGuilds entries) -> entries |> List.map AdminModels.playerGuild | Ok _ | Error _ -> []
-        return { Player = AdminModels.player (onlineIds rows) record; Sessions = described; Names = names; Sanctions = sanctions
-                 Addresses = addresses; Devices = devices; Guilds = memberships }
+        match! sessions routes context with
+        | Error error -> return Error error
+        | Ok rows ->
+            let own = rows |> List.filter (fun row -> row.PlayerId = Some record.Profile.PlayerId)
+            let! described = describe routes own
+            let! names = ask routes context (AdminCommand.NameHistory record.Profile.PlayerId)
+            let! sanctions = ask routes context (AdminCommand.PlayerSanctions record.Profile.PlayerId)
+            let! addresses = account routes context (AccountAccessCommand.AddressHistory record.Profile.PlayerId)
+            let! devices = account routes context (AccountAccessCommand.DeviceHistory record.Profile.PlayerId)
+            let! memberships = guilds routes context (GuildAdminCommand.PlayerGuilds record.Profile.PlayerId)
+            match names, sanctions, addresses, devices, memberships with
+            | Ok (AdminReply.Names names), Ok (AdminReply.Sanctions sanctions), Ok (AccountAccessResult.Addresses addresses),
+              Ok (AccountAccessResult.Devices devices), Ok (GuildAdminResult.PlayerGuilds memberships) ->
+                return Ok { Player = AdminModels.player (onlineIds rows) record; Sessions = described
+                            Names = names |> List.map AdminModels.nameChange; Sanctions = sanctions |> List.map AdminModels.sanction
+                            Addresses = addresses |> List.map AdminModels.signInAddress; Devices = devices |> List.map AdminModels.signInDevice
+                            Guilds = memberships |> List.map AdminModels.playerGuild }
+            | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, _, _, Error error -> return Error error
+            | _, _, Error AccountAccessError.Busy, _, _ | _, _, _, Error AccountAccessError.Busy, _ -> return Error AdminServiceError.Busy
+            | _, _, Error _, _, _ | _, _, _, Error _, _ -> return Error AdminServiceError.Unavailable
+            | Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                routes.Logger.Warning("Player card received an unexpected reply for {PlayerId}", PlayerId.value record.Profile.PlayerId)
+                return Error AdminServiceError.Unavailable
     }
 
     let private notices =
@@ -434,10 +455,12 @@ module AdminRoutes =
     let private showCard routes admin status (failure: string option) (resetCode: string option) (playerId: PlayerId) : HttpHandler = fun context -> task {
         match! findPlayer routes context playerId with
         | Ok (Some record) ->
-            let! model = card routes context record
-            let page = AdminViews.player admin model (if failure.IsNone && resetCode.IsNone then notice context else None) failure resetCode
-                           routes.Settings.Input.DisplayName routes.Settings.AddressHistoryDays
-            return! html status page context
+            match! card routes context record with
+            | Ok model ->
+                let page = AdminViews.player admin model (if failure.IsNone && resetCode.IsNone then notice context else None) failure resetCode
+                               routes.Settings.Input.DisplayName routes.Settings.AddressHistoryDays
+                return! html status page context
+            | Error error -> return! serviceFailure (Some admin) error context
         | Ok None -> return! errorPage 404 "Игрок не найден." (Some admin) context
         | Error error -> return! serviceFailure (Some admin) error context
     }
@@ -772,18 +795,20 @@ module AdminRoutes =
             match banOrder form with
             | Error message -> return! showAddressBans routes admin 400 (Some message) (value form "range") None context
             | Ok (range, _, _) ->
-                let! rows = sessions routes context
-                let covered = rows |> Option.defaultValue [] |> List.filter (fun row -> AddressRange.contains range row.Address)
-                let! online = describe routes covered
-                match! account routes context (AccountAccessCommand.PlayersInRange range) with
-                | Ok (AccountAccessResult.PlayersAt players) ->
-                    let check = {
-                        Range = AddressRange.key range; Reason = value form "reason"; Term = value form "term"; Minutes = value form "minutes"
-                        Online = online; Players = players |> List.map AdminModels.addressMatch
-                    }
-                    return! showAddressBans routes admin 200 None (AddressRange.key range) (Some check) context
-                | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
-                | Error error -> return! accountFailure (Some admin) error context
+                match! sessions routes context with
+                | Error error -> return! serviceFailure (Some admin) error context
+                | Ok rows ->
+                    let covered = rows |> List.filter (fun row -> AddressRange.contains range row.Address)
+                    let! online = describe routes covered
+                    match! account routes context (AccountAccessCommand.PlayersInRange range) with
+                    | Ok (AccountAccessResult.PlayersAt players) ->
+                        let check = {
+                            Range = AddressRange.key range; Reason = value form "reason"; Term = value form "term"; Minutes = value form "minutes"
+                            Online = online; Players = players |> List.map AdminModels.addressMatch
+                        }
+                        return! showAddressBans routes admin 200 None (AddressRange.key range) (Some check) context
+                    | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
+                    | Error error -> return! accountFailure (Some admin) error context
         })
 
     /// The account service stores the ban with its audit line and hands the
@@ -940,14 +965,14 @@ module AdminRoutes =
 
     let private apiStatus routes (_: AdminAccount) : HttpHandler = fun context -> task {
         match! snapshot routes context with
-        | Some status -> return! apiJson status context
-        | None -> return! apiError 503 "unavailable" "The runtime did not answer." context
+        | Ok status -> return! apiJson status context
+        | Error error -> return! apiFailure error context
     }
 
     let private apiOnline routes (_: AdminAccount) : HttpHandler = fun context -> task {
         match! online routes context with
-        | rows, true -> return! apiJson rows context
-        | _, false -> return! apiError 503 "unavailable" "The runtime did not answer." context
+        | Ok rows -> return! apiJson rows context
+        | Error error -> return! apiFailure error context
     }
 
     let private apiPlayers routes (_: AdminAccount) : HttpHandler = fun context -> task {
@@ -962,8 +987,9 @@ module AdminRoutes =
         | Some playerId ->
             match! findPlayer routes context playerId with
             | Ok (Some record) ->
-                let! model = card routes context record
-                return! apiJson model context
+                match! card routes context record with
+                | Ok model -> return! apiJson model context
+                | Error error -> return! apiFailure error context
             | Ok None -> return! apiFailure AdminServiceError.NotFound context
             | Error error -> return! apiFailure error context
     }

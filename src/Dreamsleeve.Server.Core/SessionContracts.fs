@@ -21,6 +21,17 @@ type PlayerStateError =
     | Closed
     | Busy
 
+/// Failure to obtain a session description; None in a successful reply means
+/// the profile is not known yet, never a failure or an elapsed deadline.
+[<RequireQualifiedAccess>]
+type SessionDescribeError =
+    | Full
+    | Closed
+    | Canceled
+    | Dropped
+    | TimedOut
+    | Faulted of exn
+
 /// Managed events handed off by the transport owner.
 [<RequireQualifiedAccess>]
 type ServerTransportEvent =

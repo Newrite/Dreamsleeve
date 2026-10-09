@@ -48,7 +48,7 @@ type PlayerSessionMessage =
     /// An administrator renamed the player: the stored profile, before moderation.
     | ProfileChanged of PlayerData
     /// The panel's view of this player; None before the profile is known.
-    | Describe of ReplyChannel<AdminPlayerView option>
+    | Describe of ReplyChannel<Result<AdminPlayerView option, SessionDescribeError>>
     /// A member's guild request from the client.
     | Guild of requestId: uint64 * GuildAction
     | Stop
@@ -1099,7 +1099,7 @@ module PlayerSession =
         | PlayerSessionMessage.ChangeDisplayName(requestId, name) -> changeDisplayName options request state context requestId name
         | PlayerSessionMessage.SetNameColor(requestId, color) -> setNameColor options request state context requestId color
         | PlayerSessionMessage.ProfileReplied reply -> profileReplied options request state context reply
-        | PlayerSessionMessage.Describe reply -> reply.Reply(describe state)
+        | PlayerSessionMessage.Describe reply -> reply.Reply(Ok (describe state))
         | PlayerSessionMessage.Stop -> stop request state context
     }
 

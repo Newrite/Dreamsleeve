@@ -7,7 +7,7 @@ open Dreamsleeve.Server.Domain
 
 type DescribeRequest = {
     Session: AgentRef<PlayerSessionMessage>
-    Reply: ReplyChannel<AdminPlayerView option>
+    Reply: ReplyChannel<Result<AdminPlayerView option, SessionDescribeError>>
 }
 
 /// Lets the panel ask many sessions at once with a short deadline. A session
@@ -19,17 +19,23 @@ module SessionDescriber =
     let private relay _ (request: DescribeRequest) = task {
         match request.Session.TryPost(PlayerSessionMessage.Describe request.Reply) with
         | AgentPostResult.Posted -> ()
-        | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
-            request.Reply.Reply None
+        | AgentPostResult.Full -> request.Reply.Reply(Error SessionDescribeError.Full)
+        | AgentPostResult.Closed -> request.Reply.Reply(Error SessionDescribeError.Closed)
+        | AgentPostResult.Canceled -> request.Reply.Reply(Error SessionDescribeError.Canceled)
+        | AgentPostResult.Dropped -> request.Reply.Reply(Error SessionDescribeError.Dropped)
     }
 
     let start capacity =
         Agent.Start({ AgentOptions.create "session-describer" with Mailbox = AgentMailbox.boundedWait capacity }, relay)
 
-    /// None when the session did not answer in time or is not open yet.
-    let describe (describer: Agent<DescribeRequest>) (timeout: TimeSpan) (session: AgentRef<PlayerSessionMessage>) : Task<AdminPlayerView option> = task {
+    /// The relay never waits for a session; every caller owns its bounded ask.
+    let describe (describer: Agent<DescribeRequest>) (timeout: TimeSpan) (session: AgentRef<PlayerSessionMessage>) : Task<Result<AdminPlayerView option, SessionDescribeError>> = task {
         match! describer.TryAskAsync((fun reply -> { Session = session; Reply = reply }), timeout) with
         | AgentAskResult.Replied view -> return view
-        | AgentAskResult.Faulted _ | AgentAskResult.Dropped | AgentAskResult.Full | AgentAskResult.Closed
-        | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return None
+        | AgentAskResult.Faulted error -> return Error (SessionDescribeError.Faulted error)
+        | AgentAskResult.Full -> return Error SessionDescribeError.Full
+        | AgentAskResult.Closed -> return Error SessionDescribeError.Closed
+        | AgentAskResult.Canceled -> return Error SessionDescribeError.Canceled
+        | AgentAskResult.Dropped -> return Error SessionDescribeError.Dropped
+        | AgentAskResult.TimedOut -> return Error SessionDescribeError.TimedOut
     }

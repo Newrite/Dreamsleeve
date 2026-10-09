@@ -5,6 +5,7 @@ open System.Net
 open Falco.Markup
 open Falco.Htmx
 open Dreamsleeve.Server.Domain
+open Dreamsleeve.Server.Infrastructure
 
 /// Every page of the panel as Falco.Markup nodes. Falco.Markup encodes text
 /// only through Text.enc and writes attribute values as given, so this module
@@ -179,10 +180,11 @@ module AdminViews =
 
     /// The online table; htmx replaces the whole section every 5 seconds.
     /// Falco.Htmx writes the constant hx-* attributes; nothing dynamic goes through it.
-    let online (rows: OnlineModel list) (available: bool) =
+    let online (result: Result<OnlineModel list, AdminServiceError>) =
+        let rows, available = match result with Ok rows -> rows, true | Error _ -> [], false
         Elem.section [ attr "id" "online"; Hx.get "/partials/online"; Hx.trigger "every 5s"; Hx.swapOuterHtml ] [
             let guests = rows |> List.filter (fun row -> row.Phase = AdminModels.guestPhase) |> List.length
-            Elem.h2 [] [ text (if guests = 0 then $"Онлайн ({rows.Length})" else $"Онлайн ({rows.Length}, из них гостей {guests})") ]
+            Elem.h2 [] [ text (if not available then "Онлайн (недоступно)" elif guests = 0 then $"Онлайн ({rows.Length})" else $"Онлайн ({rows.Length}, из них гостей {guests})") ]
             if not available then Elem.p [ css "error" ] [ text "Рантайм не ответил; данные устарели." ]
             Elem.table [] [
                 Elem.thead [] [
@@ -213,7 +215,7 @@ module AdminViews =
                                 Elem.td [] [ text (if isNull row.Location then "—" else row.Location) ]
                             else
                                 // A guest has not signed in: there is nothing to describe.
-                                let note = if row.Phase = AdminModels.guestPhase then "гость" else "нет данных"
+                                let note = if row.DescriptionStatus = "unavailable" then "недоступно" elif row.Phase = AdminModels.guestPhase then "гость" else "ещё не открыта"
                                 Elem.td [ attr "colspan" "6"; css "muted" ] [ text note ]
                             Elem.td [] [ text row.Phase ]
                             Elem.td [] [ text (time row.ConnectedAt) ]
@@ -222,12 +224,12 @@ module AdminViews =
             ]
         ]
 
-    let overview admin (status: StatusModel option) (rows: OnlineModel list) available =
+    let overview admin (status: Result<StatusModel, AdminServiceError>) (rows: Result<OnlineModel list, AdminServiceError>) =
         page "Обзор" Overview (Some admin) None [
             Elem.section [] [
                 Elem.h2 [] [ text "Сервер" ]
                 match status with
-                | Some status ->
+                | Ok status ->
                     Elem.dl [] [
                         for label, value in [ "Соединения", string status.Connections; "Гости", string status.Guests; "Готовы", string status.Ready
                                               "Резервы PlayerId", string status.Reservations; "Закрываются", string status.Closing
@@ -235,9 +237,9 @@ module AdminViews =
                             Elem.dt [] [ text label ]
                             Elem.dd [] [ text value ]
                     ]
-                | None -> Elem.p [ css "error" ] [ text "Рантайм не ответил." ]
+                | Error _ -> Elem.p [ css "error" ] [ text "Рантайм не ответил." ]
             ]
-            online rows available
+            online rows
         ]
 
     let players admin (model: PlayerPageModel) =
@@ -418,7 +420,7 @@ module AdminViews =
                     Elem.dt [] [ text label ]
                     Elem.dd [] [ text value ]
             ]
-            if not card.Sessions.IsEmpty then online card.Sessions true
+            if not card.Sessions.IsEmpty then online (Ok card.Sessions)
             Elem.section [] [
                 Elem.h2 [] [ text "Гильдии" ]
                 if card.Guilds.IsEmpty then Elem.p [ css "muted" ] [ text "Не состоит в гильдиях." ]

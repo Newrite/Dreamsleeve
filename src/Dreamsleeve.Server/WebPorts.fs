@@ -94,7 +94,7 @@ module WebPorts =
           Describe = fun timeout row ->
             match row.Session with
             | Some session -> SessionDescriber.describe describer timeout session
-            | None -> Task.FromResult None
+            | None -> Task.FromResult(Ok None)
           Announce = fun announcement -> tell (ServerRuntimeMessage.Announce announcement)
           ApplyRole = fun playerId role -> tell (ServerRuntimeMessage.SetPlayerRole(playerId, role))
           ApplyProfile = fun profile -> tell (ServerRuntimeMessage.RenamePlayer profile)
