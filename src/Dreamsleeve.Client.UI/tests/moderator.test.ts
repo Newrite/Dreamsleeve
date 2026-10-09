@@ -51,6 +51,72 @@ function moderator(role = true) {
 }
 
 describe("moderator tools", () => {
+  it("drops old-session moderator work when the projected role stays the same", () => {
+    const { chat, sent } = moderator();
+    chat.moderator.listSanctions();
+    chat.receive({ type: "moderationResult", requestId: "m1", sanctions: [] });
+    chat.moderator.listMarks("7", "Мира");
+    chat.receive({
+      type: "moderationResult",
+      requestId: "m2",
+      playerId: "7",
+      marks: [mark("3", "note")],
+    });
+    chat.moderator.openDialog("mute", "7", "Мира");
+    chat.moderator.submitDialog({
+      reason: "Флуд",
+      notes: false,
+      deaths: false,
+    });
+    chat.moderator.listSanctions();
+    expect(chat.store.getState().moderation?.request).toBe("m3");
+
+    // Host can coalesce a Moderator -> Player -> Moderator reconnect.
+    chat.receive(snapshot);
+    expect(chat.store.getState()).toMatchObject({
+      moderator: true,
+      moderation: null,
+      sanctions: null,
+      playerMarks: null,
+      panel: null,
+    });
+    chat.receive({
+      type: "moderationResult",
+      requestId: "m3",
+      error: "old refusal",
+    });
+    chat.receive({ type: "moderationResult", requestId: "m4", sanctions: [] });
+    expect(chat.store.getState()).toMatchObject({
+      moderation: null,
+      sanctions: null,
+      notice: "",
+    });
+
+    chat.moderator.listSanctions();
+    expect(sent().at(-1)).toEqual({ type: "listSanctions", requestId: "m5" });
+    chat.receive({ type: "moderationResult", requestId: "m5", sanctions: [] });
+    expect(chat.store.getState().sanctions).toEqual([]);
+  });
+  it("keeps current moderator requests and dialogs across a refresh snapshot", () => {
+    const { chat } = moderator();
+    chat.moderator.openDialog("kick", "7", "Мира");
+    chat.moderator.submitDialog({
+      reason: "Флуд",
+      notes: false,
+      deaths: false,
+    });
+    chat.moderator.listSanctions();
+    chat.receive({ ...snapshot, refresh: true });
+    expect(chat.store.getState().moderation?.request).toBe("m1");
+    chat.receive({ type: "moderationResult", requestId: "m2", sanctions: [] });
+    expect(chat.store.getState().sanctions).toEqual([]);
+    chat.receive({
+      type: "moderationResult",
+      requestId: "m1",
+      error: "current refusal",
+    });
+    expect(chat.store.getState().moderation?.error).toBe("current refusal");
+  });
   it("come with the role and go with it, closing what they opened", () => {
     const { chat } = moderator();
     chat.open("moderation");
