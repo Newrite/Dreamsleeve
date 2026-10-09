@@ -167,8 +167,13 @@ TEST_CASE("The bundled ui.example.toml names every setting with its default valu
 
 TEST_CASE("Filesystem probe failure is not a missing UI file")
 {
-  const auto invalid = std::filesystem::temp_directory_path() / L"dreamsleeve-<invalid>-ui.toml";
-  const auto loaded  = LoadUiFile(invalid);
+  // Beyond the Windows native path limit (32767 UTF-16 code units).
+  // Unlike ERROR_INVALID_NAME, this error is not classified as not-found by MSVC.
+  const auto      oversized = std::filesystem::temp_directory_path() / std::wstring(32768, L'x');
+  std::error_code probe;
+  CHECK_FALSE(std::filesystem::exists(oversized, probe));
+  REQUIRE(probe);
+  const auto loaded = LoadUiFile(oversized);
   CHECK_FALSE(loaded);
   if (!loaded) CHECK_FALSE(loaded.error().empty());
 }
