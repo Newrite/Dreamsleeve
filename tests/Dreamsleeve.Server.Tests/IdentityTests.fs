@@ -24,6 +24,18 @@ let private hide pick profile book =
     PseudonymBook.apply pick HiddenIdentity.Everywhere profile book |> ValueOption.get
 
 let private primitiveTests = testList "Pseudonym" [
+    testCase "comparison normalization is checked without changing display spelling" <| fun _ ->
+        let invalid = "Name\uFFFE"
+        let expected = Error (DomainError.InvalidText("Pseudonym", TextError.InvalidUnicode))
+        Expect.equal (Pseudonym.create invalid) expected "Reject before trusted dictionary comparison."
+        Expect.equal (Pseudonym.restore invalid) expected "Stored names use the same invariant."
+        for source in [ "Cafe\u0301"; "Bard\U0001F984" ] do
+            let value = Pseudonym.create source |> ok
+            Expect.equal (Pseudonym.value value) source "Original display text remains exact."
+            Expect.equal (Pseudonym.restore source) (Ok value) "Restore shares construction."
+            let names = PseudonymDictionary.create [ value ]
+            Expect.equal (names |> ValueOption.map _.Names) (ValueSome [value]) "Trusted comparison cannot fail."
+
     testCase "entries follow the client alias rules and are kept exactly" <| fun _ ->
         Expect.equal (Pseudonym.value (pseudonym "Наёмник")) "Наёмник" "Cyrillic entry"
         Expect.equal (Pseudonym.value (pseudonym "Dark Elf")) "Dark Elf" "inner space"

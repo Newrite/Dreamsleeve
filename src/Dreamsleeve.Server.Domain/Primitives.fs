@@ -405,16 +405,23 @@ module Pseudonym =
         elif Encoding.UTF8.GetByteCount source > limit then ValueSome (TextError.TooLong limit)
         else ValueNone
 
+    // The dictionary compares NFC keys. Validate that dependency operation at
+    // construction, inside PrimitiveValidation's narrow ArgumentException adapter,
+    // while retaining the exact original spelling for display.
+    let private comparable (source: string) =
+        source.Normalize(NormalizationForm.FormC) |> ignore
+        source
+
     /// A dictionary entry: one line of plain text, 1..48 UTF-8 bytes, no
     /// leading or trailing space, no control characters and no angle brackets.
     /// Kept exactly as written; it is display text, never markup.
     let create raw : Result<Pseudonym, DomainError> =
-        PrimitiveValidation.text "Pseudonym" MaxEntryBytes id false (plain MaxEntryBytes) raw |> Result.map UMX.tag
+        PrimitiveValidation.text "Pseudonym" MaxEntryBytes comparable false (plain MaxEntryBytes) raw |> Result.map UMX.tag
 
     /// A pseudonym read back from storage, numbered or not: the same rules
     /// with room for the number.
     let restore raw : Result<Pseudonym, DomainError> =
-        PrimitiveValidation.text "Pseudonym" MaxBytes id false (plain MaxBytes) raw |> Result.map UMX.tag
+        PrimitiveValidation.text "Pseudonym" MaxBytes comparable false (plain MaxBytes) raw |> Result.map UMX.tag
 
     /// "Страж 2": the short number that tells equal picks apart.
     let numbered (number: int) (name: Pseudonym) : Pseudonym =

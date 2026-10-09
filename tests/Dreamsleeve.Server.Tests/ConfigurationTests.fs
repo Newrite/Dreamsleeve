@@ -286,6 +286,12 @@ let tests = testList "Server configuration" [
             Expect.equal (loaded.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "file replaces the list"
             Expect.isNone warning "no warning")
 
+    testCase "non-normalizable pseudonym skips only its entry and preserves the valid dictionary" <| fun _ ->
+        withFile "version = 1\nnames = ['Бард', 'Name\uFFFE', 'Рыбак']\n" (fun path ->
+            let loaded, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal (loaded.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард"; "Рыбак" ] "No whole-file fallback for one rejected entry."
+            Expect.isSome warning "Skipped invalid entry remains diagnostic.")
+
     testCase "bundled pseudonym example equals the built-in list" <| fun _ ->
         let rec find (directory: DirectoryInfo) =
             let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "pseudonyms.example.toml")

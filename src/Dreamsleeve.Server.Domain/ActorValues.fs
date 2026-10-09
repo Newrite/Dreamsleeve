@@ -3,6 +3,12 @@ namespace Dreamsleeve.Server.Domain
 open System
 open System.Collections.Generic
 
+/// Read-only projection; it cannot construct an invariant-bearing state.
+[<Struct; RequireQualifiedAccess>]
+type ActorValueReading =
+    | Scalar of value: ActorValue
+    | Resource of current: int * maximum: int
+
 /// Scalar values and resources with a maximum are distinct shapes.
 /// These are client observations, not server-authoritative gameplay constraints.
 [<Struct; RequireQualifiedAccess>]
@@ -10,6 +16,11 @@ type ActorValueState =
     private
     | Scalar of value: ActorValue
     | Resource of current: int * maximum: int
+
+    member this.Reading =
+        match this with
+        | ActorValueState.Scalar value -> ActorValueReading.Scalar value
+        | ActorValueState.Resource (current, maximum) -> ActorValueReading.Resource (current, maximum)
 
 [<RequireQualifiedAccess>]
 module ActorValueState =
@@ -21,9 +32,10 @@ module ActorValueState =
     let resource (current: int) (maximum: int) = ActorValueState.Resource (current, maximum)
 
     /// Consume either case without exposing constructors that bypass validation.
-    let fold onScalar onResource = function
-        | ActorValueState.Scalar value -> onScalar value
-        | ActorValueState.Resource (current, maximum) -> onResource current maximum
+    let inline fold ([<InlineIfLambda>] onScalar) ([<InlineIfLambda>] onResource) (state: ActorValueState) =
+        match state.Reading with
+        | ActorValueReading.Scalar value -> onScalar value
+        | ActorValueReading.Resource (current, maximum) -> onResource current maximum
 
 type ActorValueInfo = private {
     displayName: ActorValueName

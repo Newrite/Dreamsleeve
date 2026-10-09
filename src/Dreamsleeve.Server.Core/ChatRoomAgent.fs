@@ -94,7 +94,7 @@ module ChatRoomAgent =
 
     /// Assigns the next ID and time, stores and relays. The requesting
     /// connection, when there is one, receives the correlated acceptance.
-    let private append (state: State) (context: AgentContext<ChatRoomCommand>) (create: ChatMessageId -> DateTimeOffset -> ChatMessage) (requester: struct (Guid * uint64) voption) =
+    let inline private append (state: State) (context: AgentContext<ChatRoomCommand>) ([<InlineIfLambda>] create: ChatMessageId -> DateTimeOffset -> ChatMessage) (requester: struct (Guid * uint64) voption) =
         match ChatMessageId.create state.NextMessageId with
         | Error _ -> context.Abort()
         | Ok messageId ->
