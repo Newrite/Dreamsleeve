@@ -15,16 +15,55 @@ open Dreamsleeve.Server.Core
 module PhantomStorage =
     let private meter = new System.Diagnostics.Metrics.Meter("Dreamsleeve.PhantomDelta")
     let private applyDuration = meter.CreateHistogram<double>("phantom.delta.apply", "ms")
-    type private Patch = { Descriptor: PhantomDelta; Path: string }
-    type private Entry = {
-        Path: string; Size: int64; mutable Touched: int64; mutable Pins: int
-        mutable Verified: bool; mutable Ram: byte array option; Patch: Patch option
+    type private Patch = {
+        Descriptor: PhantomDelta
+        Path: string
     }
-    type private Lease = { Gate: SemaphoreSlim; mutable Closed: bool; mutable Users: int }
-    type private Upload = { Manifest: PhantomManifest; Delta: PhantomDelta option; Basis: Entry option; Reserved: int64; Path: string; File: FileStream; Hash: IncrementalHash; mutable Offset: int; Lease: Lease }
-    type private Download = { Entry: Entry; Size: int64; File: FileStream; Lease: Lease }
-    type private Transfer = Upload of Upload | Download of Download
-    type private Work = { Run: unit -> unit; Fail: exn -> unit }
+    type private Entry = {
+        Path: string
+        Size: int64
+
+        mutable Touched: int64
+        mutable Pins: int
+        mutable Verified: bool
+        mutable Ram: byte array option
+
+        Patch: Patch option
+    }
+    type private Lease = {
+        Gate: SemaphoreSlim
+        mutable Closed: bool
+        mutable Users: int
+    }
+
+    type private Upload = {
+        Manifest: PhantomManifest
+        Delta: PhantomDelta option
+        Basis: Entry option
+        Reserved: int64
+
+        Path: string
+        File: FileStream
+        Hash: IncrementalHash
+        mutable Offset: int
+        Lease: Lease
+    }
+
+    type private Download = {
+        Entry: Entry
+        Size: int64
+        File: FileStream
+        Lease: Lease
+    }
+
+    type private Transfer =
+        | Upload of Upload
+        | Download of Download
+
+    type private Work = {
+        Run: unit -> unit
+        Fail: exn -> unit
+    }
 
     // Filesystem adapters translate only ordinary dependency failures.
     let inline private io ([<InlineIfLambda>] operation: unit -> 'a) =
@@ -44,12 +83,21 @@ module PhantomStorage =
         | :? System.Security.SecurityException as error -> return Error (PhantomStorageError.Io error)
     }
 
-    let private lease () = { Gate = new SemaphoreSlim(1, 1); Closed = false; Users = 0 }
-    let private borrow value = Interlocked.Increment(&value.Users) |> ignore; value
+    let private lease () = {
+        Gate = new SemaphoreSlim(1, 1)
+        Closed = false
+        Users = 0
+    }
+
+    let private borrow value =
+        Interlocked.Increment(&value.Users) |> ignore
+        value
     let private release value =
         value.Gate.Release() |> ignore
         if Interlocked.Decrement(&value.Users) = 0 && value.Closed then value.Gate.Dispose()
-    let private gate = function Upload upload -> upload.Lease | Download download -> download.Lease
+    let private gate = function
+        | Upload upload -> upload.Lease
+        | Download download -> download.Lease
 
     /// Reader ownership transfers to the operation and is disposed after verification
     /// or RAM fill. Production uses File.OpenRead; tests can control this dependency.
@@ -80,7 +128,12 @@ module PhantomStorage =
                 | Error (PhantomStorageError.Io error) -> failOwner error
                 | Error _ -> ()
         let remove key (entry: Entry) =
-            cleanup (seq { yield entry.Path; match entry.Patch with Some patch -> yield patch.Path | None -> () })
+            cleanup (seq {
+                yield entry.Path
+                match entry.Patch with
+                | Some patch -> yield patch.Path
+                | None -> ()
+            })
             if not failure.Task.IsCompleted then
                 used <- used - cost entry
                 entry.Ram |> Option.iter (fun bytes -> ram <- ram - int64 bytes.Length)
@@ -119,30 +172,51 @@ module PhantomStorage =
                                             let mutable consumed, written = 0, 0
                                             if Convert.FromHexString(name, bytes.AsSpan(), &consumed, &written) = System.Buffers.OperationStatus.Done then
                                                 hash <- AssetHash.create bytes |> Result.toOption
-                                        match io (fun () -> let file = FileInfo path in file.Length, file.LastWriteTimeUtc) with
+                                        match io (fun () ->
+                                            let file = FileInfo path
+                                            file.Length, file.LastWriteTimeUtc) with
                                         | Error error -> outcome <- Error error
                                         | Ok (size, touched) ->
                                             match hash with
                                             | Some key when size > 0L && size <= int64 options.Limits.CompressedBytes && makeRoom size ->
                                                 let age = max 0L (int64 (DateTime.UtcNow - touched).TotalMilliseconds)
-                                                entries[key] <- { Path = path; Size = size; Touched = time() - age; Pins = 0; Verified = false; Ram = None; Patch = None }
+                                                entries[key] <- {
+                                                    Path = path
+                                                    Size = size
+                                                    Touched = time() - age
+                                                    Pins = 0
+                                                    Verified = false
+                                                    Ram = None
+                                                    Patch = None
+                                                }
                                                 used <- used + size
                                             | _ -> outcome <- safeDelete path
                 match outcome with
-                | Ok () -> initialized <- true; clean(); Ok ()
+                | Ok () ->
+                    initialized <- true
+                    clean()
+                    Ok ()
                 | Error error ->
                     // No leases exist yet; retry rescans empty metadata. Completed
                     // filesystem deletions remain committed cache maintenance.
-                    entries.Clear(); used <- 0L; ram <- 0L
+                    entries.Clear()
+                    used <- 0L
+                    ram <- 0L
                     Error error
         let verify hash (entry: Entry) =
             let verified =
                 if entry.Verified then Ok true
-                else io (fun () -> use stream = openRead entry.Path in stream.Length = entry.Size && SHA256.HashData stream = AssetHash.bytes hash)
+                else
+                    io (fun () ->
+                        use stream = openRead entry.Path
+                        stream.Length = entry.Size && SHA256.HashData stream = AssetHash.bytes hash)
             match verified with
             | Error error -> Error error
             | Ok false -> Error PhantomStorageError.CacheHashMismatch
-            | Ok true -> entry.Verified <- true; entry.Touched <- time(); Ok ()
+            | Ok true ->
+                entry.Verified <- true
+                entry.Touched <- time()
+                Ok ()
         let closeTransfer id expected =
             match transfers.TryGetValue id with
             | true, current when Object.ReferenceEquals(current, expected) ->
@@ -177,8 +251,11 @@ module PhantomStorage =
                         else
                             // Lifetime boundary: stop the owner and settle accepted
                             // replies; never keep using potentially partial mutation.
-                            try work.Run()
-                            with error -> failOwner error; work.Fail error
+                            try
+                                work.Run()
+                            with error ->
+                                failOwner error
+                                work.Fail error
                         if failure.Task.IsCompleted then work.Fail failure.Task.Result
         }
         let worker = Task.Run(Func<Task>(workerLoop))
@@ -194,11 +271,17 @@ module PhantomStorage =
                 Fail = fun error -> reply.TrySetException error |> ignore
             }
             let wait = lock admission (fun () ->
-                if failure.Task.IsCompleted then work.Fail failure.Task.Result; false
-                elif closing && not control then reply.TrySetResult(Error PhantomStorageError.Closed) |> ignore; false
+                if failure.Task.IsCompleted then
+                    work.Fail failure.Task.Result
+                    false
+                elif closing && not control then
+                    reply.TrySetResult(Error PhantomStorageError.Closed) |> ignore
+                    false
                 elif control then true
                 elif channel.Writer.TryWrite work then false
-                else reply.TrySetResult(Error PhantomStorageError.QueueFull) |> ignore; false)
+                else
+                    reply.TrySetResult(Error PhantomStorageError.QueueFull) |> ignore
+                    false)
             if wait then task {
                 try do! channel.Writer.WriteAsync(work).AsTask()
                 with :? ChannelClosedException ->
@@ -249,20 +332,41 @@ module PhantomStorage =
                                             let value = lease()
                                             let mutable gateOwned = true
                                             try
-                                                let upload = { Manifest = manifest; Delta = change; Basis = previous; Reserved = reservation; Path = path; File = file; Hash = hash; Offset = 0; Lease = value }
+                                                let upload = {
+                                                    Manifest = manifest
+                                                    Delta = change
+                                                    Basis = previous
+                                                    Reserved = reservation
+
+                                                    Path = path
+                                                    File = file
+                                                    Hash = hash
+                                                    Offset = 0
+                                                    Lease = value
+                                                }
                                                 transfers.Add(id, Upload upload)
                                                 reserved <- reserved + reservation
-                                                retained <- true; fileOwned <- false; hashOwned <- false; gateOwned <- false
+                                                retained <- true
+                                                fileOwned <- false
+                                                hashOwned <- false
+                                                gateOwned <- false
                                                 Ok false
-                                            finally if gateOwned then value.Gate.Dispose()
-                                        finally if hashOwned then hash.Dispose()
+                                            finally
+                                                if gateOwned then value.Gate.Dispose()
+                                        finally
+                                            if hashOwned then hash.Dispose()
                                     finally
-                                        if fileOwned then file.Dispose(); cleanup [path]
-                        finally if not retained then previous |> Option.iter (fun entry -> entry.Pins <- entry.Pins - 1))
+                                        if fileOwned then
+                                            file.Dispose()
+                                            cleanup [path]
+                        finally
+                            if not retained then previous |> Option.iter (fun entry -> entry.Pins <- entry.Pins - 1))
         let completeUpload (upload: Upload) =
             if upload.Hash.GetHashAndReset() <> AssetHash.bytes upload.Manifest.Hash then Error PhantomStorageError.HashMismatch
             else
-                match io (fun () -> upload.File.Flush true; upload.File.Dispose()) with
+                match io (fun () ->
+                    upload.File.Flush true
+                    upload.File.Dispose()) with
                 | Error error -> Error error
                 | Ok () ->
                     let path = Path.Combine(directory, upload.Manifest.Hash.Hex + ".zst")
@@ -270,8 +374,21 @@ module PhantomStorage =
                     | true, entry when entry.Size <> int64 upload.Manifest.CompressedBytes -> Error PhantomStorageError.HashSizeConflict
                     | true, entry -> verify upload.Manifest.Hash entry
                     | false, _ ->
-                        let patch = upload.Delta |> Option.map (fun descriptor -> { Descriptor = descriptor; Path = Path.Combine(directory, upload.Manifest.Hash.Hex + ".delta") })
-                        let entry = { Path = path; Size = int64 upload.Manifest.CompressedBytes; Touched = time(); Pins = 0; Verified = true; Ram = None; Patch = patch }
+                        let patch =
+                            upload.Delta
+                            |> Option.map (fun descriptor -> {
+                                Descriptor = descriptor
+                                Path = Path.Combine(directory, upload.Manifest.Hash.Hex + ".delta")
+                            })
+                        let entry = {
+                            Path = path
+                            Size = int64 upload.Manifest.CompressedBytes
+                            Touched = time()
+                            Pins = 0
+                            Verified = true
+                            Ram = None
+                            Patch = patch
+                        }
                         // Patch first, canonical last: no rejected orphan canonical
                         // file when preparation fails. Metadata is allocated first.
                         let prepared =
@@ -303,7 +420,9 @@ module PhantomStorage =
                             | Error error -> Error error
                             | Ok previous ->
                                 let patch = Array.zeroCreate<byte> delta.CompressedBytes
-                                match io (fun () -> upload.File.Position <- 0L; upload.File.ReadExactly(patch.AsSpan())) with
+                                match io (fun () ->
+                                    upload.File.Position <- 0L
+                                    upload.File.ReadExactly(patch.AsSpan())) with
                                 | Error error -> Error error
                                 | Ok () ->
                                     let mutable full = Array.empty<byte>
@@ -313,7 +432,9 @@ module PhantomStorage =
                         match result with
                         | Error reason -> return Error reason
                         | Ok full ->
-                            match io (fun () -> upload.File.Position <- 0L; upload.File.SetLength 0L) with
+                            match io (fun () ->
+                                upload.File.Position <- 0L
+                                upload.File.SetLength 0L) with
                             | Error error -> return Error error
                             | Ok () ->
                                 let! written = ioAsync (fun () -> task { do! upload.File.WriteAsync(full.AsMemory()) })
@@ -326,7 +447,9 @@ module PhantomStorage =
         let writeChunk (id, offset, bytes: byte array) = task {
             let! admitted = enqueue (fun () ->
                 match transfers.TryGetValue id with
-                | true, Upload upload -> borrow upload.Lease |> ignore; Ok upload
+                | true, Upload upload ->
+                    borrow upload.Lease |> ignore
+                    Ok upload
                 | _ -> Error PhantomStorageError.UnknownUpload)
             match admitted with
             | Error error -> return Error error
@@ -370,7 +493,8 @@ module PhantomStorage =
                         // and shutdown waits this gate before disposing resources.
                         failOwner error
                         return! Task.FromException<Result<bool, PhantomStorageError>>(error)
-                finally release upload.Lease
+                finally
+                    release upload.Lease
         }
         let startDownload (id, manifest: PhantomManifest, basis: AssetHash option) = enqueue (fun () ->
             clean()
@@ -394,12 +518,22 @@ module PhantomStorage =
                                 let value = lease()
                                 let mutable gateOwned = true
                                 try
-                                    transfers.Add(id, Download { Entry = entry; Size = size; File = file; Lease = value })
+                                    transfers.Add(
+                                        id,
+                                        Download {
+                                            Entry = entry
+                                            Size = size
+                                            File = file
+                                            Lease = value
+                                        })
                                     entry.Pins <- entry.Pins + 1
-                                    retained <- true; gateOwned <- false
+                                    retained <- true
+                                    gateOwned <- false
                                     Ok (patch |> Option.map _.Descriptor)
-                                finally if gateOwned then value.Gate.Dispose()
-                            finally if not retained then file.Dispose()
+                                finally
+                                    if gateOwned then value.Gate.Dispose()
+                            finally
+                                if not retained then file.Dispose()
                 | _ -> Error PhantomStorageError.AssetUnavailable)
         let readFile (entry: Entry) offset count =
             io (fun () ->
@@ -426,7 +560,9 @@ module PhantomStorage =
                     item.Ram <- None
                     index <- index + 1
                 readFile entry 0 (int entry.Size)
-                |> Result.map (fun bytes -> entry.Ram <- Some bytes; ram <- ram + int64 bytes.Length)
+                |> Result.map (fun bytes ->
+                    entry.Ram <- Some bytes
+                    ram <- ram + int64 bytes.Length)
         let readChunk (id, offset, destination: Memory<byte>) = task {
             let count = destination.Length
             let! admitted = enqueue (fun () ->
@@ -437,7 +573,9 @@ module PhantomStorage =
                     else
                         entry.Touched <- time()
                         (if download.Size = entry.Size then cache entry else Ok ())
-                        |> Result.map (fun () -> borrow download.Lease |> ignore; download, if download.Size = entry.Size then entry.Ram else None)
+                        |> Result.map (fun () ->
+                            borrow download.Lease |> ignore
+                            download, if download.Size = entry.Size then entry.Ram else None)
                 | _ -> Error PhantomStorageError.UnknownDownload)
             match admitted with
             | Error error -> return Error error
@@ -448,7 +586,9 @@ module PhantomStorage =
                         if download.Lease.Closed then return Error PhantomStorageError.DownloadClosed
                         else
                             match content with
-                            | Some memory -> memory.AsMemory(offset, count).CopyTo destination; return Ok count
+                            | Some memory ->
+                                memory.AsMemory(offset, count).CopyTo destination
+                                return Ok count
                             | None ->
                                 let! read = ioAsync (fun () -> task {
                                     if download.File.Length <> download.Size then return Error PhantomStorageError.CacheSizeChanged
@@ -465,21 +605,27 @@ module PhantomStorage =
                     with error ->
                         failOwner error
                         return! Task.FromException<Result<int, PhantomStorageError>>(error)
-                finally release download.Lease
+                finally
+                    release download.Lease
         }
         let cancelTask id = task {
             let! pending = control (fun () ->
                 match transfers.TryGetValue id with
-                | true, transfer -> borrow (gate transfer) |> ignore; Ok (Some transfer)
+                | true, transfer ->
+                    borrow (gate transfer) |> ignore
+                    Ok (Some transfer)
                 | _ -> Ok None)
             match pending with
             | Ok (Some transfer) ->
                 let value = gate transfer
                 do! value.Gate.WaitAsync()
                 try
-                    let! _ = control (fun () -> closeTransfer id transfer; Ok ())
+                    let! _ = control (fun () ->
+                        closeTransfer id transfer
+                        Ok ())
                     return ()
-                finally release value
+                finally
+                    release value
             | Ok None -> ()
             | Error (PhantomStorageError.Io error) ->
                 failOwner error
@@ -494,7 +640,9 @@ module PhantomStorage =
             try
                 let! active = control (fun () -> Ok (transfers.Keys |> Seq.toArray))
                 match active with
-                | Ok ids -> for id in ids do do! cancelTask id
+                | Ok ids ->
+                    for id in ids do
+                        do! cancelTask id
                 | Error (PhantomStorageError.Io error) -> disposalFault <- Some error
                 | Error _ -> ()
             with error -> disposalFault <- Some error
@@ -505,18 +653,30 @@ module PhantomStorage =
                 let value = borrow (gate transfer)
                 do! value.Gate.WaitAsync()
                 try
-                    try closeTransfer id transfer
-                    with error -> if disposalFault.IsNone then disposalFault <- Some error
-                finally release value
+                    try
+                        closeTransfer id transfer
+                    with error ->
+                        if disposalFault.IsNone then disposalFault <- Some error
+                finally
+                    release value
             entries.Clear()
-            used <- 0L; reserved <- 0L; ram <- 0L
+            used <- 0L
+            reserved <- 0L
+            ram <- 0L
             reconstruction.Dispose()
             match disposalFault with
             | Some error -> return! Task.FromException<unit>(error)
             | None when failure.Task.IsCompleted -> return! Task.FromException<unit>(failure.Task.Result)
             | None -> return ()
         })
-        { StartUpload = startUpload; WriteChunk = writeChunk; StartDownload = startDownload
-          ReadChunk = readChunk; Cancel = cancelTask; Dispose = (fun () -> disposal.Value); OwnerFailure = failure.Task }
+        {
+            StartUpload = startUpload
+            WriteChunk = writeChunk
+            StartDownload = startDownload
+            ReadChunk = readChunk
+            Cancel = cancelTask
+            Dispose = (fun () -> disposal.Value)
+            OwnerFailure = failure.Task
+        }
 
     let create options = createWithFileReader options (fun path -> File.OpenRead path :> Stream)

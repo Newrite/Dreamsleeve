@@ -160,7 +160,9 @@ module TransportOwner =
                     if LanePolicy.reliable packet.Lane then disconnect state transport id (TransportSendError.message reason)
                     true
             else true
-        | Close id -> transport.Close id; true
+        | Close id ->
+            transport.Close id
+            true
         | Reset id ->
             transport.Reset id
             forget state id
@@ -206,7 +208,10 @@ module TransportOwner =
         let struct (value, _) = command
         match viewNotice value with
         | ValueSome key ->
-            let count = match state.ViewNotices.TryGetValue key with true, value -> value | _ -> 0
+            let count =
+                match state.ViewNotices.TryGetValue key with
+                | true, value -> value
+                | _ -> 0
             state.ViewNotices[key] <- count + 1
         | _ -> ()
         queue.Enqueue command
@@ -219,7 +224,9 @@ module TransportOwner =
     let private removePose state (node: LinkedListNode<struct (Command * int64)>) =
         let struct (command, _) = node.Value
         state.PoseOutgoing.Remove node
-        match poseKey command with ValueSome key -> state.PoseSlots.Remove key |> ignore | _ -> ()
+        match poseKey command with
+        | ValueSome key -> state.PoseSlots.Remove key |> ignore
+        | _ -> ()
         releaseCommand state command
 
     let private takeCommand state (blocked: HashSet<Guid>) =
@@ -232,6 +239,7 @@ module TransportOwner =
                     | true, peer when peer.Packets > 0 -> enqueueBulk state id (state.Outgoing.Dequeue())
                     | _ -> checking <- false
                 | _ -> checking <- false
+
             let dequeue (queue: Queue<struct (Command * int64)>) =
                 let struct (command, _) as queued = queue.Dequeue()
                 releaseCommand state command
@@ -241,7 +249,10 @@ module TransportOwner =
                 let mutable waiting = true
                 while not (isNull node) && waiting do
                     let struct (command, _) = node.Value
-                    waiting <- match poseKey command with ValueSome key -> state.ViewNotices.ContainsKey key | _ -> false
+                    waiting <-
+                        match poseKey command with
+                        | ValueSome key -> state.ViewNotices.ContainsKey key
+                        | _ -> false
                     if waiting then node <- node.Next
                 if isNull node then ValueNone
                 else
@@ -263,6 +274,7 @@ module TransportOwner =
                     if blocked.Contains id || pendingClose || (noticesOnly && not (modelNotice command)) then state.BulkPeers.Enqueue id
                     else result <- ValueSome(command, Some id)
                 result
+
             if state.Outgoing.Count > 0 then dequeue state.Outgoing
             elif state.RealtimeOutgoing.Count > 0 then dequeue state.RealtimeOutgoing
             else
@@ -271,10 +283,14 @@ module TransportOwner =
                 let notice = if state.ModelNotices > 0 then bulk true else ValueNone
                 if notice.IsSome then notice
                 elif state.PoseOutgoing.Count > 0 && (state.PoseBurst < 8 || state.BulkCommands = 0) then
-                    match pose() with ValueSome _ as ready -> ready | _ -> bulk false
+                    match pose() with
+                    | ValueSome _ as ready -> ready
+                    | _ -> bulk false
                 else
                     match bulk false with
-                    | ValueSome _ as result -> state.PoseBurst <- 0; result
+                    | ValueSome _ as result ->
+                        state.PoseBurst <- 0
+                        result
                     | _ when state.PoseOutgoing.Count > 0 -> pose()
                     | _ -> ValueNone)
 
@@ -335,7 +351,15 @@ module TransportOwner =
                 | ServerTransportEvent.Connected(id, _) ->
                     let payload = transport.MaxUnfragmentedPayloadBytes id
                     lock state.Gate (fun () ->
-                        state.Peers[id] <- { Packets = 0; Bytes = 0L; Closing = false; ResetQueued = false; IncomingPackets = 0; IncomingBytes = 0L }
+                        state.Peers[id] <- {
+                            Packets = 0
+                            Bytes = 0L
+                            Closing = false
+                            ResetQueued = false
+
+                            IncomingPackets = 0
+                            IncomingBytes = 0L
+                        }
                         state.Payloads[id] <- payload)
                     publish state event |> ignore
                 | ServerTransportEvent.Disconnected id | ServerTransportEvent.Failed(id, _) ->
@@ -358,10 +382,24 @@ module TransportOwner =
                 match queue.TryPeek() with
                 | true, struct (_, timestamp) -> Stopwatch.GetElapsedTime(timestamp).TotalMilliseconds
                 | false, _ -> 0.
-            let snapshot = struct (state.Incoming.Count, state.IncomingBytes, age state.Incoming,
-                                   state.Outgoing.Count + state.RealtimeOutgoing.Count + state.PoseOutgoing.Count + state.BulkCommands, state.OutgoingBytes,
-                                   state.BulkOutgoing.Values |> Seq.map age |> Seq.fold max (max (max (age state.Outgoing) (age state.RealtimeOutgoing)) (if state.PoseOutgoing.Count = 0 then 0. else let struct (_, at) = state.PoseOutgoing.First.Value in Stopwatch.GetElapsedTime(at).TotalMilliseconds)),
-                                   state.Dropped, state.NativeFailures)
+            let snapshot =
+                struct (
+                    state.Incoming.Count,
+                    state.IncomingBytes,
+                    age state.Incoming,
+                    state.Outgoing.Count + state.RealtimeOutgoing.Count + state.PoseOutgoing.Count + state.BulkCommands,
+                    state.OutgoingBytes,
+                    state.BulkOutgoing.Values
+                    |> Seq.map age
+                    |> Seq.fold max
+                        (max
+                            (max (age state.Outgoing) (age state.RealtimeOutgoing))
+                            (if state.PoseOutgoing.Count = 0 then 0.
+                             else
+                                 let struct (_, at) = state.PoseOutgoing.First.Value
+                                 Stopwatch.GetElapsedTime(at).TotalMilliseconds)),
+                    state.Dropped,
+                    state.NativeFailures)
             state.Dropped <- 0L
             state.NativeFailures <- 0L
             snapshot)
@@ -442,7 +480,9 @@ module TransportOwner =
             elif state.Fault.IsSome then Error(TransportSendError.Faulted state.Fault.Value)
             elif isNull packet.Bytes || packet.Bytes.Length = 0 || packet.Bytes.Length > state.Config.MaxPacketBytes then
                 Error(TransportSendError.InvalidPacket "Outgoing packet size is outside configured limits.")
-            elif (match packet.Schedule with PacketSchedule.ModelNotice _ -> packet.Lane <> DeliveryLane.Models | _ -> false) then
+            elif (match packet.Schedule with
+                  | PacketSchedule.ModelNotice _ -> packet.Lane <> DeliveryLane.Models
+                  | _ -> false) then
                 Error(TransportSendError.InvalidPacket "Model notices require the model lane.")
             elif packet.PoseStream.IsSome && packet.Lane <> DeliveryLane.Poses then
                 Error(TransportSendError.InvalidPacket "Only pose packets may replace a stream slot.")
@@ -455,15 +495,23 @@ module TransportOwner =
                 | true, peer ->
                     let replaced =
                         match packet.PoseStream with
-                        | ValueSome stream -> match state.PoseSlots.TryGetValue(struct (id, stream)) with true, node -> Some node | _ -> None
+                        | ValueSome stream ->
+                            match state.PoseSlots.TryGetValue(struct (id, stream)) with
+                            | true, node -> Some node
+                            | _ -> None
                         | _ -> None
                     let previousBytes =
                         match replaced with
-                        | Some node -> let struct (command, _) = node.Value in match command with Send(_, old) -> int64 old.Bytes.Length | _ -> 0L
+                        | Some node ->
+                            let struct (command, _) = node.Value
+                            match command with
+                            | Send(_, old) -> int64 old.Bytes.Length
+                            | _ -> 0L
                         | _ -> 0L
                     let admission = LanePolicy.admissionLane packet
                     let extra = if replaced.IsSome then 0 else 1
                     let size = int64 packet.Bytes.Length - previousBytes
+
                     if (extra > 0 && (state.OutgoingPackets + extra > countLimit admission state.Config.Worker.QueueCapacity state.Config.PeerLimit
                                       || peer.Packets + extra > countLimit admission state.Config.MaxOutgoingPacketsPerPeer 1))
                        || (size > 0L && (size > byteLimit admission state.Config.Worker.QueueBytes - state.OutgoingBytes
@@ -488,10 +536,13 @@ module TransportOwner =
                         | None ->
                             if packet.Lane = DeliveryLane.Poses then
                                 let node = state.PoseOutgoing.AddLast command
-                                match packet.PoseStream with ValueSome stream -> state.PoseSlots[struct (id, stream)] <- node | _ -> ()
+                                match packet.PoseStream with
+                                | ValueSome stream -> state.PoseSlots[struct (id, stream)] <- node
+                                | _ -> ()
                             elif LanePolicy.bulk packet.Lane then enqueueBulk state id command
                             elif packet.Lane = DeliveryLane.Realtime then state.RealtimeOutgoing.Enqueue command
                             else state.Outgoing.Enqueue command
+
                         state.OutgoingPackets <- state.OutgoingPackets + extra
                         state.OutgoingBytes <- state.OutgoingBytes + size
                         peer.Packets <- peer.Packets + extra
@@ -527,13 +578,37 @@ module TransportOwner =
     /// Success from Send means bounded handoff admission, not remote delivery.
     let create (config: ServerConfig) factory =
         let state = {
-            Config = config; Gate = obj(); Incoming = Queue(); Outgoing = Queue(); BulkOutgoing = Dictionary(); Peers = Dictionary()
-            RealtimeOutgoing = Queue(); PoseOutgoing = LinkedList(); PoseSlots = Dictionary(); PoseBurst = 0; ModelNotices = 0; ViewNotices = Dictionary()
-            BulkPeers = Queue(); BulkCommands = 0
-            Payloads = ConcurrentDictionary(); Wake = new AutoResetEvent(false)
+            Config = config
+            Gate = obj()
+
+            Incoming = Queue()
+            Outgoing = Queue()
+            BulkOutgoing = Dictionary()
+            Peers = Dictionary()
+            RealtimeOutgoing = Queue()
+            PoseOutgoing = LinkedList()
+            PoseSlots = Dictionary()
+            PoseBurst = 0
+            ModelNotices = 0
+            ViewNotices = Dictionary()
+            BulkPeers = Queue()
+            BulkCommands = 0
+
+            Payloads = ConcurrentDictionary()
+            Wake = new AutoResetEvent(false)
             Ready = TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
-            IncomingPackets = 0; IncomingBytes = 0L; OutgoingPackets = 0; OutgoingBytes = 0L
-            Stopped = false; Fault = None; ReadyHandler = None; Notified = false; Dropped = 0L; NativeFailures = 0L
+
+            IncomingPackets = 0
+            IncomingBytes = 0L
+            OutgoingPackets = 0
+            OutgoingBytes = 0L
+
+            Stopped = false
+            Fault = None
+            ReadyHandler = None
+            Notified = false
+            Dropped = 0L
+            NativeFailures = 0L
         }
         let worker = Thread(ThreadStart(run state factory), IsBackground = true, Name = "Dreamsleeve ENet owner")
         worker.Start()
@@ -555,7 +630,9 @@ module TransportOwner =
                             state.Wake.Set() |> ignore)
                 Send = send state
                 MaxUnfragmentedPayloadBytes = fun id ->
-                    match state.Payloads.TryGetValue id with true, size -> size | false, _ -> 0
+                    match state.Payloads.TryGetValue id with
+                    | true, size -> size
+                    | false, _ -> 0
                 Close = control state false
                 Reset = control state true
                 Dispose = fun () ->
@@ -569,8 +646,15 @@ module TransportOwner =
                     if dispose then
                         worker.Join()
                         lock state.Gate (fun () ->
-                            state.Incoming.Clear(); state.Outgoing.Clear(); state.RealtimeOutgoing.Clear(); state.BulkOutgoing.Clear(); state.BulkPeers.Clear(); state.PoseOutgoing.Clear(); state.PoseSlots.Clear()
+                            state.Incoming.Clear()
+                            state.Outgoing.Clear()
+                            state.RealtimeOutgoing.Clear()
+                            state.BulkOutgoing.Clear()
+                            state.BulkPeers.Clear()
+                            state.PoseOutgoing.Clear()
+                            state.PoseSlots.Clear()
                             state.ViewNotices.Clear()
-                            state.Peers.Clear(); state.Payloads.Clear())
+                            state.Peers.Clear()
+                            state.Payloads.Clear())
                         state.Wake.Dispose()
             }
