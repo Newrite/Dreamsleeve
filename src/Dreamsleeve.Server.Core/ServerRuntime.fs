@@ -10,7 +10,14 @@ open Dreamsleeve.Agent
 open Dreamsleeve.Server.Domain
 
 [<RequireQualifiedAccess>]
-type SessionSource = Chat | System | Presence | GroundMarks | Guilds | GuildStorage | Authentication
+type SessionSource =
+    | Chat
+    | System
+    | Presence
+    | GroundMarks
+    | Guilds
+    | GuildStorage
+    | Authentication
 
 type ServerRuntimeSnapshot = {
     Connections: int
@@ -210,7 +217,11 @@ module ServerRuntime =
         | Ok packets ->
             for bytes in packets do
                 if entry.Phase <> RuntimeSessionPhase.Closing then
-                    match state.Transport.Send(entry.ConnectionId, { Schedule = PacketSchedule.Ordered; Lane = lane; Bytes = bytes }) with
+                    match state.Transport.Send(entry.ConnectionId, {
+                        Schedule = PacketSchedule.Ordered
+                        Lane = lane
+                        Bytes = bytes
+                    }) with
                     | Ok () -> ()
                     | Error _ when lane = DeliveryLane.Realtime -> () // Next period repairs a dropped pose.
                     | Error reason ->
@@ -232,7 +243,11 @@ module ServerRuntime =
         send options state context entry (ProtocolCodec.refusal lane requestId rejection)
 
     let private reject options state context entry lane requestId code message =
-        refuse options state context entry lane requestId { Code = code; Message = message; Field = "" }
+        refuse options state context entry lane requestId {
+            Code = code
+            Message = message
+            Field = ""
+        }
 
     let private tell state (entry: SessionTable.Entry) message =
         match entry.Child with
@@ -363,7 +378,12 @@ module ServerRuntime =
         let self = context.Ref
         match state.Sources with
         | Some sources ->
-            let request = { ConnectionId = entry.ConnectionId; RequestId = requestId; SessionTicket = sessionTicket; Hiding = hiding }
+            let request = {
+                ConnectionId = entry.ConnectionId
+                RequestId = requestId
+                SessionTicket = sessionTicket
+                Hiding = hiding
+            }
             let started =
                 PlayerSession.start state.Settings state.Moderation authenticator.Requests authenticator.Profiles authenticator.Moderation
                     (sources.Chat.Ref) (sources.System.Ref) (sources.Presence.Ref)
@@ -554,8 +574,11 @@ module ServerRuntime =
             let presence = PresenceAgent.startObserved observation options.Presence output |> Result.map track |> Result.mapError SourceStartError.Presence
             return
                 match chat, system, marks, guilds, presence with
-                | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
-                | _, _, _, Error error, _ | _, _, _, _, Error error -> Error error
+                | Error error, _, _, _, _
+                | _, Error error, _, _, _
+                | _, _, Error error, _, _
+                | _, _, _, Error error, _
+                | _, _, _, _, Error error -> Error error
                 | Ok chat, Ok system, Ok marks, Ok guilds, Ok presence -> Ok(chat, system, marks, guilds, presence)
         })
         let releaseStarted () =
@@ -591,13 +614,23 @@ module ServerRuntime =
                 context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
                 context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
                 state.Sources <- Some {
-                    Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
+                    Chat = chat
+                    System = system
+                    Presence = presence
+                    GroundMarks = marks
+                    Guilds = guilds
+
                     ChatCleanup = AgentOutbox.Create(state.CleanupCapacity, chat.Ref)
                     SystemCleanup = AgentOutbox.Create(state.CleanupCapacity, system.Ref)
                     PresenceCleanup = AgentOutbox.Create(state.CleanupCapacity, presence.Ref)
                     GroundMarksCleanup = AgentOutbox.Create(state.CleanupCapacity, marks.Ref)
                     GuildsCleanup = AgentOutbox.Create(state.CleanupCapacity, guilds.Ref)
-                    ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
+
+                    ChatStopped = false
+                    SystemStopped = false
+                    PresenceStopped = false
+                    GroundMarksStopped = false
+                    GuildsStopped = false
                 }
                 state.Transport.SetReadyHandler(fun () ->
                     context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentTryDeliveryResult.Posted)
@@ -766,7 +799,10 @@ module ServerRuntime =
 
     let private sourceStopped state context source (outcome: Result<unit, exn>) =
         if not state.SourcesStopping then
-            let reason = match outcome with Ok () -> "completed on its own" | Error error -> error.Message
+            let reason =
+                match outcome with
+                | Ok () -> "completed on its own"
+                | Error error -> error.Message
             fail state context $"Source {source} terminated: {reason}"
         else
             match outcome with
@@ -844,8 +880,15 @@ module ServerRuntime =
         | ServerRuntimeMessage.ListSessions reply ->
             reply.Reply [
                 for entry in state.Table.Connections.Values do
-                    { ConnectionId = entry.ConnectionId; Address = entry.Address; Proxy = entry.Proxy; PlayerId = entry.PlayerId; Phase = entry.Phase
-                      ConnectedAt = entry.ConnectedAt; Session = entry.Child |> Option.map _.GeneralRef }
+                    {
+                        ConnectionId = entry.ConnectionId
+                        Address = entry.Address
+                        Proxy = entry.Proxy
+                        PlayerId = entry.PlayerId
+                        Phase = entry.Phase
+                        ConnectedAt = entry.ConnectedAt
+                        Session = entry.Child |> Option.map _.GeneralRef
+                    }
             ]
         | ServerRuntimeMessage.Stop -> stop options state context
         | ServerRuntimeMessage.Read reply ->
@@ -885,19 +928,38 @@ module ServerRuntime =
     let private startWithStorage sourceAcquired storage (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
               (guilds: GuildPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let options = settings.Runtime
-        let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
+        let agentOptions = {
+            AgentOptions.create "server-runtime" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+        }
         match Agent<ServerRuntimeMessage>.TryCheckReliable(agentOptions, isControl = isControl),
               AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.PollIntervalMs)),
               AgentDeliveryCapacity.TryCreate options.MaxSessions with
-        | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+        | Error error, _, _
+        | _, Error error, _
+        | _, _, Error error -> Error error
         | Ok configuration, Ok interval, Ok cleanup ->
             let state = {
-                Table = SessionTable.create pseudonyms; RouteScratch = Array.empty
-                Settings = settings; Moderation = moderation; Persistence = persistence; Guilds = guilds
+                Table = SessionTable.create pseudonyms
+                RouteScratch = Array.empty
+
+                Settings = settings
+                Moderation = moderation
+                Persistence = persistence
+                Guilds = guilds
                 Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
-                Transport = transport; Logger = logger
+                Transport = transport
+                Logger = logger
                 SourceAcquired = sourceAcquired
-                Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; TickInterval = interval; CleanupCapacity = cleanup; LastTick = 0L; StopDeadline = 0L
+
+                Sources = None
+                Stopping = false
+                SourcesStopping = false
+                Ticker = None
+                TickInterval = interval
+                CleanupCapacity = cleanup
+                LastTick = 0L
+                StopDeadline = 0L
                 AddressBans = []
                 Phantoms = storage |> Option.map (fun (storage, http) -> PhantomAgent.create settings.Phantoms storage http transport.Send)
             }

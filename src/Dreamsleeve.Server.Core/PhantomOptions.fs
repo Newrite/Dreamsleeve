@@ -5,7 +5,10 @@ open Dreamsleeve.Server.Domain
 
 /// One delivery policy shared by the handoff and native adapter.
 [<RequireQualifiedAccess>]
-type LaneReliability = Reliable | Sequenced | SequencedFragmented
+type LaneReliability =
+    | Reliable
+    | Sequenced
+    | SequencedFragmented
 
 [<RequireQualifiedAccess>]
 module LanePolicy =
@@ -18,30 +21,85 @@ module LanePolicy =
     // Queue/native byte quotas use the control reserve for small model notices.
     // Their wire lane and reliability remain Models/reliable.
     let admissionLane (packet: TransportPacket) =
-        match packet.Schedule with PacketSchedule.ModelNotice _ -> DeliveryLane.Control | _ -> packet.Lane
+        match packet.Schedule with
+        | PacketSchedule.ModelNotice _ -> DeliveryLane.Control
+        | _ -> packet.Lane
 
 
 type PhantomOptions = {
-    Enabled: bool; CameraCulling: bool; StoragePath: string; DiskBytes: int64; RamBytes: int64; CacheEntries: int; CacheTtlSeconds: int
-    Limits: PhantomAssetLimits; Maximum: int; Distance: float32; MaxSources: int; MaxSubscribers: int
-    MaxTransfers: int; TransfersPerPlayer: int; ChunkBytes: int; TransferTimeoutMs: int
-    PublishCooldownMs: int; PoseIntervalMs: int; PoseTimeoutMs: int; ReplicationIntervalMs: int
-    ModelBytesPerSecond: int; PlayerModelBytesPerSecond: int; PoseBytesPerSecond: int; TotalPoseBytesPerSecond: int
-    CommandsPerSecond: int; HttpRequestsPerMinute: int; MaxPoseFanoutPerTick: int
+    Enabled: bool
+    CameraCulling: bool
+    StoragePath: string
+    DiskBytes: int64
+    RamBytes: int64
+    CacheEntries: int
+    CacheTtlSeconds: int
+
+    Limits: PhantomAssetLimits
+    Maximum: int
+    Distance: float32
+    MaxSources: int
+    MaxSubscribers: int
+
+    MaxTransfers: int
+    TransfersPerPlayer: int
+    ChunkBytes: int
+    TransferTimeoutMs: int
+
+    PublishCooldownMs: int
+    PoseIntervalMs: int
+    PoseTimeoutMs: int
+    ReplicationIntervalMs: int
+
+    ModelBytesPerSecond: int
+    PlayerModelBytesPerSecond: int
+    PoseBytesPerSecond: int
+    TotalPoseBytesPerSecond: int
+    CommandsPerSecond: int
+    HttpRequestsPerMinute: int
+    MaxPoseFanoutPerTick: int
 }
 
 [<RequireQualifiedAccess>]
 module PhantomOptions =
     let defaults = {
-        Enabled = true; CameraCulling = true; StoragePath = "phantoms"; DiskBytes = 4L * 1024L * 1024L * 1024L; RamBytes = 64L * 1024L * 1024L
-        CacheEntries = 1024; CacheTtlSeconds = 86400
-        Limits = { CompressedBytes = 64 * 1024 * 1024; RawBytes = 128 * 1024 * 1024
-                   Channels = 4096; PoseBytes = 128 * 1024; RawPoseBytes = 256 * 1024 }
-        Maximum = 4; Distance = 4096.0f; MaxSources = 512; MaxSubscribers = 64
-        MaxTransfers = 64; TransfersPerPlayer = 2; ChunkBytes = 16384; TransferTimeoutMs = 30000
-        PublishCooldownMs = 1000; PoseIntervalMs = 100; PoseTimeoutMs = 1000; ReplicationIntervalMs = 100
-        ModelBytesPerSecond = 5 * 1024 * 1024; PlayerModelBytesPerSecond = 5 * 1024 * 1024; PoseBytesPerSecond = 2 * 1024 * 1024; TotalPoseBytesPerSecond = 128 * 1024 * 1024
-        CommandsPerSecond = 128; HttpRequestsPerMinute = 128; MaxPoseFanoutPerTick = 2048
+        Enabled = true
+        CameraCulling = true
+        StoragePath = "phantoms"
+        DiskBytes = 4L * 1024L * 1024L * 1024L
+        RamBytes = 64L * 1024L * 1024L
+        CacheEntries = 1024
+        CacheTtlSeconds = 86400
+
+        Limits = {
+            CompressedBytes = 64 * 1024 * 1024
+            RawBytes = 128 * 1024 * 1024
+            Channels = 4096
+            PoseBytes = 128 * 1024
+            RawPoseBytes = 256 * 1024
+        }
+        Maximum = 4
+        Distance = 4096.0f
+        MaxSources = 512
+        MaxSubscribers = 64
+
+        MaxTransfers = 64
+        TransfersPerPlayer = 2
+        ChunkBytes = 16384
+        TransferTimeoutMs = 30000
+
+        PublishCooldownMs = 1000
+        PoseIntervalMs = 100
+        PoseTimeoutMs = 1000
+        ReplicationIntervalMs = 100
+
+        ModelBytesPerSecond = 5 * 1024 * 1024
+        PlayerModelBytesPerSecond = 5 * 1024 * 1024
+        PoseBytesPerSecond = 2 * 1024 * 1024
+        TotalPoseBytesPerSecond = 128 * 1024 * 1024
+        CommandsPerSecond = 128
+        HttpRequestsPerMinute = 128
+        MaxPoseFanoutPerTick = 2048
     }
     let validate (options: PhantomOptions) = [
         if String.IsNullOrWhiteSpace options.StoragePath then "Phantoms.StoragePath must be set."
@@ -76,8 +134,12 @@ module PhantomOptions =
     ]
 
     let policy options : PhantomServerPolicy = {
-        Enabled = options.Enabled; Limits = options.Limits; SampleRate = max 1 (1000 / options.PoseIntervalMs)
-        Maximum = options.Maximum; Distance = options.Distance
-        ConcurrentTransfers = options.TransfersPerPlayer; ModelBytesPerSecond = options.PlayerModelBytesPerSecond
+        Enabled = options.Enabled
+        Limits = options.Limits
+        SampleRate = max 1 (1000 / options.PoseIntervalMs)
+        Maximum = options.Maximum
+        Distance = options.Distance
+        ConcurrentTransfers = options.TransfersPerPlayer
+        ModelBytesPerSecond = options.PlayerModelBytesPerSecond
         PoseBytesPerSecond = options.PoseBytesPerSecond
     }

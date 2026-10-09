@@ -30,7 +30,10 @@ module PresenceAgent =
         mutable KnownKind: uint64
     }
 
-    type private KindEntry = { Kind: ActorValueKind; mutable Uses: int }
+    type private KindEntry = {
+        Kind: ActorValueKind
+        mutable Uses: int
+    }
 
     type private State = {
         Members: Dictionary<Guid, Member>
@@ -110,7 +113,14 @@ module PresenceAgent =
             let kind = kindOf key info
             if not (state.Kinds.ContainsKey kind) then
                 state.LastKind <- state.LastKind + 1UL
-                state.Kinds[kind] <- { Kind = { Id = state.LastKind; Key = key; DisplayName = info.DisplayName }; Uses = 0 }
+                state.Kinds[kind] <- {
+                    Kind = {
+                        Id = state.LastKind
+                        Key = key
+                        DisplayName = info.DisplayName
+                    }
+                    Uses = 0
+                }
                 state.KindIds <- None
                 state.Unused.Add kind |> ignore
 
@@ -155,7 +165,10 @@ module PresenceAgent =
                 let snapshot = ActorValueKindIndex.Create(state.Kinds.Values |> Seq.map _.Kind)
                 state.KindIds <- Some snapshot
                 snapshot
-        { Ids = ids; Defined = defined }
+        {
+            Ids = ids
+            Defined = defined
+        }
 
     let private remove state connectionId =
         match state.Members.TryGetValue connectionId with
@@ -202,7 +215,8 @@ module PresenceAgent =
     // Visibility is symmetric in space, but self always receives its own telemetry.
     // Radius is validated once at startup; double arithmetic avoids float overflow.
     let private visibleLocation state (observer: PlayerSnapshot) (source: PlayerSnapshot) =
-        if observer.Identity.PlayerId = source.Identity.PlayerId then source.Location
+        if observer.Identity.PlayerId = source.Identity.PlayerId then
+            source.Location
         else
             match observer.Location, source.Location with
             | ValueSome origin, ValueSome target ->
@@ -240,11 +254,18 @@ module PresenceAgent =
 
     let private project state observer source =
         match visibleLocation state observer.Latest source.Latest with
-        | ValueNone -> { source.Latest with Location = ValueNone; ViewRevision = 0UL }
+        | ValueNone ->
+            { source.Latest with
+                Location = ValueNone
+                ViewRevision = 0UL
+            }
         | ValueSome location ->
             let view, _ = establishView observer source
             observeView state observer source view.Revision
-            { source.Latest with Location = ValueSome location; ViewRevision = view.Revision }
+            { source.Latest with
+                Location = ValueSome location
+                ViewRevision = view.Revision
+            }
 
     let private snapshot state observer =
         state.Members.Values
@@ -299,18 +320,27 @@ module PresenceAgent =
                     let pose = MovementPose.ofLocation location
                     if changed then
                         visibility.Add {
-                            PlayerId = playerId; ViewRevision = view.Revision
-                            Sequence = source.Latest.MovementSequence; Pose = ValueSome pose
+                            PlayerId = playerId
+                            ViewRevision = view.Revision
+                            Sequence = source.Latest.MovementSequence
+                            Pose = ValueSome pose
                         }
                     if sendSamples then
                         movements.Add {
-                            PlayerId = playerId; ViewRevision = view.Revision
-                            Sequence = source.Latest.MovementSequence; Pose = pose
+                            PlayerId = playerId
+                            ViewRevision = view.Revision
+                            Sequence = source.Latest.MovementSequence
+                            Pose = pose
                         }
                 | ValueNone ->
                     if observer.Views.Remove playerId then
                         let revision = nextRevision observer
-                        visibility.Add { PlayerId = playerId; ViewRevision = revision; Sequence = 0UL; Pose = ValueNone }
+                        visibility.Add {
+                            PlayerId = playerId
+                            ViewRevision = revision
+                            Sequence = 0UL
+                            Pose = ValueNone
+                        }
                         observeHidden state observer.ConnectionId playerId revision
             | false, _ -> ()
         candidates.Clear()
@@ -362,12 +392,18 @@ module PresenceAgent =
                     let details = DetailsPatch.between source.Published.Details source.Latest.Details
                     if values.IsSome || details.IsSome then
                         register state source.Latest.ActorValues
-                        source.ConnectionId, { PlayerId = source.Latest.Identity.PlayerId; ActorValues = values; Details = details }
+                        source.ConnectionId, {
+                            PlayerId = source.Latest.Identity.PlayerId
+                            ActorValues = values
+                            Details = details
+                        }
         ]
 
         let tick = {
-            Updated = updated; Metadata = metadata
-            AllUpdated = List.map snd updated; AllMetadata = List.map snd metadata
+            Updated = updated
+            Metadata = metadata
+            AllUpdated = List.map snd updated
+            AllMetadata = List.map snd metadata
             Removals = state.Removals
         }
         for observer in members do
@@ -380,6 +416,7 @@ module PresenceAgent =
                     count state 1 memberState.Latest.ActorValues
                     count state -1 memberState.Published.ActorValues
                 memberState.Published <- memberState.Latest
+
         flushObservations state context
 
     let private join state context (subscription: PresenceSubscription) =
@@ -407,9 +444,14 @@ module PresenceAgent =
                     match state.Members.TryGetValue subscription.ConnectionId with
                     | true, current -> { current with Events = subscription.Events }
                     | false, _ -> {
-                        ConnectionId = subscription.ConnectionId; Events = subscription.Events
-                        Latest = subscription.Snapshot; Published = subscription.Snapshot
-                        Views = Dictionary(); NextRevision = 0UL; KnownKind = 0UL
+                        ConnectionId = subscription.ConnectionId
+                        Events = subscription.Events
+
+                        Latest = subscription.Snapshot
+                        Published = subscription.Snapshot
+                        Views = Dictionary()
+                        NextRevision = 0UL
+                        KnownKind = 0UL
                       }
                 if not existing then
                     register state memberState.Published.ActorValues
@@ -483,6 +525,7 @@ module PresenceAgent =
             RuntimeMetrics.presenceFlush.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | PresenceCommand.Detach request -> detach state context request
+
         forgetUnused state
         flushObservations state context
     }
@@ -498,13 +541,26 @@ module PresenceAgent =
         | Error error, _ | _, Error error -> Error error
         | Ok interval, Ok hostOutbox ->
             let state = {
-                Members = Dictionary(); Players = Dictionary(); Dirty = HashSet()
-                Candidates = HashSet(); Movements = ResizeArray()
+                Members = Dictionary()
+                Players = Dictionary()
+                Dirty = HashSet()
+                Candidates = HashSet()
+                Movements = ResizeArray()
                 LatestIndex = SpatialIndex.create (double config.VisibilityDistance)
-                Kinds = Dictionary(); Unused = HashSet(); KindIds = None; LastKind = 0UL; Removals = 0L
+
+                Kinds = Dictionary()
+                Unused = HashSet()
+                KindIds = None
+                LastKind = 0UL
+                Removals = 0L
                 VisibilityDistanceSquared = double config.VisibilityDistance * double config.VisibilityDistance
-                Ticker = None; TickInterval = interval; LastFlush = 0L; Host = hostOutbox
-                PhantomObservation = mode; PhantomObservations = ResizeArray()
+
+                Ticker = None
+                TickInterval = interval
+                LastFlush = 0L
+                Host = hostOutbox
+                PhantomObservation = mode
+                PhantomObservations = ResizeArray()
             }
             let options = {
                 AgentOptions.create "presence" with

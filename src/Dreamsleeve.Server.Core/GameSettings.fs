@@ -49,7 +49,10 @@ module GameSettings =
             if options.ChunkBytes + 512 > settings.Server.MaxPacketBytes || PhantomAssetLimits.posePacketBytes options.Limits > settings.Server.MaxPacketBytes then
                 "Server.MaxPacketBytes must allow phantom envelopes."
         ]
-        if errors.IsEmpty then Ok { settings with phantoms = options } else Error errors
+        if errors.IsEmpty then
+            Ok { settings with phantoms = options }
+        else
+            Error errors
 
     /// Sources that acknowledge the cleanup of every session: chat, system
     /// channel, presence, ground marks and guilds.
@@ -101,7 +104,9 @@ module GameSettings =
 
     let create server runtime identity announcements groundMarks (guilds: GuildOptions) : Result<GameSettings, string list> =
         let errors = [
-            match ServerConfig.validate server with Ok _ -> () | Error errors -> yield! errors
+            match ServerConfig.validate server with
+            | Ok _ -> ()
+            | Error errors -> yield! errors
             yield! runtimeErrors server runtime announcements
             yield! IdentityOptions.validate identity
             yield! GroundMarkOptions.validate groundMarks
@@ -109,15 +114,48 @@ module GameSettings =
             if guilds.HistoryCapacity > server.MaxRecentMessages then "Server.MaxRecentMessages must include the retained guild chat history."
         ]
         let schedule = AnnouncementOptions.resolve server.ChatInput announcements
-        let rules = if errors.IsEmpty then GroundMarkOptions.rules groundMarks |> Result.mapError (fun error -> [ sprintf "GroundMarks: %A" error ]) else Error []
-        let limits = if errors.IsEmpty then GuildOptions.rules guilds |> Result.mapError (fun error -> [ sprintf "Guilds: %A" error ]) else Error []
+        let rules =
+            if errors.IsEmpty then
+                GroundMarkOptions.rules groundMarks
+                |> Result.mapError (fun error -> [ sprintf "GroundMarks: %A" error ])
+            else
+                Error []
+        let limits =
+            if errors.IsEmpty then
+                GuildOptions.rules guilds
+                |> Result.mapError (fun error -> [ sprintf "Guilds: %A" error ])
+            else
+                Error []
+
         match errors, schedule, rules, limits with
         | [], Ok schedule, Ok rules, Ok limits ->
-            Ok { server = server; runtime = runtime; identity = identity; announcements = announcements; groundMarks = groundMarks
-                 guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits
-                 trustedProxies = []; phantoms = PhantomOptions.defaults }
+            Ok {
+                server = server
+                runtime = runtime
+                identity = identity
+                announcements = announcements
+                groundMarks = groundMarks
+                guilds = guilds
+
+                codec = ProtocolCodec.create server
+                schedule = schedule
+                groundMarkRules = rules
+                guildLimits = limits
+                trustedProxies = []
+                phantoms = PhantomOptions.defaults
+            }
         | errors, schedule, rules, limits ->
-            let scheduleErrors = match schedule with Error errors -> errors | Ok _ -> []
-            let rulesErrors = match rules with Error errors -> errors | Ok _ -> []
-            let limitErrors = match limits with Error errors -> errors | Ok _ -> []
+            let scheduleErrors =
+                match schedule with
+                | Error errors -> errors
+                | Ok _ -> []
+            let rulesErrors =
+                match rules with
+                | Error errors -> errors
+                | Ok _ -> []
+            let limitErrors =
+                match limits with
+                | Error errors -> errors
+                | Ok _ -> []
+
             Error (errors @ scheduleErrors @ rulesErrors @ limitErrors)

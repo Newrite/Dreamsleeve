@@ -45,7 +45,8 @@ module GroundMarksAgent =
     }
 
     let private notifyHost state context command =
-        if not (state.Host.TrySend(context, command)) then context.Abort()
+        if not (state.Host.TrySend(context, command)) then
+            context.Abort()
 
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
@@ -74,7 +75,10 @@ module GroundMarksAgent =
             notifyHost state context (SessionHostCommand.SlowConsumer observer.ConnectionId)
 
     let private record state (mark: GroundMark) : GroundMarkRecord =
-        { Mark = mark; Author = GroundMark.authorIdentity state.Authors[mark.Author] mark }
+        {
+            Mark = mark
+            Author = GroundMark.authorIdentity state.Authors[mark.Author] mark
+        }
 
     /// The author's complete set, wherever the marks stand; sent whenever it changes.
     let private announceOwn state context author =
@@ -93,7 +97,12 @@ module GroundMarksAgent =
 
     let private changed state context (observer: Observer) added removed clear =
         if clear || not (List.isEmpty added) || not (List.isEmpty removed) then
-            let view = { ViewRevision = nextRevision observer; Added = added |> List.map (record state); Removed = removed; Clear = clear }
+            let view = {
+                ViewRevision = nextRevision observer
+                Added = added |> List.map (record state)
+                Removed = removed
+                Clear = clear
+            }
             deliver state context observer (GroundMarkEvent.Changed view)
 
     /// Recomputes what this observer sees from the index. A new baseline (clear)
@@ -118,14 +127,17 @@ module GroundMarksAgent =
                 |> Seq.sortBy _.Id
                 |> List.ofSeq
             candidates.Clear()
+
             let added = if clear then visible else visible |> List.filter (fun mark -> not (observer.Visible.Contains mark.Id))
             let removed =
                 if clear then []
                 else
                     let now = HashSet(visible |> Seq.map _.Id)
                     observer.Visible |> Seq.filter (fun id -> not (now.Contains id)) |> Seq.sort |> List.ofSeq
+
             observer.Visible.Clear()
-            for mark in visible do observer.Visible.Add mark.Id |> ignore
+            for mark in visible do
+                observer.Visible.Add mark.Id |> ignore
             changed state context observer added removed (clear && (hadAny || not visible.IsEmpty))
 
     let private join state context (subscription: Subscription<GroundMarkEvent>) =
@@ -136,8 +148,15 @@ module GroundMarksAgent =
             notifyHost state context (SessionHostCommand.Close(subscription.ConnectionId, "ground_marks_identity_conflict"))
         | true, _ | false, _ ->
             let observer = {
-                ConnectionId = subscription.ConnectionId; Profile = subscription.Profile; Events = subscription.Events
-                Location = ValueNone; Cell = ValueNone; Generation = 0UL; Visible = HashSet(); Revision = 0UL
+                ConnectionId = subscription.ConnectionId
+                Profile = subscription.Profile
+                Events = subscription.Events
+
+                Location = ValueNone
+                Cell = ValueNone
+                Generation = 0UL
+                Visible = HashSet()
+                Revision = 0UL
             }
             state.Observers[subscription.ConnectionId] <- observer
             state.Players[subscription.Profile.PlayerId] <- subscription.ConnectionId
@@ -165,7 +184,13 @@ module GroundMarksAgent =
                 refresh state context observer (generationChanged || spaceChanged)
 
     let private reject state context (observer: Observer) requestId code message field =
-        deliver state context observer (GroundMarkEvent.Rejected(requestId, { Code = code; Message = message; Field = field }))
+        deliver state context observer (GroundMarkEvent.Rejected(
+            requestId,
+            {
+                Code = code
+                Message = message
+                Field = field
+            }))
 
     /// Frequency per stable account: notes share a token bucket with a
     /// repeated-text memory, deaths keep a minimum interval.
@@ -202,11 +227,13 @@ module GroundMarksAgent =
     /// Forgets the marks, stores the removal and tells whoever saw them and
     /// their authors; one pass for expiry, a removal and a moderator's clearing.
     let private forgetPersisted state context (marks: GroundMark list) =
-        if marks.IsEmpty then true
+        if marks.IsEmpty then
+            true
         elif persist state context (GroundMarkWrite.Delete(marks |> List.map _.Id)) then
             for mark in marks do forget state mark
             true
-        else false
+        else
+            false
 
     let private announceDropped state context (marks: GroundMark list) =
         if not marks.IsEmpty then
@@ -249,7 +276,11 @@ module GroundMarksAgent =
                     match GroundMarkStorage.add state.Rules mark state.Marks with
                     | Error _ -> context.Abort()
                     | Ok evicted ->
-                        state.NextId <- if state.NextId = UInt64.MaxValue then 0UL else state.NextId + 1UL
+                        state.NextId <-
+                            if state.NextId = UInt64.MaxValue then
+                                0UL
+                            else
+                                state.NextId + 1UL
                         state.Authors[author] <- observer.Profile
                         let write =
                             match evicted with
@@ -371,20 +402,29 @@ module GroundMarksAgent =
               AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.ExpiryCheckIntervalMs)),
               AgentOutbox<GroundMarkWrite>.TryCreate(options.MaxPendingWrites, writer),
               AgentOutbox<SessionHostCommand>.TryCreate(options.MaxControlDeliveries, host) with
-        | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error (StartError.Agent error)
+        | Error error, _, _, _
+        | _, Error error, _, _
+        | _, _, Error error, _
+        | _, _, _, Error error -> Error (StartError.Agent error)
         | Ok configuration, Ok interval, Ok writerOutbox, Ok hostOutbox ->
             let state = {
-                Options = options; Rules = rules
-                Marks = GroundMarkStorage.create (); Authors = Dictionary()
+                Options = options
+                Rules = rules
+
+                Marks = GroundMarkStorage.create ()
+                Authors = Dictionary()
                 Index = SpatialIndex.create (double options.VisibilityDistance)
-                Observers = Dictionary(); Players = Dictionary()
+                Observers = Dictionary()
+                Players = Dictionary()
                 Notes = RateLimit.create options.NoteRate
-                Deaths = Dictionary(); Candidates = HashSet()
+                Deaths = Dictionary()
+                Candidates = HashSet()
                 Writer = writerOutbox
                 Host = hostOutbox
                 Logger = logger
                 NextId = max nextId 1UL
-                Ticker = None; TickInterval = interval
+                Ticker = None
+                TickInterval = interval
             }
             let mutable highest = 0UL
             let duplicates = ResizeArray<StoredGroundMark>()
@@ -396,10 +436,15 @@ module GroundMarksAgent =
                         (ValueSome (SpatialIndex.cellOf state.Index entry.Mark.Placement.LocationId entry.Mark.Placement.Position)) state.Index
                     highest <- max highest (GroundMarkId.value entry.Mark.Id)
                 | Error _ -> duplicates.Add entry
-            if duplicates.Count > 0 then Error (StartError.StoredData(sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count))
-            elif highest >= state.NextId then Error (StartError.StoredData(sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId))
+            if duplicates.Count > 0 then
+                Error (StartError.StoredData(sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count))
+            elif highest >= state.NextId then
+                Error (StartError.StoredData(sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId))
             else
                 let agent = configuration.Start(handle state)
                 let now = System.Diagnostics.Stopwatch.GetTimestamp()
-                agent.TryPost(GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now }) |> ignore
+                agent.TryPost(GroundMarkCommand.Expire {
+                    DueTimestamp = now
+                    QueuedTimestamp = now
+                }) |> ignore
                 Ok agent

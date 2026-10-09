@@ -77,11 +77,26 @@ type ServerTransport = {
 /// Expected storage failures; diagnostic text never decides retry policy.
 [<RequireQualifiedAccess>]
 type PhantomStorageError =
-    | Closed | QueueFull | TransferLimit | CacheHashMismatch | DeltaBaseUnavailable
-    | AssetUnavailable | DiskQuota | HashMismatch | HashSizeConflict | DeltaHashMismatch
-    | DeltaReconstruction | DeltaTargetHash | UnknownUpload | UploadClosed
-    | ChunkOffsetOrSize | ReadBounds | UnknownDownload | DownloadClosed
-    | CacheSizeChanged | CacheTruncated
+    | Closed
+    | QueueFull
+    | TransferLimit
+    | CacheHashMismatch
+    | DeltaBaseUnavailable
+    | AssetUnavailable
+    | DiskQuota
+    | HashMismatch
+    | HashSizeConflict
+    | DeltaHashMismatch
+    | DeltaReconstruction
+    | DeltaTargetHash
+    | UnknownUpload
+    | UploadClosed
+    | ChunkOffsetOrSize
+    | ReadBounds
+    | UnknownDownload
+    | DownloadClosed
+    | CacheSizeChanged
+    | CacheTruncated
     | Io of exn
 
 [<RequireQualifiedAccess>]
@@ -122,8 +137,15 @@ module PhantomStorageError =
 
 [<RequireQualifiedAccess>]
 type PhantomHttpError =
-    | Closed | Capability | Length | Truncated | Canceled | Io
-    | StorageCompletion | StorageLength | Storage of PhantomStorageError
+    | Closed
+    | Capability
+    | Length
+    | Truncated
+    | Canceled
+    | Io
+    | StorageCompletion
+    | StorageLength
+    | Storage of PhantomStorageError
 
 [<RequireQualifiedAccess>]
 module PhantomHttpError =
@@ -458,12 +480,23 @@ module GroundMarkOptions =
     let MinExpiryCheckIntervalMs = 1000
 
     let defaults = {
-        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
+        MailboxCapacity = 2048
+        ControlReserve = 64
+        MaxControlDeliveries = 128
+        MaxPendingWrites = 256
+
         VisibilityDistance = Visibility.DefaultDistance
-        MaxNotesPerPlayer = 5; MaxDeathMarksPerPlayer = 10
-        NoteTtlDays = 30; DeathMarkTtlDays = 7
+        MaxNotesPerPlayer = 5
+        MaxDeathMarksPerPlayer = 10
+        NoteTtlDays = 30
+        DeathMarkTtlDays = 7
         MaxPerIndexCell = 64
-        NoteRate = { Burst = 3; RefillMs = 20000; DuplicateWindowMs = 300000 }
+
+        NoteRate = {
+            Burst = 3
+            RefillMs = 20000
+            DuplicateWindowMs = 300000
+        }
         DeathMinIntervalMs = 5000
         MaxPlacementDistance = 2048.0f
         ExpiryCheckIntervalMs = 60000
@@ -531,9 +564,20 @@ module GuildOptions =
     let MaxNameLength = 64
 
     let defaults = {
-        MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
-        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; HistoryCapacity = 200
-        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
+        MaxGuilds = 10000
+        MaxGuildsPerPlayer = 3
+        MaxMembers = 64
+        MaxInvites = 32
+
+        NameMinLength = 3
+        NameMaxLength = 24
+        InviteDays = 7
+        HistoryCapacity = 200
+
+        MailboxCapacity = 2048
+        ControlReserve = 64
+        MaxControlDeliveries = 128
+        MaxPendingWrites = 1024
         InviteCheckIntervalMs = 60000
     }
 
@@ -717,8 +761,13 @@ module IdentityOptions =
     let MaxDisplayNameChangeIntervalMinutes = 525600
 
     let defaults = {
-        AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml"
-        AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1; NameColorIntervalMs = 10000
+        AllowHiddenIdentity = true
+        ToggleIntervalMs = 30000
+        PseudonymsPath = "pseudonyms.toml"
+
+        AllowDisplayNameChange = true
+        DisplayNameChangeIntervalMinutes = 1
+        NameColorIntervalMs = 10000
     }
 
     let validate options = [
@@ -751,10 +800,30 @@ module ServerRuntimeOptions =
         OpenTimeoutMs = 10000
         ShutdownTimeoutMs = 5000
         PollIntervalMs = 1
-        Player = { MailboxCapacity = 1152; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
-                   MaxBootstrapEvents = 512; MaxPendingOutput = 1152 }
-        Chat = { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
-                 Rate = { Burst = 5; RefillMs = 2000; DuplicateWindowMs = 30000 } }
-        Presence = { MailboxCapacity = 4096; ControlReserve = 128; MaxControlDeliveries = 512; ReplicationIntervalMs = 100
-                     VisibilityDistance = Visibility.DefaultDistance }
+        Player = {
+            MailboxCapacity = 1152
+            ControlReserve = 32
+            MaxPendingChat = 16
+            MaxPendingUpdates = 16
+            MaxBootstrapEvents = 512
+            MaxPendingOutput = 1152
+        }
+        Chat = {
+            MailboxCapacity = 1024
+            ControlReserve = 64
+            HistoryCapacity = 512
+            MaxControlDeliveries = 128
+            Rate = {
+                Burst = 5
+                RefillMs = 2000
+                DuplicateWindowMs = 30000
+            }
+        }
+        Presence = {
+            MailboxCapacity = 4096
+            ControlReserve = 128
+            MaxControlDeliveries = 512
+            ReplicationIntervalMs = 100
+            VisibilityDistance = Visibility.DefaultDistance
+        }
     }

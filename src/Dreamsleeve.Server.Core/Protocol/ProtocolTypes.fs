@@ -21,7 +21,12 @@ type ProtocolCodecError = {
 
 /// Trusted transport channels are closed; numeric values belong to Protocol/*.proto.
 [<Struct; RequireQualifiedAccess>]
-type DeliveryLane = Control | Chat | Realtime | Models | Poses
+type DeliveryLane =
+    | Control
+    | Chat
+    | Realtime
+    | Models
+    | Poses
 
 [<RequireQualifiedAccess>]
 type DeliveryLaneError = UnknownChannel of byte
@@ -48,12 +53,22 @@ module DeliveryLane =
 /// A detached encoded packet. Only the transport adapter chooses native flags.
 // Local handoff scheduling, never serialized or interpreted by native ENet.
 [<RequireQualifiedAccess>]
-type PacketSchedule = Ordered | ModelNotice of source: uint64 | LatestPose of source: uint64
+type PacketSchedule =
+    | Ordered
+    | ModelNotice of source: uint64
+    | LatestPose of source: uint64
 
 type TransportPacket =
-    { Lane: DeliveryLane; Bytes: byte array; Schedule: PacketSchedule }
+    {
+        Lane: DeliveryLane
+        Bytes: byte array
+        Schedule: PacketSchedule
+    }
+
     member this.PoseStream =
-        match this.Schedule with PacketSchedule.LatestPose source -> ValueSome source | _ -> ValueNone
+        match this.Schedule with
+        | PacketSchedule.LatestPose source -> ValueSome source
+        | _ -> ValueNone
 
 
 /// A client request to publish into the system channel. The requested
@@ -181,7 +196,11 @@ type ClientRequest = {
 
 /// A server-assigned number for one key and label of actor values. It lives
 /// while some online player publishes that pair and is never given to another.
-type ActorValueKind = { Id: uint64; Key: ActorValueKey; DisplayName: ActorValueName }
+type ActorValueKind = {
+    Id: uint64
+    Key: ActorValueKey
+    DisplayName: ActorValueName
+}
 
 /// A detached lookup shared by events until the actor changes its kind registry.
 /// Typed dictionary lookup avoids FSharpMap's boxed struct-key comparisons.
@@ -191,7 +210,9 @@ type ActorValueKindIndex private (ids: Collections.Generic.Dictionary<struct (Ac
     static member Empty = empty
     static member Create(kinds: ActorValueKind seq) =
         let ids = Collections.Generic.Dictionary<struct (ActorValueKey * ActorValueName), uint64>()
-        for kind in kinds do ids[struct (kind.Key, kind.DisplayName)] <- kind.Id
+        for kind in kinds do
+            ids[struct (kind.Key, kind.DisplayName)] <- kind.Id
+
         ActorValueKindIndex(ids)
     member _.ContainsKey key = ids.ContainsKey key
     member _.Item with get key = ids[key]
@@ -222,7 +243,10 @@ type ActorValueKinds = {
 
 [<RequireQualifiedAccess>]
 module ActorValueKinds =
-    let none = { Ids = ActorValueKindIndex.Empty; Defined = [] }
+    let none = {
+        Ids = ActorValueKindIndex.Empty
+        Defined = []
+    }
 
 /// What changed in one player's actor values and details since the last tick.
 type MetadataPatch = {
@@ -246,11 +270,21 @@ type PresenceChange = {
 
 [<RequireQualifiedAccess>]
 module PresenceChange =
-    let empty = { Joined = []; Updated = []; Metadata = []; Space = ValueNone; Visibility = []; Left = [] }
+    let empty = {
+        Joined = []
+        Updated = []
+        Metadata = []
+        Space = ValueNone
+        Visibility = []
+        Left = []
+    }
 
     let isEmpty change =
-        change.Joined.IsEmpty && change.Updated.IsEmpty && change.Metadata.IsEmpty
-        && change.Visibility.IsEmpty && change.Left.IsEmpty
+        change.Joined.IsEmpty
+        && change.Updated.IsEmpty
+        && change.Metadata.IsEmpty
+        && change.Visibility.IsEmpty
+        && change.Left.IsEmpty
 
 /// A channel of the session with its retained tail, ascending message ID.
 type WelcomeChannel = {

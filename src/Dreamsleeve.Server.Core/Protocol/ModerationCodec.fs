@@ -35,15 +35,21 @@ module internal ModerationCodec =
 
     let decodeSanction (source: Dreamsleeve.Protocol.Chat.SanctionPlayer) =
         let minutes =
-            if not source.HasMinutes then Ok ValueNone
-            elif source.Minutes > uint32 Int32.MaxValue then Error(ProtocolCodecFailure.InvalidPayload "minutes")
-            else Ok(ValueSome(int source.Minutes))
+            if not source.HasMinutes then
+                Ok ValueNone
+            elif source.Minutes > uint32 Int32.MaxValue then
+                Error(ProtocolCodecFailure.InvalidPayload "minutes")
+            else
+                Ok(ValueSome(int source.Minutes))
         match player source.PlayerId, decodeKind source.Kind, minutes, reason source.Reason with
         | Ok target, Ok kind, Ok minutes, Ok reason ->
             SanctionTerm.create minutes
             |> Result.mapError ProtocolCodecFailure.InvalidDomain
             |> Result.map (fun term -> ClientCommand.SanctionPlayer(target, kind, term, reason, source.Devices))
-        | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error
+        | Error error, _, _, _
+        | _, Error error, _, _
+        | _, _, Error error, _
+        | _, _, _, Error error -> Error error
 
     let decodeLift (source: Dreamsleeve.Protocol.Chat.LiftSanction) =
         match player source.PlayerId, decodeKind source.Kind with
@@ -59,10 +65,16 @@ module internal ModerationCodec =
         player source.PlayerId |> Result.map ClientCommand.ListPlayerMarks
 
     let decodeClearMarks (source: Dreamsleeve.Protocol.Chat.ClearPlayerMarks) =
-        let kinds = [ if source.Notes then GroundMarkKind.Note
-                      if source.Deaths then GroundMarkKind.Death ]
-        if kinds.IsEmpty then Error(ProtocolCodecFailure.InvalidPayload "kinds")
-        else player source.PlayerId |> Result.map (fun target -> ClientCommand.ClearPlayerMarks(target, kinds))
+        let kinds = [
+            if source.Notes then GroundMarkKind.Note
+            if source.Deaths then GroundMarkKind.Death
+        ]
+
+        if kinds.IsEmpty then
+            Error(ProtocolCodecFailure.InvalidPayload "kinds")
+        else
+            player source.PlayerId
+            |> Result.map (fun target -> ClientCommand.ClearPlayerMarks(target, kinds))
 
     let decodeDeleteMessage (source: Dreamsleeve.Protocol.Chat.DeleteChatMessage) =
         match ChatChannelId.create source.ChannelId, ChatMessageId.create source.MessageId with
@@ -72,8 +84,11 @@ module internal ModerationCodec =
     let entry (sanction: Sanction) =
         let result =
             Dreamsleeve.Protocol.Chat.SanctionEntry(
-                PlayerId = PlayerId.value sanction.Target, Kind = kind sanction.Kind, Reason = SanctionReason.value sanction.Reason,
+                PlayerId = PlayerId.value sanction.Target,
+                Kind = kind sanction.Kind,
+                Reason = SanctionReason.value sanction.Reason,
                 IssuedAtUnixMs = sanction.IssuedAt.ToUnixTimeMilliseconds())
+
         sanction.Expires |> ValueOption.iter (fun expires -> result.UntilUnixMs <- expires.ToUnixTimeMilliseconds())
         result
 

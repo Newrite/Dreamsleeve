@@ -126,7 +126,11 @@ module ChatRoomAgent =
         | true, author ->
             match admit state author.Profile.PlayerId request with
             | Error message ->
-                let rejection = { Code = RequestRejectionCode.RateLimited; Message = message; Field = "text" }
+                let rejection = {
+                    Code = RequestRejectionCode.RateLimited
+                    Message = message
+                    Field = "text"
+                }
                 respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Rejected(request.RequestId, rejection))
             | Ok () ->
                 let create messageId sentAt =
@@ -148,7 +152,11 @@ module ChatRoomAgent =
     let private removeMessage state context (request: ChatRemoval) =
         match Chat.remove request.MessageId state.Chat with
         | ValueNone ->
-            let rejection = { Code = RequestRejectionCode.TargetNotFound; Message = "No such message in the channel."; Field = "message_id" }
+            let rejection = {
+                Code = RequestRejectionCode.TargetNotFound
+                Message = "No such message in the channel."
+                Field = "message_id"
+            }
             respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Rejected(request.RequestId, rejection))
         | ValueSome message ->
             let recipients = state.Members.Values |> Seq.filter (fun recipient -> recipient.ConnectionId <> request.ConnectionId) |> Seq.toArray
@@ -197,10 +205,12 @@ module ChatRoomAgent =
             |> Result.bind (fun hostOutbox ->
                 let state = {
                     Chat = chat
+
                     Members = Dictionary()
                     Players = Dictionary()
                     Senders = RateLimit.create config.Rate
                     Options = config
+
                     Host = hostOutbox
                     NextMessageId = 1UL
                 }

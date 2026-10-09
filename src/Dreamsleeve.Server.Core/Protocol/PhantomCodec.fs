@@ -9,20 +9,26 @@ module PhantomCodec =
 
 
     let private parse maximum (bytes: byte array) (parser: MessageParser<'a>) validate =
-        if isNull bytes || bytes.Length = 0 || bytes.Length > maximum then Error "packet size"
+        if isNull bytes || bytes.Length = 0 || bytes.Length > maximum then
+            Error "packet size"
         else
-            try validate (parser.ParseFrom bytes)
-            with :? InvalidProtocolBufferException -> Error "malformed protobuf"
+            try
+                validate (parser.ParseFrom bytes)
+            with :? InvalidProtocolBufferException ->
+                Error "malformed protobuf"
 
     let private manifest options (asset: Dreamsleeve.Protocol.Phantom.AssetDescriptor) =
-        if isNull asset then Error "missing asset"
+        if isNull asset then
+            Error "missing asset"
         else
             match AssetHash.create (asset.Hash.ToByteArray()), AppearanceGeneration.create asset.Generation with
-            | Ok hash, Ok generation -> PhantomManifest.create options.Limits hash generation asset.FormatVersion asset.CompressedBytes asset.RawBytes asset.Channels
+            | Ok hash, Ok generation ->
+                PhantomManifest.create options.Limits hash generation asset.FormatVersion asset.CompressedBytes asset.RawBytes asset.Channels
             | Error error, _ | _, Error error -> Error error
 
     let private delta target (value: Dreamsleeve.Protocol.Phantom.AssetDelta) =
-        if isNull value then Ok None
+        if isNull value then
+            Ok None
         else
             match AssetHash.create(value.BaseHash.ToByteArray()), AssetHash.create(value.Hash.ToByteArray()) with
             | Ok basis, Ok hash -> PhantomDelta.create target basis hash value.CompressedBytes |> Result.map Some
@@ -30,22 +36,38 @@ module PhantomCodec =
 
     let decodeAsset options bytes =
         parse PhantomAssetLimits.assetPacketBytes bytes Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser (fun packet ->
-            if packet.ProtocolVersion <> ProtocolCodec.Version then Error "protocol version"
+            if packet.ProtocolVersion <> ProtocolCodec.Version then
+                Error "protocol version"
             else
                 match packet.PayloadCase with
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Preferences ->
                     let value = packet.Preferences
-                    if not (Single.IsFinite value.Distance) || value.Distance < 0.0f || value.Maximum > uint32 Int32.MaxValue then Error "preferences"
-                    else Ok (PhantomRequest.Preferences { Publish = value.Publish; Receive = value.Receive; Maximum = int value.Maximum; Distance = value.Distance })
+                    if not (Single.IsFinite value.Distance) || value.Distance < 0.0f || value.Maximum > uint32 Int32.MaxValue then
+                        Error "preferences"
+                    else
+                        Ok (PhantomRequest.Preferences {
+                            Publish = value.Publish
+                            Receive = value.Receive
+                            Maximum = int value.Maximum
+                            Distance = value.Distance
+                        })
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Publish ->
                     match manifest options packet.Publish.Asset, PhantomRequestId.create packet.Publish.RequestId with
-                    | Ok value, Ok request when packet.Publish.ContextRevision <> 0UL -> delta value packet.Publish.Delta |> Result.map (fun change -> PhantomRequest.Publish(value, packet.Publish.ContextRevision, request, change))
+                    | Ok value, Ok request when packet.Publish.ContextRevision <> 0UL ->
+                        delta value packet.Publish.Delta
+                        |> Result.map (fun change -> PhantomRequest.Publish(value, packet.Publish.ContextRevision, request, change))
                     | _ -> Error "publish descriptor/context/request"
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Download ->
                     match PlayerId.create packet.Download.PlayerId, AppearanceGeneration.create packet.Download.Generation, PhantomRequestId.create packet.Download.RequestId with
-                    | Ok player, Ok generation, Ok request -> (if packet.Download.BaseHash.IsEmpty then Ok None else AssetHash.create(packet.Download.BaseHash.ToByteArray()) |> Result.map Some) |> Result.map (fun basis -> PhantomRequest.Download(player, generation, request, basis))
+                    | Ok player, Ok generation, Ok request ->
+                        (if packet.Download.BaseHash.IsEmpty then
+                            Ok None
+                         else
+                            AssetHash.create(packet.Download.BaseHash.ToByteArray()) |> Result.map Some)
+                        |> Result.map (fun basis -> PhantomRequest.Download(player, generation, request, basis))
                     | _ -> Error "download"
-                | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Cancel when packet.Cancel.TransferId <> 0UL -> Ok (PhantomRequest.Cancel(PhantomTransferId packet.Cancel.TransferId))
+                | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Cancel when packet.Cancel.TransferId <> 0UL ->
+                    Ok (PhantomRequest.Cancel(PhantomTransferId packet.Cancel.TransferId))
                 | Dreamsleeve.Protocol.Phantom.ClientAssetPacket.PayloadOneofCase.Displayed ->
                     let value = packet.Displayed
                     match PlayerId.create value.PlayerId, AppearanceGeneration.create value.Generation with
@@ -56,13 +78,16 @@ module PhantomCodec =
 
     let decodePose options bytes =
         let sample (value: Dreamsleeve.Protocol.Phantom.PoseSample) =
-            if isNull value || value.ContextRevision = 0UL || value.Payload.Length = 0 || value.Payload.Length > options.Limits.PoseBytes then Error "pose envelope"
+            if isNull value || value.ContextRevision = 0UL || value.Payload.Length = 0 || value.Payload.Length > options.Limits.PoseBytes then
+                Error "pose envelope"
             else
                 match AppearanceGeneration.create value.Generation, PhantomSequence.create value.Sequence with
-                | Ok generation, Ok sequence -> PhantomPose.create options.Limits generation value.ContextRevision sequence value.SampledAtUs value.Payload.Memory
+                | Ok generation, Ok sequence ->
+                    PhantomPose.create options.Limits generation value.ContextRevision sequence value.SampledAtUs value.Payload.Memory
                 | _ -> Error "pose generation/sequence"
         parse (PhantomAssetLimits.posePacketBytes options.Limits) bytes Dreamsleeve.Protocol.Phantom.ClientPosePacket.Parser (fun packet ->
-            if packet.ProtocolVersion <> ProtocolCodec.Version then Error "protocol version"
+            if packet.ProtocolVersion <> ProtocolCodec.Version then
+                Error "protocol version"
             else
                 match sample packet.Sample with
                 | Error error -> Error error
@@ -70,43 +95,93 @@ module PhantomCodec =
                 | Ok pose -> sample packet.PreviousSample |> Result.bind (fun previous -> PhantomPose.withPrevious previous pose))
 
     let private descriptor (value: PhantomManifest) =
-        Dreamsleeve.Protocol.Phantom.AssetDescriptor(Hash = ByteString.CopyFrom(AssetHash.bytes value.Hash), Generation = value.Generation.Value
-                             , FormatVersion = value.FormatVersion, CompressedBytes = uint32 value.CompressedBytes
-                             , RawBytes = uint32 value.RawBytes, Channels = uint32 value.Channels)
+        Dreamsleeve.Protocol.Phantom.AssetDescriptor(
+            Hash = ByteString.CopyFrom(AssetHash.bytes value.Hash),
+            Generation = value.Generation.Value,
+            FormatVersion = value.FormatVersion,
+            CompressedBytes = uint32 value.CompressedBytes,
+            RawBytes = uint32 value.RawBytes,
+            Channels = uint32 value.Channels)
 
     let private deltaDescriptor (value: PhantomDelta option) =
         match value with
         | None -> null
-        | Some d -> Dreamsleeve.Protocol.Phantom.AssetDelta(BaseHash=ByteString.CopyFrom(AssetHash.bytes d.BaseHash), Hash=ByteString.CopyFrom(AssetHash.bytes d.Hash), CompressedBytes=uint32 d.CompressedBytes)
+        | Some d ->
+            Dreamsleeve.Protocol.Phantom.AssetDelta(
+                BaseHash = ByteString.CopyFrom(AssetHash.bytes d.BaseHash),
+                Hash = ByteString.CopyFrom(AssetHash.bytes d.Hash),
+                CompressedBytes = uint32 d.CompressedBytes)
 
     let encode response =
         let packet = Dreamsleeve.Protocol.Phantom.ServerAssetPacket(ProtocolVersion = ProtocolCodec.Version)
         match response with
-        | PhantomResponse.Offer(player, revision, value) -> packet.Offer <- Dreamsleeve.Protocol.Phantom.Offer(PlayerId = PlayerId.value player, ViewRevision = revision, Asset = descriptor value)
-        | PhantomResponse.Transfer(id, value, player, upload, request, token, change) -> packet.Transfer <- Dreamsleeve.Protocol.Phantom.Transfer(TransferId = id.Value, Asset = descriptor value, PlayerId = PlayerId.value player, Upload = upload, RequestId = request.Value, HttpToken = token, Delta = deltaDescriptor change)
+        | PhantomResponse.Offer(player, revision, value) ->
+            packet.Offer <-
+                Dreamsleeve.Protocol.Phantom.Offer(
+                    PlayerId = PlayerId.value player,
+                    ViewRevision = revision,
+                    Asset = descriptor value)
+        | PhantomResponse.Transfer(id, value, player, upload, request, token, change) ->
+            packet.Transfer <-
+                Dreamsleeve.Protocol.Phantom.Transfer(
+                    TransferId = id.Value,
+                    Asset = descriptor value,
+                    PlayerId = PlayerId.value player,
+                    Upload = upload,
+                    RequestId = request.Value,
+                    HttpToken = token,
+                    Delta = deltaDescriptor change)
         | PhantomResponse.Complete(id, accepted, reason, request, target) ->
-            let value = Dreamsleeve.Protocol.Phantom.Complete(TransferId = id.Value, Accepted = accepted, Reason = reason, RequestId = request.Value)
+            let value =
+                Dreamsleeve.Protocol.Phantom.Complete(
+                    TransferId = id.Value,
+                    Accepted = accepted,
+                    Reason = reason,
+                    RequestId = request.Value)
             target |> Option.iter (fun completion ->
                 value.PlayerId <- PlayerId.value completion.Target.Player
                 value.Generation <- completion.Target.Generation.Value
                 value.Upload <- completion.Upload
                 value.RetryAfterMs <- uint32 completion.RetryAfterMs)
             packet.Complete <- value
-        | PhantomResponse.Remove(player, revision) -> packet.Remove <- Dreamsleeve.Protocol.Phantom.Remove(PlayerId = PlayerId.value player, ViewRevision = revision)
+        | PhantomResponse.Remove(player, revision) ->
+            packet.Remove <-
+                Dreamsleeve.Protocol.Phantom.Remove(
+                    PlayerId = PlayerId.value player,
+                    ViewRevision = revision)
         | PhantomResponse.PoseDemand(context, required) ->
             packet.PoseDemand <- Dreamsleeve.Protocol.Phantom.PoseDemand(ContextRevision = context, Required = required)
         | PhantomResponse.Settled(generation, context) ->
             packet.Settled <- Dreamsleeve.Protocol.Phantom.Settled(Generation = generation.Value, ContextRevision = context)
         | PhantomResponse.Policy policy ->
-            packet.Policy <- Dreamsleeve.Protocol.Phantom.Policy(Enabled = policy.Enabled, RawAssetBytes = uint32 policy.Limits.RawBytes
-                , CompressedAssetBytes = uint32 policy.Limits.CompressedBytes, Channels = uint32 policy.Limits.Channels
-                , PoseBytes = uint32 policy.Limits.RawPoseBytes, CompressedPoseBytes = uint32 policy.Limits.PoseBytes, SampleRate = uint32 policy.SampleRate
-                , MaximumVisible = uint32 policy.Maximum, Distance = policy.Distance
-                , ConcurrentTransfers = uint32 policy.ConcurrentTransfers, ModelBytesPerSecond = uint32 policy.ModelBytesPerSecond, PoseBytesPerSecond = uint32 policy.PoseBytesPerSecond)
+            packet.Policy <-
+                Dreamsleeve.Protocol.Phantom.Policy(
+                    Enabled = policy.Enabled,
+                    RawAssetBytes = uint32 policy.Limits.RawBytes,
+                    CompressedAssetBytes = uint32 policy.Limits.CompressedBytes,
+                    Channels = uint32 policy.Limits.Channels,
+                    PoseBytes = uint32 policy.Limits.RawPoseBytes,
+                    CompressedPoseBytes = uint32 policy.Limits.PoseBytes,
+                    SampleRate = uint32 policy.SampleRate,
+                    MaximumVisible = uint32 policy.Maximum,
+                    Distance = policy.Distance,
+                    ConcurrentTransfers = uint32 policy.ConcurrentTransfers,
+                    ModelBytesPerSecond = uint32 policy.ModelBytesPerSecond,
+                    PoseBytesPerSecond = uint32 policy.PoseBytesPerSecond)
         // Only view changes gate that source's poses; transfer progress does not.
-        let source = if not (isNull packet.Offer) then packet.Offer.PlayerId elif not (isNull packet.Remove) then packet.Remove.PlayerId else 0UL
-        { Schedule = PacketSchedule.ModelNotice source
-          Lane = DeliveryLane.Models; Bytes = packet.ToByteArray() }
+        let source =
+            if not (isNull packet.Offer) then
+                packet.Offer.PlayerId
+            elif not (isNull packet.Remove) then
+                packet.Remove.PlayerId
+            else
+                0UL
+
+        {
+            Schedule = PacketSchedule.ModelNotice source
+            Lane = DeliveryLane.Models
+            Bytes = packet.ToByteArray()
+        }
 
     let private poseSampleSize (value: PhantomPose) =
         4 + CodedOutputStream.ComputeUInt64Size value.Generation.Value + CodedOutputStream.ComputeUInt64Size value.Context
@@ -165,7 +240,12 @@ module PhantomCodec =
         output.WriteTag(4, WireFormat.WireType.LengthDelimited)
         output.WriteBytes(UnsafeByteOperations.UnsafeWrap(ReadOnlyMemory<byte>(sample)))
         output.CheckNoSpaceLeft()
-        { Schedule = PacketSchedule.LatestPose player; Lane = DeliveryLane.Poses; Bytes = bytes }
+
+        {
+            Schedule = PacketSchedule.LatestPose player
+            Lane = DeliveryLane.Poses
+            Bytes = bytes
+        }
 
     /// Write the immutable compressed sample directly into the final packet.
     /// Fanout shares this packet among recipients with the same view revision.
@@ -181,4 +261,9 @@ module PhantomCodec =
         | Some previous ->
             let offset = writeField bytes offset 42uy (uint64 (poseSampleSize previous))
             writePoseSample bytes offset previous |> ignore
-        { Schedule = PacketSchedule.LatestPose(PlayerId.value player); Lane = DeliveryLane.Poses; Bytes = bytes }
+
+        {
+            Schedule = PacketSchedule.LatestPose(PlayerId.value player)
+            Lane = DeliveryLane.Poses
+            Bytes = bytes
+        }

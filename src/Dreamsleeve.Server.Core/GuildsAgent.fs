@@ -37,7 +37,8 @@ module GuildsAgent =
     }
 
     let private notifyHost state context command =
-        if not (state.Host.TrySend(context, command)) then context.Abort()
+        if not (state.Host.TrySend(context, command)) then
+            context.Abort()
 
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
@@ -86,9 +87,11 @@ module GuildsAgent =
         | false, _ -> PlayerData.create player (Moderation.fallbackUsername player) (Moderation.fallbackDisplayName player) NameColor.unknown
 
     let private memberView state now (membership: GuildMember) =
-        { Membership = { membership with Mute = GuildMember.mute now membership }
-          Profile = profileOf state membership.Player
-          Online = state.Online.ContainsKey membership.Player }
+        {
+            Membership = { membership with Mute = GuildMember.mute now membership }
+            Profile = profileOf state membership.Player
+            Online = state.Online.ContainsKey membership.Player
+        }
 
     // The master first, officers next, then members; each by joining time.
     let private ordered (guild: Guild) =
@@ -99,44 +102,62 @@ module GuildsAgent =
             match state.Chats.TryGetValue guild.Id with
             | true, chat when withMessages -> (Chat.snapshot chat).Messages
             | true, _ | false, _ -> []
-        { Guild = guild.Id
-          Name = guild.Name
-          ChannelId = ChatChannels.ofGuild guild.Id
-          CreatedAt = guild.CreatedAt
-          Members = ordered guild |> List.map (memberView state now)
-          Messages = messages }
+        {
+            Guild = guild.Id
+            Name = guild.Name
+            ChannelId = ChatChannels.ofGuild guild.Id
+            CreatedAt = guild.CreatedAt
+            Members = ordered guild |> List.map (memberView state now)
+            Messages = messages
+        }
 
     let private inviteView state (invite: GuildInvite) =
         GuildBook.tryFind invite.Guild state.Book
-        |> ValueOption.map (fun guild -> { Invite = invite; GuildName = guild.Name })
+        |> ValueOption.map (fun guild -> {
+            Invite = invite
+            GuildName = guild.Name
+        })
 
     let private snapshotOf state player now : GuildState =
-        { Guilds = GuildBook.guildsOf player state.Book |> List.sortBy _.CreatedAt |> List.map (fun guild -> guildView state now guild true)
-          Invites =
-            GuildBook.invitesOf player state.Book
-            |> List.filter (fun invite -> now < invite.Expires)
-            |> List.choose (inviteView state >> ValueOption.toOption)
-          Limits = state.Book.Limits }
+        {
+            Guilds = GuildBook.guildsOf player state.Book |> List.sortBy _.CreatedAt |> List.map (fun guild -> guildView state now guild true)
+            Invites =
+                GuildBook.invitesOf player state.Book
+                |> List.filter (fun invite -> now < invite.Expires)
+                |> List.choose (inviteView state >> ValueOption.toOption)
+            Limits = state.Book.Limits
+        }
 
     let private summary state (guild: Guild) : GuildSummary =
-        { Guild = guild.Id
-          Name = guild.Name
-          CreatedAt = guild.CreatedAt
-          Members = guild.MemberCount
-          Master = guild.Master |> ValueOption.map (fun master -> profileOf state master.Player) }
+        {
+            Guild = guild.Id
+            Name = guild.Name
+            CreatedAt = guild.CreatedAt
+            Members = guild.MemberCount
+            Master = guild.Master |> ValueOption.map (fun master -> profileOf state master.Player)
+        }
 
     let private card state now (guild: Guild) : GuildCard =
-        { Summary = summary state guild
-          Members = ordered guild |> List.map (memberView state now)
-          Invites =
-            guild.Invites
-            |> List.sortBy _.CreatedAt
-            |> List.map (fun invite ->
-                let profile = match state.Profiles.TryGetValue invite.Player with | true, profile -> ValueSome profile | false, _ -> ValueNone
-                invite, profile) }
+        {
+            Summary = summary state guild
+            Members = ordered guild |> List.map (memberView state now)
+            Invites =
+                guild.Invites
+                |> List.sortBy _.CreatedAt
+                |> List.map (fun invite ->
+                    let profile =
+                        match state.Profiles.TryGetValue invite.Player with
+                        | true, profile -> ValueSome profile
+                        | false, _ -> ValueNone
+                    invite, profile)
+        }
 
     let private rejection error : RequestRejection =
-        let refuse code message field = { Code = code; Message = message; Field = field }
+        let refuse code message field = {
+            Code = code
+            Message = message
+            Field = field
+        }
         match error with
         | GuildError.NameTaken -> refuse RequestRejectionCode.GuildNameTaken "A guild with this name exists." "name"
         | GuildError.ServerFull -> refuse RequestRejectionCode.GuildServerLimit "The server has the maximum number of guilds." ""
@@ -158,7 +179,9 @@ module GuildsAgent =
         | true, chat -> chat
         | false, _ ->
             let chat = Chat.createGuild state.HistoryCapacity guild.Id
-            for membership in guild.Members do Chat.join membership.Player chat |> ignore
+            for membership in guild.Members do
+                Chat.join membership.Player chat |> ignore
+
             state.Chats[guild.Id] <- chat
             chat
 
@@ -196,13 +219,26 @@ module GuildsAgent =
         let actor = subscriber.Profile.PlayerId
         let limits = state.Book.Limits
         let reply event = deliver state context subscriber event
-        let invalid message = reply (GuildEvent.Refused(requestId, { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "name" }))
+        let invalid message =
+            reply (GuildEvent.Refused(
+                requestId,
+                {
+                    Code = RequestRejectionCode.InvalidRequest
+                    Message = message
+                    Field = "name"
+                }))
         match GuildName.create limits.NameMinLength limits.NameMaxLength raw with
         | Error(DomainError.InvalidText(_, TextError.TooShort minimum)) -> invalid $"A guild name has at least {minimum} characters."
         | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"A guild name has at most {maximum} characters."
         | Error _ -> invalid "A guild name has letters, digits and spaces only."
         | Ok name when not (Moderation.allows state.Moderation (GuildName.value name)) ->
-            reply (GuildEvent.Refused(requestId, { Code = RequestRejectionCode.TextNotAllowed; Message = "The guild name contains words that are not allowed."; Field = "name" }))
+            reply (GuildEvent.Refused(
+                requestId,
+                {
+                    Code = RequestRejectionCode.TextNotAllowed
+                    Message = "The guild name contains words that are not allowed."
+                    Field = "name"
+                }))
         | Ok name ->
             match GuildId.create state.NextId with
             | Error _ -> context.Abort()
@@ -233,7 +269,13 @@ module GuildsAgent =
             | GuildAction.Invite(guild, target) ->
                 match subscriberOf state target with
                 | ValueNone when target <> actor ->
-                    reply (GuildEvent.Refused(request.RequestId, { Code = RequestRejectionCode.TargetNotFound; Message = "The player is not online."; Field = "player_id" }))
+                    reply (GuildEvent.Refused(
+                        request.RequestId,
+                        {
+                            Code = RequestRejectionCode.TargetNotFound
+                            Message = "The player is not online."
+                            Field = "player_id"
+                        }))
                 | ValueSome _ | ValueNone ->
                     match GuildBook.invite actor guild target at state.Book with
                     | Error error -> refuse error
@@ -323,7 +365,13 @@ module GuildsAgent =
                         finish guild
 
     let private rejectChat state context connectionId (replyTo: ReliableAgentRef<ChatRoomEvent>) requestId code message field =
-        respond state context connectionId replyTo (ChatRoomEvent.Rejected(requestId, { Code = code; Message = message; Field = field }))
+        respond state context connectionId replyTo (ChatRoomEvent.Rejected(
+            requestId,
+            {
+                Code = code
+                Message = message
+                Field = field
+            }))
 
     /// A member's message: the guild owner checks membership, the guild mute and
     /// the rate; the session decided the author (the real profile) and the word list.
@@ -348,7 +396,10 @@ module GuildsAgent =
                     | ValueSome entry ->
                         let chat = chatOf state entry
                         Chat.join author.Profile.PlayerId chat |> ignore
-                        let next = match state.NextMessageIds.TryGetValue guild with | true, id -> id | false, _ -> 1UL
+                        let next =
+                            match state.NextMessageIds.TryGetValue guild with
+                            | true, id -> id
+                            | false, _ -> 1UL
                         match ChatMessageId.create next with
                         | Error _ -> context.Abort()
                         | Ok messageId ->
@@ -359,6 +410,7 @@ module GuildsAgent =
                             | Error _ -> context.Abort()
                             | Ok () ->
                                 state.NextMessageIds[guild] <- next + 1UL
+
                                 respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Accepted(request.RequestId, message))
                                 broadcast state context entry (ValueSome author.Profile.PlayerId) (GuildEvent.Chat(ChatRoomEvent.Published message))
 
@@ -461,9 +513,11 @@ module GuildsAgent =
                 |> List.filter (fun guild -> needle.Length = 0 || (GuildName.value guild.Name).ToLowerInvariant().Contains needle)
         let sorted = matches |> List.sortBy (fun guild -> GuildName.key guild.Name)
         let page = max 1 page
-        { Guilds = sorted |> List.skip (min sorted.Length ((page - 1) * GuildPage.Size)) |> List.truncate GuildPage.Size |> List.map (summary state)
-          Total = sorted.Length
-          Page = page }
+        {
+            Guilds = sorted |> List.skip (min sorted.Length ((page - 1) * GuildPage.Size)) |> List.truncate GuildPage.Size |> List.map (summary state)
+            Total = sorted.Length
+            Page = page
+        }
 
     let private admin state context command (reply: ReplyChannel<GuildAdminResult>) =
         let at = now ()
@@ -534,7 +588,10 @@ module GuildsAgent =
                   AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.InviteCheckIntervalMs)),
                   AgentOutbox<GuildWrite>.TryCreate(options.MaxPendingWrites, persistence.Writer),
                   AgentOutbox<SessionHostCommand>.TryCreate(options.MaxControlDeliveries, host) with
-            | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error (StartError.Agent error)
+            | Error error, _, _, _
+            | _, Error error, _, _
+            | _, _, Error error, _
+            | _, _, _, Error error -> Error (StartError.Agent error)
             | Ok configuration, Ok interval, Ok writerOutbox, Ok hostOutbox -> Ok (configuration, interval, writerOutbox, hostOutbox)
         construction
         |> Result.bind (fun (configuration, interval, writerOutbox, hostOutbox) ->
@@ -548,7 +605,10 @@ module GuildsAgent =
                 elif (List.distinct names).Length <> names.Length then Error (StartError.StoredData "Stored guilds repeat a name.")
                 else
                     let state = {
-                        Options = options; HistoryCapacity = history; TickInterval = interval
+                        Options = options
+                        HistoryCapacity = history
+                        TickInterval = interval
+
                         Book = GuildBook.restore limits persistence.Loaded
                         Moderation = rules
                         Profiles = Dictionary()
@@ -564,8 +624,13 @@ module GuildsAgent =
                         NextId = max persistence.NextId 1UL
                         Ticker = None
                     }
-                    for profile in persistence.Profiles do state.Profiles[profile.PlayerId] <- profile
+                    for profile in persistence.Profiles do
+                        state.Profiles[profile.PlayerId] <- profile
+
                     let agent = configuration.Start(handle state)
                     let tick = System.Diagnostics.Stopwatch.GetTimestamp()
-                    agent.TryPost(GuildCommand.Expire { DueTimestamp = tick; QueuedTimestamp = tick }) |> ignore
+                    agent.TryPost(GuildCommand.Expire {
+                        DueTimestamp = tick
+                        QueuedTimestamp = tick
+                    }) |> ignore
                     Ok agent))
