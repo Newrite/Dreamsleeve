@@ -48,9 +48,19 @@ module ServerLogging =
         logger.CreateLogger()
 
     let diagnostics config (log: ILogger) : IDisposable =
-        if not config.DiagnosticsEnabled then { new IDisposable with member _.Dispose() = () }
+        let disabled () = { new IDisposable with member _.Dispose() = () }
+        if not config.DiagnosticsEnabled then disabled ()
         else
-            let file = new Dreamsleeve.Server.Infrastructure.DiagnosticFile(config.DiagnosticsFilePath, config.FileSizeLimitBytes)
-            new Dreamsleeve.Server.Infrastructure.ContinuousDiagnostics(
-                Action<string>(file.Write), Action(file.Dispose),
-                Action<Exception>(fun error -> log.Warning(error, "Continuous diagnostics write failed"))) :> IDisposable
+            Dreamsleeve.Server.Infrastructure.DiagnosticFile.TryCreate(config.DiagnosticsFilePath, config.FileSizeLimitBytes).Match(
+                (fun file ->
+                    Dreamsleeve.Server.Infrastructure.ContinuousDiagnostics.TryStart(
+                        Func<string, Dreamsleeve.Server.Infrastructure.DiagnosticOperationResult>(file.TryWrite),
+                        Func<Dreamsleeve.Server.Infrastructure.DiagnosticOperationResult>(file.TryClose),
+                        Action<Exception>(fun error -> log.Warning(error, "Continuous diagnostics owner reported a failure"))).Match(
+                            (fun collector -> collector :> IDisposable),
+                            (fun () ->
+                                log.Warning("Continuous diagnostics was not started: invalid sink")
+                                disabled ()))),
+                (fun error ->
+                    log.Warning("Continuous diagnostics was not started: {Reason}", error)
+                    disabled ()))

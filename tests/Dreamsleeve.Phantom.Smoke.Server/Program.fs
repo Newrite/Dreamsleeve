@@ -37,8 +37,18 @@ let private run (arguments: string array) = task {
     let logger = loggers.CreateLogger("PhantomSmoke")
     use diagnostics =
         if Environment.GetEnvironmentVariable("DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS") = "1" then
-            let file = new DiagnosticFile(Path.Combine(directory,"diagnostics","server.jsonl"), 1025L * 1025L)
-            new ContinuousDiagnostics(Action<string>(file.Write), Action(file.Dispose)) :> IDisposable
+            DiagnosticFile.TryCreate(Path.Combine(directory,"diagnostics","server.jsonl"), 1025L * 1025L).Match(
+                (fun file ->
+                    ContinuousDiagnostics.TryStart(Func<string, DiagnosticOperationResult>(file.TryWrite),
+                                                   Func<DiagnosticOperationResult>(file.TryClose),
+                                                   Action<Exception>(fun error -> logger.LogWarning(error, "Continuous diagnostics owner reported a failure"))).Match(
+                        (fun collector -> collector :> IDisposable),
+                        (fun () ->
+                            logger.LogWarning("Continuous diagnostics was not started: invalid sink")
+                            { new IDisposable with member _.Dispose() = () }))),
+                (fun error ->
+                    logger.LogWarning("Continuous diagnostics was not started: {Reason}", error)
+                    { new IDisposable with member _.Dispose() = () }))
         else { new IDisposable with member _.Dispose() = () }
     if ProtocolCodec.Version <> 26u then failwith "Smoke fixture requires protocol26."
     let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");

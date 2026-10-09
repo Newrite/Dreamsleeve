@@ -125,7 +125,8 @@ let private deltaFixture = fixture "native prefix delta reconstructs canonical a
 let tests = testList "Phantom HTTP" [
     fixture "HTTP diagnostics preserve real upload phases and omit capability" (fun _ storage http -> task {
         let lines = Collections.Concurrent.ConcurrentQueue<string>()
-        let collector = new ContinuousDiagnostics(Action<string>(lines.Enqueue))
+        let collector = ContinuousDiagnostics.TryStart(Func<string, DiagnosticOperationResult>(fun line -> lines.Enqueue line; DiagnosticOperationResult.Success)).Match(
+                            (fun collector -> collector), (fun () -> failtest "Invalid diagnostic test sink."))
         use cleanup = collector
         let owner = Guid.NewGuid()
         let bytes = Array.init 65539 (fun index -> byte index)
