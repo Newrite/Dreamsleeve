@@ -10,10 +10,18 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
 let mutable private requestCounter = 0L
 let private requestId () = PhantomRequestId.create (uint64 (System.Threading.Interlocked.Increment &requestCounter)) |> ok
-let private options = { PhantomOptions.defaults with ReplicationIntervalMs = 1; PublishCooldownMs = 0; PoseIntervalMs = 1; ChunkBytes = 4 }
+let private options = {
+    PhantomOptions.defaults with
+        ReplicationIntervalMs = 1
+        PublishCooldownMs = 0
+        PoseIntervalMs = 1
+        ChunkBytes = 4
+}
 let private asset gen (bytes: byte array) =
     PhantomManifest.create options.Limits (AssetHash.create (SHA256.HashData bytes) |> ok)
         (AppearanceGeneration.create gen |> ok) 2u (uint32 bytes.Length) (uint32 bytes.Length) 2u |> ok
@@ -26,18 +34,22 @@ let private player number context =
     |> Player.applyUpdate (PlayerUpdate.BeginCharacter(CharacterName.create 128 "Test" |> ok))
     |> Player.applyUpdate (PlayerUpdate.SetLocation(context, ValueSome location))
     |> Player.snapshot
+
 let private result value = Task.FromResult(Ok value)
+
 let private memoryStorage : PhantomStoragePort = {
     StartUpload = fun _ -> result true
     WriteChunk = fun _ -> result false
     StartDownload = fun _ -> result None
     ReadChunk = fun (_, offset, destination) ->
-        for index in 0 .. destination.Length - 1 do destination.Span[index] <- byte (offset + index)
+        for index in 0 .. destination.Length - 1 do
+            destination.Span[index] <- byte (offset + index)
         result destination.Length
     Cancel = fun _ -> Task.FromResult ()
     Dispose = fun () -> Task.FromResult ()
     OwnerFailure = TaskCompletionSource<exn>().Task
 }
+
 let private leases = Runtime.CompilerServices.ConditionalWeakTable<PhantomAgent.State, Collections.Generic.Dictionary<PhantomTransferId, PhantomHttpLease>>()
 let private fakeHttp () =
     let live = Collections.Generic.Dictionary<PhantomTransferId, PhantomHttpLease>()
@@ -47,26 +59,33 @@ let private fakeHttp () =
             live[id] <- lease
             lease
         Cancel = fun id ->
-            match live.TryGetValue id with true, lease -> lease.Finish(Error PhantomHttpError.Canceled) | _ -> ()
+            match live.TryGetValue id with
+            | true, lease -> lease.Finish(Error PhantomHttpError.Canceled)
+            | _ -> ()
             Task.FromResult ()
         Serve = fun _ -> Task.FromResult(Error PhantomHttpError.Capability)
         Dispose = fun () -> Task.FromResult ()
         OwnerFailure = TaskCompletionSource<exn>().Task
     }
     port, live
+
 let private advance state id count at =
     let live = leases.GetValue(state, fun _ -> failwith "missing HTTP fixture")
     live[id].Advance count
     PhantomAgent.tick state at
+
 let private readChunk (storage: PhantomStoragePort) (id, offset, count) = task {
     let bytes = Array.zeroCreate<byte> count
     let! read = storage.ReadChunk(id, offset, bytes.AsMemory())
     return read |> Result.map (fun count -> bytes[..count-1])
 }
+
 let private setup config storage count =
     let output = ResizeArray<Guid * TransportPacket>()
     let http, live = fakeHttp()
-    let state = PhantomAgent.create config storage http (fun (id, packet) -> output.Add(id, packet); Ok ())
+    let state = PhantomAgent.create config storage http (fun (id, packet) ->
+        output.Add(id, packet)
+        Ok ())
     leases.Add(state, live)
     let members = Array.init count (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
     for id, value in members do
@@ -75,6 +94,7 @@ let private setup config storage count =
     PhantomAgent.tick state 1L
     output.Clear()
     state, members, output
+
 let private models (output: ResizeArray<Guid * TransportPacket>) =
     output |> Seq.choose (fun (_, packet) -> if packet.Lane = DeliveryLane.Models then Some(Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes) else None) |> Seq.toArray
 let private transfer output =
@@ -88,19 +108,40 @@ let private pose gen sequence context =
     Dreamsleeve.Protocol.Phantom.ClientPosePacket(ProtocolVersion = ProtocolCodec.Version,
         Sample = Dreamsleeve.Protocol.Phantom.PoseSample(Generation = gen, ContextRevision = context, Sequence = sequence,
                     SampledAtUs = sequence * 50000UL, Payload = ByteString.CopyFrom [|1uy;2uy|])).ToByteArray()
-let private preferences receive distance = PhantomRequest.Preferences { Publish = true; Receive = receive; Maximum = 1; Distance = distance }
+let private preferences receive distance =
+    PhantomRequest.Preferences {
+        Publish = true
+        Receive = receive
+        Maximum = 1
+        Distance = distance
+    }
+
 let private case name run = testCaseAsync name (async { do! run() |> Async.AwaitTask })
+
 let private storageCase name run = case name (fun () -> task {
     let root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "dreamsleeve-phantom-" + Guid.NewGuid().ToString("N")))
-    let config = { options with StoragePath = root; DiskBytes = 64L; RamBytes = 8L; CacheEntries = 8
-                                Limits = { options.Limits with CompressedBytes = 64; RawBytes = 64 } }
+    let config = {
+        options with
+            StoragePath = root
+            DiskBytes = 64L
+            RamBytes = 8L
+            CacheEntries = 8
+            Limits = {
+                options.Limits with
+                    CompressedBytes = 64
+                    RawBytes = 64
+            }
+    }
     let store = PhantomStorage.create config
-    try do! run root config store
+    try
+        do! run root config store
     finally
         store.Dispose().GetAwaiter().GetResult()
         let parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar)
-        if Path.GetDirectoryName root <> parent then failwith "Test cleanup escaped temporary directory."
-        if Directory.Exists root then Directory.Delete(root, true)
+        if Path.GetDirectoryName root <> parent then
+            failwith "Test cleanup escaped temporary directory."
+        if Directory.Exists root then
+            Directory.Delete(root, true)
 })
 
 type private ControlledRead(bytes: byte array, entered: TaskCompletionSource<unit>, resume: TaskCompletionSource<unit>, failure: exn option) =
@@ -108,7 +149,9 @@ type private ControlledRead(bytes: byte array, entered: TaskCompletionSource<uni
     let reading () =
         entered.TrySetResult() |> ignore
         resume.Task.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult()
-        match failure with Some error -> raise error | None -> ()
+        match failure with
+        | Some error -> raise error
+        | None -> ()
     override _.Read(buffer: byte array, offset: int, count: int) =
         reading()
         base.Read(buffer, offset, count)
@@ -119,7 +162,9 @@ type private ControlledRead(bytes: byte array, entered: TaskCompletionSource<uni
 type private FaultingDestination(error: exn) =
     inherit System.Buffers.MemoryManager<byte>()
     override this.Memory = this.CreateMemory 4
-    override _.GetSpan() = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw(); Span<byte>.Empty
+    override _.GetSpan() =
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw()
+        Span<byte>.Empty
     override _.Pin(_: int) = raise error
     override _.Unpin() = ()
     override _.Dispose(_: bool) = ()
@@ -207,7 +252,12 @@ let tests = testList "Phantoms" [
         let disabled = { options with Enabled = false }
         let output = ResizeArray<TransportPacket>()
         let mutable started = 0
-        let storage = { memoryStorage with StartUpload = fun _ -> started <- started + 1; result true }
+        let storage = {
+            memoryStorage with
+                StartUpload = fun _ ->
+                    started <- started + 1
+                    result true
+        }
         let state = PhantomAgent.create disabled storage (PhantomHttp.create disabled storage) (fun (_, packet) -> output.Add packet; Ok ())
         Expect.equal (PhantomAgent.observationMode state) PhantomObservationMode.Membership "Bootstrap membership survives disabled replication."
         let id = Guid.NewGuid()
@@ -387,7 +437,12 @@ let tests = testList "Phantoms" [
 
     testCase "departure late View and reconnect outside AOI require current session epoch and fresh authority" <| fun _ ->
         let mutable downloads = 0
-        let storage = { memoryStorage with StartDownload = fun _ -> downloads <- downloads + 1; result None }
+        let storage = {
+            memoryStorage with
+                StartDownload = fun _ ->
+                    downloads <- downloads + 1
+                    result None
+        }
         let state, members, output = setup options storage 2
         let oldId, oldSource = members[0]
         let observerId, _ = members[1]
@@ -525,7 +580,12 @@ let tests = testList "Phantoms" [
     testCase "cross-context same-generation publication cannot correlate old starting IO with the new request" <| fun _ ->
         let old = TaskCompletionSource<Result<bool,PhantomStorageError>>()
         let mutable started = 0
-        let storage = { memoryStorage with StartUpload = fun _ -> started <- started + 1; if started = 1 then old.Task else result true }
+        let storage = {
+            memoryStorage with
+                StartUpload = fun _ ->
+                    started <- started + 1
+                    if started = 1 then old.Task else result true
+        }
         let state, members, output = setup options storage 1
         let manifest = asset 1UL [|1uy|]
         let first, next = PhantomRequestId.create 1001UL |> ok, PhantomRequestId.create 1002UL |> ok
@@ -559,10 +619,20 @@ let tests = testList "Phantoms" [
 
     testCase "same immutable generation retries IO and cooldown failures; conflicting and lower generations are terminal" <| fun _ ->
         let mutable attempts = 0
-        let storage = { memoryStorage with StartUpload = fun _ -> attempts <- attempts + 1; if attempts = 1 then Task.FromResult(Error (PhantomStorageError.Io (IOException "storage busy"))) else result true }
+        let storage = {
+            memoryStorage with
+                StartUpload = fun _ ->
+                    attempts <- attempts + 1
+                    if attempts = 1 then
+                        Task.FromResult(Error (PhantomStorageError.Io (IOException "storage busy")))
+                    else
+                        result true
+        }
         let state, members, output = setup { options with PublishCooldownMs = 100 } storage 1
         let manifest = asset 2UL [|1uy|]
-        let publish at value context = PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(value, context, requestId(), None)); PhantomAgent.tick state (at + 1L)
+        let publish at value context =
+            PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(value, context, requestId(), None))
+            PhantomAgent.tick state (at + 1L)
         publish 2L manifest 10UL
         let first = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal (first.TransferId, first.PlayerId, first.Generation, first.Upload, first.RetryAfterMs) (0UL,1UL,2UL,true,100u) "Pre-Transfer IO failure is correlated and temporary."
@@ -591,7 +661,12 @@ let tests = testList "Phantoms" [
     testCase "capacity denial preserves generation for retry and correlates upload/download requests" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,PhantomStorageError>>()
         let mutable attempts = 0
-        let storage = { memoryStorage with StartUpload = fun _ -> attempts <- attempts + 1; if attempts = 1 then pending.Task else result true }
+        let storage = {
+            memoryStorage with
+                StartUpload = fun _ ->
+                    attempts <- attempts + 1
+                    if attempts = 1 then pending.Task else result true
+        }
         let state, members, output = setup { options with MaxTransfers = 1; PublishCooldownMs = 10 } storage 2
         let manifest = asset 1UL [|1uy|]
         PhantomAgent.handle state 2L (fst members[0]) (PhantomRequest.Publish(manifest, 10UL, requestId(), None))
@@ -723,9 +798,14 @@ let tests = testList "Phantoms" [
         let delivered = ResizeArray<Guid>()
         let mutable sentThisTurn = false
         let state = PhantomAgent.create config memoryStorage (PhantomHttp.create config memoryStorage) (fun (id, packet) ->
-            if packet.Lane <> DeliveryLane.Poses then Ok ()
-            elif sentThisTurn then Error(TransportSendError.BudgetExceeded "peer budget")
-            else sentThisTurn <- true; delivered.Add id; Ok ())
+            if packet.Lane <> DeliveryLane.Poses then
+                Ok ()
+            elif sentThisTurn then
+                Error(TransportSendError.BudgetExceeded "peer budget")
+            else
+                sentThisTurn <- true
+                delivered.Add id
+                Ok ())
         let members = Array.init 5 (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
         for id, value in members do
             PhantomAgent.observe state (PhantomObservation.Member(id, value))
@@ -1059,8 +1139,14 @@ let tests = testList "Phantoms" [
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "expiry"
 
     storageCase "cold HTTP body round trip and warm hash reuse" (fun root config _ -> task {
-        let config = { config with StoragePath = Path.Combine(root, "streaming"); Limits = PhantomOptions.defaults.Limits
-                                   DiskBytes = 32L * 1024L * 1024L; RamBytes = 0L; ChunkBytes = 16384 }
+        let config = {
+            config with
+                StoragePath = Path.Combine(root, "streaming")
+                Limits = PhantomOptions.defaults.Limits
+                DiskBytes = 32L * 1024L * 1024L
+                RamBytes = 0L
+                ChunkBytes = 16384
+        }
         let storage = PhantomStorage.create config
         let http = PhantomHttp.create config storage
         try
@@ -1071,17 +1157,28 @@ let tests = testList "Phantoms" [
             Expect.equal initial (Ok false) "Cold file."
             let upload = http.Admit(Guid.NewGuid(), uploadId, manifest, true, None)
             use input = new MemoryStream(bytes, false)
-            let! written = http.Serve { Token = upload.Token; Upload = true; Length = Some(int64 bytes.Length); Body = input
-                                        BeginResponse = ignore; Cancellation = Threading.CancellationToken.None }
+            let! written = http.Serve {
+                Token = upload.Token
+                Upload = true
+                Length = Some(int64 bytes.Length)
+                Body = input
+                BeginResponse = ignore
+                Cancellation = Threading.CancellationToken.None
+            }
             Expect.equal written (Ok ()) "Complete verified upload."
             Expect.equal upload.Progress bytes.Length "Monotonic full progress."
             Expect.equal (File.ReadAllBytes(Path.Combine(config.StoragePath, manifest.Hash.Hex + ".zst"))) bytes "Exact file."
             let! _ = storage.StartDownload(downloadId, manifest, None)
             let download = http.Admit(Guid.NewGuid(), downloadId, manifest, false, None)
             use output = new MemoryStream()
-            let! read = http.Serve { Token = download.Token; Upload = false; Length = None; Body = output
-                                     BeginResponse = (fun size -> Expect.equal size bytes.Length "HTTP content length")
-                                     Cancellation = Threading.CancellationToken.None }
+            let! read = http.Serve {
+                Token = download.Token
+                Upload = false
+                Length = None
+                Body = output
+                BeginResponse = (fun size -> Expect.equal size bytes.Length "HTTP content length")
+                Cancellation = Threading.CancellationToken.None
+            }
             Expect.equal read (Ok ()) "Download completed."
             Expect.equal (output.ToArray()) bytes "Exact round trip."
             let! warm = storage.StartUpload(PhantomTransferId 3UL, asset 2UL bytes, None)
@@ -1257,7 +1354,11 @@ let tests = testList "Phantoms" [
     case "cleanup retains transfer capacity until acknowledged and faults are not discarded" (fun () -> task {
         let cleanup = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
         let started = TaskCompletionSource<Result<bool,PhantomStorageError>>(TaskCreationOptions.RunContinuationsAsynchronously)
-        let store = { memoryStorage with StartUpload = (fun _ -> started.Task); Cancel = (fun _ -> cleanup.Task) }
+        let store = {
+            memoryStorage with
+                StartUpload = (fun _ -> started.Task)
+                Cancel = (fun _ -> cleanup.Task)
+        }
         let state, members, output = setup { options with MaxTransfers = 1 } store 1
         let publish request = PhantomAgent.handle state 0L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, request, None))
         publish (requestId())
@@ -1272,7 +1373,8 @@ let tests = testList "Phantoms" [
         cleanup.SetException original
         // Wait on observable release work without relying on timing luck.
         let until = DateTime.UtcNow + TimeSpan.FromSeconds 2.
-        while (PhantomAgent.failure state).IsNone && DateTime.UtcNow < until do do! Task.Delay 1
+        while (PhantomAgent.failure state).IsNone && DateTime.UtcNow < until do
+            do! Task.Delay 1
         Expect.isTrue (PhantomAgent.failure state |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Lifecycle failure retained."
         PhantomAgent.tick state 3L
         Expect.isSome (PhantomAgent.failure state) "Tick never discards failed cleanup."
@@ -1313,7 +1415,9 @@ let tests = testList "Phantoms" [
         let path = Path.Combine(root, value.Hash.Hex + ".zst")
         Directory.CreateDirectory path |> ignore
         let! failed = store.WriteChunk(id, 0, bytes)
-        match failed with Error (PhantomStorageError.Io _) -> () | other -> failtestf "Expected rename IO error, got %A" other
+        match failed with
+        | Error (PhantomStorageError.Io _) -> ()
+        | other -> failtestf "Expected rename IO error, got %A" other
         Expect.equal (Directory.GetFiles(root, "*.tmp").Length) 0 "Partial ownership removed."
         Expect.isFalse store.OwnerFailure.IsCompleted "Fully rolled-back expected IO keeps store usable."
         Directory.Delete path
@@ -1334,18 +1438,26 @@ let tests = testList "Phantoms" [
         let original = InvalidOperationException "borrowed destination fault"
         use destination = new FaultingDestination(original)
         let mutable seen = None
-        try let! _ = store.ReadChunk(PhantomTransferId 2UL, 0, destination.Memory) in ()
-        with error -> seen <- Some error
+        try
+            let! _ = store.ReadChunk(PhantomTransferId 2UL, 0, destination.Memory)
+            ()
+        with error ->
+            seen <- Some error
         Expect.isTrue (seen |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Fault is not fabricated read absence."
         let! failed = store.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
         Expect.isTrue (Object.ReferenceEquals(failed, original)) "Owner failure signal."
         let mutable refused = false
-        try let! _ = store.StartUpload(PhantomTransferId 4UL, value, None) in ()
-        with error -> refused <- Object.ReferenceEquals(error, original)
+        try
+            let! _ = store.StartUpload(PhantomTransferId 4UL, value, None)
+            ()
+        with error ->
+            refused <- Object.ReferenceEquals(error, original)
         Expect.isTrue refused "Faulted owner never executes new business work."
         let mutable disposed = false
-        try do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
-        with error -> disposed <- Object.ReferenceEquals(error, original)
+        try
+            do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
+        with error ->
+            disposed <- Object.ReferenceEquals(error, original)
         Expect.isTrue disposed "Disposal preserves fault after releasing resources."
         Expect.equal (Directory.GetFiles(Path.Combine(root, "faulted"), "*.tmp").Length) 0 "Active upload temp released."
         use exclusive = new FileStream(Path.Combine(root, "faulted", value.Hash.Hex + ".zst"), FileMode.Open, FileAccess.ReadWrite, FileShare.None)
@@ -1362,20 +1474,28 @@ let tests = testList "Phantoms" [
         let obstruction = temporary + ".delta"
         Directory.CreateDirectory obstruction |> ignore
         let mutable commandFault = None
-        try let! _ = store.WriteChunk(PhantomTransferId 1UL, 0, bytes) in ()
-        with error -> commandFault <- Some error
+        try
+            let! _ = store.WriteChunk(PhantomTransferId 1UL, 0, bytes)
+            ()
+        with error ->
+            commandFault <- Some error
         Expect.isSome commandFault "No expected error or success is fabricated after failed cleanup."
         let! original = store.OwnerFailure.WaitAsync(TimeSpan.FromSeconds 2.)
         Expect.isTrue (commandFault |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "One original lifecycle fault."
         Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(directory, value.Hash.Hex + ".zst"))) bytes "Canonical commit remains durable."
         Expect.equal (Directory.GetFiles(directory, "*.tmp").Length) 0 "Other owned temp cleanup still attempted."
         let mutable refused = false
-        try let! _ = store.StartDownload(PhantomTransferId 2UL, value, None) in ()
-        with error -> refused <- Object.ReferenceEquals(error, original)
+        try
+            let! _ = store.StartDownload(PhantomTransferId 2UL, value, None)
+            ()
+        with error ->
+            refused <- Object.ReferenceEquals(error, original)
         Expect.isTrue refused "Partially failed cleanup cannot resume business work."
         let mutable released = false
-        try do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
-        with error -> released <- Object.ReferenceEquals(error, original)
+        try
+            do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
+        with error ->
+            released <- Object.ReferenceEquals(error, original)
         Expect.isTrue released "Disposer finishes and reports retained fault."
         use exclusive = new FileStream(Path.Combine(directory, value.Hash.Hex + ".zst"), FileMode.Open, FileAccess.ReadWrite, FileShare.None)
         Expect.equal exclusive.Length 4L "Upload handle was closed."
@@ -1430,19 +1550,27 @@ let tests = testList "Phantoms" [
         let queued = Array.init 10 (fun index -> store.StartUpload(PhantomTransferId(uint64 index + 2UL), value, None))
         resume.SetResult()
         let mutable first = None
-        try let! _ = pending.WaitAsync(TimeSpan.FromSeconds 2.) in ()
-        with error -> first <- Some error
+        try
+            let! _ = pending.WaitAsync(TimeSpan.FromSeconds 2.)
+            ()
+        with error ->
+            first <- Some error
         Expect.isTrue (first |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Unexpected fault isn't ordinary IO rejection."
         let mutable settled = None
-        try let! _ = (Task.WhenAll queued).WaitAsync(TimeSpan.FromSeconds 2.) in ()
-        with error -> settled <- Some error
+        try
+            let! _ = (Task.WhenAll queued).WaitAsync(TimeSpan.FromSeconds 2.)
+            ()
+        with error ->
+            settled <- Some error
         Expect.isTrue (settled |> Option.exists (fun error -> Object.ReferenceEquals(error, original))) "Queued admitted replies preserve the fault."
         Expect.isTrue (queued |> Array.forall _.IsFaulted) "No accepted reply remains abandoned."
         let! failed = store.OwnerFailure
         Expect.isTrue (Object.ReferenceEquals(failed, original)) "Failure exposed to runtime."
         let mutable released = false
-        try do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
-        with error -> released <- Object.ReferenceEquals(error, original)
+        try
+            do! (store.Dispose()).WaitAsync(TimeSpan.FromSeconds 2.)
+        with error ->
+            released <- Object.ReferenceEquals(error, original)
         Expect.isTrue released "Disposal terminates after fault."
         Expect.sequenceEqual (File.ReadAllBytes(Path.Combine(directory, value.Hash.Hex + ".zst"))) bytes "Previously committed file preserved."
     })
@@ -1457,7 +1585,9 @@ let tests = testList "Phantoms" [
             let value = asset 1UL bytes
             let id = PhantomTransferId 1UL
             let! rejected = store.StartUpload(id, value, None)
-            match rejected with Error (PhantomStorageError.Io _) -> () | other -> failtestf "Expected directory IO rejection, got %A" other
+            match rejected with
+            | Error (PhantomStorageError.Io _) -> ()
+            | other -> failtestf "Expected directory IO rejection, got %A" other
             do! store.Cancel id
             Expect.isFalse store.OwnerFailure.IsCompleted "No resources admitted; cleanup cannot promote initialization rejection into fault."
             File.Delete directory
@@ -1480,7 +1610,11 @@ let tests = testList "Phantoms" [
                 storageCalls <- storageCalls + 1
                 if not failHttp then raise original else Task.FromResult()
             let http = { http with Cancel = cancelHttp }
-            let storage = { memoryStorage with StartUpload = (fun _ -> Task.FromResult(Error PhantomStorageError.DiskQuota)); Cancel = cancelStorage }
+            let storage = {
+                memoryStorage with
+                    StartUpload = (fun _ -> Task.FromResult(Error PhantomStorageError.DiskQuota))
+                    Cancel = cancelStorage
+            }
             let state = PhantomAgent.create options storage http (fun _ -> Ok ())
             let id = Guid.NewGuid()
             PhantomAgent.observe state (PhantomObservation.Member(id, player 1UL 10UL))
