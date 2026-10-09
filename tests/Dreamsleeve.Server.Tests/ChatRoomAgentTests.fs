@@ -10,9 +10,22 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
-let private config = { MailboxCapacity = 4; ControlReserve = 2; HistoryCapacity = 2; MaxControlDeliveries = 4
-                       Rate = { Burst = 100; RefillMs = 1000; DuplicateWindowMs = 0 } }
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
+let private config = {
+    MailboxCapacity = 4
+    ControlReserve = 2
+    HistoryCapacity = 2
+    MaxControlDeliveries = 4
+    Rate = {
+        Burst = 100
+        RefillMs = 1000
+        DuplicateWindowMs = 0
+    }
+}
+
 let private channelId = ChatChannels.globalId
 let private profile number =
     PlayerData.create (PlayerId.create number |> ok)
@@ -21,40 +34,64 @@ let private profile number =
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
 }
+
 let private receive (output: Channel<'T>) = output.Reader.ReadAsync().AsTask().WaitAsync guard
 let private post (agent: Agent<'T>) value = task {
     let! result = agent.PostAsync value
     equal AgentPostResult.Posted result
 }
+
 let private stop (agent: Agent<'T>) = task {
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
 }
+
 let private subscription number (agent: Agent<ChatRoomEvent>) = {
-    ConnectionId = Guid.NewGuid(); Profile = profile number; Events = agent.Ref.TryReliable().Value
+    ConnectionId = Guid.NewGuid()
+    Profile = profile number
+    Events = agent.Ref.TryReliable().Value
 }
+
 let private publish (room: Agent<ChatRoomCommand>) (subscriber: Subscription<ChatRoomEvent>) requestId text =
     post room (ChatRoomCommand.Publish {
-        ConnectionId = subscriber.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile subscriber.Profile
-        Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
-        CharacterName = ValueNone; Fingerprint = Moderation.normalize text
-        Flagged = if text.StartsWith "flag" then [{ Start = 0; Length = 4 }] else []
+        ConnectionId = subscriber.ConnectionId
+        RequestId = requestId
+        Author = PublicIdentity.Profile subscriber.Profile
+        Text = ChatMessageText.create 256 text |> ok
+        ReplyTo = subscriber.Events
+        CharacterName = ValueNone
+        Fingerprint = Moderation.normalize text
+        Flagged =
+            if text.StartsWith "flag" then
+                [{ Start = 0; Length = 4 }]
+            else
+                []
         Announcement = ValueNone
     })
+
 let private announceAs (room: Agent<ChatRoomCommand>) (subscriber: Subscription<ChatRoomEvent>) requestId text =
     post room (ChatRoomCommand.Publish {
-        ConnectionId = subscriber.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile subscriber.Profile
-        Text = ChatMessageText.create 256 text |> ok; ReplyTo = subscriber.Events
-        CharacterName = ValueNone; Fingerprint = Moderation.normalize text; Flagged = []
+        ConnectionId = subscriber.ConnectionId
+        RequestId = requestId
+        Author = PublicIdentity.Profile subscriber.Profile
+        Text = ChatMessageText.create 256 text |> ok
+        ReplyTo = subscriber.Events
+        CharacterName = ValueNone
+        Fingerprint = Moderation.normalize text
+        Flagged = []
         Announcement = ValueSome(Announcement.fromClient ClientAnnouncementSource.ThirdParty AnnouncementKind.Event ValueNone)
     })
 
 let private accepted requestId = function
-    | ChatRoomEvent.Accepted(actual, message) -> equal requestId actual; message
+    | ChatRoomEvent.Accepted(actual, message) ->
+        equal requestId actual
+        message
     | other -> failwithf "Expected accepted publication: %A" other
+
 let private joined = function
     | ChatRoomEvent.Joined snapshot -> snapshot
     | other -> failwithf "Expected join snapshot: %A" other
+
 let private history (room: Agent<ChatRoomCommand>) = task {
     let! result = room.TryAskAsync(fun reply -> ChatRoomCommand.ReadHistory(ValueNone, 10, reply)) |> awaitReply
     return ok result
@@ -64,13 +101,17 @@ type private SlowMessage<'T> =
     | Hold of TaskCompletionSource<unit> * TaskCompletionSource<unit>
     | Value of 'T
     | Filler
+
 let private slow (events: Channel<'T>) (context: AgentContext<SlowMessage<'T>>) = function
     | Hold(entered, release) -> task {
         entered.TrySetResult() |> ignore
         do! release.Task.WaitAsync context.CancellationToken
       }
-    | Value event -> task { check (events.Writer.TryWrite event) "Test output closed." }
+    | Value event -> task {
+        check (events.Writer.TryWrite event) "Test output closed."
+      }
     | Filler -> Task.FromResult()
+
 let private block (agent: Agent<SlowMessage<'T>>) = task {
     let entered, release = gate<unit>(), gate<unit>()
     do! post agent (Hold(entered, release))
@@ -91,7 +132,15 @@ let tests = testList "ChatRoomAgent" [
         use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
         use player = TestAgent.Start(AgentOptions.create "player", collect events)
         use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect replies)
-        let limited = { config with HistoryCapacity = 8; Rate = { Burst = 2; RefillMs = 60000; DuplicateWindowMs = 0 } }
+        let limited = {
+            config with
+                HistoryCapacity = 8
+                Rate = {
+                    Burst = 2
+                    RefillMs = 60000
+                    DuplicateWindowMs = 0
+                }
+        }
         use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let first = subscription 1UL player
         do! post room (ChatRoomCommand.Join first)
@@ -104,7 +153,10 @@ let tests = testList "ChatRoomAgent" [
         accepted 2UL two |> ignore
 
         // A new connection of the same account inherits the spent burst.
-        do! post room (ChatRoomCommand.Detach { ConnectionId = first.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
+        do! post room (ChatRoomCommand.Detach {
+            ConnectionId = first.ConnectionId
+            ReplyTo = cleanup.Ref.TryReliable().Value
+        })
         let! _ = receive replies
         let second = subscription 1UL player
         do! post room (ChatRoomCommand.Join second)
@@ -131,7 +183,15 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
         use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
         use player = TestAgent.Start(AgentOptions.create "player", collect events)
-        let limited = { config with HistoryCapacity = 8; Rate = { Burst = 1; RefillMs = 50; DuplicateWindowMs = 60000 } }
+        let limited = {
+            config with
+                HistoryCapacity = 8
+                Rate = {
+                    Burst = 1
+                    RefillMs = 50
+                    DuplicateWindowMs = 60000
+                }
+        }
         use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
@@ -211,7 +271,13 @@ let tests = testList "ChatRoomAgent" [
         let! published = receive aliceEvents
         let message = accepted 7UL published
         let! _ = receive bobEvents
-        let remove requestId = post room (ChatRoomCommand.Remove { ConnectionId = b.ConnectionId; RequestId = requestId; MessageId = message.MessageId; ReplyTo = b.Events })
+        let remove requestId =
+            post room (ChatRoomCommand.Remove {
+                ConnectionId = b.ConnectionId
+                RequestId = requestId
+                MessageId = message.MessageId
+                ReplyTo = b.Events
+            })
         do! remove 8UL
         let! removed = receive bobEvents
         equal (ChatRoomEvent.Removed(ValueSome 8UL, message)) removed
@@ -252,7 +318,11 @@ let tests = testList "ChatRoomAgent" [
         use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect replies)
         use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let old = subscription 1UL player
-        let detach id = post room (ChatRoomCommand.Detach { ConnectionId = id; ReplyTo = cleanup.Ref.TryReliable().Value })
+        let detach id =
+            post room (ChatRoomCommand.Detach {
+                ConnectionId = id
+                ReplyTo = cleanup.Ref.TryReliable().Value
+            })
         do! post room (ChatRoomCommand.Join old)
         let! _ = receive events
         do! detach old.ConnectionId
@@ -285,7 +355,11 @@ let tests = testList "ChatRoomAgent" [
         use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
         use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let a = subscription 1UL alice
-        let s = { ConnectionId = Guid.NewGuid(); Profile = profile 2UL; Events = receiver.Ref.TryReliable().Value.Map Value }
+        let s = {
+            ConnectionId = Guid.NewGuid()
+            Profile = profile 2UL
+            Events = receiver.Ref.TryReliable().Value.Map Value
+        }
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join s)
         let! _ = receive aliceEvents
@@ -319,7 +393,9 @@ let tests = testList "ChatRoomAgent" [
         let! _ = receive events
         do! post room (ChatRoomCommand.Join duplicate)
         let! rejected = receive conflictingEvents
-        match rejected with ChatRoomEvent.JoinFailed _ -> () | other -> failwithf "Expected join refusal: %A" other
+        match rejected with
+        | ChatRoomEvent.JoinFailed _ -> ()
+        | other -> failwithf "Expected join refusal: %A" other
         do! publish room original 1UL "still here"
         let! message = receive events
         equal (ValueSome (PublicIdentity.Profile original.Profile)) (accepted 1UL message).Author
@@ -332,7 +408,10 @@ let tests = testList "ChatRoomAgent" [
         use cleanup = TestAgent.Start(options "full-cleanup" (AgentMailbox.boundedWait 1), slow ackEvents)
         let! release = block cleanup
         use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
-        do! post room (ChatRoomCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
+        do! post room (ChatRoomCommand.Detach {
+            ConnectionId = Guid.NewGuid()
+            ReplyTo = cleanup.Ref.TryReliable().Value.Map Value
+        })
         let! _ = terminal room.Completion
         check room.Completion.IsCanceled "A lost cleanup reply left the source silently running."
         release.SetResult()
@@ -347,7 +426,11 @@ let tests = testList "ChatRoomAgent" [
         let! releaseReceiver = block receiver
         use room = ChatRoomAgent.start { config with MaxControlDeliveries = 1 } ChatChannelKind.Global (host.Ref.TryReliable().Value.Map Value) |> ok |> fun owner -> owner.Owner
         for number in [1UL; 2UL] do
-            do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = receiver.Ref.TryReliable().Value.Map Value })
+            do! post room (ChatRoomCommand.Join {
+                ConnectionId = Guid.NewGuid()
+                Profile = profile number
+                Events = receiver.Ref.TryReliable().Value.Map Value
+            })
         let! _ = terminal room.Completion
         check room.Completion.IsCanceled "Source ignored overflowing its only control path."
         releaseHost.SetResult()
@@ -387,7 +470,11 @@ let tests = testList "ChatRoomAgent" [
         use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let expected = InvalidOperationException("broken internal event mapper")
         let broken = receiver.Ref.TryReliable().Value.Map(fun (_: ChatRoomEvent) -> raise expected)
-        do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = broken })
+        do! post room (ChatRoomCommand.Join {
+            ConnectionId = Guid.NewGuid()
+            Profile = profile 1UL
+            Events = broken
+        })
         let! _ = terminal room.Completion
         check room.Completion.IsFaulted "Source failure was converted to successful completion."
         expectStopFault expected room.StopReason
@@ -443,7 +530,10 @@ let tests = testList "ChatRoomAgent" [
         let! first = receive aliceEvents
         equal ChatChannelKind.System (joined first).Kind
         let! _ = receive bobEvents
-        do! post room (ChatRoomCommand.Announce { Text = ChatMessageText.create 256 "Рестарт" |> ok; Kind = AnnouncementKind.Admin })
+        do! post room (ChatRoomCommand.Announce {
+            Text = ChatMessageText.create 256 "Рестарт" |> ok
+            Kind = AnnouncementKind.Admin
+        })
         for events in [aliceEvents; bobEvents] do
             let! delivered = receive events
             match delivered with
