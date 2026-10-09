@@ -7,6 +7,7 @@ open System.Net.Sockets
 open System.Security.Cryptography
 open System.Threading
 open Dreamsleeve.Agent
+open Dreamsleeve.Server.Tests.AgentTests
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
@@ -97,21 +98,21 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
         let server = { ServerConfig.defaults with Port = freePort() }
         let runtimeOptions = { ServerRuntimeOptions.defaults with Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
         let settings = Settings.game server runtimeOptions IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults |> GameSettings.withPhantoms options |> ok
-        use auth = Agent.Start(AgentOptions.create "phantom-e2e-auth", fun _ (request: SessionAuthenticationRequest) -> task {
+        use auth = TestAgent.Start(AgentOptions.create "phantom-e2e-auth", fun _ (request: SessionAuthenticationRequest) -> task {
             let result =
                 if request.Ticket = ticket "alice" then Ok { Profile = profile 1UL "alice"; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome IPAddress.Loopback }
                 elif request.Ticket = ticket "bob" then Ok { Profile = profile 2UL "bob"; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome IPAddress.Loopback }
                 else Error SessionAuthenticationError.InvalidTicket
             request.ReplyTo.TryPost { OperationId = request.OperationId; Result = result } |> ignore
         })
-        use names = Agent.Start(AgentOptions.create "phantom-e2e-names", fun _ (request: ProfileChangeRequest) -> task {
+        use names = TestAgent.Start(AgentOptions.create "phantom-e2e-names", fun _ (request: ProfileChangeRequest) -> task {
             request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ProfileChangeError.Unavailable } |> ignore
         })
-        use moderation = Agent.Start(AgentOptions.create "phantom-e2e-moderation", fun _ (request: ModerationRequest) -> task {
+        use moderation = TestAgent.Start(AgentOptions.create "phantom-e2e-moderation", fun _ (request: ModerationRequest) -> task {
             request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore
         })
-        use marks = Agent.Start(AgentOptions.create "phantom-e2e-marks", fun _ (_: GroundMarkWrite) -> task { () })
-        use guilds = Agent.Start(AgentOptions.create "phantom-e2e-guilds", fun _ (_: GuildWrite) -> task { () })
+        use marks = TestAgent.Start(AgentOptions.create "phantom-e2e-marks", fun _ (_: GroundMarkWrite) -> task { () })
+        use guilds = TestAgent.Start(AgentOptions.create "phantom-e2e-guilds", fun _ (_: GuildWrite) -> task { () })
         let authentication = { Requests = auth.Ref.TryReliable().Value; Profiles = names.Ref.TryReliable().Value; Moderation = moderation.Ref.TryReliable().Value; Completion = auth.Completion }
         let storage = PhantomStorage.create options
         let http = PhantomHttp.create options storage
@@ -119,7 +120,7 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
         use runtime = ServerRuntime.startWithPhantoms storage http settings Moderation.empty PseudonymDictionary.builtIn
                             { Loaded = []; NextId = 1UL; Writer = marks.Ref.TryReliable().Value }
                             { Loaded = []; Profiles = []; NextId = 1UL; Writer = guilds.Ref.TryReliable().Value; WriterStopped = guilds.Completion }
-                            authentication transport NullLogger.Instance
+                            authentication transport NullLogger.Instance |> expectStarted |> fun owner -> owner.Owner
         let alice, bob = client server.Port, client server.Port
         let pump () = service alice; service bob
         let wait reason predicate =

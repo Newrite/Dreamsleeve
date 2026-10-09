@@ -11,10 +11,10 @@ open AgentTests
 open BackgroundTests
 
 let private authentication () : Agent<AuthMessage> =
-    Agent.Start(AgentOptions.create "lifetime-auth", fun _ _ -> Task.FromResult())
+    TestAgent.Start(AgentOptions.create "lifetime-auth", fun _ _ -> Task.FromResult())
 
 let private administrator () : Agent<AdminMessage> =
-    Agent.Start(AgentOptions.create "lifetime-admin", fun _ _ -> Task.FromResult())
+    TestAgent.Start(AgentOptions.create "lifetime-admin", fun _ _ -> Task.FromResult())
 
 let private stop (agent: Agent<'Message>) = task {
     agent.Complete() |> ignore

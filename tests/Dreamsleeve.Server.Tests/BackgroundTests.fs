@@ -23,14 +23,14 @@ type OwnerMessage =
     | ChildStopped of Agent<AgentTests.Message> * Result<unit, exn>
 
 let handleOwner seen (replacement: TaskCompletionSource<Agent<AgentTests.Message> * exn>)
-                (context: AgentContext<OwnerMessage>) message = task {
+                (context: ReliableAgentContext<OwnerMessage>) message = task {
     match message with
     | WatchChild child ->
         context.Watch(child, fun result -> ChildStopped(child, result))
     | ChildStopped(child, Error error) ->
         check child.Completion.IsCompleted "Restart preceded the old child's cleanup."
         expectStopFault error child.StopReason
-        let next = Agent.Start(AgentOptions.create child.Name, ordinaryHandler seen)
+        let next = TestAgent.Start(AgentOptions.create child.Name, ordinaryHandler seen)
         replacement.SetResult(next, error)
     | ChildStopped(_, Ok ()) -> failwith "The test child should have faulted."
 }
@@ -40,12 +40,12 @@ let tests = testList "Background" [
         let seen = System.Collections.Concurrent.ConcurrentQueue<int>()
         let restarted = gate<Agent<AgentTests.Message> * exn>()
         let expected = InvalidOperationException("child failed")
-        use child = Agent.Start(AgentOptions.create "child", ordinaryHandler seen)
+        use child = TestAgent.Start(AgentOptions.create "child", ordinaryHandler seen)
         equal AgentPostResult.Posted (child.TryPost(AgentTests.Message.FailMessage expected))
         do! eventually (fun () -> child.Completion.IsCompleted)
 
         // Subscribe after failure: observing Completion cannot miss an earlier stop.
-        use owner = Agent.Start(AgentOptions.create "owner", handleOwner seen restarted)
+        use owner = TestAgent.StartReliable(AgentOptions.create "owner", handleOwner seen restarted)
         equal AgentPostResult.Posted (owner.TryPost(WatchChild child))
         let! next, error = awaitResult restarted.Task
         use next = next
@@ -62,7 +62,7 @@ let tests = testList "Background" [
 
     case "reliable mapped addresses wait for capacity and report cancellation or closure" (fun () -> task {
         let seen = System.Collections.Concurrent.ConcurrentQueue<int>()
-        use agent = Agent.Start(options "reliable" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+        use agent = TestAgent.Start(options "reliable" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
         let! release = holdAgent agent
         equal AgentPostResult.Posted (agent.TryPost(AgentTests.Message.Record 1))
         let address = agent.Ref.TryReliable().Value.Map AgentTests.Message.Record
@@ -94,7 +94,7 @@ let tests = testList "Background" [
             return! release.Task.WaitAsync token
         }
 
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
             | Finished (Ok value) -> finished.SetResult value
@@ -105,7 +105,7 @@ let tests = testList "Background" [
                 do! unblock.Task
         }
 
-        use agent = Agent.Start(options "fsm" (AgentMailbox.boundedWait 1), handle)
+        use agent = TestAgent.StartReliable(options "fsm" (AgentMailbox.boundedWait 1), handle)
         equal AgentPostResult.Posted (agent.TryPost Launch)
         do! awaitResult started.Task
 
@@ -136,14 +136,14 @@ let tests = testList "Background" [
         let observed = gate<exn>()
         let expected = InvalidOperationException("store unavailable")
         let operation (_: CancellationToken) : Task<int> = raise expected
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
             | Finished (Error error) -> observed.SetResult error
             | _ -> ()
         }
 
-        use agent = Agent.Start(AgentOptions.create "failure", handle)
+        use agent = TestAgent.StartReliable(AgentOptions.create "failure", handle)
         agent.TryPost Launch |> ignore
         let! error = awaitResult observed.Task
         check (Object.ReferenceEquals(expected, error)) "Original operation error lost."
@@ -163,13 +163,13 @@ let tests = testList "Background" [
                 do! cleanup.Task
             return 0
         }
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
             | _ -> ()
         }
 
-        use agent = Agent.Start(AgentOptions.create "abort", handle)
+        use agent = TestAgent.StartReliable(AgentOptions.create "abort", handle)
         agent.TryPost Launch |> ignore
         do! awaitResult started.Task
         agent.Abort()
@@ -185,17 +185,15 @@ let tests = testList "Background" [
         let operation (_: CancellationToken) =
             launched <- true
             Task.FromResult 1
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
             | _ -> ()
         }
 
-        use agent = Agent.Start(options "drop" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropOldest), handle)
-        equal false agent.Ref.IsNonDropping
-        agent.TryPost Launch |> ignore
-        let! _ = terminal agent.Completion
-        check agent.Completion.IsFaulted "Dropping a completion must not be silently allowed."
+        match Agent.TryStartReliable(options "drop" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropOldest), handle) with
+        | Error AgentStartError.DroppingMailbox -> ()
+        | result -> failtestf "Expected reliable construction rejection, got %A" result
         check (not launched) "Invalid mailbox must be rejected before starting work."
     })
     case "mapper failure faults the agent and cancels sibling work" (fun () -> task {
@@ -214,7 +212,7 @@ let tests = testList "Background" [
             return 1
         }
         let broken (_: Result<int, exn>) : Message = raise expected
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch ->
                 context.PipeToSelf(sibling, Finished)
@@ -222,7 +220,7 @@ let tests = testList "Background" [
             | _ -> ()
         }
 
-        use agent = Agent.Start(AgentOptions.create "mapping-failure", handle)
+        use agent = TestAgent.StartReliable(AgentOptions.create "mapping-failure", handle)
         agent.TryPost Launch |> ignore
         do! awaitResult canceled.Task
         let! _ = terminal agent.Completion
@@ -235,13 +233,13 @@ let tests = testList "Background" [
             started.SetResult()
             return! release.Task.WaitAsync token
         }
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
             | _ -> ()
         }
 
-        use agent = Agent.Start(AgentOptions.create "join", handle)
+        use agent = TestAgent.StartReliable(AgentOptions.create "join", handle)
         agent.TryPost Launch |> ignore
         do! awaitResult started.Task
         agent.Complete() |> ignore
@@ -265,7 +263,7 @@ let tests = testList "Background" [
             return 0
         }
         let broken (_: Result<int, exn>) : Message = raise expected
-        let handle (context: AgentContext<Message>) message = task {
+        let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch ->
                 context.PipeToSelf(sibling, Finished)
@@ -273,7 +271,7 @@ let tests = testList "Background" [
             | _ -> ()
         }
 
-        use agent = Agent.Start(AgentOptions.create "late-fault", handle)
+        use agent = TestAgent.StartReliable(AgentOptions.create "late-fault", handle)
         agent.TryPost Launch |> ignore
         do! awaitResult started.Task
         do! awaitResult siblingStarted.Task

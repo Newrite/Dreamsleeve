@@ -33,7 +33,7 @@ let private immediate = { InitialDelay = TimeSpan.Zero; MaxDelay = TimeSpan.Zero
 
 let private supervise policy (start: CancellationToken -> Task<SupervisedChild<int>>) =
     let events = ConcurrentQueue<SupervisorEvent<int>>()
-    AgentSupervisor.start "supervisor-test" policy start events.Enqueue, events
+    TestSupervisor.start "supervisor-test" policy start events.Enqueue, events
 
 let private fromChildren (children: Children) = fun (_: CancellationToken) -> Task.FromResult(children.Next())
 
@@ -113,7 +113,7 @@ let tests = testList "Supervisor" [
         let children = Children()
         let events = ConcurrentQueue<SupervisorEvent<int>>()
         let policy = { immediate with MaxRestarts = 1; Window = TimeSpan.FromSeconds 10.0 }
-        let supervisor = AgentSupervisor.startWithTimeProvider clock "supervisor-window" policy (fromChildren children) events.Enqueue
+        let supervisor = TestSupervisor.startWithTimeProvider clock "supervisor-window" policy (fromChildren children) events.Enqueue
         do! serving supervisor 1
         children.Fail(1, InvalidOperationException "first")
         do! serving supervisor 2
@@ -158,5 +158,5 @@ let tests = testList "Supervisor" [
         Expect.equal (RestartPolicy.delay policy 1000) policy.MaxDelay "no overflow far past the cap"
         for invalid in [ { policy with InitialDelay = TimeSpan.FromSeconds -1.0 }; { policy with MaxDelay = TimeSpan.Zero }
                          { policy with MaxRestarts = -1 }; { policy with Window = TimeSpan.Zero } ] do
-            Expect.throwsT<ArgumentException> (fun () -> RestartPolicy.validate invalid) $"refused: %A{invalid}"
+            Expect.isError (RestartPolicy.tryValidate invalid) $"refused: %A{invalid}"
 ]

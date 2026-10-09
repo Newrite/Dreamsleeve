@@ -15,6 +15,7 @@ let main argv =
         AdminDomainTests.tests
         PlayerDetailsTests.tests
         AgentTests.tests
+        ConstructionTests.tests
         CodecTests.tests
         BackgroundTests.tests
         OutboxTests.tests

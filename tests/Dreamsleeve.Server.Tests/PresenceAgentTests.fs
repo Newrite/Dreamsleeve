@@ -94,12 +94,12 @@ let private withPresenceUsing settings initialize run = task {
     let hostEvents, aliceEvents, bobEvents, lateEvents, acknowledgments =
         Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(),
         Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<Guid>()
-    use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-    use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-    use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-    use late = Agent.Start(AgentOptions.create "late", collect lateEvents)
-    use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-    use presence = PresenceAgent.start settings (host.Ref.TryReliable().Value)
+    use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+    use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+    use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+    use late = TestAgent.Start(AgentOptions.create "late", collect lateEvents)
+    use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+    use presence = PresenceAgent.start settings (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
     let a, b = initialize (subscription 1UL alice, subscription 2UL bob)
     do! post presence (PresenceCommand.Join a)
     let! _ = receive aliceEvents
@@ -218,16 +218,16 @@ let private observationModeCase mode = case $"dense128 phantom observation mode 
             | PhantomObservation.View _ -> views <- views + 1; 1
             | PhantomObservation.Hidden _ -> hidden <- hidden + 1; 1
         visit observation
-    use host = Agent.Start(AgentOptions.create "phantom-observation-host", fun _ command ->
+    use host = TestAgent.Start(AgentOptions.create "phantom-observation-host", fun _ command ->
         match command with
         | SessionHostCommand.ObservePhantoms observation -> largestTurn <- max largestTurn (count observation)
         | SessionHostCommand.Close _ -> closes <- closes + 1
         | _ -> ()
         Task.FromResult())
-    use events = Agent.Start(AgentOptions.create "dense-presence-events", fun _ (_: PresenceEvent) -> Task.FromResult())
-    use cleanup = Agent.Start(AgentOptions.create "dense-presence-cleanup", fun _ (_: Guid) -> Task.FromResult())
+    use events = TestAgent.Start(AgentOptions.create "dense-presence-events", fun _ (_: PresenceEvent) -> Task.FromResult())
+    use cleanup = TestAgent.Start(AgentOptions.create "dense-presence-cleanup", fun _ (_: Guid) -> Task.FromResult())
     let settings = { config with MailboxCapacity = 512; ControlReserve = 128; MaxControlDeliveries = 1024 }
-    use presence = PresenceAgent.startObserved mode settings (host.Ref.TryReliable().Value)
+    use presence = PresenceAgent.startObserved mode settings (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
     let subscriptions = Array.init 128 (fun index ->
         let value = subscription (uint64 index + 1UL) events
         { value with Snapshot = character value |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome(location (float32 index)))) |> Player.snapshot })
@@ -266,11 +266,11 @@ let tests = testList "PresenceAgent" [
         let hostEvents, aliceEvents, bobEvents, acknowledgments =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(),
             Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+        use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a, b = subscription 1UL alice, subscription 2UL bob
         let detach = { ConnectionId = a.ConnectionId; ReplyTo = cleanup.Ref.TryReliable().Value }
         do! post presence (PresenceCommand.Join a)
@@ -294,10 +294,10 @@ let tests = testList "PresenceAgent" [
 
     case "an old connection cannot detach the replacement with the same player ID" (fun () -> task {
         let hostEvents, events, acknowledgments = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let old = subscription 1UL player
         let replacement = { old with ConnectionId = Guid.NewGuid() }
         let detach connectionId = post presence (PresenceCommand.Detach { ConnectionId = connectionId; ReplyTo = cleanup.Ref.TryReliable().Value })
@@ -323,11 +323,11 @@ let tests = testList "PresenceAgent" [
         let hostEvents, fastEvents, slowEvents, nextEvents =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(),
             Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<PresenceEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use fast = Agent.Start(AgentOptions.create "fast", collect fastEvents)
-        use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
-        use newcomer = Agent.Start(AgentOptions.create "newcomer", collect nextEvents)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use fast = TestAgent.Start(AgentOptions.create "fast", collect fastEvents)
+        use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
+        use newcomer = TestAgent.Start(AgentOptions.create "newcomer", collect nextEvents)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a, n = subscription 1UL fast, subscription 3UL newcomer
         let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join a)
@@ -357,11 +357,11 @@ let tests = testList "PresenceAgent" [
         let hostEvents, events, ignored, acknowledgments =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(),
             Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use healthy = Agent.Start(AgentOptions.create "healthy", collect events)
-        use receiver = Agent.Start(options "blocked" (AgentMailbox.boundedWait 1), slow ignored)
-        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use healthy = TestAgent.Start(AgentOptions.create "healthy", collect events)
+        use receiver = TestAgent.Start(options "blocked" (AgentMailbox.boundedWait 1), slow ignored)
+        use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         do! post presence (PresenceCommand.Join(subscription 1UL healthy))
         let! _ = receive events
         let! release = block receiver
@@ -379,10 +379,10 @@ let tests = testList "PresenceAgent" [
 
     case "cleanup acknowledgment overflow terminates the source visibly" (fun () -> task {
         let hostEvents, ignored = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use cleanup = Agent.Start(options "blocked-cleanup" (AgentMailbox.boundedWait 1), slow ignored)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use cleanup = TestAgent.Start(options "blocked-cleanup" (AgentMailbox.boundedWait 1), slow ignored)
         let! release = block cleanup
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         do! post presence (PresenceCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
         let! _ = terminal presence.Completion
         check presence.Completion.IsCanceled "Cleanup failure was swallowed."
@@ -469,10 +469,10 @@ let tests = testList "PresenceAgent" [
     case "join flush removes a slow existing subscriber without resurrecting its stale snapshot" (fun () -> task {
         let hostEvents, fastEvents, slowEvents =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<PresenceEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use fast = Agent.Start(AgentOptions.create "fast", collect fastEvents)
-        use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use fast = TestAgent.Start(AgentOptions.create "fast", collect fastEvents)
+        use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let a = subscription 1UL fast
         let s = { ConnectionId = Guid.NewGuid(); Snapshot = Player.snapshot (Player.create (profile 2UL)); Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join a)
@@ -617,10 +617,10 @@ let tests = testList "PresenceAgent" [
         }))
     case "a full realtime subscriber drops samples without losing membership" (fun () -> task {
         let hostEvents, events, acknowledgments = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<PresenceEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use receiver = Agent.Start(options "slow-realtime" (AgentMailbox.boundedWait 1), slow events)
-        use cleanup = Agent.Start(AgentOptions.create "barrier", collect acknowledgments)
-        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use receiver = TestAgent.Start(options "slow-realtime" (AgentMailbox.boundedWait 1), slow events)
+        use cleanup = TestAgent.Start(AgentOptions.create "barrier", collect acknowledgments)
+        use presence = PresenceAgent.start config (host.Ref.TryReliable().Value) |> expectStarted |> fun owner -> owner.Owner
         let positioned = Player.create (profile 1UL) |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome (location 0.0f))) |> Player.snapshot
         let subscriber = { ConnectionId = Guid.NewGuid(); Snapshot = positioned; Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post presence (PresenceCommand.Join subscriber)

@@ -75,13 +75,13 @@ let private withMarksUsing settings (loaded: StoredGroundMark list) nextId run =
     let writes, hostEvents, aliceEvents, bobEvents, acknowledgments =
         Channel.CreateUnbounded<GroundMarkWrite>(), Channel.CreateUnbounded<SessionHostCommand>(),
         Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<Guid>()
-    use writer = Agent.Start(AgentOptions.create "writer", collect writes)
-    use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-    use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-    use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-    use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+    use writer = TestAgent.Start(AgentOptions.create "writer", collect writes)
+    use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+    use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+    use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+    use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
     let rules = GroundMarkOptions.rules settings |> ok
-    use marks = GroundMarksAgent.start settings rules loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    use marks = GroundMarksAgent.start settings rules loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let observer number (agent: Agent<GroundMarkEvent>) events =
         { Subscription = { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = agent.Ref.TryReliable().Value }; Events = events }
     let a, b = observer 1UL alice aliceEvents, observer 2UL bob bobEvents
@@ -158,15 +158,15 @@ let private stored id author kind x (createdAt: DateTimeOffset) : StoredGroundMa
 
 let private rejectsSaturatedWrite operation = task {
     let entered, release = gate<unit>(), gate<unit>()
-    use writer = Agent.Start({ AgentOptions.create "blocked-marks-writer" with Mailbox = AgentMailbox.boundedWait 1 },
+    use writer = TestAgent.Start({ AgentOptions.create "blocked-marks-writer" with Mailbox = AgentMailbox.boundedWait 1 },
         fun _ _ -> task { entered.TrySetResult() |> ignore; do! release.Task })
-    use host = Agent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
+    use host = TestAgent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
     let events = Channel.CreateUnbounded<GroundMarkEvent>()
-    use receiver = Agent.Start(AgentOptions.create "mark-events", collect events)
+    use receiver = TestAgent.Start(AgentOptions.create "mark-events", collect events)
     let settings = { options with MaxPendingWrites = 1 }
     let initial = stored 1UL 1UL GroundMarkKind.Note 0.0f DateTimeOffset.UtcNow
     use marks = GroundMarksAgent.start settings (GroundMarkOptions.rules settings |> ok) [initial] 2UL
-                    (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+                    (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let subscription = { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = receiver.Ref.TryReliable().Value }
     let submit requestId = GroundMarkCommand.Place {
         ConnectionId = subscription.ConnectionId; RequestId = requestId; Body = note $"new {requestId}"
@@ -806,7 +806,7 @@ let private storeTests = testList "SQLite ground marks" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = register database "writer"
-        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8
+        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8 |> expectStarted
         let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UnixEpoch
         for id in 1UL .. 3UL do
             let! posted = writer.PostAsync(GroundMarkWrite.Insert (mark id))

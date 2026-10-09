@@ -24,7 +24,7 @@ type private WallClock() =
     override _.GetUtcNow() = now
     member _.Advance(span: TimeSpan) = now <- now + span
 
-let private access (service: Agent<AdminMessage>) command =
+let private access (service: ReliableAgent<AdminMessage>) command =
     service.TryAskAsync(fun reply -> AdminMessage.Access(command, reply)) |> awaitReply
 
 let private secret = function
@@ -35,7 +35,7 @@ let private signedIn = function
     | Ok (AdminReply.SignedIn(admin, token, _)) -> admin, token
     | other -> failtestf "Expected a sign-in: %A" other
 
-let private stop (service: Agent<AdminMessage>) = task {
+let private stop (service: ReliableAgent<AdminMessage>) = task {
     let! admitted = service.PostAsync AdminMessage.Stop
     equal AgentPostResult.Posted admitted
     do! awaitUnit service.Completion
@@ -46,7 +46,7 @@ let private withService options run = task {
     use database = new Database()
     SqliteAccountStore.initialize database.Config |> ok
     let clock = WallClock()
-    let service = AdminService.start options database.Config NullLogger.Instance clock
+    let service = AdminService.start options database.Config NullLogger.Instance clock |> expectStarted
     do! run service clock
     do! stop service
 }

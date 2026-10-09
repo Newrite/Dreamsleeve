@@ -60,15 +60,15 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
     let hostCommands = Channel.CreateUnbounded<SessionHostCommand>()
     let nameRequests = Channel.CreateUnbounded<ProfileChangeRequest>()
     let moderationRequests = Channel.CreateUnbounded<ModerationRequest>()
-    use authentication = Agent.Start(AgentOptions.create "authentication", collect queries)
-    use names = Agent.Start(AgentOptions.create "names", collect nameRequests)
-    use moderation' = Agent.Start(AgentOptions.create "account-moderation", collect moderationRequests)
-    use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
-    use system = Agent.Start(AgentOptions.create "system", collect systemCommands)
+    use authentication = TestAgent.Start(AgentOptions.create "authentication", collect queries)
+    use names = TestAgent.Start(AgentOptions.create "names", collect nameRequests)
+    use moderation' = TestAgent.Start(AgentOptions.create "account-moderation", collect moderationRequests)
+    use chat = TestAgent.Start(AgentOptions.create "chat", collect chatCommands)
+    use system = TestAgent.Start(AgentOptions.create "system", collect systemCommands)
     use presence = createPresence presenceCommands
-    use marks = Agent.Start(AgentOptions.create "marks", collect markCommands)
-    use guilds = Agent.Start(AgentOptions.create "guilds", collect guildCommands)
-    use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
+    use marks = TestAgent.Start(AgentOptions.create "marks", collect markCommands)
+    use guilds = TestAgent.Start(AgentOptions.create "guilds", collect guildCommands)
+    use host = TestAgent.Start(AgentOptions.create "host", collect hostCommands)
     let request = {
         ConnectionId = Guid.NewGuid()
         RequestId = 1UL
@@ -80,7 +80,7 @@ let private withIdentityPlayer moderation announcements identity hideIdentity se
                      (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation'.Ref.TryReliable().Value)
                      (chat.Ref.TryReliable().Value) (system.Ref.TryReliable().Value)
                      (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (guilds.Ref.TryReliable().Value)
-                     (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
+                     (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> expectStarted |> fun owner -> owner.Owner
     let fixture = { Request = request; Player = player; Authentication = queries;
                     Chat = chatCommands; System = systemCommands; Presence = presenceCommands; Marks = markCommands; Guilds = guildCommands
                     GuildEvents = ref None; Host = hostCommands
@@ -114,10 +114,10 @@ let private withPlayerUsingPresence settings createPresence run =
     withModeratedPlayer Moderation.empty settings createPresence run
 
 let private withRules settings run =
-    withModeratedPlayer rules settings (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+    withModeratedPlayer rules settings (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private withPlayer settings run =
-    withPlayerUsingPresence settings (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+    withPlayerUsingPresence settings (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private resolve fixture = task {
     let! query = receive fixture.Authentication
@@ -237,7 +237,7 @@ let private submitted fixture requestId text = task {
 }
 
 let private withAnnouncements announcements run =
-    withConfiguredPlayer rules announcements options (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+    withConfiguredPlayer rules announcements options (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private announcementRequest text signature : AnnouncementRequest = {
     ChannelId = systemId
@@ -262,7 +262,7 @@ let private announcementRefused fixture requestId code field = task {
 // Chat stays pending in these tests; the budget holds all of it.
 let private withIdentity identity hide run =
     withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity hide { options with MaxPendingChat = 8 }
-        (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) run
+        (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) run
 
 let private strazh = Pseudonym.create "Страж" |> ok
 
@@ -930,25 +930,25 @@ let tests = testList "PlayerSession" ([
         let queries, chatCommands, presenceCommands, hostCommands =
             Channel.CreateUnbounded<SessionAuthenticationRequest>(), Channel.CreateUnbounded<ChatRoomCommand>(),
             Channel.CreateUnbounded<PresenceCommand>(), Channel.CreateUnbounded<SessionHostCommand>()
-        use authentication = Agent.Start(AgentOptions.create "closed-authentication", collect queries)
+        use authentication = TestAgent.Start(AgentOptions.create "closed-authentication", collect queries)
         authentication.Complete() |> ignore
         do! awaitUnit authentication.Completion
-        use chat = Agent.Start(AgentOptions.create "chat", collect chatCommands)
-        use presence = Agent.Start(AgentOptions.create "presence", collect presenceCommands)
-        use host = Agent.Start(AgentOptions.create "host", collect hostCommands)
+        use chat = TestAgent.Start(AgentOptions.create "chat", collect chatCommands)
+        use presence = TestAgent.Start(AgentOptions.create "presence", collect presenceCommands)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostCommands)
         let request = {
             ConnectionId = Guid.NewGuid(); RequestId = 1UL
             SessionTicket = String('b', 43); Hiding = HiddenIdentity.Shown
         }
-        use marks = Agent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
-        use names = Agent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<ProfileChangeRequest>()))
-        use moderation = Agent.Start(AgentOptions.create "account-moderation", collect (Channel.CreateUnbounded<ModerationRequest>()))
-        use guilds = Agent.Start(AgentOptions.create "guilds", collect (Channel.CreateUnbounded<GuildCommand>()))
+        use marks = TestAgent.Start(AgentOptions.create "marks", collect (Channel.CreateUnbounded<GroundMarkCommand>()))
+        use names = TestAgent.Start(AgentOptions.create "names", collect (Channel.CreateUnbounded<ProfileChangeRequest>()))
+        use moderation = TestAgent.Start(AgentOptions.create "account-moderation", collect (Channel.CreateUnbounded<ModerationRequest>()))
+        use guilds = TestAgent.Start(AgentOptions.create "guilds", collect (Channel.CreateUnbounded<GuildCommand>()))
         let game = Settings.game ServerConfig.defaults { ServerRuntimeOptions.defaults with Player = options } IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
         use player = PlayerSession.start game Moderation.empty (authentication.Ref.TryReliable().Value) (names.Ref.TryReliable().Value) (moderation.Ref.TryReliable().Value)
                          (chat.Ref.TryReliable().Value) (chat.Ref.TryReliable().Value)
                          (presence.Ref.TryReliable().Value) (marks.Ref.TryReliable().Value) (guilds.Ref.TryReliable().Value)
-                         (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request
+                         (host.Ref.TryReliable().Value) Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance request |> expectStarted |> fun owner -> owner.Owner
         let! failure = terminal player.Completion
         check failure.IsSome "Closed dependency should terminate this session observably."
         equal 0 chatCommands.Reader.Count
@@ -1027,7 +1027,7 @@ let tests = testList "PlayerSession" ([
                     do! release.Task.WaitAsync context.CancellationToken
                 | PresenceCommand.Join _ | PresenceCommand.Detach _ | PresenceCommand.Flush _ -> ()
             }
-            Agent.Start({ AgentOptions.create "blocked-presence" with Mailbox = AgentMailbox.boundedWait 1 }, handle)
+            TestAgent.Start({ AgentOptions.create "blocked-presence" with Mailbox = AgentMailbox.boundedWait 1 }, handle)
         do! withPlayerUsingPresence { options with MaxPendingUpdates = 1 } createPresence (fun fixture -> task {
             let! _, _, _ = ready fixture
             let initial = CharacterName.create 128 "Original" |> ok
@@ -1057,7 +1057,7 @@ let tests = testList "PlayerSession" ([
     case "a display name change passes the word list, goes to the account service and spreads through presence" (fun () ->
         let identity = { IdentityOptions.defaults with DisplayNameChangeIntervalMinutes = 60 }
         withIdentityPlayer rules AnnouncementOptions.defaults identity HiddenIdentity.Shown options
-            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
             let! profile, _, _ = ready fixture
             let name value = DisplayName.create 64 value |> ok
             let refusal requestId expected = task {
@@ -1114,7 +1114,7 @@ let tests = testList "PlayerSession" ([
     case "a name color must be readable, goes to the account service, spreads through presence and waits the interval" (fun () ->
         let identity = { IdentityOptions.defaults with NameColorIntervalMs = 60000 }
         withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity HiddenIdentity.Shown options
-            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
             let! profile, _, _ = ready fixture
             let color raw = NameColor.create raw |> ok
             let refusal requestId expected = task {
@@ -1170,7 +1170,7 @@ let tests = testList "PlayerSession" ([
     case "a server that refuses display name changes answers before the account service" (fun () ->
         let identity = { IdentityOptions.defaults with AllowDisplayNameChange = false }
         withIdentityPlayer Moderation.empty AnnouncementOptions.defaults identity HiddenIdentity.Shown options
-            (fun commands -> Agent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
+            (fun commands -> TestAgent.Start(AgentOptions.create "presence", collect commands)) (fun fixture -> task {
             let! _ = ready fixture
             do! post fixture.Player (PlayerSessionMessage.ChangeDisplayName(2UL, DisplayName.create 64 "Other" |> ok))
             let! answer = receive fixture.Host

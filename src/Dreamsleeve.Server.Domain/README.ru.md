@@ -394,3 +394,8 @@ ContextRevision и возрастающий Sequence. Устаревшие sampl
 Новый SetLocation сбрасывает sequence; BeginCharacter/LeaveGame очищают активный
 контекст, сохраняя его high-water mark на всё соединение. Downstream ViewRevision
 принадлежит проекции Presence, а не самому Player.
+
+
+### Проверенная ёмкость истории гильдии
+
+`ChatHistoryCapacity.create historyCapacity` возвращает `Result<ChatHistoryCapacity, DomainError>` и проверяет положительную ёмкость до запуска владельца. `Chat.createGuild capacity guildId` создаёт канал без повторной валидации: проверенный `GuildId` определяет и kind `Guild`, и `ChatChannels.ofGuild guildId`. Обычная `Chat.create` использует ту же проверку ёмкости и дополнительно сохраняет проверку соответствия channel/kind.

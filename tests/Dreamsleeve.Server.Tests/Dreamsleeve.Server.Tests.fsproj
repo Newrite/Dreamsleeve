@@ -14,6 +14,7 @@
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
+    <Compile Include="ConstructionTests.fs" />
     <Compile Include="AdminDomainTests.fs" />
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />

@@ -42,7 +42,7 @@ let private withHostUsingPorts (alter: AuthPorts -> AuthPorts) (logs: Concurrent
         | AuthMessage.WorkersStopped _ | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ | AuthMessage.Stop
         | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
     }
-    use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
+    use auth = TestAgent.Start(AgentOptions.create "http-test-auth", handle)
     let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let initial = {

@@ -31,7 +31,7 @@ type private ManualClock() =
 let private start database options clock =
     AuthService.start options database NullLogger.Instance clock |> ok
 
-let private access (service: Agent<AuthMessage>) command =
+let private access (service: ReliableAgent<AuthMessage>) command =
     service.TryAskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitReply
 
 let private register service = task {
@@ -54,7 +54,7 @@ let private collect (completion: TaskCompletionSource<SessionAuthenticationReply
 
 let private consume service ticket = task {
     let completion = gate<SessionAuthenticationReply>()
-    use receiver = Agent.Start(AgentOptions.create "auth-test-reply", collect completion)
+    use receiver = TestAgent.Start(AgentOptions.create "auth-test-reply", collect completion)
     let operationId = Guid.NewGuid()
     let request = { OperationId = operationId; Ticket = ticket; ReplyTo = receiver.Ref.TryReliable().Value }
     let! admitted = (AuthService.authenticator service).Requests.PostAsync request
@@ -66,7 +66,7 @@ let private consume service ticket = task {
     return response.Result
 }
 
-let private stop (service: Agent<AuthMessage>) = task {
+let private stop (service: ReliableAgent<AuthMessage>) = task {
     let! admitted = service.PostAsync AuthMessage.Stop
     equal AgentPostResult.Posted admitted
     do! awaitUnit service.Completion
@@ -81,10 +81,17 @@ let private remember service = task {
 }
 
 let tests = testList "Authentication service" [
+    testCase "invalid derived worker budget is rejected before touching uninitialized storage" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        let invalid = { settings with MaxConcurrentOperations = Int32.MaxValue }
+        match AuthService.start invalid database.Config NullLogger.Instance TimeProvider.System with
+        | Error(AuthService.StartError.Agent(AgentStartError.CapacityOverflow(Int32.MaxValue, 2))) -> ()
+        | other -> failtestf "Expected preflight failure before storage: %A" other)
+
     testCase "startup preserves ban storage failure before creating a service" (fun () ->
         use database = new SqliteAccountStoreTests.Database()
         match AuthService.start settings database.Config NullLogger.Instance TimeProvider.System with
-        | Error(AccountStoreError.Failed (:? Microsoft.Data.Sqlite.SqliteException)) -> ()
+        | Error(AuthService.StartError.Storage(AccountStoreError.Failed (:? Microsoft.Data.Sqlite.SqliteException))) -> ()
         | other -> failtestf "Missing database did not return the owning storage error: %A" other)
 
     case "startup rejects a corrupt ban and succeeds after storage repair" (fun () -> task {
@@ -93,7 +100,7 @@ let tests = testList "Authentication service" [
         // SQLite shape checks accept this nonempty text; domain validation rejects the control character.
         database.Execute "INSERT INTO address_bans(network,prefix,reason,issued_at) VALUES(zeroblob(16),0,char(1),0)"
         match AuthService.start settings database.Config NullLogger.Instance TimeProvider.System with
-        | Error(AccountStoreError.Failed (:? System.IO.InvalidDataException)) -> ()
+        | Error(AuthService.StartError.Storage(AccountStoreError.Failed (:? System.IO.InvalidDataException))) -> ()
         | other -> failtestf "Invalid persisted ban was accepted: %A" other
         database.Execute "DELETE FROM address_bans"
         use service = start database.Config settings TimeProvider.System
@@ -326,7 +333,7 @@ let tests = testList "Authentication service" [
         use service = start database.Config { settings with MaxTickets = 10 } TimeProvider.System
         let! profile = register service
         let replies = System.Threading.Channels.Channel.CreateUnbounded<ProfileChangeReply>()
-        use receiver = Agent.Start(AgentOptions.create "name-replies", fun _ (reply: ProfileChangeReply) -> task {
+        use receiver = TestAgent.Start(AgentOptions.create "name-replies", fun _ (reply: ProfileChangeReply) -> task {
             replies.Writer.TryWrite reply |> ignore
         })
         let change value = task {
@@ -455,9 +462,9 @@ let tests = testList "Authentication service" [
         let root = SqliteAdminStore.createFirstAdmin database.Config (username "root") "hash" (fun id -> PanelSession.create "s" id DateTimeOffset.UtcNow (TimeSpan.FromHours 1.)) DateTimeOffset.UtcNow CancellationToken.None |> ok |> Option.get
         let reason = SanctionReason.create "Рейд" |> ok
         let order range = AccountAccessCommand.BanAddresses(AddressRange.parse range |> ok, reason, SanctionTerm.UntilLifted, root.Id)
-        let attach (service: Agent<AuthMessage>) = task {
+        let attach (service: ReliableAgent<AuthMessage>) = task {
             let changes = System.Collections.Concurrent.ConcurrentQueue<AccountChange>()
-            let runtime = Agent.Start(AgentOptions.create "ban-test-runtime", fun _ change -> task { changes.Enqueue change })
+            let runtime = TestAgent.Start(AgentOptions.create "ban-test-runtime", fun _ change -> task { changes.Enqueue change })
             let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
             equal AgentPostResult.Posted targeted
             let next () = task {

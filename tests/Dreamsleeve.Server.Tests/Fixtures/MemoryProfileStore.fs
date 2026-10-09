@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Infrastructure
 
 open System.Collections.Generic
 open Dreamsleeve.Agent
+open Dreamsleeve.Server.Tests.AgentTests
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
 
@@ -66,5 +67,5 @@ module MemoryProfileStore =
                     Mailbox = AgentMailbox.boundedWait config.MailboxCapacity
             }
 
-            let handle = AgentReplyDispatcher.createHandler config.MaxPendingReplies (fun request -> request.ReplyTo) (reply state)
-            Ok (Agent.Start(options, handle))
+            let handle = TestReplyDispatcher.createHandler config.MaxPendingReplies (fun request -> request.ReplyTo) (reply state)
+            Ok (TestAgent.StartReliable(options, handle))

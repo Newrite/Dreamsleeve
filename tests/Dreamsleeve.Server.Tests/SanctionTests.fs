@@ -236,7 +236,7 @@ let private access (service: Agent<AuthMessage>) command =
 
 let private consume service ticket = task {
     let completion = gate<SessionAuthenticationReply>()
-    use receiver = Agent.Start(AgentOptions.create "sanction-test-reply", fun _ reply -> task { completion.TrySetResult reply |> ignore })
+    use receiver = TestAgent.Start(AgentOptions.create "sanction-test-reply", fun _ reply -> task { completion.TrySetResult reply |> ignore })
     let! admitted = (AuthService.authenticator service).Requests.PostAsync { OperationId = Guid.NewGuid(); Ticket = ticket; ReplyTo = receiver.Ref.TryReliable().Value }
     equal AgentDeliveryResult.Posted admitted
     let! response = awaitResult completion.Task
@@ -253,7 +253,7 @@ let private withService run = task {
     use database = new SqliteAccountStoreTests.Database()
     SqliteAccountStore.initialize database.Config |> ok
     let changes = ConcurrentQueue<AccountChange>()
-    use runtime = Agent.Start(AgentOptions.create "sanction-test-runtime", fun _ change -> task { changes.Enqueue change })
+    use runtime = TestAgent.Start(AgentOptions.create "sanction-test-runtime", fun _ change -> task { changes.Enqueue change })
     use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System |> ok
     let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
     equal AgentPostResult.Posted targeted
@@ -308,8 +308,8 @@ let private serviceTests = testList "Account service sanctions" [
         use database = new SqliteAccountStoreTests.Database()
         SqliteAccountStore.initialize database.Config |> ok
         let restartedChanges = ConcurrentQueue<AccountChange>()
-        let stopped = Agent.Start(AgentOptions.create "stopped-runtime", fun _ (_: AccountChange) -> task { () })
-        use restarted = Agent.Start(AgentOptions.create "restarted-runtime", fun _ change -> task { restartedChanges.Enqueue change })
+        let stopped = TestAgent.Start(AgentOptions.create "stopped-runtime", fun _ (_: AccountChange) -> task { () })
+        use restarted = TestAgent.Start(AgentOptions.create "restarted-runtime", fun _ change -> task { restartedChanges.Enqueue change })
         use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System |> ok
         let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(stopped.Ref.TryReliable().Value))
         equal AgentPostResult.Posted targeted
@@ -365,7 +365,7 @@ let private moderationTests = testList "Account service moderation" [
             let mod' = match registered with Ok (AccountAccessResult.Registered mod') -> mod' | other -> failtestf "%A" other
             database.Execute $"INSERT INTO player_roles(player_id, role, granted_at) VALUES ({PlayerId.value mod'.PlayerId}, 1, 0)"
             let replies = Channel.CreateUnbounded<ModerationReply>()
-            use receiver = Agent.Start(AgentOptions.create "moderation-reply", fun _ (reply: ModerationReply) -> task { replies.Writer.TryWrite reply |> ignore })
+            use receiver = TestAgent.Start(AgentOptions.create "moderation-reply", fun _ (reply: ModerationReply) -> task { replies.Writer.TryWrite reply |> ignore })
             let moderation = (AuthService.authenticator service).Moderation
             let ask command = task {
                 let request: ModerationRequest = { OperationId = Guid.NewGuid(); Command = command; ReplyTo = receiver.Ref.TryReliable().Value }

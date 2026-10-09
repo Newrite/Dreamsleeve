@@ -11,6 +11,48 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open Dreamsleeve.Agent
 
+// Fixture construction asserts successful typed startup only in the test assembly.
+let expectStarted = function
+    | Ok value -> value
+    | Error error -> failtestf "Fixture construction failed: %A" error
+
+type TestAgent =
+    static member Start(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>, ?isControl: 'Message -> bool) =
+        Agent.TryStart(options, handler, ?isControl = isControl) |> expectStarted
+
+    static member StartReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>, ?isControl: 'Message -> bool) =
+        (Agent.TryStartReliable(options, handler, ?isControl = isControl) |> expectStarted).Owner
+
+type TestStatefulAgent =
+    static member Start(options, initialState, handler) =
+        StatefulAgent.TryStart(options, initialState, handler) |> expectStarted
+
+type TestMutableAgent =
+    static member Start(options, initialState, handler) =
+        MutableStatefulAgent.TryStart(options, initialState, handler) |> expectStarted
+
+type TestOutbox<'Message> =
+    static member Create(capacity, destination: ReliableAgentRef<'Message>) =
+        AgentOutbox<'Message>.TryCreate(capacity, destination) |> expectStarted
+
+module TestReplyDispatcher =
+    let createHandler capacity replyTo execute = AgentReplyDispatcher.tryCreateHandler capacity replyTo execute |> expectStarted
+    let createAsyncHandler capacity replyTo execute = AgentReplyDispatcher.tryCreateAsyncHandler capacity replyTo execute |> expectStarted
+
+module TestOrderedHandler =
+    let createHandler capacity output execute = AgentOutbox.tryCreateHandler capacity output execute |> expectStarted
+
+module TestTicker =
+    let start interval context toMessage = AgentTicker.tryStart interval context toMessage |> expectStarted
+    let startWithTimeProvider time interval context toMessage = AgentTicker.tryStartWithTimeProvider time interval context toMessage |> expectStarted
+
+module TestSupervisor =
+    let start name policy start observe = AgentSupervisor.tryStart name policy start observe |> expectStarted
+    let startWithTimeProvider time name policy start observe = AgentSupervisor.tryStartWithTimeProvider time name policy start observe |> expectStarted
+
+module TestReplyScope =
+    let create context target capacity closedReply busyReply = AgentReplyScope.tryCreate context target capacity closedReply busyReply |> expectStarted
+
 // Gates, rather than sleeps, establish ordering. The guard detects deadlocks;
 // short timeouts appear only in tests whose subject is timeout behavior.
 let guard = TimeSpan.FromSeconds 5.0
@@ -90,7 +132,7 @@ let holdAgent (agent: Agent<Message>) = task {
 
 let serialAndReply () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(AgentOptions.create "fifo", ordinaryHandler seen)
+    use agent = TestAgent.Start(AgentOptions.create "fifo", ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     equal AgentPostResult.Posted (agent.TryPost(Record 2))
@@ -107,7 +149,7 @@ let serialAndReply () = task {
 
 let boundedBackpressure () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options "backpressure" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+    use agent = TestAgent.Start(options "backpressure" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     equal AgentPostResult.Full (agent.TryPost(Record 2))
@@ -125,7 +167,7 @@ let boundedBackpressure () = task {
 
 let askTimeoutIncludesAdmission () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options "admission-timeout" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+    use agent = TestAgent.Start(options "admission-timeout" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     let! result =
@@ -141,7 +183,7 @@ let askTimeoutIncludesAdmission () = task {
 
 let replyTimeoutSettlesChannel () = task {
     let captured = gate<ReplyChannel<int>> ()
-    use agent = Agent.Start(AgentOptions.create "reply-timeout", ordinaryHandler (ConcurrentQueue<int>()))
+    use agent = TestAgent.Start(AgentOptions.create "reply-timeout", ordinaryHandler (ConcurrentQueue<int>()))
     let request = agent.TryAskAsync((fun reply -> CaptureReply(captured, reply)), timeout = TimeSpan.FromMilliseconds 100.0)
     let! reply = awaitResult captured.Task
     let! result = awaitResult request
@@ -156,7 +198,7 @@ let admittedCommandCommitsAfterTimeout () = task {
     let entered, release, lateReply = gate<unit> (), gate<unit> (), gate<bool> ()
     let effects = ConcurrentQueue<int>()
     let mutable built = 0
-    use agent = Agent.Start(AgentOptions.create "committed-after-timeout", fun _ (reply: ReplyChannel<int>) -> task {
+    use agent = TestAgent.Start(AgentOptions.create "committed-after-timeout", fun _ (reply: ReplyChannel<int>) -> task {
         entered.TrySetResult() |> ignore
         do! release.Task
         effects.Enqueue 1
@@ -180,7 +222,7 @@ let admittedCommandCommitsAfterTimeout () = task {
 
 let preCanceledAskHasNoSideEffects () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(AgentOptions.create "pre-cancel", ordinaryHandler seen)
+    use agent = TestAgent.Start(AgentOptions.create "pre-cancel", ordinaryHandler seen)
     use cancellation = new CancellationTokenSource()
     cancellation.Cancel()
     let mutable built = false
@@ -194,12 +236,12 @@ let preCanceledAskHasNoSideEffects () = task {
 
 let invalidAskTimeoutHasNoSideEffects () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(AgentOptions.create "invalid-timeout", ordinaryHandler seen)
+    use agent = TestAgent.Start(AgentOptions.create "invalid-timeout", ordinaryHandler seen)
     for timeout in [ TimeSpan.FromMilliseconds -2.0; TimeSpan.MaxValue ] do
         let mutable built = false
         let! result = agent.TryAskAsync((fun reply -> built <- true; Request(1, reply)), timeout = timeout) |> awaitResult
         match result with
-        | AgentAskResult.Faulted (:? ArgumentOutOfRangeException) -> ()
+        | AgentAskResult.InvalidRequest(AgentRequestError.InvalidTimeout actual) -> equal timeout actual
         | other -> failwithf "Expected timeout validation failure, received %A" other
         check (not built) "An invalid timeout invoked the message builder."
     agent.Complete() |> ignore
@@ -209,7 +251,7 @@ let invalidAskTimeoutHasNoSideEffects () = task {
 
 let builderFailureIsIsolated () = task {
     let expected = InvalidOperationException "builder" :> exn
-    use agent = Agent.Start(AgentOptions.create "builder", ordinaryHandler (ConcurrentQueue<int>()))
+    use agent = TestAgent.Start(AgentOptions.create "builder", ordinaryHandler (ConcurrentQueue<int>()))
     let! result = agent.TryAskAsync<int>(fun _ -> raise expected) |> awaitResult
     expectFault expected result
     let! next = agent.TryAskAsync(fun reply -> Request(5, reply)) |> awaitResult
@@ -220,7 +262,7 @@ let builderFailureIsIsolated () = task {
 
 let dropWriteSettlesRequest () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options "drop-write" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropWrite), ordinaryHandler seen)
+    use agent = TestAgent.Start(options "drop-write" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropWrite), ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     equal AgentPostResult.Dropped (agent.TryPost(Record 2))
@@ -237,7 +279,7 @@ let dropWriteSettlesRequest () = task {
 
 let evictionSettlesRequest fullMode () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options (string fullMode) (AgentMailbox.bounded 2 fullMode), ordinaryHandler seen)
+    use agent = TestAgent.Start(options (string fullMode) (AgentMailbox.bounded 2 fullMode), ordinaryHandler seen)
     let! release = holdAgent agent
     let evictedRequest =
         if fullMode = BoundedChannelFullMode.DropOldest then
@@ -262,7 +304,7 @@ let evictionSettlesRequest fullMode () = task {
 
 let dropAccounting () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options "drop-accounting" (AgentMailbox.bounded 3 BoundedChannelFullMode.DropOldest), ordinaryHandler seen)
+    use agent = TestAgent.Start(options "drop-accounting" (AgentMailbox.bounded 3 BoundedChannelFullMode.DropOldest), ordinaryHandler seen)
     let! release = holdAgent agent
     for number in 1 .. 1000 do equal AgentPostResult.Posted (agent.TryPost(Record number))
     equal 3 agent.QueueLength
@@ -278,7 +320,7 @@ let requestFailureCanContinue () = task {
     let expected = InvalidOperationException "request handler" :> exn
     let mutable errors = 0
     let config = { AgentOptions.create "continue" with OnError = Some(fun _ -> errors <- errors + 1; AgentErrorAction.Continue) }
-    use agent = Agent.Start(config, ordinaryHandler (ConcurrentQueue<int>()))
+    use agent = TestAgent.Start(config, ordinaryHandler (ConcurrentQueue<int>()))
     let! result = agent.TryAskAsync(fun reply -> FailRequest(expected, reply)) |> awaitResult
     expectFault expected result
     let! next = agent.TryAskAsync(fun reply -> Request(7, reply)) |> awaitResult
@@ -290,7 +332,7 @@ let requestFailureCanContinue () = task {
 
 let abortDiscardsQueuedWork () = task {
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(AgentOptions.create "abort-queue", ordinaryHandler seen)
+    use agent = TestAgent.Start(AgentOptions.create "abort-queue", ordinaryHandler seen)
     let! _ = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     let request = agent.TryAskAsync(fun reply -> Request(2, reply))
@@ -313,7 +355,7 @@ let cooperativeAbortHasConsistentNotifications () = task {
         { AgentOptions.create "cooperative-abort" with
             OnError = Some(fun _ -> errors <- errors + 1; AgentErrorAction.Stop)
             OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
-    use agent = Agent.Start(config, fun context () -> task {
+    use agent = TestAgent.Start(config, fun context () -> task {
         started.TrySetResult() |> ignore
         do! Task.Delay(Timeout.Infinite, context.CancellationToken)
     })
@@ -333,7 +375,7 @@ let gracefulCompleteDrainsAndIsStable () = task {
     let seen = ConcurrentQueue<int>()
     let stopped = ConcurrentQueue<AgentStopReason>()
     let config = { AgentOptions.create "complete" with OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
-    use agent = Agent.Start(config, ordinaryHandler seen)
+    use agent = TestAgent.Start(config, ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
     let request = agent.TryAskAsync(fun reply -> Request(2, reply))
@@ -357,7 +399,7 @@ let gracefulCompleteDrainsAndIsStable () = task {
 let throwingCancellationCallbackCannotStrandWriter () = task {
     let entered, release = gate<unit> (), gate<unit> ()
     let seen = ConcurrentQueue<int>()
-    use agent = Agent.Start(options "throwing-cancel" (AgentMailbox.boundedWait 1), fun context number -> task {
+    use agent = TestAgent.Start(options "throwing-cancel" (AgentMailbox.boundedWait 1), fun context number -> task {
         if number = 0 then
             use registration = context.CancellationToken.Register(fun () -> raise (InvalidOperationException "cancel callback"))
             entered.TrySetResult() |> ignore
@@ -386,7 +428,7 @@ let throwingCancellationCallbackCannotStrandWriter () = task {
 let faultDiscardsAndSettlesQueuedRequests () = task {
     let seen = ConcurrentQueue<int>()
     let expected = InvalidOperationException "stop on error" :> exn
-    use agent = Agent.Start(AgentOptions.create "fault-discard", ordinaryHandler seen)
+    use agent = TestAgent.Start(AgentOptions.create "fault-discard", ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(FailMessage expected))
     let request = agent.TryAskAsync(fun reply -> Request(2, reply))
@@ -404,7 +446,7 @@ let faultDiscardsAndSettlesQueuedRequests () = task {
 
 let unansweredRequestSettlesOnComplete () = task {
     let captured = gate<ReplyChannel<int>> ()
-    use agent = Agent.Start(AgentOptions.create "unanswered", ordinaryHandler (ConcurrentQueue<int>()))
+    use agent = TestAgent.Start(AgentOptions.create "unanswered", ordinaryHandler (ConcurrentQueue<int>()))
     let request = agent.TryAskAsync(fun reply -> CaptureReply(captured, reply))
     let! reply = awaitResult captured.Task
     agent.Complete() |> ignore
@@ -461,7 +503,7 @@ let statefulErrorStopDiscards () = task {
     let seen = ConcurrentQueue<int>()
     let expected = InvalidOperationException "state error" :> exn
     let config = { StatefulAgentOptions.create "state-stop" with OnUnhandled = Some(fun _ -> StatefulErrorAction.Stop) }
-    use agent = StatefulAgent.Start(config, 0, stateHandler seen)
+    use agent = TestStatefulAgent.Start(config, 0, stateHandler seen)
     let entered, release = gate<unit> (), gate<unit> ()
     equal AgentPostResult.Posted (agent.TryPost(GateState(entered, release)))
     do! awaitResult entered.Task
@@ -479,7 +521,7 @@ let mutableErrorStopDiscards () = task {
     let seen = ConcurrentQueue<int>()
     let expected = InvalidOperationException "mutable error" :> exn
     let config = { MutableStatefulAgentOptions.create "mutable-stop" with OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Stop) }
-    use agent = MutableStatefulAgent.Start(config, ResizeArray<int>(), mutableHandler seen)
+    use agent = TestMutableAgent.Start(config, ResizeArray<int>(), mutableHandler seen)
     let entered, release = gate<unit> (), gate<unit> ()
     equal AgentPostResult.Posted (agent.TryPost(GateState(entered, release)))
     do! awaitResult entered.Task
@@ -495,8 +537,8 @@ let mutableErrorStopDiscards () = task {
 
 let successfulStopTransitionsDrain () = task {
     let stateSeen, mutableSeen = ConcurrentQueue<int>(), ConcurrentQueue<int>()
-    use stateAgent = StatefulAgent.Start(StatefulAgentOptions.create "state-transition", 0, stateHandler stateSeen)
-    use mutableAgent = MutableStatefulAgent.Start(MutableStatefulAgentOptions.create "mutable-transition", ResizeArray<int>(), mutableHandler mutableSeen)
+    use stateAgent = TestStatefulAgent.Start(StatefulAgentOptions.create "state-transition", 0, stateHandler stateSeen)
+    use mutableAgent = TestMutableAgent.Start(MutableStatefulAgentOptions.create "mutable-transition", ResizeArray<int>(), mutableHandler mutableSeen)
     let entered1, release1 = gate<unit> (), gate<unit> ()
     let entered2, release2 = gate<unit> (), gate<unit> ()
     equal AgentPostResult.Posted (stateAgent.TryPost(GateState(entered1, release1)))
@@ -519,8 +561,8 @@ let successfulStopTransitionsDrain () = task {
 
 let queryFailuresAreIsolated () = task {
     let expected = InvalidOperationException "projection" :> exn
-    use stateAgent = StatefulAgent.Start(StatefulAgentOptions.create "state-query", 10, stateHandler (ConcurrentQueue<int>()))
-    use mutableAgent = MutableStatefulAgent.Start(MutableStatefulAgentOptions.create "mutable-query", ResizeArray<int>([ 3; 4 ]), mutableHandler (ConcurrentQueue<int>()))
+    use stateAgent = TestStatefulAgent.Start(StatefulAgentOptions.create "state-query", 10, stateHandler (ConcurrentQueue<int>()))
+    use mutableAgent = TestMutableAgent.Start(MutableStatefulAgentOptions.create "mutable-query", ResizeArray<int>([ 3; 4 ]), mutableHandler (ConcurrentQueue<int>()))
     let! stateFailure = stateAgent.TryReadAsync<int>(fun _ -> raise expected) |> awaitResult
     let! mutableFailure = mutableAgent.TryReadAsync<int>(fun _ -> raise expected) |> awaitResult
     expectFault expected stateFailure
@@ -543,7 +585,7 @@ let statefulPolicyPrecedenceAndRecovery () = task {
             AgentOptions = { AgentOptions.create "policy-state" with OnError = Some(fun _ -> baseCalls <- baseCalls + 1; AgentErrorAction.Stop) }
             OnUnhandled = Some(fun _ -> StatefulErrorAction.ReplaceStateAndContinue 100)
             OnTransition = Some transitions.Enqueue }
-    use agent = StatefulAgent.Start(config, 1, stateHandler (ConcurrentQueue<int>()))
+    use agent = TestStatefulAgent.Start(config, 1, stateHandler (ConcurrentQueue<int>()))
     equal AgentPostResult.Posted (agent.TryPost(Explode(InvalidOperationException "recover")))
     equal AgentPostResult.Posted (agent.TryPost(Add 3))
     let! value = agent.TryReadAsync id |> awaitReply
@@ -559,8 +601,8 @@ let basePolicyFallbackForBothWrappers () = task {
     let baseOptions = { AgentOptions.create "fallback" with OnError = Some(fun _ -> Interlocked.Increment(&calls) |> ignore; AgentErrorAction.Continue) }
     let stateOptions = { StatefulAgentOptions.create "state-fallback" with AgentOptions = baseOptions }
     let mutableOptions = { MutableStatefulAgentOptions.create "mutable-fallback" with AgentOptions = baseOptions }
-    use stateAgent = StatefulAgent.Start(stateOptions, 1, stateHandler (ConcurrentQueue<int>()))
-    use mutableAgent = MutableStatefulAgent.Start(mutableOptions, ResizeArray<int>([ 1 ]), mutableHandler (ConcurrentQueue<int>()))
+    use stateAgent = TestStatefulAgent.Start(stateOptions, 1, stateHandler (ConcurrentQueue<int>()))
+    use mutableAgent = TestMutableAgent.Start(mutableOptions, ResizeArray<int>([ 1 ]), mutableHandler (ConcurrentQueue<int>()))
     let error = InvalidOperationException "fallback failure" :> exn
     equal AgentPostResult.Posted (stateAgent.TryPost(Explode error))
     equal AgentPostResult.Posted (mutableAgent.TryPost(Explode error))
@@ -578,7 +620,7 @@ let basePolicyFallbackForBothWrappers () = task {
 let statefulAtomicCommandReplies () = task {
     let error = InvalidOperationException "state request" :> exn
     let config = { StatefulAgentOptions.create "state-ask" with OnUnhandled = Some(fun _ -> StatefulErrorAction.KeepStateAndContinue) }
-    use agent = StatefulAgent.Start(config, 10, stateHandler (ConcurrentQueue<int>()))
+    use agent = TestStatefulAgent.Start(config, 10, stateHandler (ConcurrentQueue<int>()))
     let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
     let! failed = agent.TryAskAsync(fun reply -> ExplodeReply(error, reply)) |> awaitResult
@@ -592,7 +634,7 @@ let statefulAtomicCommandReplies () = task {
 let mutableAtomicCommandReplies () = task {
     let error = InvalidOperationException "mutable request" :> exn
     let config = { MutableStatefulAgentOptions.create "mutable-ask" with OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Continue) }
-    use agent = MutableStatefulAgent.Start(config, ResizeArray<int>([ 10 ]), mutableHandler (ConcurrentQueue<int>()))
+    use agent = TestMutableAgent.Start(config, ResizeArray<int>([ 10 ]), mutableHandler (ConcurrentQueue<int>()))
     let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
     let! failed = agent.TryAskAsync(fun reply -> ExplodeReply(error, reply)) |> awaitResult
@@ -618,7 +660,7 @@ let synchronousIdleAbortCancelsLifetime () = task {
             let config =
                 { options $"sync-idle-{iteration}" mailbox with
                     OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
-            use agent = Agent.Start(config, fun context () -> task {
+            use agent = TestAgent.Start(config, fun context () -> task {
                 let token = context.CancellationToken
                 let registration = token.Register(fun () -> Interlocked.Increment(&callbacks) |> ignore)
                 captured.TrySetResult(token, registration) |> ignore
@@ -644,7 +686,7 @@ let concurrentTerminalRequestsRemainConsistent () = task {
     let config =
         { options "concurrent-stop" AgentMailbox.unboundedAllowSync with
             OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
-    use agent = Agent.Start(config, fun context () -> task {
+    use agent = TestAgent.Start(config, fun context () -> task {
         let registration = context.CancellationToken.Register(fun () -> Interlocked.Increment(&callbacks) |> ignore)
         registered.TrySetResult registration |> ignore
         entered.TrySetResult() |> ignore

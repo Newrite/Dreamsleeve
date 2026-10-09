@@ -51,12 +51,12 @@ let private createAuthentication () =
                 Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome address }
             | None -> Error SessionAuthenticationError.InvalidTicket
     }
-    Agent.Start(AgentOptions.create "fixture-authentication",
-        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+    TestAgent.StartReliable(AgentOptions.create "fixture-authentication",
+        TestReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
 
 // Profile changes are stored by the account service; here they succeed at once.
 let private names =
-    lazy (Agent.Start(AgentOptions.create "fixture-names", fun _ (request: ProfileChangeRequest) -> task {
+    lazy (TestAgent.Start(AgentOptions.create "fixture-names", fun _ (request: ProfileChangeRequest) -> task {
         let username = $"p{Dreamsleeve.Server.Domain.PlayerId.value request.PlayerId}"
         let create = Dreamsleeve.Server.Domain.PlayerData.create request.PlayerId (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
         let profile =
@@ -68,7 +68,7 @@ let private names =
 
 // Moderation is the account service's; runtime tests route it, not decide it.
 let private moderation =
-    lazy (Agent.Start(AgentOptions.create "fixture-moderation", fun _ (request: ModerationRequest) -> task {
+    lazy (TestAgent.Start(AgentOptions.create "fixture-moderation", fun _ (request: ModerationRequest) -> task {
         request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore
     }))
 
@@ -182,14 +182,14 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
         Dispose = ignore
     }
     use authenticator = createAuthentication ()
-    use writer = Agent.Start(AgentOptions.create "writer", discard)
-    use guildWriter = Agent.Start(AgentOptions.create "guild-writer", discardGuilds)
+    use writer = TestAgent.Start(AgentOptions.create "writer", discard)
+    use guildWriter = TestAgent.Start(AgentOptions.create "guild-writer", discardGuilds)
     let game =
         Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
         |> GameSettings.withTrustedProxies proxies
     let game = match phantomStorage with Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok | None -> game
     let start = match phantomStorage with Some (options, storage) -> ServerRuntime.startWithPhantoms storage (Dreamsleeve.Server.Infrastructure.PhantomHttp.create options storage) | None -> ServerRuntime.start
-    use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport logger
+    use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport logger |> expectStarted |> fun owner -> owner.Owner
     let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; PayloadBudgets = budgets; Errors = errors; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
     try
         do! run fixture
@@ -448,9 +448,16 @@ let tests = testList "ServerRuntime" [
             fixture.Notify() |> ignore
             let! refused = receive fixture.Closed
             equal guest refused
-            let! state = stats fixture
-            equal 1 state.Ready
-            equal 1 state.Connections
+            // Transport Close precedes asynchronous source detach and removal from the table.
+            let cleanup = task {
+                let mutable pending = true
+                while pending do
+                    let! state = stats fixture
+                    equal 1 state.Ready
+                    pending <- state.Connections <> 1
+                    if pending then do! Task.Yield()
+            }
+            do! cleanup.WaitAsync guard
         })
     }
 
@@ -752,7 +759,7 @@ let tests = testList "ServerRuntime" [
     testTask "late authentication reply after disconnect cannot revive or reserve the old route" {
         let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
         let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
-        let createAuthentication () = Agent.Start(AgentOptions.create "controlled-authenticator", collect)
+        let createAuthentication () = TestAgent.Start(AgentOptions.create "controlled-authenticator", collect)
         do! withRuntimeUsing ServerRuntimeOptions.defaults createAuthentication (fun fixture -> task {
             let abandoned = connect fixture "race"
             let! oldRequest = receive requests
@@ -782,7 +789,7 @@ let tests = testList "ServerRuntime" [
         let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
         let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
         let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 100 }
-        do! withRuntimeUsing options (fun () -> Agent.Start(AgentOptions.create "silent-authenticator", collect)) (fun fixture -> task {
+        do! withRuntimeUsing options (fun () -> TestAgent.Start(AgentOptions.create "silent-authenticator", collect)) (fun fixture -> task {
             let connection = connect fixture "silent"
             let! _ = receive requests
             let! closed = receive fixture.Closed
@@ -972,8 +979,8 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
         OperationId = request.OperationId
         Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
     }
-    Agent.Start(AgentOptions.create "named-authentication",
-        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+    TestAgent.StartReliable(AgentOptions.create "named-authentication",
+        TestReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
 
 let private connectHidden fixture name =
     let id = Guid.NewGuid()
@@ -1124,8 +1131,8 @@ let private roleAuthentication (accounts: (string * string * string * Dreamsleev
         OperationId = request.OperationId
         Result = (match Map.tryFind request.Ticket identities with Some player -> Ok player | None -> Error SessionAuthenticationError.InvalidTicket)
     }
-    Agent.Start(AgentOptions.create "role-authentication",
-        AgentReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
+    TestAgent.StartReliable(AgentOptions.create "role-authentication",
+        TestReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
 
 let private playerId value = Dreamsleeve.Server.Domain.PlayerId.create value |> ok
 
@@ -1236,7 +1243,7 @@ let adminTests = testList "ServerRuntime admin panel" [
         let accounts = [ "alice", "alice.real", "Алиса Настоящая", Dreamsleeve.Server.Domain.PlayerRole.Moderator
                          "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player ]
         do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
-            use describer = SessionDescriber.start 8
+            use describer = SessionDescriber.start 8 |> expectStarted
             let bob = connect fixture "bob"
             let! _ = welcome fixture bob
             let alice = connectHidden fixture "alice"
@@ -1261,7 +1268,7 @@ let adminTests = testList "ServerRuntime admin panel" [
         let accounts = [ "alice", "alice", "Alice", Dreamsleeve.Server.Domain.PlayerRole.Player
                          "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player ]
         do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
-            use describer = SessionDescriber.start 8
+            use describer = SessionDescriber.start 8 |> expectStarted
             let alice = connect fixture "alice"
             let! opened = welcome fixture alice
             let aliceId = playerId opened.SelfPlayerId
@@ -1283,7 +1290,7 @@ let adminTests = testList "ServerRuntime admin panel" [
                          "bob", "bob", "Bob", Dreamsleeve.Server.Domain.PlayerRole.Player
                          "carol", "carol", "Carol", Dreamsleeve.Server.Domain.PlayerRole.Player ]
         do! withRuntimeNamed ServerRuntimeOptions.defaults IdentityOptions.defaults (dictionaryOf ["Страж"]) (roleAuthentication accounts) (fun fixture -> task {
-            use describer = SessionDescriber.start 8
+            use describer = SessionDescriber.start 8 |> expectStarted
             let carol = connect fixture "carol"
             let! _ = welcome fixture carol
             let bob = connect fixture "bob"

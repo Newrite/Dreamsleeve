@@ -39,7 +39,7 @@ let private handle (seen: ConcurrentQueue<int>) (context: AgentContext<Message>)
 }
 
 let private start ordinary reserve seen =
-    Agent.Start(options "reserved-admission" (AgentMailbox.boundedWithControl ordinary reserve),
+    TestAgent.Start(options "reserved-admission" (AgentMailbox.boundedWithControl ordinary reserve),
                 handle seen, isControl = isControl)
 
 let private hold control (agent: Agent<Message>) = task {
@@ -249,7 +249,7 @@ let tests = testList "Admission" [
         let seen = ConcurrentQueue<int>()
         let settings = { options "continue-reserved" (AgentMailbox.boundedWithControl 1 1) with
                             OnError = Some(fun _ -> AgentErrorAction.Continue) }
-        use agent = Agent.Start(settings, handle seen, isControl = isControl)
+        use agent = TestAgent.Start(settings, handle seen, isControl = isControl)
         let! release = hold true agent
         equal AgentPostResult.Posted (agent.TryPost(Fail(InvalidOperationException("continue"))))
         let waiting = agent.PostAsync(Data 1)

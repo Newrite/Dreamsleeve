@@ -47,17 +47,17 @@ type private Command = Start | Tick of AgentTick | Barrier of TaskCompletionSour
 
 let private start (clock: Clock) (release: Task) (ticks: Channel<AgentTick>) =
     let mutable ticker: AgentTicker option = None
-    let handle (context: AgentContext<Command>) command = task {
+    let handle (context: ReliableAgentContext<Command>) command = task {
         match command with
         | Barrier ready -> ready.SetResult()
-        | Start -> ticker <- Some (AgentTicker.startWithTimeProvider clock (TimeSpan.FromMilliseconds 100L) context Tick)
+        | Start -> ticker <- Some (TestTicker.startWithTimeProvider clock (TimeSpan.FromMilliseconds 100L) context Tick)
         | Tick value ->
             check (ticks.Writer.TryWrite value) "Tick output closed."
             do! release
             ticker.Value.Acknowledge()
     }
     let options = { AgentOptions.create "ticker-test" with Mailbox = AgentMailbox.boundedWait 4 }
-    let agent = Agent.Start(options, handle)
+    let agent = TestAgent.StartReliable(options, handle)
     equal AgentPostResult.Posted (agent.TryPost Start)
     agent
 

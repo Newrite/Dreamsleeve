@@ -485,6 +485,15 @@ let private chatTests =
             Expect.equal (historyIds page) [ 10UL ] "History page is detached"
             Expect.equal before.Messages page.Messages "Both keep the original message"
 
+        testCase "checked guild history capacity constructs a correctly bound chat without revalidation" <| fun _ ->
+            Expect.isError (ChatHistoryCapacity.create 0) "Zero history is refused at preflight."
+            Expect.isError (ChatHistoryCapacity.create -1) "Negative history is refused at preflight."
+            let capacity = ChatHistoryCapacity.create 2 |> ok
+            let guildId = GuildId.create 7UL |> ok
+            let guildChat = Chat.createGuild capacity guildId
+            Expect.equal guildChat.Kind ChatChannelKind.Guild "Guild kind matches its checked ID."
+            Expect.equal guildChat.ChannelId (ChatChannels.ofGuild guildId) "Guild channel derives from that same ID."
+
         testCase "history and channel limits are validated" <| fun _ ->
             Expect.isError (Chat.create ChatChannels.globalId ChatChannelKind.Global 0) "No unbounded/zero history"
             Expect.isError (Chat.historyAfter ValueNone 0 (chat 2)) "Page size must be positive"

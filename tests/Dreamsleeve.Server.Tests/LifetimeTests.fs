@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.LifetimeTests
+module Dreamsleeve.Server.Tests.LifetimeTests
 
 open System
 open System.Collections.Concurrent
@@ -15,7 +15,7 @@ type private LifecycleMessage =
     | Ended of Result<unit, exn>
 
 let private lifecycle (child: Agent<'T>) (ended: TaskCompletionSource<Result<unit, exn>>)
-                      (context: AgentContext<LifecycleMessage>) message = task {
+                      (context: ReliableAgentContext<LifecycleMessage>) message = task {
     match message with
     | Attach(own, ready) ->
         if own then context.Own(child, Ended)
@@ -31,7 +31,7 @@ let private attach own (agent: Agent<LifecycleMessage>) = task {
 }
 
 let private taskLifecycle (completion: Task) (ended: TaskCompletionSource<Result<unit, exn>>)
-                          (context: AgentContext<LifecycleMessage>) message = task {
+                          (context: ReliableAgentContext<LifecycleMessage>) message = task {
     match message with
     | Attach(_, ready) ->
         context.Watch(completion, Ended)
@@ -64,10 +64,10 @@ type private RouteMessage =
 
 let private startRouter capacity target =
     let mutable scope: AgentReplyScope<int> option = None
-    let handle (context: AgentContext<RouteMessage>) message = task {
+    let handle (context: ReliableAgentContext<RouteMessage>) message = task {
         match message with
         | Initialize ready ->
-            scope <- Some (AgentReplyScope.create context target capacity -1 -2)
+            scope <- Some (TestReplyScope.create context target capacity -1 -2)
             ready.SetResult()
         | Forward reply -> scope.Value.Forward(reply, fun forwarded -> target.TryPost(Capture forwarded) = AgentPostResult.Posted)
         | Refuse reply -> scope.Value.Forward(reply, fun _ -> false)
@@ -77,7 +77,7 @@ let private startRouter capacity target =
             entered.SetResult()
             do! release.Task.WaitAsync context.CancellationToken
     }
-    Agent.Start(options "router" (AgentMailbox.boundedWait 2), handle)
+    TestAgent.StartReliable(options "router" (AgentMailbox.boundedWait 2), handle)
 
 let private initialize (router: Agent<RouteMessage>) = task {
     let ready = gate<unit>()
@@ -90,18 +90,18 @@ let private capture (replies: Channel<ReplyChannel<int>>) = replies.Reader.ReadA
 let tests = testList "Lifetimes" [
     case "owned child is aborted and joined through its asynchronous cleanup" (fun () -> task {
         let entered, cleaning, release = gate<unit>(), gate<unit>(), gate<unit>()
-        let childHandler (context: AgentContext<unit>) () = task {
+        let childHandler (context: ReliableAgentContext<unit>) () = task {
             entered.SetResult()
             try do! Task.Delay(Timeout.Infinite, context.CancellationToken)
             with :? OperationCanceledException -> ()
             cleaning.SetResult()
             do! release.Task
         }
-        use child = Agent.Start(AgentOptions.create "owned", childHandler)
+        use child = TestAgent.StartReliable(AgentOptions.create "owned", childHandler)
         child.TryPost() |> ignore
         do! awaitResult entered.Task
         let ended = gate<Result<unit, exn>>()
-        use owner = Agent.Start(AgentOptions.create "owner", lifecycle child ended)
+        use owner = TestAgent.StartReliable(AgentOptions.create "owner", lifecycle child ended)
         do! attach true owner
         owner.Abort()
         do! awaitResult cleaning.Task
@@ -115,11 +115,11 @@ let tests = testList "Lifetimes" [
 
     case "owned child fault is observed even when ownership begins after its stop" (fun () -> task {
         let failure = InvalidOperationException("child failed")
-        use child = Agent.Start(AgentOptions.create "child", ordinaryHandler (ConcurrentQueue<int>()))
+        use child = TestAgent.Start(AgentOptions.create "child", ordinaryHandler (ConcurrentQueue<int>()))
         child.TryPost(AgentTests.Message.FailMessage failure) |> ignore
         let! _ = terminal child.Completion
         let ended = gate<Result<unit, exn>>()
-        use owner = Agent.Start(AgentOptions.create "owner", lifecycle child ended)
+        use owner = TestAgent.StartReliable(AgentOptions.create "owner", lifecycle child ended)
         do! attach true owner
         let! result = awaitResult ended.Task
         match result with
@@ -130,9 +130,9 @@ let tests = testList "Lifetimes" [
 
     case "Watch detaches on Complete and Abort without stopping the shared target" (fun () -> task {
         for abort in [false; true] do
-            use child = Agent.Start(AgentOptions.create "shared", ordinaryHandler (ConcurrentQueue<int>()))
+            use child = TestAgent.Start(AgentOptions.create "shared", ordinaryHandler (ConcurrentQueue<int>()))
             let ended = gate<Result<unit, exn>>()
-            use owner = Agent.Start(AgentOptions.create "observer", lifecycle child ended)
+            use owner = TestAgent.StartReliable(AgentOptions.create "observer", lifecycle child ended)
             do! attach false owner
             if abort then owner.Abort() else owner.Complete() |> ignore
             let! _ = terminal owner.Completion
@@ -146,7 +146,7 @@ let tests = testList "Lifetimes" [
     case "Watch observes an already faulted Task without requiring its owning agent" (fun () -> task {
         let failure = InvalidOperationException("shared dependency failed")
         let ended = gate<Result<unit, exn>>()
-        use owner = Agent.Start(AgentOptions.create "observer", taskLifecycle (Task.FromException failure) ended)
+        use owner = TestAgent.StartReliable(AgentOptions.create "observer", taskLifecycle (Task.FromException failure) ended)
         do! attach false owner
         let! result = awaitResult ended.Task
         match result with
@@ -159,7 +159,7 @@ let tests = testList "Lifetimes" [
         for abort in [false; true] do
             let pending = gate<unit>()
             let ended = gate<Result<unit, exn>>()
-            use owner = Agent.Start(AgentOptions.create "observer", taskLifecycle pending.Task ended)
+            use owner = TestAgent.StartReliable(AgentOptions.create "observer", taskLifecycle pending.Task ended)
             do! attach false owner
             if abort then owner.Abort() else owner.Complete() |> ignore
             let! _ = terminal owner.Completion
@@ -170,7 +170,7 @@ let tests = testList "Lifetimes" [
 
     case "forwarded replies are bounded, reclaim settled slots and preserve the first result" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-        use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+        use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         use router = startRouter 1 target
         do! initialize router
         let first = router.TryAskAsync Forward
@@ -195,7 +195,7 @@ let tests = testList "Lifetimes" [
 
     case "target failure closes replies even while the router cannot handle messages" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-        use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+        use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         use router = startRouter 1 target
         do! initialize router
         let waiting = router.TryAskAsync Forward
@@ -216,14 +216,14 @@ let tests = testList "Lifetimes" [
     case "stopping the router settles replies owned by a still-live caller" (fun () -> task {
         for abort in [false; true] do
             let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-            use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+            use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
             use router = startRouter 1 target
             do! initialize router
-            let forward (_: AgentContext<ReplyChannel<int>>) reply = task {
+            let forward (_: ReliableAgentContext<ReplyChannel<int>>) reply = task {
                 let! result = router.PostAsync(Forward reply)
                 equal AgentPostResult.Posted result
             }
-            use caller = Agent.Start(AgentOptions.create "caller", forward)
+            use caller = TestAgent.StartReliable(AgentOptions.create "caller", forward)
             let waiting = caller.TryAskAsync id
             let! _ = capture captured
             if abort then router.Abort() else router.Complete() |> ignore
@@ -237,7 +237,7 @@ let tests = testList "Lifetimes" [
 
     case "caller cancellation frees capacity without waiting for the old target reply" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-        use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+        use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         use router = startRouter 1 target
         do! initialize router
         use cancel = new CancellationTokenSource()
@@ -258,7 +258,7 @@ let tests = testList "Lifetimes" [
 
     case "refused forwarding settles the request and does not consume capacity" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-        use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+        use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         use router = startRouter 1 target
         do! initialize router
         let! refused = router.TryAskAsync Refuse |> awaitResult
@@ -274,15 +274,15 @@ let tests = testList "Lifetimes" [
 
     case "a forwarding exception settles an external caller and preserves the cause" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
-        use target = Agent.Start(AgentOptions.create "target", targetHandler captured)
+        use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         use router = startRouter 1 target
         do! initialize router
         let failure = InvalidOperationException("cannot schedule")
-        let forward (_: AgentContext<ReplyChannel<int>>) reply = task {
+        let forward (_: ReliableAgentContext<ReplyChannel<int>>) reply = task {
             let! _ = router.PostAsync(Throw(failure, reply))
             ()
         }
-        use caller = Agent.Start(AgentOptions.create "caller", forward)
+        use caller = TestAgent.StartReliable(AgentOptions.create "caller", forward)
         let! result = caller.TryAskAsync id |> awaitResult
         expectFault failure result
         let! _ = terminal router.Completion

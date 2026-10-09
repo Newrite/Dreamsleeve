@@ -548,12 +548,13 @@ module ServerRuntime =
         match chat, system, marks, guilds, presence with
         | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
         | _, _, _, Error error, _ | _, _, _, _, Error error ->
+            state.Logger.LogError("Source startup failed: {Error}", error)
             // Every successful sibling is owned until its actual cleanup has finished.
             for abort, _ in started do abort ()
             try
                 do! System.Threading.Tasks.Task.WhenAll(started |> Seq.map snd)
             with :? OperationCanceledException -> ()
-            fail state context $"Source startup failed: {error}"
+            context.Abort()
         | Ok chat, Ok system, Ok marks, Ok guilds, Ok presence ->
             context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
             context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))

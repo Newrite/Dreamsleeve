@@ -60,16 +60,16 @@ type private Fixture = {
 
 let private withGuildsUsing (persistence: Agent<GuildWrite> -> GuildPersistence) run = task {
     let writes, hostEvents, acknowledgments = Channel.CreateUnbounded<GuildWrite>(), Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<Guid>()
-    use writer = Agent.Start(AgentOptions.create "guild-writer", collect writes)
-    use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-    use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+    use writer = TestAgent.Start(AgentOptions.create "guild-writer", collect writes)
+    use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+    use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
     let limits = GuildOptions.rules options |> ok
-    use guilds = GuildsAgent.start options limits rules chatRate (persistence writer) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    use guilds = GuildsAgent.start options limits rules chatRate (persistence writer) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let mutable agents = []
     let participant number =
         let events, chat = Channel.CreateUnbounded<GuildEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        let eventAgent = Agent.Start(AgentOptions.create $"member-{number}", collect events)
-        let chatAgent = Agent.Start(AgentOptions.create $"chat-{number}", collect chat)
+        let eventAgent = TestAgent.Start(AgentOptions.create $"member-{number}", collect events)
+        let chatAgent = TestAgent.Start(AgentOptions.create $"chat-{number}", collect chat)
         agents <- (eventAgent :> IDisposable) :: (chatAgent :> IDisposable) :: agents
         { Subscription = { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = eventAgent.Ref.TryReliable().Value }
           Events = events; Chat = chat; ChatReplies = chatAgent.Ref.TryReliable().Value }
@@ -171,11 +171,11 @@ let private submission (who: Member) requestId body : ChatSubmission =
 // first owner write must keep its outbox reservation until the next operation.
 let private rejectsSaturatedWrite administrative = task {
     let entered, release = gate<unit>(), gate<unit>()
-    use writer = Agent.Start({ AgentOptions.create "blocked-guild-writer" with Mailbox = AgentMailbox.boundedWait 1 },
+    use writer = TestAgent.Start({ AgentOptions.create "blocked-guild-writer" with Mailbox = AgentMailbox.boundedWait 1 },
         fun _ _ -> task { entered.TrySetResult() |> ignore; do! release.Task })
-    use host = Agent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
+    use host = TestAgent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
     let events = Channel.CreateUnbounded<GuildEvent>()
-    use receiver = Agent.Start(AgentOptions.create "guild-events", collect events)
+    use receiver = TestAgent.Start(AgentOptions.create "guild-events", collect events)
     let master = { Player = pid 1UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UtcNow; Mute = ValueNone }
     let memberOfGuild = { master with Player = pid 2UL; Role = GuildRole.Member }
     let loaded = { Id = gid 1UL; Name = GuildName.create 3 24 "Стражи" |> ok; CreatedAt = DateTimeOffset.UtcNow
@@ -184,7 +184,7 @@ let private rejectsSaturatedWrite administrative = task {
     use guilds = GuildsAgent.start settings (GuildOptions.rules settings |> ok) rules chatRate
                     { Loaded = [loaded]; Profiles = [profile 1UL; profile 2UL]; NextId = 2UL
                       Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
-                    (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+                    (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let subscription = { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = receiver.Ref.TryReliable().Value }
     try
         equal AgentPostResult.Posted (writer.TryPost(GuildWrite.Delete(gid 99UL)))

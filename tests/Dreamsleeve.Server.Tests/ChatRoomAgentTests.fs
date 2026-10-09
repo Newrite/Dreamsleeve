@@ -88,11 +88,11 @@ let private rateLimited requestId = function
 let tests = testList "ChatRoomAgent" [
     case "burst limit is per account and survives a reconnect; refusals are not stored" (fun () -> task {
         let hostEvents, events, replies = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect replies)
         let limited = { config with HistoryCapacity = 8; Rate = { Burst = 2; RefillMs = 60000; DuplicateWindowMs = 0 } }
-        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let first = subscription 1UL player
         do! post room (ChatRoomCommand.Join first)
         let! _ = receive events
@@ -117,7 +117,7 @@ let tests = testList "ChatRoomAgent" [
 
         // Another account has its own budget.
         let otherEvents = Channel.CreateUnbounded<ChatRoomEvent>()
-        use otherPlayer = Agent.Start(AgentOptions.create "other", collect otherEvents)
+        use otherPlayer = TestAgent.Start(AgentOptions.create "other", collect otherEvents)
         let other = subscription 2UL otherPlayer
         do! post room (ChatRoomCommand.Join other)
         let! _ = receive otherEvents
@@ -129,10 +129,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "normalized repeats are refused within the window and tokens refill over time" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
         let limited = { config with HistoryCapacity = 8; Rate = { Burst = 1; RefillMs = 50; DuplicateWindowMs = 60000 } }
-        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start limited ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
@@ -157,11 +157,11 @@ let tests = testList "ChatRoomAgent" [
         let hostEvents, aliceEvents, bobEvents, nextEvents =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(),
             Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-        use newcomer = Agent.Start(AgentOptions.create "next", collect nextEvents)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+        use newcomer = TestAgent.Start(AgentOptions.create "next", collect nextEvents)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let a, b, n = subscription 1UL alice, subscription 2UL bob, subscription 3UL newcomer
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
@@ -198,10 +198,10 @@ let tests = testList "ChatRoomAgent" [
     case "a removal reaches every member and the history; an unknown message is refused to the requester only" (fun () -> task {
         let hostEvents, aliceEvents, bobEvents =
             Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let a, b = subscription 1UL alice, subscription 2UL bob
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
@@ -230,9 +230,9 @@ let tests = testList "ChatRoomAgent" [
 
     case "flagged ranges travel with the stored message and its broadcast" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
@@ -247,10 +247,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "Detach acknowledges removal and late old commands cannot affect a replacement connection" (fun () -> task {
         let hostEvents, events, replies = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use cleanup = Agent.Start(AgentOptions.create "cleanup", collect replies)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect replies)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let old = subscription 1UL player
         let detach id = post room (ChatRoomCommand.Detach { ConnectionId = id; ReplyTo = cleanup.Ref.TryReliable().Value })
         do! post room (ChatRoomCommand.Join old)
@@ -280,10 +280,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "a full subscriber is removed without delaying the author or later fanout" (fun () -> task {
         let hostEvents, aliceEvents, slowEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-        use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slow slowEvents)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let a = subscription 1UL alice
         let s = { ConnectionId = Guid.NewGuid(); Profile = profile 2UL; Events = receiver.Ref.TryReliable().Value.Map Value }
         do! post room (ChatRoomCommand.Join a)
@@ -310,10 +310,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "identity conflicts do not replace the existing author binding" (fun () -> task {
         let hostEvents, events, conflictingEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use conflict = Agent.Start(AgentOptions.create "conflict", collect conflictingEvents)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use conflict = TestAgent.Start(AgentOptions.create "conflict", collect conflictingEvents)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let original, duplicate = subscription 1UL player, subscription 1UL conflict
         do! post room (ChatRoomCommand.Join original)
         let! _ = receive events
@@ -328,10 +328,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "full cleanup acknowledgment is an observable source termination" (fun () -> task {
         let hostEvents, ackEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<Guid>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use cleanup = Agent.Start(options "full-cleanup" (AgentMailbox.boundedWait 1), slow ackEvents)
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use cleanup = TestAgent.Start(options "full-cleanup" (AgentMailbox.boundedWait 1), slow ackEvents)
         let! release = block cleanup
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         do! post room (ChatRoomCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = cleanup.Ref.TryReliable().Value.Map Value })
         let! _ = terminal room.Completion
         check room.Completion.IsCanceled "A lost cleanup reply left the source silently running."
@@ -341,11 +341,11 @@ let tests = testList "ChatRoomAgent" [
 
     case "full bounded host control output cannot silently lose slow-consumer notifications" (fun () -> task {
         let hostEvents, ignored = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(options "blocked-host" (AgentMailbox.boundedWait 1), slow hostEvents)
-        use receiver = Agent.Start(options "blocked-recipient" (AgentMailbox.boundedWait 1), slow ignored)
+        use host = TestAgent.Start(options "blocked-host" (AgentMailbox.boundedWait 1), slow hostEvents)
+        use receiver = TestAgent.Start(options "blocked-recipient" (AgentMailbox.boundedWait 1), slow ignored)
         let! releaseHost = block host
         let! releaseReceiver = block receiver
-        use room = ChatRoomAgent.start { config with MaxControlDeliveries = 1 } ChatChannelKind.Global (host.Ref.TryReliable().Value.Map Value) |> ok
+        use room = ChatRoomAgent.start { config with MaxControlDeliveries = 1 } ChatChannelKind.Global (host.Ref.TryReliable().Value.Map Value) |> ok |> fun owner -> owner.Owner
         for number in [1UL; 2UL] do
             do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = receiver.Ref.TryReliable().Value.Map Value })
         let! _ = terminal room.Completion
@@ -358,10 +358,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "independent channels allocate their own ordered message IDs" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use first = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
-        use second = ChatRoomAgent.start config ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use first = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
+        use second = ChatRoomAgent.start config ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let subscriber = subscription 1UL player
         do! post first (ChatRoomCommand.Join subscriber)
         let! _ = receive events
@@ -382,9 +382,9 @@ let tests = testList "ChatRoomAgent" [
 
     case "an unexpected delivery mapper fault remains observable as the original source failure" (fun () -> task {
         let hostEvents, ignored = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use receiver = Agent.Start(AgentOptions.create "receiver", collect ignored)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use receiver = TestAgent.Start(AgentOptions.create "receiver", collect ignored)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let expected = InvalidOperationException("broken internal event mapper")
         let broken = receiver.Ref.TryReliable().Value.Map(fun (_: ChatRoomEvent) -> raise expected)
         do! post room (ChatRoomCommand.Join { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = broken })
@@ -395,9 +395,9 @@ let tests = testList "ChatRoomAgent" [
 
     case "history eviction preserves detached snapshots and reports a cursor gap" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let subscriber = subscription 1UL player
         do! post room (ChatRoomCommand.Join subscriber)
         let! _ = receive events
@@ -433,10 +433,10 @@ let tests = testList "ChatRoomAgent" [
 
     case "the system channel takes server announcements without an author and client announcements only" (fun () -> task {
         let hostEvents, aliceEvents, bobEvents = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-        use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-        use room = ChatRoomAgent.start { config with HistoryCapacity = 8 } ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+        use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+        use room = ChatRoomAgent.start { config with HistoryCapacity = 8 } ChatChannelKind.System (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let a, b = subscription 1UL alice, subscription 2UL bob
         do! post room (ChatRoomCommand.Join a)
         do! post room (ChatRoomCommand.Join b)
@@ -468,9 +468,9 @@ let tests = testList "ChatRoomAgent" [
     // channel is a broken invariant: the owner stops instead of answering.
     case "an announcement in a global channel stops its owner" (fun () -> task {
         let hostEvents, events = Channel.CreateUnbounded<SessionHostCommand>(), Channel.CreateUnbounded<ChatRoomEvent>()
-        use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-        use player = Agent.Start(AgentOptions.create "player", collect events)
-        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok
+        use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+        use player = TestAgent.Start(AgentOptions.create "player", collect events)
+        use room = ChatRoomAgent.start config ChatChannelKind.Global (host.Ref.TryReliable().Value) |> ok |> fun owner -> owner.Owner
         let alice = subscription 1UL player
         do! post room (ChatRoomCommand.Join alice)
         let! _ = receive events
