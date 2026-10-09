@@ -16,7 +16,10 @@ type ServiceFailureReason =
     | StartRejected of AgentStartError
     | Faulted of exn
 
-type ServiceFailure = { Stage: ServiceFailureStage; Reason: ServiceFailureReason }
+type ServiceFailure = {
+    Stage: ServiceFailureStage
+    Reason: ServiceFailureReason
+}
 
 /// Composition owns every returned service until its completion is observed.
 [<RequireQualifiedAccess>]
@@ -29,12 +32,22 @@ module ServiceLifetime =
         let failures = ResizeArray<ServiceFailure>()
         let mutable admin = None
         let mutable exitCode = 1
+
         // These are lifetime boundaries: inspect the actual returned tasks before wrappers select one fault.
         let record (stage: ServiceFailureStage) (errors: exn list) =
-            for error in errors do failures.Add { Stage = stage; Reason = ServiceFailureReason.Faulted error }
+            for error in errors do
+                failures.Add {
+                    Stage = stage
+                    Reason = ServiceFailureReason.Faulted error
+                }
+
         match! OwnedCleanup.captureResult startAdmin with
         | Error errors -> record ServiceFailureStage.StartOrServe errors
-        | Ok(Error error) -> failures.Add { Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.StartRejected error }
+        | Ok(Error error) ->
+            failures.Add {
+                Stage = ServiceFailureStage.StartOrServe
+                Reason = ServiceFailureReason.StartRejected error
+            }
         | Ok(Ok started) ->
             admin <- started
             match! OwnedCleanup.captureResult(fun () -> serve admin) with

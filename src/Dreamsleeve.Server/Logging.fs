@@ -18,9 +18,14 @@ type LoggingSettings = {
 [<RequireQualifiedAccess>]
 module ServerLogging =
     let defaults = {
-        DiagnosticsEnabled = false; DiagnosticsFilePath = "diagnostics/server.jsonl"
-        MinimumLevel = "Information"; Console = true; FilePath = "logs/server-.json"
-        FileSizeLimitBytes = 10485760L; RetainedFileCount = 14
+        DiagnosticsEnabled = false
+        DiagnosticsFilePath = "diagnostics/server.jsonl"
+
+        MinimumLevel = "Information"
+        Console = true
+        FilePath = "logs/server-.json"
+        FileSizeLimitBytes = 10485760L
+        RetainedFileCount = 14
     }
 
     let validate config =
@@ -37,14 +42,22 @@ module ServerLogging =
 
     let create config =
         let level = Enum.Parse<LogEventLevel>(config.MinimumLevel, true)
-        let logger = LoggerConfiguration().MinimumLevel.Is(level).Enrich.FromLogContext()
-                         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        let logger =
+            LoggerConfiguration().MinimumLevel.Is(level).Enrich.FromLogContext()
+                .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+
         if config.Console then
             logger.WriteTo.Console(outputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}") |> ignore
         if not (String.IsNullOrWhiteSpace config.FilePath) then
-            logger.WriteTo.File(JsonFormatter(renderMessage = true), config.FilePath,
-                rollingInterval = RollingInterval.Day, fileSizeLimitBytes = Nullable config.FileSizeLimitBytes,
-                rollOnFileSizeLimit = true, retainedFileCountLimit = Nullable config.RetainedFileCount) |> ignore
+            logger.WriteTo.File(
+                JsonFormatter(renderMessage = true),
+                config.FilePath,
+                rollingInterval = RollingInterval.Day,
+                fileSizeLimitBytes = Nullable config.FileSizeLimitBytes,
+                rollOnFileSizeLimit = true,
+                retainedFileCountLimit = Nullable config.RetainedFileCount)
+            |> ignore
+
         logger.CreateLogger()
 
     let diagnostics config (log: ILogger) : IDisposable =

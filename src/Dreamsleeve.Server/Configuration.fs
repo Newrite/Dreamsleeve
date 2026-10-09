@@ -119,13 +119,28 @@ module Configuration =
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
-        Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
+        Recovery = {
+            InitialDelayMs = 1000
+            MaxDelayMs = 30000
+            MaxRestarts = 5
+            WindowSeconds = 600
+        }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
-            Steam = { Enabled = false; PublicUrl = ""; ProxyUrls = [] }
+            Steam = {
+                Enabled = false
+                PublicUrl = ""
+                ProxyUrls = []
+            }
             Listener = {
-                ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
-                TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+                ListenUrl = "http://127.0.0.1:8779"
+                AllowInsecureLoopback = true
+                AllowInsecureRemote = false
+                CertificatePath = ""
+                TrustForwardedHeaders = false
+
+                RequestsPerMinute = 120
+                RequestTimeoutSeconds = 15
             }
             Service = AuthService.defaults
         }
@@ -133,8 +148,14 @@ module Configuration =
             Enabled = true
             MaxConnections = 64
             Listener = {
-                ListenUrl = "http://127.0.0.1:8780"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
-                TrustForwardedHeaders = false; RequestsPerMinute = 600; RequestTimeoutSeconds = 15
+                ListenUrl = "http://127.0.0.1:8780"
+                AllowInsecureLoopback = true
+                AllowInsecureRemote = false
+                CertificatePath = ""
+                TrustForwardedHeaders = false
+
+                RequestsPerMinute = 600
+                RequestTimeoutSeconds = 15
             }
             Service = AdminService.defaults
         }
@@ -150,7 +171,14 @@ module Configuration =
 
     // Each [[table array]] entry starts from these defaults, like a section does.
     let private listItemDefaults =
-        dict [ typeof<ScheduledAnnouncement>, box { Text = ""; Kind = "Announcement"; DelaySeconds = 0; IntervalSeconds = 0 } ]
+        dict [
+            typeof<ScheduledAnnouncement>, box {
+                Text = ""
+                Kind = "Announcement"
+                DelaySeconds = 0
+                IntervalSeconds = 0
+            }
+        ]
 
     let private isList (target: Type) =
         target.IsGenericType && target.GetGenericTypeDefinition() = typedefof<list<_>>
@@ -161,45 +189,13 @@ module Configuration =
         let cons = cases |> Array.find (fun case -> case.Name = "Cons")
         List.foldBack (fun item tail -> FSharpValue.MakeUnion(cons, [| item; tail |])) items (FSharpValue.MakeUnion(empty, [||]))
 
-    // Records remain immutable domain settings. TOML overrides only supplied fields.
-    let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
-        let target = current.GetType()
-        let invalid () = Error $"Invalid TOML value or type: {path}"
-        if isList target then
-            let element = target.GetGenericArguments()[0]
-            match input, listItemDefaults.TryGetValue element with
-            // A list of strings is an inline array of strings.
-            | (:? TomlArray as values), _ when element = typeof<string> ->
-                if values |> Seq.forall (fun value -> value :? string) then Ok (makeList target (List.ofSeq values))
-                else invalid ()
-            | (:? TomlTableArray as tables), (true, template) ->
-                let items = tables |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table) |> Seq.toList
-                match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
-                | Some error -> Error error
-                | None -> Ok (makeList target (items |> List.choose (function Ok value -> Some value | Error _ -> None)))
-            // An exported empty list is written as an inline empty array.
-            | (:? TomlArray as values), (true, _) when values.Count = 0 -> Ok (makeList target [])
-            | _ -> invalid ()
-        elif FSharpType.IsRecord target then
-            match input with
-            | :? TomlTable as table ->
-                let fields = FSharpType.GetRecordFields target
-                match table.Keys |> Seq.tryFind (fun name -> fields |> Array.forall (fun field -> field.Name <> name)) with
-                | Some name -> Error $"Unknown setting: {path}{name}"
-                | None ->
-                    let values = fields |> Array.map (fun field ->
-                        let value = field.GetValue current
-                        match table.TryGetValue field.Name with
-                        | true, replacement -> overlay (path + field.Name + ".") value replacement
-                        | false, _ -> Ok value)
-                    match values |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
-                    | Some error -> Error error
-                    | None -> Ok (FSharpValue.MakeRecord(target, values |> Array.choose (function Ok value -> Some value | Error _ -> None)))
-            | _ -> invalid ()
-        elif current :? IPAddress then
+    let private overlayScalar (current: obj) (input: obj) (target: Type) invalid =
+        if current :? IPAddress then
             match input with
             | :? string as text ->
-                match IPAddress.TryParse text with true, address -> Ok (box address) | false, _ -> invalid ()
+                match IPAddress.TryParse text with
+                | true, address -> Ok (box address)
+                | false, _ -> invalid ()
             | _ -> invalid ()
         elif target = typeof<string> || target = typeof<bool> then
             if input.GetType() = target then Ok input else invalid ()
@@ -214,6 +210,50 @@ module Configuration =
                     else Ok value
                 with
                 | :? OverflowException | :? InvalidCastException -> invalid ()
+
+    // Records remain immutable domain settings. TOML overrides only supplied fields.
+    let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
+        let target = current.GetType()
+        let invalid () = Error $"Invalid TOML value or type: {path}"
+        if isList target then
+            let element = target.GetGenericArguments()[0]
+            match input, listItemDefaults.TryGetValue element with
+            // A list of strings is an inline array of strings.
+            | (:? TomlArray as values), _ when element = typeof<string> ->
+                if values |> Seq.forall (fun value -> value :? string) then Ok (makeList target (List.ofSeq values))
+                else invalid ()
+            | (:? TomlTableArray as tables), (true, template) ->
+                let items =
+                    tables
+                    |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table)
+                    |> Seq.toList
+
+                match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
+                | Some error -> Error error
+                | None -> Ok (makeList target (items |> List.choose (function Ok value -> Some value | Error _ -> None)))
+            // An exported empty list is written as an inline empty array.
+            | (:? TomlArray as values), (true, _) when values.Count = 0 -> Ok (makeList target [])
+            | _ -> invalid ()
+        elif FSharpType.IsRecord target then
+            match input with
+            | :? TomlTable as table ->
+                let fields = FSharpType.GetRecordFields target
+                match table.Keys |> Seq.tryFind (fun name -> fields |> Array.forall (fun field -> field.Name <> name)) with
+                | Some name -> Error $"Unknown setting: {path}{name}"
+                | None ->
+                    let values =
+                        fields
+                        |> Array.map (fun field ->
+                            let value = field.GetValue current
+                            match table.TryGetValue field.Name with
+                            | true, replacement -> overlay (path + field.Name + ".") value replacement
+                            | false, _ -> Ok value)
+
+                    match values |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
+                    | Some error -> Error error
+                    | None -> Ok (FSharpValue.MakeRecord(target, values |> Array.choose (function Ok value -> Some value | Error _ -> None)))
+            | _ -> invalid ()
+        else overlayScalar current input target invalid
 
     let rec private toTableValue (value: obj) : obj =
         let valueType = value.GetType()
@@ -432,7 +472,12 @@ module Configuration =
         | Some key -> Error $"Unknown moderation setting: {scope}{key}"
         | None ->
             match stringList table "words", stringList table "substrings", stringList table "exceptions" with
-            | Ok words, Ok substrings, Ok exceptions -> Ok { Words = words; Substrings = substrings; Exceptions = exceptions }
+            | Ok words, Ok substrings, Ok exceptions ->
+                Ok {
+                    Words = words
+                    Substrings = substrings
+                    Exceptions = exceptions
+                }
             | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
 
     let private section (table: TomlTable) name =
@@ -458,14 +503,22 @@ module Configuration =
             | Some key -> Error $"Unknown moderation setting: {key}"
             | None ->
                 let merge (first: ModerationSource) (second: ModerationSource) =
-                    { Words = first.Words @ second.Words; Substrings = first.Substrings @ second.Substrings
-                      Exceptions = first.Exceptions @ second.Exceptions }
+                    {
+                        Words = first.Words @ second.Words
+                        Substrings = first.Substrings @ second.Substrings
+                        Exceptions = first.Exceptions @ second.Exceptions
+                    }
                 let tiers =
-                    section table "block" |> Result.bind (fun block ->
-                    section table "flag" |> Result.bind (fun flag ->
-                    tierSource legacy "" |> Result.bind (fun top ->
-                    tierSource block "block." |> Result.bind (fun blocked ->
-                    tierSource flag "flag." |> Result.map (fun flagged -> merge top blocked, flagged)))))
+                    section table "block"
+                    |> Result.bind (fun block ->
+                        section table "flag"
+                        |> Result.bind (fun flag ->
+                            tierSource legacy ""
+                            |> Result.bind (fun top ->
+                                tierSource block "block."
+                                |> Result.bind (fun blocked ->
+                                    tierSource flag "flag."
+                                    |> Result.map (fun flagged -> merge top blocked, flagged)))))
                 tiers |> Result.map (fun (block, flag) -> Moderation.create block |> Moderation.withFlags flag)
 
     let internal readModerationSource path = readText path MaxRulesBytes
@@ -501,7 +554,13 @@ module Configuration =
                 | (true, (:? int64 as version)), _ when version <> 1L -> Error "Unsupported pseudonym file version."
                 | (true, value), _ when not (value :? int64) -> Error "Pseudonym file version must be a number."
                 | _, (true, (:? TomlArray as values)) ->
-                    let names = values |> Seq.choose (function :? string as text -> Pseudonym.create text |> Result.toOption | _ -> None) |> List.ofSeq
+                    let names =
+                        values
+                        |> Seq.choose (function
+                            | :? string as text -> Pseudonym.create text |> Result.toOption
+                            | _ -> None)
+                        |> List.ofSeq
+
                     match PseudonymDictionary.create names with
                     | ValueNone -> Error "Pseudonym file has no valid names."
                     | ValueSome dictionary -> Ok (dictionary, values.Count - dictionary.Count)
@@ -528,8 +587,13 @@ module Configuration =
         match remainingArgs with
         | [] ->
             // --port replaces the file's value before the one check.
-            match configFile with None -> Ok defaults | Some path -> load path
-            |> Result.map (fun config -> match port with None -> config | Some value -> { config with Server = { config.Server with Port = value } })
+            match configFile with
+            | None -> Ok defaults
+            | Some path -> load path
+            |> Result.map (fun config ->
+                match port with
+                | None -> config
+                | Some value -> { config with Server = { config.Server with Port = value } })
             |> Result.bind validate
             |> Result.map LaunchCommand.Run
         | "--help" :: _ | "-h" :: _ -> Ok LaunchCommand.Help

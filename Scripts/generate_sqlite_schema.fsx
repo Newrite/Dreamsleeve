@@ -10,7 +10,10 @@ open Dreamsleeve.Server.Infrastructure
 
 let root = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, ".."))
 let database = Path.Combine(root, "build", "sqlhydra", "schema.db")
-let config = { DatabasePath = database; BusyTimeoutSeconds = 5 }
+let config = {
+    DatabasePath = database
+    BusyTimeoutSeconds = 5
+}
 
 // Only this generator's disposable database is replaced. Runtime data lives elsewhere.
 for suffix in [""; "-wal"; "-shm"] do
@@ -18,9 +21,12 @@ for suffix in [""; "-wal"; "-shm"] do
 
 match SqliteDatabase.initialize config (Path.Combine(root, "db", "migrations")) with
 | Ok () -> printfn "SQLite schema ready for SqlHydra: %s" database
-| Error error -> eprintfn "%s" error; exit 1
+| Error error ->
+    eprintfn "%s" error
+    exit 1
 
 SqliteConnection.ClearAllPools()
+
 let start = ProcessStartInfo("dotnet", UseShellExecute = false)
 start.WorkingDirectory <- Path.Combine(root, "src", "Dreamsleeve.Server.Infrastructure")
 for argument in ["tool"; "run"; "sqlhydra"; "--"; "sqlite"] do
