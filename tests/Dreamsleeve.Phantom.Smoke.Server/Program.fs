@@ -13,8 +13,12 @@ open Microsoft.Extensions.Logging
 open Dreamsleeve.Server.Web
 open Falco
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private ticket (name: string) = name.PadRight(43, '_')
+
 let private profile number name =
     PlayerData.create (PlayerId.create number |> ok) (Username.create 32 name |> ok)
         (DisplayName.create 64 name |> ok) NameColor.unknown
@@ -91,48 +95,95 @@ let private run (arguments: string array) = task {
                 else { new IDisposable with member _.Dispose() = () }
             own (fun () -> task { diagnostics.Dispose() } :> Task)
             if ProtocolCodec.Version <> 26u then failwith "Smoke fixture requires protocol26."
-            let phantoms = { PhantomOptions.defaults with StoragePath = Path.Combine(directory, "server-cache");
-                                                           DiskBytes = 128L * 1025L * 1025L; RamBytes = 4L * 1025L * 1025L;
-                                                           PublishCooldownMs = 100; ReplicationIntervalMs = 10 }
-            let server = { ServerConfig.defaults with BindAddress = IPAddress.Loopback; Port = port; PeerLimit = 8 }
-            let options = { ServerRuntimeOptions.defaults with MaxSessions = 8; Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
+            let phantoms =
+                { PhantomOptions.defaults with
+                    StoragePath = Path.Combine(directory, "server-cache")
+                    DiskBytes = 128L * 1025L * 1025L
+                    RamBytes = 4L * 1025L * 1025L
+                    PublishCooldownMs = 100
+                    ReplicationIntervalMs = 10 }
+            let server =
+                { ServerConfig.defaults with
+                    BindAddress = IPAddress.Loopback
+                    Port = port
+                    PeerLimit = 8 }
+            let options =
+                { ServerRuntimeOptions.defaults with
+                    MaxSessions = 8
+                    Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
             let settings = GameSettings.create server options IdentityOptions.defaults AnnouncementOptions.defaults
                                GroundMarkOptions.defaults GuildOptions.defaults |> ok |> GameSettings.withPhantoms phantoms |> ok
             let auth = authConfiguration.Start(fun _ (request: SessionAuthenticationRequest) -> task {
                 let result =
-                    if request.Ticket = ticket "alice" then Ok { Profile = profile 1UL "alice"; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome IPAddress.Loopback }
-                    elif request.Ticket = ticket "bob" then Ok { Profile = profile 2UL "bob"; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome IPAddress.Loopback }
+                    if request.Ticket = ticket "alice" then
+                        Ok { Profile = profile 1UL "alice"
+                             Role = PlayerRole.Player
+                             Mute = ValueNone
+                             SignedInFrom = ValueSome IPAddress.Loopback }
+                    elif request.Ticket = ticket "bob" then
+                        Ok { Profile = profile 2UL "bob"
+                             Role = PlayerRole.Player
+                             Mute = ValueNone
+                             SignedInFrom = ValueSome IPAddress.Loopback }
                     else Error SessionAuthenticationError.InvalidTicket
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = result } |> ignore
+                request.ReplyTo.TryPost
+                    { OperationId = request.OperationId
+                      Result = result }
+                |> ignore
             })
             own (fun () -> stopOwner auth.Abort auth.Completion (fun () -> false) :> Task)
             let names = namesConfiguration.Start(fun _ (request: ProfileChangeRequest) -> task {
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ProfileChangeError.Unavailable } |> ignore
+                request.ReplyTo.TryPost
+                    { OperationId = request.OperationId
+                      Result = Error ProfileChangeError.Unavailable }
+                |> ignore
             })
             own (fun () -> stopOwner names.Abort names.Completion (fun () -> false) :> Task)
             let moderation = moderationConfiguration.Start(fun _ (request: ModerationRequest) -> task {
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore
+                request.ReplyTo.TryPost
+                    { OperationId = request.OperationId
+                      Result = Error ModerationError.Unavailable }
+                |> ignore
             })
             own (fun () -> stopOwner moderation.Abort moderation.Completion (fun () -> false) :> Task)
             let marks = marksConfiguration.Start(fun _ (_: GroundMarkWrite) -> task { () })
             own (fun () -> stopOwner marks.Abort marks.Completion (fun () -> false) :> Task)
             let guilds = guildsConfiguration.Start(fun _ (_: GuildWrite) -> task { () })
             own (fun () -> stopOwner guilds.Abort guilds.Completion (fun () -> false) :> Task)
-            let authentication = { Requests = auth.Ref; Profiles = names.Ref;
-                                   Moderation = moderation.Ref; Completion = auth.Completion }
+
+            let authentication =
+                { Requests = auth.Ref
+                  Profiles = names.Ref
+                  Moderation = moderation.Ref
+                  Completion = auth.Completion }
             let storage = PhantomStorage.create phantoms
             own (fun () -> storage.Dispose() :> Task)
             let http = PhantomHttp.create phantoms storage
             own (fun () -> http.Dispose() :> Task)
-            let listener = { ListenUrl = $"http://127.0.0.1:{port}"; CertificatePath = ""; CertificatePasswordVariable = ""; TrustForwardedHeaders = false; TrustedProxies = [] }
+            let listener =
+                { ListenUrl = $"http://127.0.0.1:{port}"
+                  CertificatePath = ""
+                  CertificatePasswordVariable = ""
+                  TrustForwardedHeaders = false
+                  TrustedProxies = [] }
             let webLog = (new Serilog.LoggerConfiguration()).CreateLogger()
             own (fun () -> task { webLog.Dispose() } :> Task)
-            let web = WebHost.create listener { MaxBodyBytes = 4096; MaxConnections = 64; RequestTimeoutSeconds = 30 }
-                          (fun _ -> { Bucket = "smoke"; PermitsPerMinute = 10000 }) (fun _ -> WebHost.error 429 "rate" "rate") webLog
+            let web =
+                WebHost.create
+                    listener
+                    { MaxBodyBytes = 4096
+                      MaxConnections = 64
+                      RequestTimeoutSeconds = 30 }
+                    (fun _ ->
+                        { Bucket = "smoke"
+                          PermitsPerMinute = 10000 })
+                    (fun _ -> WebHost.error 429 "rate" "rate")
+                    webLog
             own (fun () -> web.DisposeAsync().AsTask())
             stopAdmissions.Add(fun () -> web.StopAsync())
             web.UseFalco(PhantomRoutes.endpoints (fun () -> Some http)) |> ignore
             do! web.StartAsync()
+
             match EnetTransport.createWithPhantoms server phantoms logger with
             | Error error ->
                 outcome <- Error(SmokeStartError.Transport error)
@@ -140,8 +191,14 @@ let private run (arguments: string array) = task {
             | Ok transport ->
                 own (fun () -> task { transport.Dispose() } :> Task)
                 let runtimeResult = ServerRuntime.startWithPhantoms storage http settings Moderation.empty PseudonymDictionary.builtIn
-                                      { Loaded = []; NextId = 1UL; Writer = marks.Ref }
-                                      { Loaded = []; Profiles = []; NextId = 1UL; Writer = guilds.Ref; WriterStopped = guilds.Completion }
+                                      { Loaded = []
+                                        NextId = 1UL
+                                        Writer = marks.Ref }
+                                      { Loaded = []
+                                        Profiles = []
+                                        NextId = 1UL
+                                        Writer = guilds.Ref
+                                        WriterStopped = guilds.Completion }
                                       authentication transport logger
                 match runtimeResult with
                 | Error error ->
@@ -153,8 +210,14 @@ let private run (arguments: string array) = task {
                     // joins runtime before reaching its underlying transport.
                     own (fun () -> stopOwner runtime.Abort runtime.Completion (fun () -> completionObserved) :> Task)
                     Directory.CreateDirectory(Path.GetDirectoryName readyFile) |> ignore
-                    File.WriteAllText(readyFile, JsonSerializer.Serialize({| protocolVersion = 26; port = int port;
-                        stateDirectory = directory; aliceTicket = ticket "alice"; bobTicket = ticket "bob" |}))
+                    File.WriteAllText(
+                        readyFile,
+                        JsonSerializer.Serialize(
+                            {| protocolVersion = 26
+                               port = int port
+                               stateDirectory = directory
+                               aliceTicket = ticket "alice"
+                               bobTicket = ticket "bob" |}))
                     printfn "PHANTOM_SMOKE_READY protocol26 127.0.0.1:%d" port
                     // Console.In may not support canceling a pending read. There
                     // is one process-scoped reader; the runner owns stdin/exit.

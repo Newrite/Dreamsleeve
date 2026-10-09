@@ -1,4 +1,5 @@
 module Dreamsleeve.Phantom.HttpProbe
+
 open System
 open System.IO
 open System.Diagnostics
@@ -14,8 +15,14 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
-let stop message = eprintfn "%s" message; exit 1
-let ok = function Ok x -> x | Error e -> stop (sprintf "%A" e)
+let stop message =
+    eprintfn "%s" message
+    exit 1
+
+let ok = function
+    | Ok x -> x
+    | Error e -> stop (sprintf "%A" e)
+
 // Instrument the real response stream; no synthetic replacement of HTTP or storage.
 type TimedStream(inner: Stream) =
     inherit Stream()
@@ -45,7 +52,10 @@ let run (args: string array) = task {
     let data = File.ReadAllBytes args[0]
     let root = Path.GetFullPath args[1]
     Directory.CreateDirectory root |> ignore
-    let options = { PhantomOptions.defaults with StoragePath = Path.Combine(root, "cache"); RamBytes = 0L }
+    let options =
+        { PhantomOptions.defaults with
+            StoragePath = Path.Combine(root, "cache")
+            RamBytes = 0L }
     let asset = PhantomManifest.create options.Limits (AssetHash.create (SHA256.HashData data) |> ok)
                     (AppearanceGeneration.create 1UL |> ok) 2u (uint32 data.Length) (uint32 data.Length) 2u |> ok
     let storage = PhantomStorage.create options
@@ -60,6 +70,7 @@ let run (args: string array) = task {
             } }
     let http = PhantomHttp.create options measured
     let id = PhantomTransferId 1UL
+
     let! cached = storage.StartUpload(id,asset, None)
     if not (ok cached) then
         let mutable offset = 0
@@ -69,6 +80,7 @@ let run (args: string array) = task {
             ok result |> ignore
             offset <- offset+count
     do! storage.Cancel id
+
     let builder = WebApplication.CreateBuilder()
     builder.Logging.ClearProviders() |> ignore
     builder.WebHost.UseSetting("urls", "http://127.0.0.1:0") |> ignore
@@ -80,7 +92,9 @@ let run (args: string array) = task {
         use body = new TimedStream(context.Response.Body)
         let! result = http.Serve {
             Token = context.Request.Headers.Authorization.ToString().Replace("Bearer ", "")
-            Upload = false; Length = None; Body = body
+            Upload = false
+            Length = None
+            Body = body
             BeginResponse = fun size -> context.Response.ContentLength <- Nullable(int64 size)
             Cancellation = context.RequestAborted }
         responseMs <- body.Elapsed
@@ -89,6 +103,7 @@ let run (args: string array) = task {
         finished.TrySetResult() |> ignore
     }))
     do! app.StartAsync()
+
     use client = new HttpClient(Timeout = TimeSpan.FromSeconds 90.)
     let owner = Guid.NewGuid()
     let results = ResizeArray<obj>()
@@ -102,7 +117,9 @@ let run (args: string array) = task {
         let! admitted = storage.StartDownload(transfer, asset, None)
         ok admitted |> ignore
         let lease = http.Admit(owner,transfer,asset,false, None)
-        diskMs <- 0.; responseMs <- 0.; pumpMs <- 0.
+        diskMs <- 0.
+        responseMs <- 0.
+        pumpMs <- 0.
         finished <- TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
         use request = new HttpRequestMessage(HttpMethod.Get, Seq.head app.Urls)
         request.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer",lease.Token)
@@ -127,15 +144,29 @@ let run (args: string array) = task {
         let elapsed = watch.Elapsed.TotalMilliseconds
         do! finished.Task
         let valid = total = data.Length && Convert.ToHexStringLower(hash.GetHashAndReset()) = asset.Hash.Hex
-        let row = {| name=name; bytes=total; elapsedMs=elapsed; pumpMs=pumpMs; responseWriteMs=responseMs; storageReadMs=diskMs
-                     remainingPumpMs=pumpMs-responseMs-diskMs; valid=valid |}
+        let row =
+            {| name = name
+               bytes = total
+               elapsedMs = elapsed
+               pumpMs = pumpMs
+               responseWriteMs = responseMs
+               storageReadMs = diskMs
+               remainingPumpMs = pumpMs-responseMs-diskMs
+               valid = valid |}
         if not valid then stop "Body hash/length mismatch"
         results.Add row
         printfn "%s" (JsonSerializer.Serialize row)
         do! http.Cancel transfer
         do! storage.Cancel transfer
+
     if args.Length > 2 then
-        let start = ProcessStartInfo(Path.GetFullPath args[2], UseShellExecute=false, RedirectStandardOutput=true, RedirectStandardInput=true, CreateNoWindow=true)
+        let start =
+            ProcessStartInfo(
+                Path.GetFullPath args[2],
+                UseShellExecute=false,
+                RedirectStandardOutput=true,
+                RedirectStandardInput=true,
+                CreateNoWindow=true)
         for value in [Seq.head app.Urls; Path.GetFullPath args[0]] do start.ArgumentList.Add value
         use child = Process.Start start
         for name, rate in ["winhttpFast1",5242880; "winhttpSlow512KiB",524288; "winhttpFastAfterSlow",5242880] do
@@ -144,7 +175,9 @@ let run (args: string array) = task {
             let! admitted = storage.StartDownload(transfer,asset, None)
             ok admitted |> ignore
             let lease = http.Admit(owner,transfer,asset,false, None)
-            diskMs <- 0.; responseMs <- 0.; pumpMs <- 0.
+            diskMs <- 0.
+            responseMs <- 0.
+            pumpMs <- 0.
             finished <- TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
             do! child.StandardInput.WriteLineAsync lease.Token
             do! child.StandardInput.WriteLineAsync(string rate)
@@ -153,8 +186,14 @@ let run (args: string array) = task {
             if isNull output then stop "Native probe ended without a result"
             do! finished.Task
             let client = JsonDocument.Parse output
-            let row = {| name=name; elapsedMs=client.RootElement.GetProperty("elapsedMs").GetDouble(); valid=client.RootElement.GetProperty("valid").GetBoolean()
-                         pumpMs=pumpMs; responseWriteMs=responseMs; storageReadMs=diskMs; remainingPumpMs=pumpMs-responseMs-diskMs |}
+            let row =
+                {| name = name
+                   elapsedMs = client.RootElement.GetProperty("elapsedMs").GetDouble()
+                   valid = client.RootElement.GetProperty("valid").GetBoolean()
+                   pumpMs = pumpMs
+                   responseWriteMs = responseMs
+                   storageReadMs = diskMs
+                   remainingPumpMs = pumpMs-responseMs-diskMs |}
             results.Add row
             printfn "%s" (JsonSerializer.Serialize row)
             do! http.Cancel transfer
@@ -162,11 +201,13 @@ let run (args: string array) = task {
         child.StandardInput.Close()
         do! child.WaitForExitAsync()
         if child.ExitCode <> 0 then stop (sprintf "Native probe failed: %d" child.ExitCode)
+
     File.WriteAllText(Path.Combine(root,"results.json"), JsonSerializer.Serialize(results,JsonSerializerOptions(WriteIndented=true)))
     do! app.StopAsync()
     do! app.DisposeAsync().AsTask()
     do! http.Dispose()
     do! storage.Dispose()
 }
+
 [<EntryPoint>]
 let main args = run args |> _.GetAwaiter().GetResult(); 0
