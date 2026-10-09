@@ -165,17 +165,29 @@ TEST_CASE("The bundled ui.example.toml names every setting with its default valu
   });
 }
 
-TEST_CASE("Filesystem probe failure is not a missing UI file")
+TEST_CASE("Filesystem probe failure is distinct from a legitimately missing UI file")
 {
-  // Beyond the Windows native path limit (32767 UTF-16 code units).
-  // Unlike ERROR_INVALID_NAME, this error is not classified as not-found by MSVC.
-  const auto      oversized = std::filesystem::temp_directory_path() / std::wstring(32768, L'x');
-  std::error_code probe;
-  CHECK_FALSE(std::filesystem::exists(oversized, probe));
-  REQUIRE(probe);
-  const auto loaded = LoadUiFile(oversized);
-  CHECK_FALSE(loaded);
-  if (!loaded) CHECK_FALSE(loaded.error().empty());
+  const std::filesystem::path path{"ui-probe.toml"};
+  unsigned                    probes{};
+  const auto                  unavailable = std::make_error_code(std::errc::permission_denied);
+  const auto rejected = Testing::LoadUiFileWithProbe(path, [&](const std::filesystem::path& value, std::error_code& error) {
+    CHECK(value == path);
+    ++probes;
+    error = unavailable;
+    return false;
+  });
+  REQUIRE_FALSE(rejected);
+  CHECK(rejected.error() == "Cannot inspect UI settings: " + unavailable.message());
+
+  const auto missing = Testing::LoadUiFileWithProbe(path, [&](const std::filesystem::path& value, std::error_code& error) {
+    CHECK(value == path);
+    ++probes;
+    error.clear();
+    return false;
+  });
+  REQUIRE(missing);
+  CHECK(*missing == UiFile{});
+  CHECK(probes == 2);
 }
 
 TEST_CASE("UI saves preserve foreign temporary paths and clean only their own rejected file")

@@ -366,35 +366,61 @@ export namespace Dreamsleeve::Host
     return book;
   }
 
+  namespace UiFileDetail
+  {
+
+    template <class Probe>
+    std::expected<UiFile, std::string> Load(const std::filesystem::path& path, Probe&& probeExists)
+    {
+      std::error_code probe;
+      const bool      exists = probeExists(path, probe);
+      if (probe) return std::unexpected{"Cannot inspect UI settings: " + probe.message()};
+      if (!exists) return UiFile{};
+
+      std::ifstream input{path, std::ios::binary | std::ios::ate};
+      if (!input) return std::unexpected{"Cannot open UI settings"};
+      const auto length = input.tellg();
+      // Pseudonyms and the ignore list share the file, hence the larger bound.
+      if (length < 0 || length > (1 << 20)) return std::unexpected{"UI settings must not exceed 1 MiB"};
+
+      std::string source(static_cast<std::size_t>(length), '\0');
+      input.seekg(0);
+      if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
+
+      UiFile file;
+      source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
+      if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
+        return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
+      if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
+
+      file.ui.chat = Normalize(file.ui.chat);
+      if (!std::ranges::contains(HidingNames, file.ui.hideIdentity)) file.ui.hideIdentity = HidingNames.front();
+      file.names = Normalize(std::move(file.names));
+      return file;
+    }
+
+  }
+
   // A missing file is the ordinary first run and yields defaults. A present but
   // unreadable file is an error: the caller keeps its current values and reports it.
   std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path)
   {
-    std::error_code probe;
-    const bool      exists = std::filesystem::exists(path, probe);
-    if (probe) return std::unexpected{"Cannot inspect UI settings: " + probe.message()};
-    if (!exists) return UiFile{};
+    return UiFileDetail::Load(path, [](const std::filesystem::path& value, std::error_code& error) {
+      return std::filesystem::exists(value, error);
+    });
+  }
 
-    std::ifstream input{path, std::ios::binary | std::ios::ate};
-    if (!input) return std::unexpected{"Cannot open UI settings"};
-    const auto length = input.tellg();
-    // Pseudonyms and the ignore list share the file, hence the larger bound.
-    if (length < 0 || length > (1 << 20)) return std::unexpected{"UI settings must not exceed 1 MiB"};
+  namespace Testing
+  {
 
-    std::string source(static_cast<std::size_t>(length), '\0');
-    input.seekg(0);
-    if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
+    // Only the initial dependency probe is substituted; parsing and file ownership
+    // use the production pipeline, without a global filesystem override.
+    template <class Probe>
+    std::expected<UiFile, std::string> LoadUiFileWithProbe(const std::filesystem::path& path, Probe&& probe)
+    {
+      return UiFileDetail::Load(path, std::forward<Probe>(probe));
+    }
 
-    UiFile file;
-    source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
-    if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
-      return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
-    if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
-
-    file.ui.chat = Normalize(file.ui.chat);
-    if (!std::ranges::contains(HidingNames, file.ui.hideIdentity)) file.ui.hideIdentity = HidingNames.front();
-    file.names = Normalize(std::move(file.names));
-    return file;
   }
 
   // Temporary file plus rename: a crash mid-write never leaves a truncated file.
