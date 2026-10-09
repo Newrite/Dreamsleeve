@@ -130,8 +130,14 @@ module AdminService =
     }
 
     let defaults = {
-        MailboxCapacity = 64; MaxConcurrentOperations = 2; PasswordIterations = Secrets.MinPasswordIterations
-        SessionHours = 12; CodeLifetimeMinutes = 15; LoginAttemptsPerMinute = 10; MaxTrackedLogins = 1024
+        MailboxCapacity = 64
+        MaxConcurrentOperations = 2
+        PasswordIterations = Secrets.MinPasswordIterations
+
+        SessionHours = 12
+        CodeLifetimeMinutes = 15
+        LoginAttemptsPerMinute = 10
+        MaxTrackedLogins = 1024
     }
 
     let validate options = [
@@ -178,7 +184,9 @@ module AdminService =
                     |> Result.mapError (storageError logger)
                 | None, _ | Some _, PasswordVerificationResult.Failed -> Error AdminServiceError.InvalidCredentials
                 | Some _, _ -> Error AdminServiceError.Unavailable
-            verified |> Result.bind (fun account ->
+
+            verified
+            |> Result.bind (fun account ->
                 let secret, created = session options now account.Id
                 SqliteAdminStore.createSession database created token
                 |> Result.map (fun () -> AdminWorkResult.Reply(AdminReply.SignedIn(account, secret, created.ExpiresAt)))
@@ -260,7 +268,10 @@ module AdminService =
             | error ->
                 logger.LogError(error, "Admin operation failed")
                 Error AdminServiceError.Unavailable
-        return { OperationId = request.OperationId; Result = result }
+        return {
+            OperationId = request.OperationId
+            Result = result
+        }
     }
 
     let private completeIfStopped state (context: ReliableAgentContext<AdminMessage>) =
@@ -283,7 +294,13 @@ module AdminService =
         let key = Username.value username
         let window = TimeSpan.FromMinutes 1.
         if state.Attempts.Count >= options.MaxTrackedLogins && not (state.Attempts.ContainsKey key) then
-            let expired = state.Attempts |> Seq.filter (fun entry -> let struct (start, _) = entry.Value in now - start >= window) |> Seq.map _.Key |> Seq.toArray
+            let expired =
+                state.Attempts
+                |> Seq.filter (fun entry ->
+                    let struct (start, _) = entry.Value
+                    now - start >= window)
+                |> Seq.map _.Key
+                |> Seq.toArray
             for name in expired do state.Attempts.Remove name |> ignore
         match state.Attempts.TryGetValue key with
         | true, struct (start, count) when now - start < window ->
@@ -311,10 +328,20 @@ module AdminService =
         match command with
         | AdminCommand.Setup(code, _, password) ->
             if not (Secrets.validPassword password) then Error AdminServiceError.InvalidCredentials
-            else redeem (function AdminCodePurpose.Setup -> true | AdminCodePurpose.ResetPassword _ -> false) code
+            else
+                redeem
+                    (function
+                     | AdminCodePurpose.Setup -> true
+                     | AdminCodePurpose.ResetPassword _ -> false)
+                    code
         | AdminCommand.ResetPassword(code, password) ->
             if not (Secrets.validPassword password) then Error AdminServiceError.InvalidCredentials
-            else redeem (function AdminCodePurpose.ResetPassword _ -> true | AdminCodePurpose.Setup -> false) code
+            else
+                redeem
+                    (function
+                     | AdminCodePurpose.ResetPassword _ -> true
+                     | AdminCodePurpose.Setup -> false)
+                    code
         | AdminCommand.Login(username, password) ->
             if not (Secrets.validPassword password) then Error AdminServiceError.InvalidCredentials
             else admitLogin options state now username |> Result.map (fun () -> ValueNone)
@@ -337,11 +364,18 @@ module AdminService =
             | Ok redeemed ->
                 let operationId = Guid.NewGuid()
                 let request = {
-                    OperationId = operationId; Command = command; Redeemed = redeemed
+                    OperationId = operationId
+                    Command = command
+                    Redeemed = redeemed
                     ReplyTo = context.Ref.Map AdminMessage.Finished
                 }
                 state.Exclusive <- exclusive command
-                state.Pending.Add(operationId, { Command = command; Reply = reply })
+                state.Pending.Add(
+                    operationId,
+                    {
+                        Command = command
+                        Reply = reply
+                    })
                 if not (state.Outbox.TrySend(context, request)) then
                     state.Exclusive <- false
                     state.Pending.Remove operationId |> ignore
@@ -351,12 +385,31 @@ module AdminService =
     let private logAction (logger: ILogger) (admin: AdminAccount) action (target: string) =
         logger.LogInformation("Admin {Admin}: {Action} {Target}", Username.value admin.Username, AdminAction.key action, target)
 
+    let private logCompletion (logger: ILogger) command reply =
+        match command, reply with
+        | AdminCommand.Setup _, AdminReply.SignedIn(admin, _, _) ->
+            logAction logger admin AdminAction.CreatedAdmin (AuditTarget.key (AuditTarget.Admin admin.Id))
+        | AdminCommand.ResetPassword _, AdminReply.SignedIn(admin, _, _) ->
+            logAction logger admin AdminAction.ResetAdminPassword (AuditTarget.key (AuditTarget.Admin admin.Id))
+        | AdminCommand.Login _, AdminReply.SignedIn(admin, _, _) ->
+            logger.LogInformation("Admin {Admin} signed in", Username.value admin.Username)
+        | AdminCommand.CreateApiToken(admin, label), _ ->
+            logAction logger admin AdminAction.CreatedApiToken (ApiTokenLabel.value label)
+        | AdminCommand.RevokeApiToken(admin, hash), _ ->
+            logAction logger admin AdminAction.RevokedApiToken (AuditTarget.key (AuditTarget.ApiToken(hash.Substring(0, 8))))
+        | AdminCommand.SetRole(admin, playerId, role), _ ->
+            logAction logger admin AdminAction.SetRole $"{AuditTarget.key (AuditTarget.Player playerId)} {PlayerRole.key role}"
+        | AdminCommand.Record(admin, entry), _ ->
+            logAction logger admin entry.Action (AuditTarget.key entry.Target)
+        | _ -> ()
+
     let private finished options (clock: TimeProvider) (logger: ILogger) state (context: ReliableAgentContext<AdminMessage>) (completion: AdminWorkReply) =
         match state.Pending.TryGetValue completion.OperationId with
         | false, _ -> ()
         | true, pending ->
             state.Exclusive <- false
             state.Pending.Remove completion.OperationId |> ignore
+
             let issue purpose =
                 let code = Secrets.newToken ()
                 state.Codes <- AdminCodes.issue purpose (Secrets.hash code) (clock.GetUtcNow()) (codeLifetime options) state.Codes
@@ -370,18 +423,11 @@ module AdminService =
                     logger.LogInformation("Admin password reset code issued for {Admin}", Username.value admin.Username)
                     issue (AdminCodePurpose.ResetPassword admin.Id)
                 | command, Ok (AdminWorkResult.Reply reply) ->
-                    match command, reply with
-                    | AdminCommand.Setup _, AdminReply.SignedIn(admin, _, _) -> logAction logger admin AdminAction.CreatedAdmin (AuditTarget.key (AuditTarget.Admin admin.Id))
-                    | AdminCommand.ResetPassword _, AdminReply.SignedIn(admin, _, _) -> logAction logger admin AdminAction.ResetAdminPassword (AuditTarget.key (AuditTarget.Admin admin.Id))
-                    | AdminCommand.Login _, AdminReply.SignedIn(admin, _, _) -> logger.LogInformation("Admin {Admin} signed in", Username.value admin.Username)
-                    | AdminCommand.CreateApiToken(admin, label), _ -> logAction logger admin AdminAction.CreatedApiToken (ApiTokenLabel.value label)
-                    | AdminCommand.RevokeApiToken(admin, hash), _ -> logAction logger admin AdminAction.RevokedApiToken (AuditTarget.key (AuditTarget.ApiToken(hash.Substring(0, 8))))
-                    | AdminCommand.SetRole(admin, playerId, role), _ -> logAction logger admin AdminAction.SetRole $"{AuditTarget.key (AuditTarget.Player playerId)} {PlayerRole.key role}"
-                    | AdminCommand.Record(admin, entry), _ -> logAction logger admin entry.Action (AuditTarget.key entry.Target)
-                    | _ -> ()
+                    logCompletion logger command reply
                     Ok reply
                 | _, Ok (AdminWorkResult.AdminsCounted _ | AdminWorkResult.AdminFound _) -> Error AdminServiceError.Unavailable
                 | _, Error error -> Error error
+
             pending.Reply.Reply result
             completeIfStopped state context
 
@@ -415,7 +461,10 @@ module AdminService =
         if int64 options.MaxConcurrentOperations + 2L > int64 Int32.MaxValue then
             Error (AgentStartError.CapacityOverflow(options.MaxConcurrentOperations, 2))
         else
-            let workerOptions = { AgentOptions.create "admin-storage" with Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations }
+            let workerOptions = {
+                AgentOptions.create "admin-storage" with
+                    Mailbox = AgentMailbox.boundedWait options.MaxConcurrentOperations
+            }
             let settings = {
                 AgentOptions.create "admin" with
                     Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity (options.MaxConcurrentOperations + 2)
@@ -430,10 +479,16 @@ module AdminService =
                                (execute options database dummyHash clock logger)
                 let workers = worker.Start work
                 let state = {
-                    Pending = Dictionary(); Workers = workers
+                    Pending = Dictionary()
+                    Workers = workers
                     Outbox = AgentOutbox.Create(operations, workers.Ref)
-                    Attempts = Dictionary(); Codes = AdminCodes.empty
-                    Exclusive = false; Stopping = false; WorkersStopped = false
+
+                    Attempts = Dictionary()
+                    Codes = AdminCodes.empty
+
+                    Exclusive = false
+                    Stopping = false
+                    WorkersStopped = false
                 }
                 let agent = owner.Start(handle options clock logger state)
                 agent.TryPost AdminMessage.Start |> ignore
