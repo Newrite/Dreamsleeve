@@ -130,6 +130,32 @@ let tests = testList "Supervisor" [
         | other -> failtestf "Refusal was not preserved: %A" other
     }
 
+    testTask "unexpected thrown starts preserve their original fault through the same exhaustion policy" {
+        let expected = InvalidOperationException("unexpected allocation fault")
+        let events = ConcurrentQueue<SupervisorEvent<int, string>>()
+        let start (_: CancellationToken) = Task.FromException<Result<SupervisedChild<int>, string>> expected
+        let supervisor = TestSupervisor.start "throwing-start" { immediate with MaxRestarts = 1 } start events.Enqueue
+        let! (failure: SupervisorGaveUpException<string> option) = task {
+            try
+                do! awaitUnit supervisor.Completion
+                return None
+            with :? SupervisorGaveUpException<string> as error -> return Some error
+        }
+        match failure with
+        | Some error ->
+            equal 2 error.Failures
+            match error.Failure with
+            | SupervisorFailure.Faulted original -> check (Object.ReferenceEquals(expected, original)) "Original unexpected fault is retained."
+            | other -> failtestf "Thrown start was relabeled: %A" other
+            check (Object.ReferenceEquals(expected, error.InnerException)) "Actual fault remains the inner exception."
+        | None -> failtest "Exhaustion must fault."
+        match List.ofSeq events with
+        | [SupervisorEvent.StartFailed first; SupervisorEvent.Restarting(_, 1)
+           SupervisorEvent.StartFailed last; SupervisorEvent.GaveUp 2] ->
+            check (Object.ReferenceEquals(expected, first) && Object.ReferenceEquals(expected, last)) "Fault events retain original cause."
+        | other -> failtestf "Unexpected events: %A" other
+    }
+
     testTask "a rejected partial startup joins its owned cleanup before reconstruction" {
         let cleanupStarted, releaseCleanup = gate<unit>(), gate<unit>()
         let children = Children()

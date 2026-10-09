@@ -314,3 +314,6 @@ Timestamp поля AgentTick относятся к TimeProvider.
 `Stopped`, `Restarting`, `GaveUp`) в обработчике супервизора: только быстрые действия вроде
 лога, исключения игнорируются. Состояние ребёнка супервизор не восстанавливает и принятые им
 команды не повторяет. `startWithTimeProvider` позволяет проверять окно отказов без ожидания.
+
+
+Функция запуска ребёнка возвращает `Task<Result<SupervisedChild<'Child>, 'StartError>>`. `SupervisorEvent<'Child,'StartError>.StartRejected` сохраняет ожидаемый отказ создания, а `StartFailed` — неожиданное исходное исключение. Оба используют существующую политику пересоздания целого ребёнка. При исчерпании попыток `SupervisorGaveUpException<'StartError>.Failure` хранит `SupervisorFailure.StartRejected reason`, `Faulted originalException` или `CompletedUnexpectedly`; `InnerException` содержит только реальное исключение. Отказавшая фабрика освобождает и ожидает частично полученные ресурсы до возврата typed ошибки. Политика пересоздания не повторяет отдельную уже принятую операцию.

@@ -52,11 +52,14 @@ let private consoleCommand operation handle (request: Task<AgentAskResult<'Reply
     | AgentAskResult.Canceled ->
         printfn "%s: waiting canceled; an admitted command may have executed. No automatic retry." operation
         return ConsoleCommandOutcome.Unconfirmed
+    | AgentAskResult.InvalidRequest error ->
+        printfn "%s: request rejected before admission: %A." operation error
+        return ConsoleCommandOutcome.Unconfirmed
     | AgentAskResult.Faulted error -> return ConsoleCommandOutcome.StopServer error
 }
 
 // One-time panel codes go to the console only, like reset-password codes: never to the log.
-let private adminCode (admin: Agent<AdminMessage> option) command (lifetime: int) = task {
+let private adminCode (admin: ReliableAgent<AdminMessage> option) command (lifetime: int) = task {
     match admin with
     | None ->
         printfn "The admin panel is disabled ([Admin] Enabled = false)."
@@ -91,8 +94,8 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
-let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Agent<AdminMessage> option)
-                        (game: unit -> Agent<ServerRuntimeMessage> option) (supervision: Task) (canceled: Task) = task {
+let private waitForStop settings (authentication: ReliableAgent<AuthMessage>) (admin: ReliableAgent<AdminMessage> option)
+                        (game: unit -> ReliableAgent<ServerRuntimeMessage> option) (supervision: Task) (canceled: Task) = task {
     let chatInput = settings.Server.ChatInput
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
@@ -190,7 +193,7 @@ let private waitForStop settings (authentication: Agent<AuthMessage>) (admin: Ag
     return serviceFailure
 }
 
-let private stopRuntime settings (logger: ILogger) (runtime: Agent<ServerRuntimeMessage>) = task {
+let private stopRuntime settings (logger: ILogger) (runtime: ReliableAgent<ServerRuntimeMessage>) = task {
     if not runtime.Completion.IsCompleted then
         use deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(float settings.Runtime.ShutdownTimeoutMs + 2000.0))
         let! admitted = runtime.PostAsync(ServerRuntimeMessage.Stop, deadline.Token)
@@ -228,7 +231,7 @@ let private stopHost (host: Microsoft.AspNetCore.Builder.WebApplication option) 
 let private loadGroundMarks settings moderation (logger: ILogger) = task {
     let! loaded = Task.Run(fun () -> SqliteGroundMarkStore.loadAll settings.Database CancellationToken.None)
     match loaded with
-    | Error error -> return Error (sprintf "%A" error)
+    | Error error -> return Error error
     | Ok stored ->
         let blocked, kept =
             stored.Marks |> List.partition (fun record -> not (Dreamsleeve.Server.Domain.Moderation.allows moderation record.Mark.Text))
@@ -247,7 +250,6 @@ let private loadGuilds settings moderation = task {
     let! loaded = Task.Run(fun () -> SqliteGuildStore.loadAll settings.Database CancellationToken.None)
     return
         loaded
-        |> Result.mapError (sprintf "%A")
         |> Result.map (fun stored ->
             { stored with Profiles = stored.Profiles |> List.map (Dreamsleeve.Server.Domain.Moderation.publicProfile moderation) })
 }
@@ -257,7 +259,7 @@ let private loadGuilds settings moderation = task {
 [<Literal>]
 let private WriterDrainSeconds = 30
 
-let private stopWriter (logger: ILogger) (what: string) (writer: Agent<'Write>) = task {
+let private stopWriter (logger: ILogger) (what: string) (writer: ReliableAgent<'Write>) = task {
     writer.Complete() |> ignore
     try do! writer.Completion.WaitAsync(TimeSpan.FromSeconds(float WriterDrainSeconds))
     with :? TimeoutException ->
@@ -271,68 +273,153 @@ let private stopWriter (logger: ILogger) (what: string) (writer: Agent<'Write>) 
 /// their writers, the ENet transport and the runtime. HTTP, accounts and the panel
 /// outlive it. Completion comes once the transport and the writers are released,
 /// so the next instance binds the port again and loads everything the last one wrote.
-let private startGame publishHttp settings (game: GameSettings) moderation pseudonyms (authentication: Agent<AuthMessage>) (logger: ILogger)
-                      (_: CancellationToken) : Task<SupervisedChild<Agent<ServerRuntimeMessage>>> = task {
-    let! loaded = loadGroundMarks settings moderation logger
-    let records, nextId =
-        match loaded with
-        | Ok value -> value
-        | Error error -> raise (InvalidOperationException $"Ground mark storage failed: {error}")
-    let! guilds = loadGuilds settings moderation
-    let guilds =
-        match guilds with
-        | Ok value -> value
-        | Error error -> raise (InvalidOperationException $"Guild storage failed: {error}")
-    let writer = SqliteGroundMarkStore.startWriter settings.Database logger game.GroundMarks.MaxPendingWrites
-    let guildWriter = SqliteGuildStore.startWriter settings.Database logger game.Guilds.MaxPendingWrites
-    logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
-    logger.LogInformation("Guilds loaded: {Count}, next id {NextId}", guilds.Guilds.Length, guilds.NextId)
-    match EnetTransport.createWithPhantoms game.Server game.Phantoms logger with
-    | Error error ->
-        do! stopWriter logger "Ground mark" writer
-        do! stopWriter logger "Guild" guildWriter
-        return raise (InvalidOperationException $"ENet startup failed: {error}")
-    | Ok transport ->
-        let phantomStorage = PhantomStorage.create game.Phantoms
-        let phantomHttp = PhantomHttp.create game.Phantoms phantomStorage
-        publishHttp (Some phantomHttp)
-        let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
-        let guildStorage = {
-            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
-            Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion
+[<RequireQualifiedAccess>]
+type private GameStartError =
+    | GroundMarkStorage of AccountStoreError
+    | GuildStorage of AccountStoreError
+    | Transport of string
+    | Agent of AgentStartError
+
+let private joinAbortedOwner (completion: Task) = task {
+    try do! completion
+    with :? OperationCanceledException when completion.IsCanceled -> ()
+}
+
+let private abortWriters (writer: ReliableAgent<GroundMarkWrite>) (guildWriter: ReliableAgent<GuildWrite>) = task {
+    writer.Abort()
+    guildWriter.Abort()
+    let joined = Task.WhenAll [joinAbortedOwner writer.Completion :> Task; joinAbortedOwner guildWriter.Completion :> Task]
+    try do! joined
+    with error ->
+        if joined.IsFaulted then return! Task.FromException<unit> joined.Exception
+        else return! Task.FromException<unit> error
+}
+
+/// A real cleanup fault after a typed refusal preserves that refusal and all
+/// cleanup exceptions; ordinary refused startup does not manufacture an exception.
+type private GameStartCleanupException(rejection: GameStartError, failures: exn list) =
+    inherit AggregateException("Game startup was refused and construction cleanup failed.", failures)
+    member _.Rejection = rejection
+
+let private startGame publishHttp settings (game: GameSettings) moderation pseudonyms (authentication: ReliableAgent<AuthMessage>) (logger: ILogger)
+                      (_: CancellationToken) : Task<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>> = task {
+    let writerPlan = SqliteGroundMarkStore.tryPrepareWriter settings.Database logger game.GroundMarks.MaxPendingWrites
+    let guildWriterPlan = SqliteGuildStore.tryPrepareWriter settings.Database logger game.Guilds.MaxPendingWrites
+    match writerPlan, guildWriterPlan with
+    | Error error, _ | _, Error error -> return Error(GameStartError.Agent error)
+    | Ok writerPlan, Ok guildWriterPlan ->
+        // Register only acquired resources; a returned child's Completion assumes
+        // ownership. Failed construction attempts every cleanup and records all faults.
+        let cleanups = ResizeArray<unit -> Task>()
+        let construct = task {
+            let! loaded = loadGroundMarks settings moderation logger
+            match loaded with
+            | Error error -> return Error(GameStartError.GroundMarkStorage error)
+            | Ok(records, nextId) ->
+                let! loadedGuilds = loadGuilds settings moderation
+                match loadedGuilds with
+                | Error error -> return Error(GameStartError.GuildStorage error)
+                | Ok guilds ->
+                    let writer = writerPlan.Start()
+                    cleanups.Add(fun () -> task {
+                        writer.Abort()
+                        do! joinAbortedOwner writer.Completion
+                    })
+                    let guildWriter = guildWriterPlan.Start()
+                    // Replace the first writer's cleanup once both were acquired:
+                    // abort both before joining, retaining every completion fault.
+                    cleanups[cleanups.Count - 1] <- fun () -> abortWriters writer guildWriter
+                    logger.LogInformation("Ground marks loaded: {Count}, next id {NextId}", records.Length, nextId)
+                    logger.LogInformation("Guilds loaded: {Count}, next id {NextId}", guilds.Guilds.Length, guilds.NextId)
+                    match EnetTransport.createWithPhantoms game.Server game.Phantoms logger with
+                    | Error error -> return Error(GameStartError.Transport error)
+                    | Ok transport ->
+                        cleanups.Add(fun () -> task { transport.Dispose() })
+                        let phantomStorage = PhantomStorage.create game.Phantoms
+                        cleanups.Add(fun () -> phantomStorage.Dispose() :> Task)
+                        let phantomHttp = PhantomHttp.create game.Phantoms phantomStorage
+                        cleanups.Add(fun () -> phantomHttp.Dispose() :> Task)
+                        let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref }
+                        let guildStorage = {
+                            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
+                            Writer = guildWriter.Ref; WriterStopped = guildWriter.Completion
+                        }
+                        match ServerRuntime.startWithPhantoms phantomStorage phantomHttp game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger with
+                        | Error error -> return Error(GameStartError.Agent error)
+                        | Ok runtime ->
+                            cleanups.Add(fun () -> task {
+                                publishHttp None
+                                runtime.Abort()
+                                do! joinAbortedOwner runtime.Completion
+                            })
+                            publishHttp (Some phantomHttp)
+                            let! admitted = authentication.Ref.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.Map ServerRuntimeMessage.AccountChanged))
+                            match admitted with
+                            | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
+                            let completion = task {
+                                let! outcome = task {
+                                    try
+                                        do! runtime.Completion
+                                        return None
+                                    with error -> return Some error
+                                }
+                                if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
+                                try transport.Dispose()
+                                with error -> logger.LogError(error, "ENet transport disposal failed")
+                                publishHttp None
+                                do! phantomHttp.Dispose()
+                                try do! phantomStorage.Dispose()
+                                with error -> logger.LogError(error, "Phantom storage disposal failed")
+                                try do! stopWriter logger "Ground mark" writer
+                                with error -> logger.LogError(error, "Ground mark writer failed")
+                                try do! stopWriter logger "Guild" guildWriter
+                                with error -> logger.LogError(error, "Guild writer failed")
+                                match outcome with
+                                | Some error -> raise error
+                                | None -> ()
+                            }
+                            return Ok {
+                                SupervisedChild.Value = runtime
+                                SupervisedChild.Completion = completion
+                                SupervisedChild.Stop = fun () -> stopRuntime settings logger runtime
+                            }
         }
-        let runtime =
-            ServerRuntime.startWithPhantoms phantomStorage phantomHttp game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger
-        let! _ = authentication.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value.Map ServerRuntimeMessage.AccountChanged))
-        let completion = task {
-            let! outcome = task {
-                try
-                    do! runtime.Completion
-                    return None
-                with error -> return Some error
-            }
-            if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
-            try transport.Dispose()
-            with error -> logger.LogError(error, "ENet transport disposal failed")
-            publishHttp None
-            do! phantomHttp.Dispose()
-            try do! phantomStorage.Dispose()
-            with error -> logger.LogError(error, "Phantom storage disposal failed")
-            try do! stopWriter logger "Ground mark" writer
-            with error -> logger.LogError(error, "Ground mark writer failed")
-            try do! stopWriter logger "Guild" guildWriter
-            with error -> logger.LogError(error, "Guild writer failed")
-            match outcome with
-            | Some error -> raise error
-            | None -> ()
+        let! outcome = task {
+            try
+                let! result = construct
+                return Ok result
+            with error -> return Error error
         }
-        return { SupervisedChild.Value = runtime; SupervisedChild.Completion = completion
-                 SupervisedChild.Stop = fun () -> stopRuntime settings logger runtime }
+        let releaseFailedConstruction () = task {
+            let failures = ResizeArray<exn>()
+            for cleanup in cleanups |> Seq.rev do
+                try do! cleanup ()
+                with error ->
+                    failures.Add error
+                    logger.LogError(error, "Failed construction resource cleanup faulted")
+            return List.ofSeq failures
+        }
+        match outcome with
+        | Ok(Ok child) -> return Ok child
+        | Ok(Error error) ->
+            logger.LogError("Game startup refused: {Error}", error)
+            let! failures = releaseFailedConstruction ()
+            match failures with
+            | [] -> return Error error
+            | failures ->
+                return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(GameStartCleanupException(error, failures))
+        | Error error ->
+            logger.LogError(error, "Game startup faulted before ownership transfer")
+            let! failures = releaseFailedConstruction ()
+            match failures with
+            | [] -> return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>> error
+            | failures ->
+                return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(AggregateException("Game startup and resource cleanup faulted.", error :: failures))
 }
 
 /// The supervisor's events in the log. firstStart settles with the first start:
 /// false when it failed, which is a configuration or storage problem, not a crash.
-let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSource<bool>) event =
+let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSource<bool>) (event: SupervisorEvent<ReliableAgent<ServerRuntimeMessage>, GameStartError>) =
     let recovery = settings.Recovery
     match event with
     | SupervisorEvent.Started(_, 0) ->
@@ -342,6 +429,9 @@ let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSou
     | SupervisorEvent.Started(_, restarts) ->
         logger.LogWarning("Game runtime restarted (restart {Restarts}), listening on {Address}:{Port}; players reconnect on their own",
                           restarts, settings.Server.BindAddress, settings.Server.Port)
+    | SupervisorEvent.StartRejected error ->
+        logger.LogError("Game runtime startup refused: {Error}", error)
+        firstStart.TrySetResult false |> ignore
     | SupervisorEvent.StartFailed error ->
         logger.LogError(error, "Game runtime failed to start")
         firstStart.TrySetResult false |> ignore
@@ -356,7 +446,7 @@ let private gameEvents settings (logger: ILogger) (firstStart: TaskCompletionSou
         logger.LogCritical("Game runtime failed {Failures} times within {WindowSeconds} s; stopping the server", failures, recovery.WindowSeconds)
         firstStart.TrySetResult false |> ignore
 
-let private serve settings (game: GameSettings) moderation configuration pseudonyms authentication admin (logger: ILogger) (log: Serilog.ILogger) = task {
+let private serve settings (game: GameSettings) moderation configuration pseudonyms (authentication: ReliableAgent<AuthMessage>) (admin: ReliableAgent<AdminMessage> option) (logger: ILogger) (log: Serilog.ILogger) = task {
     let steam = settings.Authentication.Steam
     if steam.Enabled then
         let key = not (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable WebPorts.SteamKeyVariable))
@@ -365,96 +455,105 @@ let private serve settings (game: GameSettings) moderation configuration pseudon
     let mutable content = None
     let currentContent () = lock contentGate (fun () -> content)
     let publishContent value = lock contentGate (fun () -> content <- value)
-    let web = AuthRoutes.buildWithPhantoms currentContent game.Phantoms.HttpRequestsPerMinute (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
-    let describer = SessionDescriber.start 64
-    let mutable panel = None
-    let supervisor = ref None
-    let current () = supervisor.Value |> Option.bind (fun (running: AgentSupervisor<Agent<ServerRuntimeMessage>>) -> running.Current)
-    try
-        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-        let handler = ConsoleCancelEventHandler(fun _ event ->
-            event.Cancel <- true
-            canceled.TrySetResult() |> ignore)
-        Console.CancelKeyPress.AddHandler handler
-        use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
-
+    match SessionDescriber.start 64 with
+    | Error error ->
+        logger.LogError("Session describer configuration refused: {Error}", error)
+        return 1
+    | Ok describer ->
+        let web = AuthRoutes.buildWithPhantoms currentContent game.Phantoms.HttpRequestsPerMinute (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
+        let mutable panel = None
+        let supervisor = ref None
+        let current () = supervisor.Value |> Option.bind (fun (running: AgentSupervisor<ReliableAgent<ServerRuntimeMessage>, GameStartError>) -> running.Current)
         try
-            let mutable exitCode = 0
+            let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+            let handler = ConsoleCancelEventHandler(fun _ event ->
+                event.Cancel <- true
+                canceled.TrySetResult() |> ignore)
+            Console.CancelKeyPress.AddHandler handler
+            use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
+
             try
-                do! web.StartAsync()
-                // The panel starts after authentication and stops before the game part.
-                let mutable canStartGame = true
-                match admin with
-                | Some service ->
-                    let ports = WebPorts.admin service authentication current describer configuration
-                    let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
-                    panel <- Some host
-                    do! host.StartAsync()
-                    logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
-                    let! outcome =
-                        service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
-                        |> consoleCommand "Admin startup status" (fun status -> task {
-                            match status with
-                            | Ok (AdminReply.Configured false) ->
-                                return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
-                            | Ok _ -> return ConsoleCommandOutcome.Handled
-                            | Error error ->
-                                logger.LogWarning("Admin panel status unavailable: {Error}", error)
-                                return ConsoleCommandOutcome.Handled
-                        })
-                    match outcome with
-                    | ConsoleCommandOutcome.Handled -> ()
-                    | ConsoleCommandOutcome.Unconfirmed ->
-                        canStartGame <- false
-                        exitCode <- 1
-                    | ConsoleCommandOutcome.StopServer error ->
-                        logger.LogError(error, "Admin startup request failed")
-                        canStartGame <- false
-                        exitCode <- 1
-                | None -> logger.LogInformation("Admin panel disabled")
-                if canStartGame then
-                    let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
-                    let running =
-                        AgentSupervisor.start "game-supervisor" (Configuration.restartPolicy settings.Recovery)
-                            (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
-                    supervisor.Value <- Some running
-                    let! started = firstStart.Task
-                    if started then
-                        let! serviceFailure = waitForStop settings authentication admin current running.Completion canceled.Task
-                        match serviceFailure with
-                        | None -> ()
-                        | Some error ->
-                            logger.LogError(error, "Console service request faulted")
+                let mutable exitCode = 0
+                try
+                    do! web.StartAsync()
+                    // The panel starts after authentication and stops before the game part.
+                    let mutable canStartGame = true
+                    match admin with
+                    | Some service ->
+                        let ports = WebPorts.admin service authentication current describer configuration
+                        let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
+                        panel <- Some host
+                        do! host.StartAsync()
+                        logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
+                        let! outcome =
+                            service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
+                            |> consoleCommand "Admin startup status" (fun status -> task {
+                                match status with
+                                | Ok (AdminReply.Configured false) ->
+                                    return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                                | Ok _ -> return ConsoleCommandOutcome.Handled
+                                | Error error ->
+                                    logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                                    return ConsoleCommandOutcome.Handled
+                            })
+                        match outcome with
+                        | ConsoleCommandOutcome.Handled -> ()
+                        | ConsoleCommandOutcome.Unconfirmed ->
+                            canStartGame <- false
                             exitCode <- 1
-                    if not started || running.Completion.IsFaulted then exitCode <- 1
-            with error ->
-                logger.LogError(error, "Server listener failed")
-                exitCode <- 1
-
-            // Stop HTTP admission before stopping the account and admin agents.
-            // Existing bounded requests may finish while the ENet runtime drains.
-            let! panelStopped = stopHost panel "Admin" logger
-            let! authStopped = stopHost (Some web) "Authentication" logger
-            if not (panelStopped && authStopped) then exitCode <- 1
-
-            match supervisor.Value with
-            | Some running ->
-                try do! running.StopAsync()
+                        | ConsoleCommandOutcome.StopServer error ->
+                            logger.LogError(error, "Admin startup request failed")
+                            canStartGame <- false
+                            exitCode <- 1
+                    | None -> logger.LogInformation("Admin panel disabled")
+                    if canStartGame then
+                        let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                        let startedSupervisor =
+                            AgentSupervisor.tryStart "game-supervisor" (Configuration.restartPolicy settings.Recovery)
+                                (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
+                        match startedSupervisor with
+                        | Error error ->
+                            logger.LogError("Supervisor configuration refused: {Error}", error)
+                            exitCode <- 1
+                        | Ok running ->
+                            supervisor.Value <- Some running
+                            let! started = firstStart.Task
+                            if started then
+                                let! serviceFailure = waitForStop settings authentication admin current running.Completion canceled.Task
+                                match serviceFailure with
+                                | None -> ()
+                                | Some error ->
+                                    logger.LogError(error, "Console service request faulted")
+                                    exitCode <- 1
+                            if not started || running.Completion.IsFaulted then exitCode <- 1
                 with error ->
-                    logger.LogError(error, "Game runtime stopped with an error")
+                    logger.LogError(error, "Server listener failed")
                     exitCode <- 1
-            | None -> ()
-            return exitCode
+
+                // Stop HTTP admission before stopping the account and admin agents.
+                // Existing bounded requests may finish while the ENet runtime drains.
+                let! panelStopped = stopHost panel "Admin" logger
+                let! authStopped = stopHost (Some web) "Authentication" logger
+                if not (panelStopped && authStopped) then exitCode <- 1
+
+                match supervisor.Value with
+                | Some running ->
+                    try do! running.StopAsync()
+                    with error ->
+                        logger.LogError(error, "Game runtime stopped with an error")
+                        exitCode <- 1
+                | None -> ()
+                return exitCode
+            finally
+                Console.CancelKeyPress.RemoveHandler handler
         finally
-            Console.CancelKeyPress.RemoveHandler handler
-    finally
-        panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
-        web.DisposeAsync().AsTask().GetAwaiter().GetResult()
-        describer.Complete() |> ignore
-        describer.Completion.GetAwaiter().GetResult()
+            panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
+            web.DisposeAsync().AsTask().GetAwaiter().GetResult()
+            describer.Complete() |> ignore
+            describer.Completion.GetAwaiter().GetResult()
 }
 
-let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
+let private stopAuthentication (authentication: ReliableAgent<AuthMessage>) = task {
     if not authentication.Completion.IsCompleted then
         let! admitted = authentication.PostAsync AuthMessage.Stop
         match admitted with
@@ -463,7 +562,7 @@ let private stopAuthentication (authentication: Agent<AuthMessage>) = task {
     do! authentication.Completion
 }
 
-let private stopAdmin (admin: Agent<AdminMessage> option) = task {
+let private stopAdmin (admin: ReliableAgent<AdminMessage> option) = task {
     match admin with
     | Some service when not service.Completion.IsCompleted ->
         let! admitted = service.PostAsync AdminMessage.Stop
@@ -528,8 +627,8 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
                 return 1
             | Ok authentication ->
                 let startAdmin () =
-                    if settings.Admin.Enabled then Some (AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
-                    else None
+                    if settings.Admin.Enabled then AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System |> Result.map Some
+                    else Ok None
                 let! result =
                     ServiceLifetime.run authentication startAdmin
                         (fun admin -> serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log)

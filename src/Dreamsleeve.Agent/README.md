@@ -304,3 +304,6 @@ as it starts. `observe` receives the events (`Started`, `StartFailed`, `Stopped`
 `GaveUp`) on the supervisor's handler: quick work such as logging only; exceptions are ignored.
 The supervisor neither restores the child's state nor replays its accepted commands.
 `startWithTimeProvider` lets tests drive the failure window without waiting.
+
+
+The child-start delegate returns `Task<Result<SupervisedChild<'Child>, 'StartError>>`. `SupervisorEvent<'Child,'StartError>.StartRejected` preserves an expected construction refusal; `StartFailed` preserves an unexpected thrown exception. Both use the same existing whole-child reconstruction policy. At exhaustion, `SupervisorGaveUpException<'StartError>.Failure` retains `SupervisorFailure.StartRejected reason`, `Faulted originalException`, or `CompletedUnexpectedly`; only an actual fault supplies `InnerException`. A rejected factory must release and join partially acquired resources before returning its typed error. This reconstruction policy never retries an individual admitted operation.

@@ -67,7 +67,7 @@ module WebPorts =
             if String.IsNullOrWhiteSpace key then Task.FromResult (Ok { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone })
             else SteamOpenId.profile steamHttp.Value key steamId token }
 
-    let auth (settings: ApplicationConfig) (authentication: Agent<AuthMessage>) : AuthPorts =
+    let auth (settings: ApplicationConfig) (authentication: ReliableAgent<AuthMessage>) : AuthPorts =
         { Access = fun command timeout token ->
             authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
           Steam = steam settings }
@@ -79,7 +79,7 @@ module WebPorts =
 
     /// runtime is the game runtime now serving, none while it restarts: the panel
     /// then reports it unavailable, and stored changes apply at the next sign-in.
-    let admin (service: Agent<AdminMessage>) (authentication: Agent<AuthMessage>) (runtime: unit -> Agent<ServerRuntimeMessage> option)
+    let admin (service: ReliableAgent<AdminMessage>) (authentication: ReliableAgent<AuthMessage>) (runtime: unit -> ReliableAgent<ServerRuntimeMessage> option)
               (describer: Agent<DescribeRequest>) configuration : AdminPorts =
         let ask message timeout token =
             match runtime () with
