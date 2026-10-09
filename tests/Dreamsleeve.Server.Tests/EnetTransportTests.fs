@@ -293,6 +293,16 @@ let tests = testSequenced <| testList "ENet transport" [
         Expect.isError (ServerConfig.validate { ServerConfig.defaults with ReceiveBufferBytes = 0 }) "invalid receive buffer"
         Expect.isError (ServerConfig.validate { ServerConfig.defaults with SendBufferBytes = -1 }) "invalid send buffer"
 
+    testCase "unknown delivery policy is rejected before native access or budget reservation" <| fun _ ->
+        let hostBudget = PacketBudget(2, 64L)
+        let peerBudget = PacketBudget(2, 64L)
+        for value in [ -1; 99 ] do
+            let result = OutgoingPackets.TrySend(Unchecked.defaultof<EnetPeer>, ReadOnlySpan<byte>([|1uy|]),
+                                                hostBudget, peerBudget, 0uy, enum<PacketDelivery> value)
+            Expect.equal result PacketSendResult.InvalidDelivery "Invalid CLR enum is a typed refusal."
+            Expect.equal (hostBudget.Packets, hostBudget.Bytes, peerBudget.Packets, peerBudget.Bytes)
+                         (0, 0L, 0, 0L) "No native peer access or lease mutation is needed."
+
     testCase "outgoing leases enforce packet and byte budgets, then release after ACK and reset" <| fun _ ->
         withPeers (fun _ peer pump ->
             let hostBudget = PacketBudget(8, 64L)

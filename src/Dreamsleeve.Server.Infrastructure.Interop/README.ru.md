@@ -24,6 +24,9 @@ host/peer происходят на владельце транспорта. Э�
 `OutgoingPackets.TrySend` получает канал и reliability от классификатора протокола:
 Control/Chat reliable, Realtime sequenced flags=0. Предел realtime проверяется
 до admission по согласованному payload MTU; reliable snapshot может фрагментироваться.
+Неизвестное значение CLR enum `PacketDelivery` возвращает `InvalidDelivery` до
+обращения к native peer, резервирования бюджетов и создания packet lease.
+Для F# transport это ошибка внутреннего контракта (`TransportSendError.Faulted`).
 
 `EnetPump.Service` — узкий вызов host_service с null event и timeout=0. После
 protocol pump адаптер ограниченно извлекает готовые события через CheckEvents.

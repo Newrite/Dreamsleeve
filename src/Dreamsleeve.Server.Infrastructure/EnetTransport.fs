@@ -272,6 +272,7 @@ module EnetTransport =
                     Ok ()
                 | PacketSendResult.BudgetExceeded -> Error(TransportSendError.BudgetExceeded "Outgoing ENet packet budget exceeded.")
                 | PacketSendResult.PeerRejected -> Error(TransportSendError.PeerRejected "ENet peer rejected the outgoing packet.")
+                | PacketSendResult.InvalidDelivery -> Error(TransportSendError.Faulted "Outgoing ENet delivery policy is invalid.")
                 | unknown when not (Enum.IsDefined unknown) -> Error(TransportSendError.Faulted "Unknown ENet packet admission result.")
 
     let private dispose state () =

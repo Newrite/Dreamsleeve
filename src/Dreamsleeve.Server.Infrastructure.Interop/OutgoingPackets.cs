@@ -41,7 +41,8 @@ public enum PacketSendResult
 {
     Sent,
     BudgetExceeded,
-    PeerRejected
+    PeerRejected,
+    InvalidDelivery
 }
 
 // C# expresses the managed function pointer required by yENet. Routing, polling,
@@ -79,6 +80,25 @@ public static unsafe class OutgoingPackets
     public static PacketSendResult TrySend(EnetPeer peer, ReadOnlySpan<byte> bytes,
         PacketBudget hostBudget, PacketBudget peerBudget, byte channel, PacketDelivery delivery)
     {
+        // An unknown CLR enum value is rejected before reserving budgets or
+        // creating a native packet. Valid delivery policies are enumerated here.
+        EnetPacketFlag flags;
+        switch (delivery)
+        {
+            case PacketDelivery.Reliable:
+            case PacketDelivery.ReliableBulk:
+                flags = EnetPacketFlag.Reliable;
+                break;
+            case PacketDelivery.Sequenced:
+                flags = default;
+                break;
+            case PacketDelivery.SequencedFragmented:
+                flags = EnetPacketFlag.UnreliableFragment;
+                break;
+            default:
+                return PacketSendResult.InvalidDelivery;
+        }
+
         // ENet silently upgrades ordinary and fragmented unreliable packets to
         // reliable at FFFF. Advance the channel epoch with an empty reliable
         // transport marker first: a pose itself must never become reliable.
@@ -110,13 +130,6 @@ public static unsafe class OutgoingPackets
         {
             var lease = new Lease(hostBudget, peerBudget, bytes.Length);
             handle = GCHandle.Alloc(lease);
-            var flags = delivery switch
-            {
-                PacketDelivery.Reliable or PacketDelivery.ReliableBulk => EnetPacketFlag.Reliable,
-                PacketDelivery.Sequenced => default,
-                PacketDelivery.SequencedFragmented => EnetPacketFlag.UnreliableFragment,
-                _ => throw new ArgumentOutOfRangeException(nameof(delivery))
-            };
             packet = EnetPacket.Create(bytes, flags,
                 &Released, (void*)GCHandle.ToIntPtr(handle));
             if (!packet.IsCreated)
