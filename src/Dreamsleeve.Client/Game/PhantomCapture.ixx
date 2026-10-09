@@ -56,6 +56,7 @@ export namespace Dreamsleeve::Game::PhantomCapture
   {
     std::vector<RE::NiAVObject*> nodes;
     if (auto collected = N::Collect(&root, nodes); !collected) return std::unexpected(collected.error());
+
     AppearanceProbe result;
     // Reparenting/reordering the same attachments is not an appearance change.
     std::ranges::sort(nodes, std::less<RE::NiAVObject*>{});
@@ -65,10 +66,12 @@ export namespace Dreamsleeve::Game::PhantomCapture
         auto auxiliary = N::Auxiliary(*g);
         if (!auxiliary) return std::unexpected(auxiliary.error());
         if (*auxiliary) continue;
+
         auto& d  = g->GetGeometryRuntimeData();
         auto  v  = std::uint64_t(reinterpret_cast<std::uintptr_t>(g));
         v       ^= std::uint64_t(reinterpret_cast<std::uintptr_t>(d.skinInstance.get())) << 7;
         if (d.skinInstance) v ^= std::uint64_t(reinterpret_cast<std::uintptr_t>(d.skinInstance->skinPartition.get())) << 13;
+
         if (auto* dynamic = g->AsDynamicTriShape())
         {
           auto&               data = dynamic->GetDynamicTrishapeRuntimeData();
@@ -89,6 +92,7 @@ export namespace Dreamsleeve::Game::PhantomCapture
               }
           }
         }
+
         if (auto* tri = g->AsTriShape())
         {
           const auto& c  = tri->GetTrishapeRuntimeData();
@@ -97,6 +101,7 @@ export namespace Dreamsleeve::Game::PhantomCapture
         }
         result.structure += v * 0x9e3779b185ebca87ULL;
       }
+
     return result;
   }
 
@@ -189,6 +194,7 @@ public:
       // context. Keep the published asset/base while waiting for a new source.
       // Never sample the detached old root or label old transforms as fresh.
       if (p.Get3D(false) != root.get()) return A::Fail(P::Failure::Busy, "native.source-rebuilding");
+
       P::Snapshot out    = last;
       out.generation     = stamp.generation;
       out.sequence       = stamp.sequence;
@@ -199,6 +205,7 @@ public:
       out.channels.resize(layout.requiredChannels.size());
       anchors.resize(layout.requiredChannels.size());
       out.bounds.resize(layout.bounds.size());
+
       std::uint32_t missing = 0;
       for (std::size_t i = 0; i < layout.requiredChannels.size(); ++i)
       {
@@ -228,10 +235,21 @@ public:
         else if (last.channels.empty())
           return A::Fail(P::Failure::MissingSource, "native.initial-channel");
         if (!hadTransform && geometry) ++missing;
-        out.channels[i].hidden = geometry && (retainMissing && !hadTransform && transform
-                                                ? last.channels[i].hidden
-                                                : binding.visibility.Sample(transform != nullptr, attachment.hidden, firstPerson));
+
+        if (!geometry)
+        {
+          out.channels[i].hidden = false;
+        }
+        else if (retainMissing && !hadTransform && transform)
+        {
+          out.channels[i].hidden = last.channels[i].hidden;
+        }
+        else
+        {
+          out.channels[i].hidden = binding.visibility.Sample(transform != nullptr, attachment.hidden, firstPerson);
+        }
       }
+
       for (std::size_t i = 0; i < layout.bounds.size(); ++i)
       {
         auto& binding = bindings[layout.bounds[i]];
@@ -251,8 +269,10 @@ public:
           }
         }
       }
+
       auto checked = P::CheckSnapshot(out, asset);
       if (!checked) return std::unexpected(checked.error());
+
       missingGeometry = missing;
       last            = out;
       return out;

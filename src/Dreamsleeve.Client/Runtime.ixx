@@ -77,9 +77,11 @@ export namespace Runtime
     Host::Session                 session;
     Host::Bubbles                 bubbles;  // Active chat texts above fireflies; main thread only.
     Host::UiFile                  ui;
+
     std::filesystem::path         clientPath{std::filesystem::path{ConfigDirectory} / ClientConfig};
     std::filesystem::path         uiPath{std::filesystem::path{ConfigDirectory} / UiConfig};
     std::filesystem::path         aliasPath{std::filesystem::path{ConfigDirectory} / AliasConfig};
+
     GameContext                   context{GameContext::MainMenu};
     bool                          dataLoaded{};
     bool                          shutdown{};
@@ -266,6 +268,7 @@ export namespace Runtime
       state.ui = *ui;
     else
       logger::warn("UI settings ignored: {}", ui.error());
+
     const auto routes = Dream::RoutesOf(*settings);
     const auto chosen = state.ui.ui.route.empty() ? std::nullopt : Dream::RouteIndex(routes, state.ui.ui.route);
     if (!state.ui.ui.route.empty() && !chosen)
@@ -285,6 +288,7 @@ export namespace Runtime
 #endif
       return false;
     }
+
     state.session.ConfigureRoutes(
       routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
       state.ui.ui.route);
@@ -304,6 +308,7 @@ export namespace Runtime
 
     state.movement = Dream::MovementView::Create(settings->client.movement);
     state.app      = std::move(*app);
+
     // The first session already opens with the saved "hide my name" choice.
     state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
     logger::info(

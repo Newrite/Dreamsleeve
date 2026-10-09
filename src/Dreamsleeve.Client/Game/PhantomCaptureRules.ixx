@@ -70,14 +70,22 @@ public:
 
     AppearanceChange Observe(AppearanceProbe observed, std::uint64_t now)
     {
-      const auto change = observed.structure != accepted.structure ? AppearanceChange::Structure
-                        : !Near(accepted, observed, 0.25f)         ? AppearanceChange::Deformation
-                                                                   : AppearanceChange::None;
+      auto change = AppearanceChange::None;
+      if (observed.structure != accepted.structure)
+      {
+        change = AppearanceChange::Structure;
+      }
+      else if (!Near(accepted, observed, 0.25f))
+      {
+        change = AppearanceChange::Deformation;
+      }
+
       if (change == AppearanceChange::None)
       {
         candidate.reset();
         return change;
       }
+
       // Structural updates settle promptly. In-place deformations must settle
       // for longer, with a tighter tolerance than the publication threshold.
       if (
@@ -88,6 +96,7 @@ public:
         since     = now;
         return AppearanceChange::None;
       }
+
       const auto settle = change == AppearanceChange::Structure ? 250000ULL : 1000000ULL;
       return now - since >= settle ? change : AppearanceChange::None;
     }

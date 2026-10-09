@@ -26,6 +26,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     void                                 (*normalizeBones)(RE::BSFlattenedBoneTree&){};
     RE::NiPointer<RE::NiObject>          (*clone)(RE::NiNode*, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>&){};
   };
+
   enum class Transform
   {
     World,
@@ -121,6 +122,7 @@ export namespace Dreamsleeve::Game::PhantomNative
       nextChannels.emplace(replacement.get(), channels.at(object));
       mapped.emplace(object, std::move(replacement));
     }
+
     std::unordered_set<RE::NiSkinInstance*> remappedSkins;
     for (auto* object : old)
       if (auto* geometry = object->AsGeometry())
@@ -141,6 +143,7 @@ export namespace Dreamsleeve::Game::PhantomNative
             skin->boneWorldTransforms[b] = &skin->bones[b]->world;
           }
         }
+
     for (const auto& [parent, child] : edges)
     {
       if (child->parent != parent) return A::Fail(P::Failure::InvalidLink, "Некорректный родитель узла фантома");
@@ -148,6 +151,7 @@ export namespace Dreamsleeve::Game::PhantomNative
       if (replacement == child) parent->DetachChild(child);
       mapped.at(parent)->AsNode()->AttachChild(replacement, false);
     }
+
     for (const auto& [name, count] : containers)
       logger::info("[Phantom] stream containers: {} x{} -> NiNode", name, count);
     logger::info("[Phantom] stream tree retains {} geometry objects and {} pose channels", geometryCount, nextChannels.size());
@@ -238,11 +242,13 @@ export namespace Dreamsleeve::Game::PhantomNative
     lit->SetMaterial(temporary, true);
     temporary->~BSLightingShaderMaterialBase();
     RE::free(temporary);
+
     auto*                        material = static_cast<RE::BSLightingShaderMaterialBase*>(lit->material);
     RE::NiPointer<RE::NiTexture> white;
     RE::BSShaderManager::GetTexture("textures\\effects\\fxwhite.dds", true, white, false);
     if (!white) return A::Fail(P::Failure::InvalidLink, "required local ghost texture fxwhite.dds missing");
     material->diffuseTexture = RE::NiPointer<RE::NiSourceTexture>{static_cast<RE::NiSourceTexture*>(white.get())};
+
     using Shader             = RE::BSShaderProperty::EShaderPropertyFlag;
     lit->flags.reset(Shader::kCastShadows, Shader::kReceiveShadows, Shader::kSpecular);
     lit->flags.set(Shader::kZBufferTest, Shader::kZBufferWrite, Shader::kNoFade, Shader::kRimLighting);
@@ -254,6 +260,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     }
     lit->flags.set(Shader::kOwnEmit);
     ApplyLook(*lit, look);
+
     RE::NiPointer<RE::NiAlphaProperty> alpha{engine.alpha()};
     if (!alpha) return A::Fail(P::Failure::Busy, "native.allocation");
     if (data.alphaProperty)
@@ -267,11 +274,62 @@ export namespace Dreamsleeve::Game::PhantomNative
     alpha->SetSrcBlendMode(RE::NiAlphaProperty::AlphaFunction::kSrcAlpha);
     alpha->SetDestBlendMode(RE::NiAlphaProperty::AlphaFunction::kOne);
     data.alphaProperty = alpha;
+
     lit->SetupGeometry(&geometry);
     lit->FinishSetupGeometry(&geometry);
     return {};
   }
 
+}
+
+namespace Dreamsleeve::Game::PhantomNative
+{
+  // Pairs borrow the live and detached trees retained by Prepare's root owners.
+  // Required surfaces receive independent clone materials before metadata stripping.
+  inline P::Result<void> PrepareRequiredMaterials(
+    const std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs,
+    const Engine& engine)
+  {
+    for (const auto& [source, target] : pairs)
+    {
+      auto* geometry = source->AsGeometry();
+      auto* copy     = target->AsGeometry();
+      if (!geometry || !copy) continue;
+      auto auxiliary = Auxiliary(*source);
+      if (!auxiliary) return std::unexpected(auxiliary.error());
+      if (*auxiliary) continue;
+
+      const auto& original = geometry->GetGeometryRuntimeData();
+      auto&       detached = copy->GetGeometryRuntimeData();
+      if (const auto* effect = netimmerse_cast<RE::BSEffectShaderProperty*>(original.shaderProperty.get()))
+      {
+        // Effect properties can be shared or omitted by the engine clone.
+        // Replace from source facts before filtering the cloned tree; never
+        // mutate the live property or silently lose this required surface.
+        if (!engine.lighting) return A::Fail(P::Failure::InvalidLink, "native lighting factory missing");
+        RE::NiPointer<RE::BSLightingShaderProperty> replacement{engine.lighting()};
+        if (!replacement || !replacement->material) return A::Fail(P::Failure::Busy, "native.allocation");
+        using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
+        if (original.skinInstance) replacement->flags.set(Shader::kSkinned);
+        if (effect->flags.all(Shader::kTwoSided)) replacement->flags.set(Shader::kTwoSided);
+        detached.shaderProperty = replacement;
+        logger::info(
+          "[Phantom] converted native effect surface '{}' to ghost lighting (skinned={})",
+          source->name.c_str(),
+          original.skinInstance != nullptr);
+      }
+
+      if (original.shaderProperty && original.shaderProperty == detached.shaderProperty)
+        return A::Fail(P::Failure::InvalidLink, "clone shares source shader property");
+    }
+
+    return {};
+  }
+
+}
+
+export namespace Dreamsleeve::Game::PhantomNative
+{
   struct Prepared
   {
     P::Asset             asset;
@@ -282,6 +340,7 @@ export namespace Dreamsleeve::Game::PhantomNative
   {
     if (!engine.mainThread || !engine.mainThread() || !engine.save || !engine.normalizeBones || !engine.alpha || !engine.clone)
       return A::Fail(P::Failure::Busy, "native capture outside game thread");
+
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     using Clock      = std::chrono::steady_clock;
     const auto start = Clock::now();
@@ -305,13 +364,16 @@ export namespace Dreamsleeve::Game::PhantomNative
 #endif
     auto* clone = holder ? holder->AsNode() : nullptr;
     if (!clone) return A::Fail(P::Failure::InvalidLink, "Не удалось клонировать модель");
+
     std::vector<RE::NiAVObject*> cloned;
     if (auto collected = Collect(clone, cloned); !collected) return std::unexpected(collected.error());
     const std::unordered_set<RE::NiAVObject*> sourceNodes{topology.begin(), topology.end()};
     for (auto* node : cloned)
       if (sourceNodes.contains(node)) return A::Fail(P::Failure::InvalidLink, "Копия содержит узлы исходной модели");
+
     for (auto* node : cloned)
       if (auto* tree = netimmerse_cast<RE::BSFlattenedBoneTree*>(node)) engine.normalizeBones(*tree);
+
     const std::unordered_set<RE::NiAVObject*> clonedNodes{cloned.begin(), cloned.end()};
     std::erase_if(pairs, [&](const auto& pair) { return !sourceNodes.contains(pair.first) || !clonedNodes.contains(pair.second); });
     std::unordered_map<const RE::NiTransform*, Binding> transforms;
@@ -325,36 +387,10 @@ export namespace Dreamsleeve::Game::PhantomNative
             source->name.c_str() ? source->name.c_str() : "",
             source->GetRTTI()->GetName(),
             source->parent && source->parent->name.c_str() ? source->parent->name.c_str() : ""));
-    for (const auto& [source, target] : pairs)
-    {
-      auto* geometry = source->AsGeometry();
-      auto* copy     = target->AsGeometry();
-      if (!geometry || !copy) continue;
-      auto auxiliary = Auxiliary(*source);
-      if (!auxiliary) return std::unexpected(auxiliary.error());
-      if (*auxiliary) continue;
-      const auto& original = geometry->GetGeometryRuntimeData();
-      auto&       detached = copy->GetGeometryRuntimeData();
-      if (const auto* effect = netimmerse_cast<RE::BSEffectShaderProperty*>(original.shaderProperty.get()))
-      {
-        // Effect properties can be shared or omitted by the engine clone.
-        // Replace from source facts before filtering the cloned tree; never
-        // mutate the live property or silently lose this required surface.
-        if (!engine.lighting) return A::Fail(P::Failure::InvalidLink, "native lighting factory missing");
-        RE::NiPointer<RE::BSLightingShaderProperty> replacement{engine.lighting()};
-        if (!replacement || !replacement->material) return A::Fail(P::Failure::Busy, "native.allocation");
-        using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
-        if (original.skinInstance) replacement->flags.set(Shader::kSkinned);
-        if (effect->flags.all(Shader::kTwoSided)) replacement->flags.set(Shader::kTwoSided);
-        detached.shaderProperty = replacement;
-        logger::info(
-          "[Phantom] converted native effect surface '{}' to ghost lighting (skinned={})",
-          source->name.c_str(),
-          original.skinInstance != nullptr);
-      }
-      if (original.shaderProperty && original.shaderProperty == detached.shaderProperty)
-        return A::Fail(P::Failure::InvalidLink, "clone shares source shader property");
-    }
+
+    if (auto materials = PrepareRequiredMaterials(pairs, engine); !materials)
+      return std::unexpected(std::move(materials.error()));
+
     // Clone may retain runtime-only metadata (FaceGen model/morph handles,
     // actor animation data, mod extras) which NiStream cannot reconstruct.
     // This is a controller-free visual snapshot, not another live actor.
@@ -362,6 +398,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     for (const auto& [source, target] : pairs)
       if (source->extra && source->extra == target->extra)
         return A::Fail(P::Failure::InvalidLink, "Копия разделяет метаданные с исходной моделью");
+
     std::unordered_map<RE::NiAVObject*, Binding> channels;
     for (const auto& [source, target] : pairs)
     {
@@ -369,6 +406,7 @@ export namespace Dreamsleeve::Game::PhantomNative
       target->world      = source->world;
       target->worldBound = source->worldBound;
     }
+
     // Materialize optimized bone transforms as ordinary owned NiNodes. NIF
     // links can now survive Save/Load; never retain a pointer to the live skin.
     std::unordered_map<const RE::NiTransform*, RE::NiNode*> bones;
@@ -415,6 +453,7 @@ export namespace Dreamsleeve::Game::PhantomNative
         skinCopy->boneWorldTransforms[b] = &bone->world;
       }
     }
+
     cloned.clear();
     if (auto collected = Collect(clone, cloned); !collected) return std::unexpected(collected.error());
     std::size_t strippedExtras = 0;
@@ -427,6 +466,7 @@ export namespace Dreamsleeve::Game::PhantomNative
       node->controllers.reset();
     }
     logger::info("[Phantom] removed {} clone extra-data entries before NiStream Save", strippedExtras);
+
     // A leaf excluded by the prototype must not retain controllers, lights
     // or shader dependencies in the network asset, even while hidden.
     for (auto* object : cloned | std::views::reverse)
@@ -440,6 +480,7 @@ export namespace Dreamsleeve::Game::PhantomNative
         channels.erase(object);
       }
     }
+
     auto streamRoot = StreamTree(clone, channels);
     if (!streamRoot) return std::unexpected(streamRoot.error());
     cloned.clear();
@@ -468,6 +509,7 @@ export namespace Dreamsleeve::Game::PhantomNative
       ms(saveStart, saveEnd));
 #endif
     if (!encoded) return std::unexpected(encoded.error());
+
     Prepared out{P::Asset{std::move(*encoded)}, {}};
     out.bindings.reserve(cloned.size());
     for (auto* node : cloned)

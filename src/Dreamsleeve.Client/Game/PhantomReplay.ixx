@@ -121,6 +121,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
       Stop("Изменился мир/интерьер");
       return;
     }
+
     s.space         = space;
     const auto load = s.reader.Read();
     if (!load.error.empty())
@@ -133,10 +134,12 @@ export namespace Dreamsleeve::Game::PhantomReplay
       Pause();
       return;
     }
+
     const auto elapsed = s.lastTick == Clock::time_point{}
                          ? 0ULL
                          : static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now - s.lastTick).count());
     s.lastTick         = now;
+
     if (!s.next) s.next = s.reader.Take();
     if (!s.next)
     {
@@ -155,12 +158,14 @@ export namespace Dreamsleeve::Game::PhantomReplay
     }
     if (s.current && !s.candidate && now >= s.beginAt) s.playheadUs += elapsed;
     if (s.current && now < s.beginAt) return;
+
     // Consume already elapsed samples; timestamps come from the saved capture.
     while (s.current && s.next && s.next->pose->generation == s.current->pose->generation && s.next->pose->sampledAtUs <= s.playheadUs)
     {
       s.current = std::move(s.next);
       s.next    = s.reader.Take();
     }
+
     const bool replace =
       !s.current || (s.next && s.next->pose->generation != s.current->pose->generation && s.next->pose->sampledAtUs <= s.playheadUs);
     if (replace)
@@ -185,6 +190,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
           frame.asset->Layout().bounds.size(),
           S::Scene::Reservation(*frame.asset) / 1048576.0);
       }
+
       auto       built      = s.candidate->Advance(context);
       const auto ms         = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
       s.buildingMs         += ms;
@@ -196,6 +202,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
         return;
       }
       if (*built != S::BuildProgress::Ready) return;
+
       s.status.buildMs = std::max(s.status.buildMs, s.buildingMs);
       s.scene          = std::move(s.candidate);
       s.context        = context;
@@ -210,6 +217,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
       s.status.memoryBytes = s.scene->MemoryBytes();
       logger::info("Phantom replay model ready: generation={}, build={:.2f} ms", s.current->pose->generation.value, s.buildingMs);
     }
+
     if (!s.scene || !s.current) return;
     const auto                 start = Clock::now();
     std::optional<P::Snapshot> interpolated;
@@ -219,6 +227,7 @@ export namespace Dreamsleeve::Game::PhantomReplay
       const auto t = std::clamp(double(s.playheadUs - a) / double(b - a), 0.0, 1.0);
       interpolated = P::Motion::Between(*s.current->pose, *s.next->pose, static_cast<float>(t));
     }
+
     S::FrameBudget budget;
     auto           applied = s.scene->Apply(interpolated ? *interpolated : *s.current->pose, s.context, budget);
     if (!applied)
@@ -226,12 +235,14 @@ export namespace Dreamsleeve::Game::PhantomReplay
       Fail(applied.error().field);
       return;
     }
+
     auto attached = s.scene->Attach(parent, s.context);
     if (!attached)
     {
       Fail(attached.error().field);
       return;
     }
+
     const auto ms    = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
     s.status.applyMs = std::max(s.status.applyMs, ms);
     s.status.seconds = double(s.current->pose->sampledAtUs - s.firstUs) / 1000000.0;

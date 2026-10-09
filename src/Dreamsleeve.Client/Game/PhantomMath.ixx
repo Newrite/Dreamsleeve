@@ -83,15 +83,18 @@ export namespace Dreamsleeve::Game::PhantomMath
   {
     if (!Finite(Value(t.translate)) || !std::isfinite(t.scale) || t.scale <= 1e-6f)
       return Fail(P::Failure::InvalidNumber, "transform.scale/position");
+
     const auto& m = t.rotate.entry;
     for (unsigned i = 0; i < 3; ++i)
       for (unsigned j = 0; j < 3; ++j)
         if (!std::isfinite(m[i][j])) return Fail(P::Failure::InvalidNumber, "transform.rotation");
+
     const P::Vec3 x{m[0][0], m[1][0], m[2][0]}, y{m[0][1], m[1][1], m[2][1]}, z{m[0][2], m[1][2], m[2][2]};
     if (
       std::abs(Dot(x, x) - 1) > 0.02f || std::abs(Dot(y, y) - 1) > 0.02f || std::abs(Dot(z, z) - 1) > 0.02f ||
       std::abs(Dot(x, y)) > 0.02f || std::abs(Dot(y, z)) > 0.02f || std::abs(Dot(z, x)) > 0.02f || Dot(Cross(x, y), z) < 0.98f)
       return Fail(P::Failure::UnsupportedGeometry, "transform.shear/reflection");
+
     P::Quaternion q;
     const float   trace = m[0][0] + m[1][1] + m[2][2];
     if (trace > 0)
@@ -126,12 +129,14 @@ export namespace Dreamsleeve::Game::PhantomMath
       q.x          = (m[0][2] + m[2][0]) / s;
       q.y          = (m[1][2] + m[2][1]) / s;
     }
+
     const auto n     = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
     const auto sign  = q.w < 0 ? -1.f : 1.f;
     q.x             *= sign / n;
     q.y             *= sign / n;
     q.z             *= sign / n;
     q.w             *= sign / n;
+
     P::Transform out{Value(t.translate), q, t.scale};
     if (!Finite(out)) return Fail(P::Failure::InvalidNumber, "transform.quaternion");
     return out;

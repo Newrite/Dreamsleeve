@@ -82,6 +82,7 @@ namespace Fireflies
     const auto observer = World::Observe(player);
     if (!observer || (state.space && *state.space != observer->space)) ClearAll();
     if (!observer) return;
+
     state.space        = observer->space;
     const auto& space  = observer->space;
     const auto& origin = observer->position;
@@ -110,6 +111,7 @@ namespace Fireflies
         // The pose is already interpolated by MovementView.
         ref->Update3DPosition(true);
       }
+
       visible.insert(id);
       PlayerLabels::Add(names, id, position, remote, now);
     }

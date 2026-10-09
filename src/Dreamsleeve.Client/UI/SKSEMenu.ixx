@@ -115,6 +115,7 @@ namespace SKSEMenu
     static bool           thirtySeconds = false;
     constexpr const char* labels[] = {"Покой", "Ходьба и повороты", "Спринт", "Бой и оружие", "Первое/третье лицо", "Снаряжение и SMP"};
     const bool            busy     = s.phase == D::Phase::Recording || s.phase == D::Phase::Saving;
+
     ImGui::TextWrapped("Локальная запись исходных поз и байтов кодека. Сервер не требуется. Файлы остаются рядом с логом SKSE.");
     if (!busy && !replay.active && !replay.loading)
     {
@@ -130,6 +131,7 @@ namespace SKSEMenu
     }
     ImGui::TextWrapped("Во время локальной записи публикация вашего фантома приостановлена. Записывается полная поза для анализа сжатия.");
     if (s.phase == D::Phase::Recording && ImGui::Button("Остановить запись")) feedback.Post({Runtime::NoticeKind::PhantomRecordingStop});
+
     constexpr const char* phases[] = {"Не записывается", "Запись (закройте меню)", "Сохранение", "Сохранено", "Ошибка записи"};
     ImGui::Text("%s: %.1f с, %llu кадров, %.1f Гц", phases[static_cast<int>(s.phase)], s.seconds, s.samples, s.sampleHz);
     ImGui::Text("Кодировано: %llu, отправлено в ENet: %llu, movement: %llu", s.encoded, s.sent, s.movements);
@@ -158,6 +160,7 @@ namespace SKSEMenu
       feedback.Post({Runtime::NoticeKind::PhantomReplayStart, false, static_cast<std::uint32_t>(scenario)});
     if ((replay.active || replay.loading) && ImGui::Button("Остановить воспроизведение"))
       feedback.Post({Runtime::NoticeKind::PhantomReplayStop});
+
     ImGui::TextWrapped("%s", replay.stage.c_str());
     ImGui::Text(
       "%.1f с, отрисовано: %llu, декодировано: %llu, моделей: %llu",

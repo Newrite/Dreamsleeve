@@ -49,6 +49,7 @@ namespace Hooks
     constexpr auto StreamLoad      = REL::VariantID(68978, 70331, 0xC9F470);
     constexpr auto AlphaFactory    = REL::VariantID(69311, 70684, 0xCADF10);
     constexpr auto LightingFactory = REL::VariantID(99847, 106492, 0x1302ED0);
+
     // Actual string -> no-argument loader registry; the adjacent qword is not it.
     constexpr auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
 
@@ -208,6 +209,7 @@ namespace Hooks
     // before traversing its children. Do not mutate the tree between audit/Save.
     stream.RegisterObjects();
     if (!stream.objects.size() || stream.objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
+
     const auto* registry = *REL::Relocation<const void**>{Address::StreamLoaders};
     if (!registry) return std::unexpected{"NiStream preflight: loader registry unavailable"};
     const auto  buckets = StreamField<std::uint32_t>(registry, Offset::LoaderBuckets);
@@ -215,6 +217,7 @@ namespace Hooks
     const auto* table   = StreamField<const void* const*>(registry, Offset::LoaderTable);
     if (!table || !buckets || buckets > 65536 || count > 65536)
       return std::unexpected{"NiStream preflight: invalid loader registry layout"};
+
     std::unordered_set<std::string> factories;
     std::size_t                     visited = 0;
     for (std::uint32_t i = 0; i < buckets; ++i)
@@ -225,6 +228,7 @@ namespace Hooks
         if (name && StreamField<std::uintptr_t>(entry, Offset::LoaderFactory)) factories.emplace(name);
       }
     if (visited != count) return std::unexpected{"NiStream preflight: incomplete loader registry"};
+
     std::map<std::string, std::size_t> types;
     for (const auto& object : stream.objects)
     {
@@ -232,6 +236,7 @@ namespace Hooks
       if (!type || !type->GetName()) return std::unexpected{"NiStream preflight: missing streamable RTTI"};
       ++types[type->GetName()];
     }
+
     std::string missing;
     logger::info(
       "[Phantom] NiStream preflight: {} objects, {} types, {} loader factories",
@@ -323,6 +328,7 @@ public:
     if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
     SeedStream(*stream, root);
     if (auto audited = AuditPhantom(*stream); !audited) return std::unexpected(P::Error{P::Failure::InvalidFormat, audited.error()});
+
     // A size hint, not a limit or retained allocation. Only the game thread
     // accesses it. Each vector belongs exclusively to its resulting asset.
     static std::uint32_t previousBytes{};
@@ -352,6 +358,7 @@ public:
     if (!saved)
       return std::unexpected(
         P::Error{P::Failure::InvalidFormat, std::format("NiStream Save: {} {}", stream->lastError, stream->lastErrorMessage)});
+
     auto result = std::move(output).Take();
     if (result.empty()) return std::unexpected(P::Error{P::Failure::InvalidFormat, "native.empty-output"});
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -359,6 +366,7 @@ public:
       "native_output",
       std::format("\"reserve_hint\":{},\"raw_bytes\":{},\"capacity\":{}", previousBytes, result.size(), result.capacity()));
 #endif
+
     previousBytes = static_cast<std::uint32_t>(result.size());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Span disposeSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeDispose);
@@ -404,6 +412,7 @@ public:
       data.boneEntries = nullptr;
       return;
     }
+
     const auto bytes  = data.numBones * sizeof(RE::BSFlattenedBoneTree::BoneEntry);
     auto*      native = static_cast<RE::BSFlattenedBoneTree::BoneEntry*>(RE::malloc(bytes));
     if (!native && bytes)
@@ -415,6 +424,7 @@ public:
       data.boneEntries = reinterpret_cast<RE::BSFlattenedBoneTree::BoneEntry*>(allocation);
       return;
     }
+
     std::memcpy(native, data.boneEntries, bytes);
     RE::free(reinterpret_cast<std::byte*>(data.boneEntries) - sizeof(std::uint64_t));
     data.boneEntries = native;

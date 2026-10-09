@@ -430,9 +430,7 @@ export namespace World
         owner->GetPermanentActorValue(value) + player->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kTemporary, value);
       if (!Domain::Checks::Finite(current, maximum)) continue;
       values.insert_or_assign(
-        std::string{
-            key
-      },
+        std::string{key},
         Domain::ActorValueInfo{
             std::string{label},
             Domain::ResourceActorValue{Domain::Players::Points(current), Domain::Players::Points(maximum)}

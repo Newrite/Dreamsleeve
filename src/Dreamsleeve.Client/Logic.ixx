@@ -252,6 +252,7 @@ namespace Logic
       frame);
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
+
     // The server confirmed a switch of "hide my name": the next session opens so too.
     if (frame.hideIdentity && *frame.hideIdentity != Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.hideIdentity))
     {
@@ -259,6 +260,7 @@ namespace Logic
       runtime.app->Exchange().SetHideIdentity(*frame.hideIdentity);
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
     }
+
     // Chosen automatically, the route that answered is where the next start begins.
     if (const auto& status = state.output.status; status.routeReached && runtime.ui.ui.route.empty())
     {
@@ -270,12 +272,14 @@ namespace Logic
         if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
       }
     }
+
     // Reconnecting would be refused again until the player turns the choice off.
     if (frame.identityRefused)
     {
       runtime.manualDisconnect = true;
       logger::warn("The server does not allow hidden names; automatic reconnect stopped");
     }
+
     // A moderator or an administrator ended the session: coming straight back
     // would undo a kick, and a ban refuses it anyway. The player signs in again by hand.
     if (
@@ -285,7 +289,9 @@ namespace Logic
       runtime.manualDisconnect = true;
       logger::info("The server ended the session; automatic reconnect stopped");
     }
+
     PrismaUI::Dispatch(frame.events);
+
     // New pseudonyms are batched: at most one ui.toml write per interval.
     if (now >= state.nextNamesSave && runtime.session.PlayerNames().TakeDirty())
     {

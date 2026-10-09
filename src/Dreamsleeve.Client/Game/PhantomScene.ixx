@@ -35,6 +35,7 @@ export namespace Dreamsleeve::Game::PhantomScene
   {
     std::uint64_t remainingChannels{65536};
   };
+
   enum class BuildProgress
   {
     Pending,
@@ -48,11 +49,13 @@ export namespace Dreamsleeve::Game::PhantomScene
     Context                                    context;
     P::Generation                              generation;
     Look                                       look;
+
     RE::NiPointer<RE::NiNode>                  root, parent;
     std::vector<RE::NiAVObject*>               nodes;
     RE::NiAVObject*                            labelNode{};  // Borrowed from root; game-thread access only.
     std::vector<RE::NiSkinInstance*>           skins;
     std::vector<RE::BSLightingShaderProperty*> surfaces;
+
     enum class Phase
     {
       Waiting,
@@ -215,6 +218,7 @@ public:
       if (pose.channels.size() != layout.requiredChannels.size() || pose.bounds.size() != layout.bounds.size())
         return A::Fail(P::Failure::InvalidFormat, "scene.pose-shape");
       if (frame.remainingChannels < nodes.size()) return A::Fail(P::Failure::Busy, "scene.frame-budget");
+
       frame.remainingChannels -= nodes.size();
       for (std::size_t i = 0; i < layout.requiredChannels.size(); ++i)
       {
@@ -224,12 +228,14 @@ public:
         node->GetFlags().set(pose.channels[i].hidden, Flag::kHidden);
         node->GetFadeAmount() = 1;
       }
+
       for (std::size_t i = 0; i < layout.bounds.size(); ++i)
       {
         auto bound    = pose.bounds[i];
         bound.radius += 0.055f;
         A::Bounds(*nodes[layout.bounds[i]], bound);
       }
+
       for (auto* node : nodes)
         node->local =
           node->parent && std::abs(node->parent->world.scale) > 1e-6f ? node->parent->world.Invert() * node->world : node->world;
@@ -241,10 +247,12 @@ public:
             if (child) A::Enclose(bound, {A::Value(child->worldBound.center), child->worldBound.radius});
           A::Bounds(*node, bound);
         }
+
       for (auto* skin : skins)
         skin->frameID = std::numeric_limits<std::uint32_t>::max();
       for (auto* surface : surfaces)
         N::ApplyLook(*surface, look);
+
       phase = Phase::Posed;
       return {};
     }
