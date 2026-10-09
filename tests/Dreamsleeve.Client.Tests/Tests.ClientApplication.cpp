@@ -485,6 +485,146 @@ TEST_CASE("Programmatic startup uses the same validation as file configuration")
   CHECK_FALSE(ClientApplication::TryCreate(settings));
 }
 
+TEST_CASE("Delayed methods replies cannot publish across a route change or ABA")
+{
+  bool returnToOriginal{};
+  SUBCASE("another route") {}
+  SUBCASE("original index selected again")
+  {
+    returnToOriginal = true;
+  }
+
+  struct Gates
+  {
+    std::promise<void>        firstEntered;
+    std::promise<void>        firstRelease;
+    std::promise<std::string> nextEntered;
+    std::promise<void>        nextRelease;
+    std::atomic_bool          firstReleased{};
+    std::atomic_bool          nextReleased{};
+    std::atomic_int           calls{};
+
+    void Release()
+    {
+      if (!firstReleased.exchange(true)) firstRelease.set_value();
+      if (!nextReleased.exchange(true)) nextRelease.set_value();
+    }
+  };
+
+  auto             gates        = std::make_shared<Gates>();
+  auto             firstEntered = gates->firstEntered.get_future();
+  auto             nextEntered  = gates->nextEntered.get_future();
+  auto             firstRelease = gates->firstRelease.get_future().share();
+  auto             nextRelease  = gates->nextRelease.get_future().share();
+  ApplicationPorts ports;
+  ports.readMethods = [gates, firstRelease, nextRelease](std::string_view url, bool) -> Auth::Result<Auth::Methods> {
+    if (++gates->calls == 1)
+    {
+      gates->firstEntered.set_value();
+      firstRelease.wait();
+      return Auth::Methods{Auth::RegistrationMode::Manual, true};
+    }
+    if (gates->calls == 2)
+    {
+      gates->nextEntered.set_value(std::string{url});
+      nextRelease.wait();
+    }
+    return Auth::Methods{Auth::RegistrationMode::Open, false};
+  };
+  ClientSettings settings;
+  settings.client.serverPort       = 1;
+  settings.client.connectTimeoutMs = 50;
+  settings.routes.push_back({"Proxy", "127.0.0.1", 2, "http://127.0.0.1:9"});
+  auto app = ClientApplication::TryCreate(settings, {0, 0}, std::move(ports));
+
+  struct ReleaseBeforeAppShutdown
+  {
+    std::shared_ptr<Gates> gates;
+
+    ~ReleaseBeforeAppShutdown()
+    {
+      gates->Release();
+    }
+  } release{gates};
+
+  REQUIRE(app);
+  REQUIRE(firstEntered.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
+  const auto waitRoute = [&](std::size_t route) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    while ((*app)->Status().route != route && std::chrono::steady_clock::now() < deadline)
+      std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    return (*app)->Status().route == route;
+  };
+  (*app)->Exchange().SetRouteChoice(1);
+  REQUIRE(waitRoute(1));
+  if (returnToOriginal)
+  {
+    (*app)->Exchange().SetRouteChoice(0);
+    REQUIRE(waitRoute(0));
+  }
+  gates->firstReleased = true;
+  gates->firstRelease.set_value();
+  REQUIRE(nextEntered.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
+  CHECK(nextEntered.get() == (returnToOriginal ? settings.authUrl : settings.routes[0].authUrl));
+  CHECK((*app)->Status().methods == Auth::Methods{});
+  gates->nextReleased = true;
+  gates->nextRelease.set_value();
+  const auto          deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  const Auth::Methods fresh{Auth::RegistrationMode::Open, false};
+  while ((*app)->Status().methods != fresh && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  CHECK((*app)->Status().methods == fresh);
+  (*app)->Stop();
+}
+
+TEST_CASE("First-run configuration supports a bare relative filename")
+{
+  struct File
+  {
+    std::filesystem::path path =
+      L"dreamsleeve-relative-settings-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()) + L".toml";
+
+    ~File()
+    {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+    }
+  } file;
+
+  REQUIRE(file.path.parent_path().empty());
+  REQUIRE(EnsureClientSettings(file.path));
+  CHECK(LoadClientSettings(file.path));
+}
+
+TEST_CASE("Unicode configuration failures remain typed and existing files are preserved")
+{
+  struct Fixture
+  {
+    std::filesystem::path root =
+      std::filesystem::temp_directory_path() /
+      (L"dreamsleeve-settings-\U0001F984-\u4E2D-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    ~Fixture()
+    {
+      std::error_code error;
+      std::filesystem::remove_all(root, error);
+    }
+  } fixture;
+
+  std::filesystem::create_directories(fixture.root);
+  const auto blocked = fixture.root / L"\u975E\u76EE\u5F55-\U0001F984";
+  {
+    std::ofstream file{blocked, std::ios::binary};
+    file << "keep";
+  }
+  const auto result = EnsureClientSettings(blocked / L"настройки.toml");
+  CHECK_FALSE(result);
+  if (!result) CHECK_FALSE(result.error().empty());
+  CHECK(ReadText(blocked) == "keep");
+  REQUIRE(EnsureClientSettings(blocked));
+  CHECK(ReadText(blocked) == "keep");
+}
+
 TEST_SUITE_END();
 
 TEST_CASE("Remote HTTP opt-in loads from client TOML")

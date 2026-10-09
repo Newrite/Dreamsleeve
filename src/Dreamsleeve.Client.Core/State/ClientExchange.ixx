@@ -764,11 +764,12 @@ public:
     }
 
     // Owner only.
-    void PublishRoute(std::size_t route, bool reached)
+    void PublishRoute(std::size_t route, bool reached, bool resetMethods = false)
     {
       std::lock_guard lock{mutex};
       status.route        = route;
       status.routeReached = reached;
+      if (resetMethods) status.methods = {};
     }
 
     // Main thread. Read by the owner when it opens the next session; a running

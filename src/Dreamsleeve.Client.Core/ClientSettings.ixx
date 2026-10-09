@@ -294,11 +294,18 @@ namespace Dreamsleeve::Client
   export std::expected<void, std::string> EnsureClientSettings(const std::filesystem::path& path)
   {
     std::error_code error;
-    if (std::filesystem::exists(path, error)) return {};
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) return std::unexpected{"Cannot create " + path.parent_path().string()};
+    const bool      exists = std::filesystem::exists(path, error);
+    if (error) return std::unexpected{"Cannot inspect client configuration: " + error.message()};
+    if (exists) return {};
+    if (!path.parent_path().empty())
+    {
+      std::filesystem::create_directories(path.parent_path(), error);
+      if (error) return std::unexpected{"Cannot create client configuration directory: " + error.message()};
+    }
     std::ofstream output{path, std::ios::binary};
-    if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write " + path.string()};
+    if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write client configuration"};
+    output.close();
+    if (!output) return std::unexpected{"Cannot finish client configuration write"};
     return {};
   }
 
