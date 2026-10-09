@@ -132,9 +132,19 @@ namespace Dreamsleeve::Client::Phantom::Nif
     {
       Kind                          kind;
       std::span<const std::uint8_t> bytes;
-      std::vector<std::uint32_t>    children, bones;
-      std::uint32_t                 skin{NoNode}, data{NoNode}, partition{NoNode}, root{NoNode};
-      std::uint32_t                 vertices{}, boneCount{}, partitions{}, maximumVertex{}, maximumBone{};
+      std::vector<std::uint32_t>    children;
+      std::vector<std::uint32_t>    bones;
+
+      std::uint32_t                 skin{NoNode};
+      std::uint32_t                 data{NoNode};
+      std::uint32_t                 partition{NoNode};
+      std::uint32_t                 root{NoNode};
+
+      std::uint32_t                 vertices{};
+      std::uint32_t                 boneCount{};
+      std::uint32_t                 partitions{};
+      std::uint32_t                 maximumVertex{};
+      std::uint32_t                 maximumBone{};
       bool                          weights{};
     };
 
@@ -220,6 +230,7 @@ namespace Dreamsleeve::Client::Phantom::Nif
         b.skin = *skin;
         if (auto link = Ref(r, Kind::Lighting); !link) return std::unexpected(link.error());
         if (auto link = Ref(r, Kind::Alpha, true); !link) return std::unexpected(link.error());
+
         const auto descriptor   = r.Get<std::uint64_t>();
         const auto strideResult = Descriptor(descriptor);
         if (!strideResult) return std::unexpected(strideResult.error());
@@ -238,12 +249,14 @@ namespace Dreamsleeve::Client::Phantom::Nif
         else if (!(b.skin != NoNode))
           return Fail("missing-shape-buffer");
         if (!(r.Get<std::uint32_t>() == 0)) return Fail("particle-data");
+
         if (b.kind == Kind::Dynamic)
         {
           if (!(r.Get<std::uint32_t>() == b.vertices * 16)) return Fail("dynamic-size");
           r.Floats(std::size_t(b.vertices) * 4);
           result.vertexBytes += std::uint64_t(b.vertices) * 16;
         }
+
         if (b.kind == Kind::SubIndex)
         {
           const auto segments = r.Count(65535, 9);
@@ -271,6 +284,7 @@ namespace Dreamsleeve::Client::Phantom::Nif
         if (!(b.vertices <= 65535)) return Fail("partition-vertices");
         r.Take(size);
         result.vertexBytes += size;
+
         for (std::uint32_t p = 0; p < b.partitions; ++p)
         {
           const auto vertices = r.Get<std::uint16_t>(), triangles = r.Get<std::uint16_t>(), bones = r.Get<std::uint16_t>();
@@ -432,66 +446,8 @@ namespace Dreamsleeve::Client::Phantom::Nif
         return r.End();
       }
 
-  public:
-
-      explicit Parser(const Limits& value) : limits(value) {}
-
-      Result<Layout> Read(std::span<const std::uint8_t> bytes)
+      Result<Layout> BuildLayout(const std::uint32_t& root, std::uint32_t count)
       {
-        if (!(!bytes.empty() && bytes.size() <= limits.assetBytes)) return Fail("size");
-        Reader                     r{bytes};
-        constexpr std::string_view header    = "Gamebryo File Format, Version 20.2.0.7\n";
-        const auto                 signature = r.Take(header.size());
-        if (!(std::equal(signature.begin(), signature.end(), header.begin()))) return Fail("header");
-        if (!(r.Get<std::uint32_t>() == 0x14020007 && r.Get<std::uint8_t>() == 1 && r.Get<std::uint32_t>() == 12)) return Fail("version");
-        const auto count = r.Count(65535, 6);
-        if (!(count > 0 && r.Get<std::uint32_t>() == 100)) return Fail("stream-version");
-        for (unsigned i = 0; i < 3; ++i)
-          r.Take(r.Get<std::uint8_t>());
-        const auto typeCount = r.Get<std::uint16_t>();
-        if (!(typeCount > 0 && typeCount <= Names.size())) return Fail("type-count");
-        std::vector<Kind> types;
-        for (unsigned i = 0; i < typeCount; ++i)
-        {
-          const auto name  = r.Text(r.Get<std::uint32_t>());
-          const auto found = std::ranges::find(Names, name);
-          if (!(found != Names.end())) return Fail("unsupported-class:" + name);
-          types.push_back(static_cast<Kind>(found - Names.begin()));
-        }
-        std::vector<std::uint32_t> sizes;
-        for (std::uint32_t i = 0; i < count; ++i)
-        {
-          const auto type = r.Get<std::uint16_t>();
-          if (!(type < types.size())) return Fail("type-index");
-          blocks.push_back(Block{types[type]});
-        }
-        std::uint64_t total = 0;
-        for (std::uint32_t i = 0; i < count; ++i)
-        {
-          const auto size = r.Get<std::uint32_t>();
-          if (!(size > 0 && size <= limits.assetBytes)) return Fail("block-size");
-          sizes.push_back(size);
-          total += size;
-        }
-        if (!(total <= limits.assetBytes)) return Fail("block-total");
-        strings              = r.Count(65535, 4);
-        const auto maxString = r.Get<std::uint32_t>();
-        if (!(maxString <= 4096)) return Fail("max-string");
-        for (std::uint32_t i = 0; i < strings; ++i)
-        {
-          const auto length = r.Get<std::uint32_t>();
-          if (!(length <= maxString)) return Fail("string-table");
-          r.Text(length);
-        }
-        if (!(r.Get<std::uint32_t>() == 0)) return Fail("groups");
-        for (std::size_t i = 0; i < blocks.size(); ++i)
-          blocks[i].bytes = r.Take(sizes[i]);
-        if (!(r.Get<std::uint32_t>() == 1)) return Fail("roots");
-        const auto root = Ref(r, Kind::Node);
-        if (!root) return std::unexpected(root.error());
-        if (auto end = r.End(); !end) return std::unexpected(end.error());
-        for (auto& block : blocks)
-          if (auto checked = ReadBlock(block); !checked) return std::unexpected(checked.error());
         std::vector<std::uint32_t> ordinal(blocks.size(), NoNode);
         const auto                 visit = [&](auto&& self, std::uint32_t id, std::uint32_t parent, unsigned depth) -> Result<void> {
           if (!(depth <= 256 && result.nodes.size() < limits.nodes && ordinal[id] == NoNode)) return Fail("tree");
@@ -503,8 +459,9 @@ namespace Dreamsleeve::Client::Phantom::Nif
             if (auto visited = self(self, child, index, depth + 1); !visited) return std::unexpected(visited.error());
           return {};
         };
-        if (auto visited = visit(visit, *root, NoNode, 0); !visited) return std::unexpected(visited.error());
+        if (auto visited = visit(visit, root, NoNode, 0); !visited) return std::unexpected(visited.error());
         if (!(!result.bounds.empty())) return Fail("no-geometry");
+
         std::set<std::uint32_t> channels{0};
         for (std::uint32_t i = 0; i < blocks.size(); ++i)
         {
@@ -534,9 +491,80 @@ namespace Dreamsleeve::Client::Phantom::Nif
             }
           }
         }
+
         result.blocks = count;
         result.requiredChannels.assign(channels.begin(), channels.end());
         return std::move(result);
+      }
+
+  public:
+
+      explicit Parser(const Limits& value) : limits(value) {}
+
+      Result<Layout> Read(std::span<const std::uint8_t> bytes)
+      {
+        if (!(!bytes.empty() && bytes.size() <= limits.assetBytes)) return Fail("size");
+        Reader                     r{bytes};
+        constexpr std::string_view header    = "Gamebryo File Format, Version 20.2.0.7\n";
+        const auto                 signature = r.Take(header.size());
+        if (!(std::equal(signature.begin(), signature.end(), header.begin()))) return Fail("header");
+        if (!(r.Get<std::uint32_t>() == 0x14020007 && r.Get<std::uint8_t>() == 1 && r.Get<std::uint32_t>() == 12)) return Fail("version");
+        const auto count = r.Count(65535, 6);
+        if (!(count > 0 && r.Get<std::uint32_t>() == 100)) return Fail("stream-version");
+        for (unsigned i = 0; i < 3; ++i)
+          r.Take(r.Get<std::uint8_t>());
+        const auto typeCount = r.Get<std::uint16_t>();
+        if (!(typeCount > 0 && typeCount <= Names.size())) return Fail("type-count");
+
+        std::vector<Kind> types;
+        for (unsigned i = 0; i < typeCount; ++i)
+        {
+          const auto name  = r.Text(r.Get<std::uint32_t>());
+          const auto found = std::ranges::find(Names, name);
+          if (!(found != Names.end())) return Fail("unsupported-class:" + name);
+          types.push_back(static_cast<Kind>(found - Names.begin()));
+        }
+
+        std::vector<std::uint32_t> sizes;
+        for (std::uint32_t i = 0; i < count; ++i)
+        {
+          const auto type = r.Get<std::uint16_t>();
+          if (!(type < types.size())) return Fail("type-index");
+          blocks.push_back(Block{types[type]});
+        }
+
+        std::uint64_t total = 0;
+        for (std::uint32_t i = 0; i < count; ++i)
+        {
+          const auto size = r.Get<std::uint32_t>();
+          if (!(size > 0 && size <= limits.assetBytes)) return Fail("block-size");
+          sizes.push_back(size);
+          total += size;
+        }
+        if (!(total <= limits.assetBytes)) return Fail("block-total");
+
+        strings              = r.Count(65535, 4);
+        const auto maxString = r.Get<std::uint32_t>();
+        if (!(maxString <= 4096)) return Fail("max-string");
+        for (std::uint32_t i = 0; i < strings; ++i)
+        {
+          const auto length = r.Get<std::uint32_t>();
+          if (!(length <= maxString)) return Fail("string-table");
+          r.Text(length);
+        }
+        if (!(r.Get<std::uint32_t>() == 0)) return Fail("groups");
+
+        for (std::size_t i = 0; i < blocks.size(); ++i)
+          blocks[i].bytes = r.Take(sizes[i]);
+        if (!(r.Get<std::uint32_t>() == 1)) return Fail("roots");
+        const auto root = Ref(r, Kind::Node);
+        if (!root) return std::unexpected(root.error());
+        if (auto end = r.End(); !end) return std::unexpected(end.error());
+
+        for (auto& block : blocks)
+          if (auto checked = ReadBlock(block); !checked) return std::unexpected(checked.error());
+
+        return BuildLayout(*root, count);
       }
     };
 

@@ -50,7 +50,12 @@ export namespace Dreamsleeve::Client
   std::vector<ConnectionRoute> RoutesOf(const ClientSettings& settings)
   {
     std::vector<ConnectionRoute> routes{
-        {std::string{MainRouteName}, settings.client.serverHost, settings.client.serverPort, settings.authUrl}
+        {
+          std::string{MainRouteName},
+          settings.client.serverHost,
+          settings.client.serverPort,
+          settings.authUrl
+        }
     };
     routes.insert(routes.end(), settings.routes.begin(), settings.routes.end());
     return routes;
@@ -245,6 +250,7 @@ namespace Dreamsleeve::Client
     std::optional<std::string> InvalidRoute(const ClientSettings& settings)
     {
       if (settings.routes.size() >= MaxRoutes) return "routes";
+
       std::set<std::string_view> names{MainRouteName};
       for (std::size_t index = 0; index < settings.routes.size(); ++index)
       {
@@ -274,6 +280,7 @@ namespace Dreamsleeve::Client
     if (auto field = ClientExchange::InvalidCapacity(settings.commandCapacity, settings.stateCapacity))
       return std::unexpected{"Invalid client setting: " + std::string{*field}};
     if (auto field = SettingsDetail::InvalidRoute(settings)) return std::unexpected{"Invalid client setting: " + *field};
+
     // The host is resolved per connection; the transport check covers the ENet host and the timeouts.
     if (
       auto transport = DreamNetClient::ValidateConfig(
@@ -300,11 +307,13 @@ namespace Dreamsleeve::Client
     const bool      exists = std::filesystem::exists(path, error);
     if (error) return std::unexpected{"Cannot inspect client configuration: " + error.message()};
     if (exists) return {};
+
     if (!path.parent_path().empty())
     {
       std::filesystem::create_directories(path.parent_path(), error);
       if (error) return std::unexpected{"Cannot create client configuration directory: " + error.message()};
     }
+
     std::ofstream output{path, std::ios::binary};
     if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write client configuration"};
     output.close();
@@ -341,9 +350,14 @@ namespace Dreamsleeve::Client
     // The historical file default predates the two phantom lanes. This is a
     // configuration migration; every connection still uses the current protocol.
     if (file.client.network.channelLimit == 3) file.client.network.channelLimit = MinChannels;
+
     const auto& view = file.interpolation;
-    file.client.movement =
-      {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
+    file.client.movement = {
+        std::chrono::milliseconds{view.delayMs},
+        std::chrono::milliseconds{view.maxGapMs},
+        view.historyCapacity,
+        view.teleportDistance
+    };
     return ClientSettings{
         std::move(file.client),
         std::move(file.authUrl),

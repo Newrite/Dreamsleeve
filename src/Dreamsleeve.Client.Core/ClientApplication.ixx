@@ -39,8 +39,10 @@ public:
     {
       if (auto valid = ValidateClientSettings(settings); !valid) return std::unexpected{valid.error()};
       if (!ports.readMethods) return std::unexpected{"Missing authentication methods request port"};
+
       auto net = DreamNetRuntime::TryInitialize();
       if (!net) return std::unexpected{net.error().ToLogString()};
+
       auto exchange = ClientExchange::TryCreate(settings.commandCapacity, settings.stateCapacity);
       if (!exchange) return std::unexpected{"Cannot create client exchange"};
       auto runtime = ClientRuntime::Create(settings.client, **exchange);
@@ -48,6 +50,7 @@ public:
       auto app = std::unique_ptr<ClientApplication>{
           new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime), std::move(ports)}
       };
+
       // Before the threads: the first connection already goes by the route.
       const auto known = [&](std::optional<std::size_t> index) {
         return index && *index < app->routes.size() ? index : std::nullopt;
@@ -56,6 +59,7 @@ public:
       app->exchange->SetRouteChoice(chosen);
       app->automatic = !chosen;
       app->SelectRoute(chosen.value_or(known(preference.first).value_or(0)), true);
+
       try
       {
         app->methodsReader = std::jthread([self = app.get()](std::stop_token stop) { self->ReadMethods(stop); });
@@ -143,6 +147,7 @@ public:
     {
       exchange->RequestStop();
       if (worker.joinable()) worker.join();
+
       methodsReader.request_stop();
       if (methodsReader.joinable()) methodsReader.join();
     }
@@ -153,6 +158,7 @@ private:
     // and gives up after this many failed asks in a row.
     static constexpr auto SteamPollInterval    = std::chrono::seconds{2};
     static constexpr int  MaxSteamPollFailures = 5;
+
     // Unknown sign-in methods are asked again this often.
     static constexpr auto MethodsRetry = std::chrono::seconds{30};
 
@@ -216,6 +222,7 @@ private:
       routeReached = false;
       runtime->UseEndpoint(routes[index].serverHost, routes[index].serverPort, now);
       runtime->UseHttpEndpoint(routes[index].authUrl, settings.allowInsecureRemoteAuth);
+
       {
         // Selection and a methods reply's revision check/publication serialize
         // here. A route index alone does not identify an A -> B -> A request.
@@ -225,6 +232,7 @@ private:
         exchange->PublishRoute(index, false, true);
         methodsWanted = true;
       }
+
       methodsWake.notify_one();
     }
 
@@ -316,6 +324,7 @@ private:
         if (!saved) return saved;
         exchange->PublishSavedLogin(true, grant->username);
       }
+
       auto connected = runtime->Connect(std::move(grant->sessionTicket));
       if (!connected)
         return std::unexpected{
@@ -337,6 +346,7 @@ private:
         if (!registered) return registered;
         NoteReached();
       }
+
       return ConnectGrant(
         OnRoutes([&](const ConnectionRoute& route) {
           return Auth::LoginGrant(route.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth, device);
@@ -374,6 +384,7 @@ private:
         return Auth::BeginSteam(route.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
       });
       if (!flow) return std::unexpected{flow.error()};
+
       // The page stays available for "copy the link" while the client waits.
       exchange->PublishSteamPage(flow->page);
 
@@ -392,6 +403,7 @@ private:
       auto opening = Auth::Browser::Start(flow->page);
       bool opened  = !opening;
       if (!opening) exchange->PublishSteamPage(flow->page, {}, opening.error().detail);
+
       const auto deadline = std::chrono::steady_clock::now() + flow->lifetime;
       auto       next     = std::chrono::steady_clock::now() + SteamPollInterval;
       int        failures{};
@@ -406,6 +418,7 @@ private:
             exchange->PublishSteamPage(flow->page, *result ? **result : std::string{}, *result ? std::string{} : result->error());
           }
         }
+
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline)
           return std::unexpected{
@@ -424,6 +437,7 @@ private:
             continue;
           return std::unexpected{polled.error()};
         }
+
         failures = 0;
         if (!*polled) continue;
         if (request.remember && (**polled).rememberToken.empty())
@@ -466,9 +480,11 @@ private:
         methodsWanted       = false;
         const auto revision = routeRevision;
         const auto url      = routes[active.load()].authUrl;
+
         lock.unlock();
         auto methods = ports.readMethods(url, settings.allowInsecureRemoteAuth);
         lock.lock();
+
         if (stop.stop_requested()) break;
         if (revision != routeRevision) continue;
         if (methods) exchange->PublishMethods(*methods);
@@ -500,6 +516,7 @@ private:
         exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
       else
         exchange->PublishError(saved.error().message);
+
       // Online from the start: the server counts a client that has not signed in.
       runtime->KeepGuest(true);
 
@@ -522,6 +539,7 @@ private:
             result ? Auth::FailureCode::None : result.error().code);
           if (refused) RefreshMethods();
         }
+
         if (exchange->StopRequested()) break;
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());
         Report(runtime->Poll(10));
@@ -548,11 +566,13 @@ private:
     bool                       routeReached{};
     std::size_t                failedRoutes{};
     std::optional<std::string> device;
+
     DreamNetRuntime            enet;
     ClientExchange::Ptr        exchange;
     ClientRuntime::Ptr         runtime;
     std::jthread               worker;
     ApplicationPorts           ports;
+
     // ReadMethods owns detached HTTP work; wanted/revision under methodsMutex.
     std::mutex                  methodsMutex;
     std::condition_variable_any methodsWake;

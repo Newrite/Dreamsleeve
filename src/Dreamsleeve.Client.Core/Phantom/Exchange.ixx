@@ -55,8 +55,10 @@ private:
 
   struct Remote : RemoteVersion
   {
-    std::uint64_t                player{}, sceneBytes{};
+    std::uint64_t                player{};
+    std::uint64_t                sceneBytes{};
     std::optional<RemoteVersion> previous;
+
     Remote() = default;
 
     Remote(std::uint64_t p, std::uint64_t v, Wire::Descriptor d) : RemoteVersion(v, d), player(p) {}
@@ -64,8 +66,13 @@ private:
 
   struct Metrics
   {
-    std::uint64_t modelBytes{}, poseBytes{}, rejected{}, dropped{}, cacheHits{};
-    std::uint32_t queued{}, sampleRate{};
+    std::uint64_t modelBytes{};
+    std::uint64_t poseBytes{};
+    std::uint64_t rejected{};
+    std::uint64_t dropped{};
+    std::uint64_t cacheHits{};
+    std::uint32_t queued{};
+    std::uint32_t sampleRate{};
     std::string   error;
   };
 
@@ -90,7 +97,11 @@ private:
     PublicationPhase                                     phase{PublicationPhase::Preparing};
     mutable std::mutex                                   mutex;
     ViewSettings                                         settings;
-    std::uint64_t                                        epoch{1}, context{}, localRevision{1}, poseRevision{1};
+
+    std::uint64_t                                        epoch{1};
+    std::uint64_t                                        context{};
+    std::uint64_t                                        localRevision{1};
+    std::uint64_t                                        poseRevision{1};
     std::optional<Generation>                            localGeneration, previousGeneration;
     std::optional<Domain::LocationId>                    space;
     std::uint64_t                                        previousReservation{};
@@ -99,11 +110,13 @@ private:
     bool                                                 available{}, changed{true};
     std::optional<Wire::PoseDemand>                      poseDemand;
     std::uint32_t                                        serverSampleRate{50};
+
     std::optional<std::pair<Generation, ValidatedAsset>> capture;
     std::shared_ptr<const Snapshot>                      snapshot;
     std::optional<Publication>                           publication;
     std::shared_ptr<const PreparedAsset>                 localAsset, previousAsset;
     std::optional<Wire::Pose>                            encoded;
+
     std::unordered_map<std::uint64_t, Remote>            remotes;
     Metrics                                              metrics;
     std::uint64_t                                        localReservation{};
@@ -118,6 +131,7 @@ private:
       // A compression basis has no generation/pose authority in the next context.
       auto       basis            = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
       const auto basisReservation = basis ? (basis == localAsset ? localReservation : previousReservation) : 0;
+
       ++localRevision;
       localGeneration.reset();
       previousGeneration.reset();
@@ -171,7 +185,10 @@ public:
 
     struct Work
     {
-      std::uint64_t                                        epoch{}, context{}, localRevision{}, poseRevision{};
+      std::uint64_t                                        epoch{};
+      std::uint64_t                                        context{};
+      std::uint64_t                                        localRevision{};
+      std::uint64_t                                        poseRevision{};
       ViewSettings                                         settings;
       std::optional<std::pair<Generation, ValidatedAsset>> capture;
       std::shared_ptr<const Snapshot>                      snapshot;
@@ -189,6 +206,7 @@ public:
       changed            = true;
       metrics.sampleRate = std::min(settings.sampleRate, serverSampleRate);
       if (!settings.receive) remotes.clear();
+
       while (remotes.size() > settings.maximum || Reserved() > settings.memoryBytes)
       {
         if (remotes.empty()) break;
@@ -292,6 +310,7 @@ public:
         (localGeneration && phase != PublicationPhase::Settled && phase != PublicationPhase::Rejected) ||
         bytes + Reserved() - (phase == PublicationPhase::Rejected ? localReservation : 0) > settings.memoryBytes)
         return false;
+
       // A rejected candidate never replaces the last usable bridge asset.
       if (phase != PublicationPhase::Rejected && localGeneration)
       {
@@ -299,6 +318,7 @@ public:
         previousReservation = localReservation;
         previousAsset       = std::move(localAsset);
       }
+
       localAsset.reset();
       phase            = PublicationPhase::Preparing;
       localReservation = bytes;
@@ -525,6 +545,7 @@ public:
       const auto found = remotes.find(offer.player);
       if (found != remotes.end() && offer.view < found->second.view) return false;
       if (found == remotes.end() && remotes.size() >= settings.maximum) return false;
+
       const auto  sceneBytes = found == remotes.end() ? 0 : found->second.sceneBytes;
       const auto* prior      = found == remotes.end() ? nullptr
                              : found->second.Asset()  ? static_cast<const RemoteVersion*>(&found->second)
@@ -536,6 +557,7 @@ public:
       const bool  admitted =
         Reservation(offer.asset) + sceneBytes + priorBytes <= settings.memoryBytes - std::min(settings.memoryBytes, Reserved(offer.player));
       if (!admitted && found == remotes.end()) return false;
+
       auto& remote = remotes[offer.player];
       if (remote.view != offer.view || remote.descriptor != offer.asset)
       {
@@ -544,6 +566,7 @@ public:
         remote.sceneBytes = sceneBytes;
         remote.previous   = std::move(prior);
       }
+
       // Keep the new AOI view so bridge poses still reach the visible scene.
       // Deferred metadata owns no incoming model allocation or decode job.
       if (!admitted)
@@ -567,6 +590,7 @@ public:
       if (workEpoch != epoch || found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset)
         return;
       if (!asset) return;
+
       found->second.content = std::move(asset);
       if (cached) ++metrics.cacheHits;
     }
@@ -635,6 +659,7 @@ public:
       Display         result{settings, {}, metrics, available};
       result.remotes.reserve(remotes.size());
       result.settings.sampleRate = std::min(result.settings.sampleRate, serverSampleRate);
+
       for (const auto& [id, remote] : remotes)
         result.remotes.push_back(remote);
       return result;

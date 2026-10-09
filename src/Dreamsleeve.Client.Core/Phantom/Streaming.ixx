@@ -1,4 +1,5 @@
 export module Dreamsleeve.Client.Phantom.Streaming;
+
 import std;
 import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Domain;
@@ -86,6 +87,7 @@ export namespace Dreamsleeve::Client::Phantom
     Exchange&                   exchange;
     Worker                      worker;
     Http                        http;
+
     std::optional<Wire::Policy> policy;
     std::optional<Local>        local;
     // Last server commit receipt. A local preparation rollback does not republish
@@ -95,6 +97,7 @@ export namespace Dreamsleeve::Client::Phantom
     std::unordered_map<std::uint64_t, Download>     downloads;
     std::unordered_map<std::uint64_t, DownloadPlan> plans;
     std::deque<Wire::Request>                       requests;
+
     std::uint64_t                                   context{}, lastPoseSequence{}, localRevision{};
     RequestId                                       lastRequest;
     bool                                            active{};
@@ -158,6 +161,7 @@ export namespace Dreamsleeve::Client::Phantom
       const auto* pending = std::get_if<Pending>(&local->state);
       if (!pending || pending->at > now) return;
       if (TransferCount() >= policy->concurrentTransfers) return;
+
       const auto& publication = local->value;
       const auto& asset       = *publication.asset;
       if (
@@ -169,6 +173,7 @@ export namespace Dreamsleeve::Client::Phantom
         lastPoseSequence = 0;
         return;
       }
+
       const Wire::Descriptor descriptor{
           asset.hash,
           publication.generation,
@@ -221,6 +226,7 @@ export namespace Dreamsleeve::Client::Phantom
           downloads.erase(receiving->transfer.value);
         }
       }
+
       const auto queued = admitted && worker.Queue(value);
       plans.insert_or_assign(
         value.player,
@@ -268,6 +274,7 @@ export namespace Dreamsleeve::Client::Phantom
         local->state = Upload{value, 0, Clock::now()};
         return;
       }
+
       const auto  plan     = plans.find(value.player);
       const auto  remote   = exchange.Find(value.player);
       const auto* awaiting = plan == plans.end() ? nullptr : std::get_if<Awaiting>(&plan->second.state);
@@ -278,6 +285,7 @@ export namespace Dreamsleeve::Client::Phantom
         Cancel(value.transfer);
         return;
       }
+
       if (value.delta && (plan->second.baseHash != value.delta->baseHash))
       {
         Cancel(value.transfer);
@@ -296,6 +304,7 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       plan->second.state = Receiving{value.transfer};
+
       if (!http.Start(value, {}, std::min(policy->modelBytesPerSecond, exchange.Settings().downloadBytesPerSecond)))
       {
         Cancel(value.transfer);
@@ -350,6 +359,7 @@ export namespace Dreamsleeve::Client::Phantom
           return;
         }
       }
+
       if (!value.transfer.value)
       {
         const auto  plan     = plans.find(value.player);
@@ -365,6 +375,7 @@ export namespace Dreamsleeve::Client::Phantom
         }
         return;
       }
+
       const auto found = downloads.find(value.transfer.value);
       if (found == downloads.end()) return;
       if (found->second.request != value.request) return;
@@ -373,6 +384,7 @@ export namespace Dreamsleeve::Client::Phantom
         found->second.receipt = value;
         return;
       }
+
       if (!value.accepted) http.Cancel(value.transfer);
       auto download = std::move(found->second);
       downloads.erase(found);
@@ -388,6 +400,7 @@ export namespace Dreamsleeve::Client::Phantom
         exchange.Unavailable(exchange.Epoch(), download.offer, "Передача модели фантома не завершена");
         return;
       }
+
       if (!worker.Queue(download.offer, std::move(download.bytes), download.delta))
       {
         if (download.delta)
@@ -429,7 +442,9 @@ export namespace Dreamsleeve::Client::Phantom
           plan->second.baseHash = missing.baseHash;
         }
       }
+
       if (!policy || !active || !exchange.Settings().receive) return;
+
       for (auto it = plans.begin(); it != plans.end();)
       {
         const auto remote = exchange.Find(it->first);
@@ -447,6 +462,7 @@ export namespace Dreamsleeve::Client::Phantom
         else
           ++it;
       }
+
       auto count = TransferCount();
       for (auto& [id, plan] : plans)
       {
@@ -476,6 +492,38 @@ export namespace Dreamsleeve::Client::Phantom
       }
     }
 
+    void ExpireDownloads(Clock::time_point now)
+    {
+      for (auto it = downloads.begin(); it != downloads.end();)
+      {
+        if (now - it->second.touched > Timeout)
+        {
+          Cancel(TransferId{it->first});
+          const auto plan = plans.find(it->second.offer.player);
+          if (plan != plans.end()) plan->second.state = Pending{now + std::chrono::seconds(1)};
+          it = downloads.erase(it);
+        }
+        else
+          ++it;
+      }
+    }
+
+    void DrainRequests(std::vector<Outbound>& output)
+    {
+      while (!requests.empty() && output.size() < 16)
+      {
+        auto encoded = Wire::Encode(requests.front());
+        requests.pop_front();
+        if (encoded)
+        {
+          exchange.Count(encoded->size(), 0);
+          output.push_back({Wire::ModelsLane, std::move(*encoded)});
+        }
+        else
+          exchange.Failed("Не удалось сформировать запрос фантома");
+      }
+    }
+
 public:
 
     Streaming(Exchange& owner, std::filesystem::path cache) : exchange(owner), worker(owner, std::move(cache)) {}
@@ -496,6 +544,7 @@ public:
       downloads.clear();
       plans.clear();
       requests.clear();
+
       context          = 0;
       active           = false;
       lastPoseSequence = localRevision = 0;
@@ -655,6 +704,7 @@ public:
         lastPoseSequence = 0;
         localRevision    = outgoing.localRevision;
       }
+
       if (outgoing.changed)
       {
         Preferences();
@@ -674,6 +724,7 @@ public:
           plans.clear();
         }
       }
+
       if (outgoing.publication)
       {
         CancelUpload();
@@ -682,6 +733,7 @@ public:
         latestPose.reset();
         lastPoseSequence = 0;
       }
+
       if (outgoing.pose && exchange.PosesRequired()) latestPose = std::move(outgoing.pose);
       if (!exchange.PosesRequired()) latestPose.reset();
       if (local)
@@ -693,7 +745,9 @@ public:
         }
         Publish(now);
       }
+
       DownloadPoll(now);
+
       const auto elapsed = std::chrono::duration<double>(now - lastBudget).count();
       lastBudget         = now;
       if (policy)
@@ -701,30 +755,10 @@ public:
         poseCredit =
           std::min<double>(poseCredit + elapsed * policy->poseBytesPerSecond, double(2ULL * policy->limits.compressedPoseBytes + 1024));
       }
-      for (auto it = downloads.begin(); it != downloads.end();)
-      {
-        if (now - it->second.touched > Timeout)
-        {
-          Cancel(TransferId{it->first});
-          const auto plan = plans.find(it->second.offer.player);
-          if (plan != plans.end()) plan->second.state = Pending{now + std::chrono::seconds(1)};
-          it = downloads.erase(it);
-        }
-        else
-          ++it;
-      }
-      while (!requests.empty() && output.size() < 16)
-      {
-        auto encoded = Wire::Encode(requests.front());
-        requests.pop_front();
-        if (encoded)
-        {
-          exchange.Count(encoded->size(), 0);
-          output.push_back({Wire::ModelsLane, std::move(*encoded)});
-        }
-        else
-          exchange.Failed("Не удалось сформировать запрос фантома");
-      }
+
+      ExpireDownloads(now);
+      DrainRequests(output);
+
       const bool rejected = local && std::holds_alternative<Rejected>(local->state);
       if (rejected && latestPose && latestPose->generation == local->value.generation)
         latestPose = latestPose->previous ? std::optional<Wire::Pose>{*latestPose->previous} : std::nullopt;
@@ -748,6 +782,7 @@ public:
         }
         latestPose.reset();
       }
+
       return output;
     }
   };

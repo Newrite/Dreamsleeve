@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
     ShutdownLogger();
     return result;
   }
+
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
     spdlog::error(
@@ -94,6 +95,7 @@ int main(int argc, char* argv[])
     ShutdownLogger();
     return 2;
   }
+
   const int result = RunStateConsole(argc == 2);
   ShutdownLogger();
   return result;
