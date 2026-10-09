@@ -31,13 +31,13 @@ type private Children() =
 
 let private immediate = { InitialDelay = TimeSpan.Zero; MaxDelay = TimeSpan.Zero; MaxRestarts = 3; Window = TimeSpan.FromMinutes 1.0 }
 
-let private supervise policy (start: CancellationToken -> Task<SupervisedChild<int>>) =
-    let events = ConcurrentQueue<SupervisorEvent<int>>()
+let private supervise policy (start: CancellationToken -> Task<Result<SupervisedChild<int>, string>>) =
+    let events = ConcurrentQueue<SupervisorEvent<int, string>>()
     TestSupervisor.start "supervisor-test" policy start events.Enqueue, events
 
-let private fromChildren (children: Children) = fun (_: CancellationToken) -> Task.FromResult(children.Next())
+let private fromChildren (children: Children) = fun (_: CancellationToken) -> Task.FromResult(Ok(children.Next()))
 
-let private serving (supervisor: AgentSupervisor<int>) id = eventually (fun () -> supervisor.Current = Some id)
+let private serving (supervisor: AgentSupervisor<int, string>) id = eventually (fun () -> supervisor.Current = Some id)
 
 /// Timestamps move only when the test says; timers are real (the tests use zero delays).
 type private Clock() =
@@ -76,11 +76,11 @@ let tests = testList "Supervisor" [
         for id in 1 .. 3 do
             do! serving supervisor id
             children.Fail(id, InvalidOperationException $"failure {id}")
-        let! (failure: SupervisorGaveUpException option) = task {
+        let! (failure: SupervisorGaveUpException<string> option) = task {
             try
                 do! supervisor.Completion |> awaitUnit
                 return None
-            with :? SupervisorGaveUpException as error -> return Some error
+            with :? SupervisorGaveUpException<string> as error -> return Some error
         }
         match failure with
         | Some error ->
@@ -97,8 +97,8 @@ let tests = testList "Supervisor" [
         let children = Children()
         let mutable attempts = 0
         let start _ =
-            if Interlocked.Increment &attempts = 1 then Task.FromException<SupervisedChild<int>>(InvalidOperationException "port in use")
-            else Task.FromResult(children.Next())
+            if Interlocked.Increment &attempts = 1 then Task.FromException<Result<SupervisedChild<int>, string>>(InvalidOperationException "port in use")
+            else Task.FromResult(Ok(children.Next()))
         let supervisor, events = supervise immediate start
         do! serving supervisor 1
         match List.ofSeq events with
@@ -108,10 +108,55 @@ let tests = testList "Supervisor" [
         do! supervisor.StopAsync() |> awaitUnit
     }
 
+    testTask "expected startup refusals retain their typed reason through retry exhaustion" {
+        let events = ConcurrentQueue<SupervisorEvent<int, string>>()
+        let start (_: CancellationToken) = Task.FromResult(Error "capacity exhausted")
+        let supervisor = TestSupervisor.start "typed-rejection" { immediate with MaxRestarts = 1 } start events.Enqueue
+        let! (failure: SupervisorGaveUpException<string> option) = task {
+            try
+                do! awaitUnit supervisor.Completion
+                return None
+            with :? SupervisorGaveUpException<string> as error -> return Some error
+        }
+        match failure with
+        | Some error ->
+            equal 2 error.Failures
+            equal (SupervisorFailure.StartRejected "capacity exhausted") error.Failure
+            check (isNull error.InnerException) "A typed startup refusal must not fabricate an exception."
+        | None -> failtest "Exhaustion must fault the supervisor lifecycle."
+        match List.ofSeq events with
+        | [SupervisorEvent.StartRejected "capacity exhausted"; SupervisorEvent.Restarting(_, 1)
+           SupervisorEvent.StartRejected "capacity exhausted"; SupervisorEvent.GaveUp 2] -> ()
+        | other -> failtestf "Refusal was not preserved: %A" other
+    }
+
+    testTask "a rejected partial startup joins its owned cleanup before reconstruction" {
+        let cleanupStarted, releaseCleanup = gate<unit>(), gate<unit>()
+        let children = Children()
+        let mutable attempts = 0
+        let start (_: CancellationToken) = task {
+            let attempt = Interlocked.Increment &attempts
+            if attempt = 1 then
+                // Factory owns the acquired resource until its asynchronous cleanup joins.
+                cleanupStarted.SetResult()
+                do! releaseCleanup.Task
+                return Error "loaded data refused"
+            else return Ok(children.Next())
+        }
+        let supervisor, events = supervise immediate start
+        do! awaitResult cleanupStarted.Task
+        equal 1 attempts
+        check events.IsEmpty "Reconstruction began before factory cleanup completed."
+        releaseCleanup.SetResult()
+        do! serving supervisor 1
+        equal 2 attempts
+        do! awaitUnit (supervisor.StopAsync())
+    }
+
     testTask "failures older than the window are forgotten" {
         let clock = Clock()
         let children = Children()
-        let events = ConcurrentQueue<SupervisorEvent<int>>()
+        let events = ConcurrentQueue<SupervisorEvent<int, string>>()
         let policy = { immediate with MaxRestarts = 1; Window = TimeSpan.FromSeconds 10.0 }
         let supervisor = TestSupervisor.startWithTimeProvider clock "supervisor-window" policy (fromChildren children) events.Enqueue
         do! serving supervisor 1
@@ -140,7 +185,7 @@ let tests = testList "Supervisor" [
         let release = gate<unit>()
         let start _ = task {
             do! release.Task
-            return children.Next()
+            return Ok(children.Next())
         }
         let supervisor, events = supervise immediate start
         let stopping = supervisor.StopAsync()

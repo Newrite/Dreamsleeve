@@ -191,6 +191,9 @@ module SqliteGroundMarkStore =
     /// that caused it. A failed write is logged; memory stays authoritative
     /// for the running server and the next successful write is unaffected.
     /// capacity is GroundMarks.MaxPendingWrites, checked with the configuration.
-    let startWriter config (logger: ILogger) capacity =
+    let tryPrepareWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.TryStartReliable(options, write config logger)
+        Agent.TryPrepareReliable(options, write config logger)
+
+    let startWriter config logger capacity =
+        tryPrepareWriter config logger capacity |> Result.map (fun plan -> plan.Start())

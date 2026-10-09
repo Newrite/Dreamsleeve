@@ -183,6 +183,9 @@ module SqliteGuildStore =
 
     /// One sequential writer keeps the order of a guild's changes. capacity is
     /// Guilds.MaxPendingWrites, checked with the configuration.
-    let startWriter config (logger: ILogger) capacity =
+    let tryPrepareWriter config (logger: ILogger) capacity =
         let options = { AgentOptions.create "guild-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.TryStartReliable(options, handle config logger)
+        Agent.TryPrepareReliable(options, handle config logger)
+
+    let startWriter config logger capacity =
+        tryPrepareWriter config logger capacity |> Result.map (fun plan -> plan.Start())
