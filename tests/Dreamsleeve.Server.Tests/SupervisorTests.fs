@@ -15,7 +15,10 @@ type private Children() =
     let mutable started = 0
 
     member _.Started = Volatile.Read &started
-    member _.Stops id = match stops.TryGetValue id with | true, count -> count | false, _ -> 0
+    member _.Stops id =
+        match stops.TryGetValue id with
+        | true, count -> count
+        | false, _ -> 0
     member _.Fail(id, error: exn) = finished[id].TrySetException error |> ignore
     member _.End id = finished[id].TrySetResult() |> ignore
 
@@ -23,13 +26,21 @@ type private Children() =
         let id = Interlocked.Increment &started
         let completion = gate<unit>()
         finished[id] <- completion
-        { SupervisedChild.Value = id; SupervisedChild.Completion = completion.Task
-          SupervisedChild.Stop = fun () ->
-              stops.AddOrUpdate(id, 1, fun _ count -> count + 1) |> ignore
-              completion.TrySetResult() |> ignore
-              Task.CompletedTask }
+        {
+            SupervisedChild.Value = id
+            SupervisedChild.Completion = completion.Task
+            SupervisedChild.Stop = fun () ->
+                stops.AddOrUpdate(id, 1, fun _ count -> count + 1) |> ignore
+                completion.TrySetResult() |> ignore
+                Task.CompletedTask
+        }
 
-let private immediate = { InitialDelay = TimeSpan.Zero; MaxDelay = TimeSpan.Zero; MaxRestarts = 3; Window = TimeSpan.FromMinutes 1.0 }
+let private immediate = {
+    InitialDelay = TimeSpan.Zero
+    MaxDelay = TimeSpan.Zero
+    MaxRestarts = 3
+    Window = TimeSpan.FromMinutes 1.0
+}
 
 let private supervise policy (start: CancellationToken -> Task<Result<SupervisedChild<int>, string>>) =
     let events = ConcurrentQueue<SupervisorEvent<int, string>>()
@@ -82,7 +93,8 @@ let tests = testList "Supervisor" [
             try
                 do! supervisor.Completion |> awaitUnit
                 return None
-            with :? SupervisorGaveUpException<string> as error -> return Some error
+            with :? SupervisorGaveUpException<string> as error ->
+                return Some error
         }
         match failure with
         | Some error ->
@@ -99,8 +111,10 @@ let tests = testList "Supervisor" [
         let children = Children()
         let mutable attempts = 0
         let start _ =
-            if Interlocked.Increment &attempts = 1 then Task.FromException<Result<SupervisedChild<int>, string>>(InvalidOperationException "port in use")
-            else Task.FromResult(Ok(children.Next()))
+            if Interlocked.Increment &attempts = 1 then
+                Task.FromException<Result<SupervisedChild<int>, string>>(InvalidOperationException "port in use")
+            else
+                Task.FromResult(Ok(children.Next()))
         let supervisor, events = supervise immediate start
         do! serving supervisor 1
         match List.ofSeq events with
@@ -118,7 +132,8 @@ let tests = testList "Supervisor" [
             try
                 do! awaitUnit supervisor.Completion
                 return None
-            with :? SupervisorGaveUpException<string> as error -> return Some error
+            with :? SupervisorGaveUpException<string> as error ->
+                return Some error
         }
         match failure with
         | Some error ->
@@ -141,7 +156,8 @@ let tests = testList "Supervisor" [
             try
                 do! awaitUnit supervisor.Completion
                 return None
-            with :? SupervisorGaveUpException<string> as error -> return Some error
+            with :? SupervisorGaveUpException<string> as error ->
+                return Some error
         }
         match failure with
         | Some error ->
@@ -169,7 +185,8 @@ let tests = testList "Supervisor" [
                 cleanupStarted.SetResult()
                 do! releaseCleanup.Task
                 return Error "loaded data refused"
-            else return Ok(children.Next())
+            else
+                return Ok(children.Next())
         }
         let supervisor, events = supervise immediate start
         do! awaitResult cleanupStarted.Task
@@ -185,7 +202,11 @@ let tests = testList "Supervisor" [
         let clock = Clock()
         let children = Children()
         let events = ConcurrentQueue<SupervisorEvent<int, string>>()
-        let policy = { immediate with MaxRestarts = 1; Window = TimeSpan.FromSeconds 10.0 }
+        let policy = {
+            immediate with
+                MaxRestarts = 1
+                Window = TimeSpan.FromSeconds 10.0
+        }
         let supervisor = TestSupervisor.startWithTimeProvider clock "supervisor-window" policy (fromChildren children) events.Enqueue
         do! serving supervisor 1
         children.Fail(1, InvalidOperationException "first")
@@ -199,7 +220,12 @@ let tests = testList "Supervisor" [
 
     testTask "Stop during the restart delay starts nothing more" {
         let children = Children()
-        let supervisor, events = supervise { immediate with InitialDelay = TimeSpan.FromHours 1.0; MaxDelay = TimeSpan.FromHours 1.0 } (fromChildren children)
+        let supervisor, events =
+            supervise {
+                immediate with
+                    InitialDelay = TimeSpan.FromHours 1.0
+                    MaxDelay = TimeSpan.FromHours 1.0
+            } (fromChildren children)
         do! serving supervisor 1
         children.Fail(1, InvalidOperationException "boom")
         do! eventually (fun () -> events |> Seq.exists (function SupervisorEvent.Restarting _ -> true | _ -> false))
@@ -225,7 +251,12 @@ let tests = testList "Supervisor" [
     }
 
     testCase "restart delays double up to MaxDelay and bad policies are refused" <| fun _ ->
-        let policy = { InitialDelay = TimeSpan.FromSeconds 1.0; MaxDelay = TimeSpan.FromSeconds 5.0; MaxRestarts = 10; Window = TimeSpan.FromMinutes 1.0 }
+        let policy = {
+            InitialDelay = TimeSpan.FromSeconds 1.0
+            MaxDelay = TimeSpan.FromSeconds 5.0
+            MaxRestarts = 10
+            Window = TimeSpan.FromMinutes 1.0
+        }
         let delays = [ 1 .. 5 ] |> List.map (RestartPolicy.delay policy >> _.TotalSeconds)
         Expect.equal delays [ 1.0; 2.0; 4.0; 5.0; 5.0 ] "doubling, then the cap"
         Expect.equal (RestartPolicy.delay policy 1000) policy.MaxDelay "no overflow far past the cap"
@@ -238,11 +269,14 @@ let tests = testList "Supervisor" [
         let primary = InvalidOperationException("child stop")
         let secondary = InvalidOperationException("child completion cleanup")
         let mutable stops = 0
-        let child = { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
-                      SupervisedChild.Stop = fun () ->
-                          Interlocked.Increment(&stops) |> ignore
-                          stopping.TrySetResult() |> ignore
-                          Task.FromException primary }
+        let child = {
+            SupervisedChild.Value = 1
+            SupervisedChild.Completion = completion.Task
+            SupervisedChild.Stop = fun () ->
+                Interlocked.Increment(&stops) |> ignore
+                stopping.TrySetResult() |> ignore
+                Task.FromException primary
+        }
         let supervisor, _ = supervise immediate (fun _ -> Task.FromResult(Ok child))
         do! serving supervisor 1
         let first = supervisor.StopAsync()
@@ -268,11 +302,14 @@ let tests = testList "Supervisor" [
         let mutable starts, stops = 0, 0
         let start _ =
             starts <- starts + 1
-            Task.FromResult(Ok { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
-                                SupervisedChild.Stop = fun () ->
-                                    Interlocked.Increment(&stops) |> ignore
-                                    stopping.TrySetResult() |> ignore
-                                    Task.FromException stopFailure })
+            Task.FromResult(Ok {
+                SupervisedChild.Value = 1
+                SupervisedChild.Completion = completion.Task
+                SupervisedChild.Stop = fun () ->
+                    Interlocked.Increment(&stops) |> ignore
+                    stopping.TrySetResult() |> ignore
+                    Task.FromException stopFailure
+            })
         let observe = function
             | SupervisorEvent.Started _ -> raise original
             | SupervisorEvent.StartFailed _ | SupervisorEvent.StartRejected _ | SupervisorEvent.Stopped _
@@ -300,13 +337,16 @@ let tests = testList "Supervisor" [
         let start _ = task {
             constructing.TrySetResult() |> ignore
             do! created.Task
-            return Ok { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
-                        SupervisedChild.Stop = fun () -> task {
-                            Interlocked.Increment(&stops) |> ignore
-                            stopping.TrySetResult() |> ignore
-                            do! releaseCleanup.Task
-                            completion.TrySetResult() |> ignore
-                        } }
+            return Ok {
+                SupervisedChild.Value = 1
+                SupervisedChild.Completion = completion.Task
+                SupervisedChild.Stop = fun () -> task {
+                    Interlocked.Increment(&stops) |> ignore
+                    stopping.TrySetResult() |> ignore
+                    do! releaseCleanup.Task
+                    completion.TrySetResult() |> ignore
+                }
+            }
         }
         let supervisor, events = supervise immediate start
         do! awaitUnit constructing.Task
@@ -343,8 +383,13 @@ let tests = testList "Supervisor" [
     testTask "a child's generic exhaustion exception is not the supervisor's own exhaustion" {
         let original = SupervisorGaveUpException<string>("nested child", 1, SupervisorFailure.StartRejected "child refusal")
         let ready = gate<unit>()
-        let child = { SupervisedChild.Value = 1; SupervisedChild.Completion = ready.Task
-                      SupervisedChild.Stop = fun () -> ready.TrySetResult() |> ignore; Task.FromException original }
+        let child = {
+            SupervisedChild.Value = 1
+            SupervisedChild.Completion = ready.Task
+            SupervisedChild.Stop = fun () ->
+                ready.TrySetResult() |> ignore
+                Task.FromException original
+        }
         let supervisor, _ = supervise immediate (fun _ -> Task.FromResult(Ok child))
         do! serving supervisor 1
         let! failure = terminal (supervisor.StopAsync())
