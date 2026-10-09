@@ -87,11 +87,31 @@ type AgentPostResult =
     /// </summary>
     | Canceled
 
+/// Expected rejection at construction, before an agent or worker starts.
+[<RequireQualifiedAccess>]
+type AgentStartError =
+    | NullArgument of name: string
+    | InvalidTimeout of value: TimeSpan
+    | InvalidCapacity of name: string * value: int
+    | CapacityOverflow of ordinaryCapacity: int * controlReserve: int
+    | MissingControlClassifier
+    | UnknownFullMode of value: BoundedChannelFullMode
+    | DroppingMailbox
+    | InvalidInterval of value: TimeSpan
+    | InvalidRestartPolicy of field: string
+
+/// Malformed request input is rejected before building or admitting a message.
+[<RequireQualifiedAccess>]
+type AgentRequestError =
+    | NullArgument of name: string
+    | InvalidTimeout of value: TimeSpan
+
 /// <summary>
 /// The result of sending a request (Ask) and waiting for a reply, encapsulating possible operational failures.
 /// </summary>
 [<RequireQualifiedAccess>]
 type AgentAskResult<'T> =
+    | InvalidRequest of AgentRequestError
     /// <summary>
     /// The agent replied successfully with the expected value.
     /// </summary>
@@ -173,11 +193,16 @@ type ReplyChannel<'T> internal (completion: TaskCompletionSource<AgentAskResult<
 
     /// <summary>Attempts to return a request-local error without faulting an abandoned task.</summary>
     member _.TryReplyError(error: exn) =
-        if isNull error then nullArg (nameof error)
-        completion.TrySetResult(AgentAskResult.Faulted error)
+        if isNull error then
+            Error (AgentRequestError.NullArgument(nameof error))
+        else
+            Ok (completion.TrySetResult(AgentAskResult.Faulted error))
+
+    // Runtime catch sites already hold a nonnull original exception.
+    member internal _.ReplyFault(error: exn) = completion.TrySetResult(AgentAskResult.Faulted error) |> ignore
 
     /// <summary>Returns a request-local error, ignoring an already completed request.</summary>
-    member this.ReplyError(error: exn) = this.TryReplyError(error) |> ignore
+    member this.ReplyError(error: exn) = this.TryReplyError(error) |> Result.map ignore
 
     /// <summary>Attempts to complete the request as canceled.</summary>
     member _.TryCancel() = completion.TrySetResult(AgentAskResult.Canceled)
@@ -205,18 +230,19 @@ type AgentOptions =
         /// </summary>
         SingleWriter: bool
         /// <summary>
-        /// Default admission-plus-reply timeout used by AskAsync and TryAskAsync.
+        /// Default admission-plus-reply timeout used by TryAskAsync.
         /// None and Timeout.InfiniteTimeSpan mean no deadline; zero expires without posting.
         /// </summary>
         DefaultAskTimeout: TimeSpan option
         /// <summary>
         /// Optional callback invoked on the background processing loop when it starts.
-        /// Receives the agent's name.
+        /// Receives the agent's name. A notification fault stops the owner before dispatch.
         /// </summary>
         OnStarted: (string -> unit) option
         /// <summary>
         /// Optional callback invoked exactly once after processing and cleanup stop, before Completion settles.
-        /// Receives the agent's name and the reason it stopped. Must not wait for Completion.
+        /// Receives the name and sealed stop reason. A failure faults Completion without
+        /// changing that reason. Must not wait for Completion.
         /// </summary>
         OnStopped: (string * AgentStopReason -> unit) option
         /// <summary>
@@ -247,20 +273,77 @@ module AgentOptions =
         }
 
 [<AutoOpen>]
-module private AgentInternals =
-    let taskFromException<'T> (error: exn) = Task.FromException<'T>(error)
-
-    let inline safeInvoke (callback: unit -> unit) =
-        try callback () with _ -> ()
-
-    // CancellationTokenSource timers support at most UInt32.MaxValue - 1 milliseconds.
-    let validateTimeout name timeout =
+module internal AgentInternals =
+    // Preserve the public Ask deadline contract; dependency timers truncate milliseconds.
+    let invalidTimeout timeout =
         match timeout with
         | Some value when value <> Timeout.InfiniteTimeSpan &&
                           (value < TimeSpan.Zero || value > TimeSpan.FromMilliseconds(4294967294.0)) ->
-            raise (ArgumentOutOfRangeException(name, value,
-                "The timeout must be nonnegative, no greater than 4294967294 milliseconds, or Timeout.InfiniteTimeSpan."))
-        | _ -> ()
+            Some value
+        | Some _ | None -> None
+
+    type CheckedAgentOptions<'Message> = {
+        Options: AgentOptions
+        IsControl: ('Message -> bool) option
+        IsReliable: bool
+    }
+
+    let checkOptions (options: AgentOptions) (handler: 'Handler) (isControl: ('Message -> bool) option) =
+        let missingCallback =
+            if isNull (box options) then None
+            else
+                [ options.OnStarted |> Option.map (fun callback -> "OnStarted", box callback)
+                  options.OnStopped |> Option.map (fun callback -> "OnStopped", box callback)
+                  options.OnError |> Option.map (fun callback -> "OnError", box callback)
+                  isControl |> Option.map (fun callback -> "isControl", box callback) ]
+                |> List.tryPick (function
+                    | Some(name, callback) when isNull callback -> Some name
+                    | _ -> None)
+
+        let error =
+            if isNull (box options) then Some (AgentStartError.NullArgument "options")
+            elif isNull (box handler) then Some (AgentStartError.NullArgument "handler")
+            elif isNull (box options.Mailbox) then Some (AgentStartError.NullArgument "Mailbox")
+            else
+                match missingCallback, invalidTimeout options.DefaultAskTimeout, options.Mailbox with
+                | Some name, _, _ -> Some (AgentStartError.NullArgument name)
+                | None, Some value, _ -> Some (AgentStartError.InvalidTimeout value)
+                | None, None, AgentMailbox.BoundedWithControl(ordinary, _) when ordinary < 1 ->
+                    Some (AgentStartError.InvalidCapacity("ordinaryCapacity", ordinary))
+                | None, None, AgentMailbox.BoundedWithControl(_, reserve) when reserve < 1 ->
+                    Some (AgentStartError.InvalidCapacity("controlReserve", reserve))
+                | None, None, AgentMailbox.BoundedWithControl(ordinary, reserve) when int64 ordinary + int64 reserve > int64 Int32.MaxValue ->
+                    Some (AgentStartError.CapacityOverflow(ordinary, reserve))
+                | None, None, AgentMailbox.BoundedWithControl _ when isControl.IsNone -> Some AgentStartError.MissingControlClassifier
+                | None, None, AgentMailbox.Bounded(capacity, _, _) when capacity < 1 ->
+                    Some (AgentStartError.InvalidCapacity("capacity", capacity))
+                | None, None, AgentMailbox.Bounded(_, mode, _) when not (Enum.IsDefined mode) ->
+                    Some (AgentStartError.UnknownFullMode mode)
+                | None, None, (AgentMailbox.Unbounded _ | AgentMailbox.Bounded _ | AgentMailbox.BoundedWithControl _) -> None
+
+        match error with
+        | Some failure -> Error failure
+        | None ->
+            // CLIMutable input must not remain an alias into a prepared construction.
+            let snapshot = {
+                Name = options.Name
+                Mailbox = options.Mailbox
+                SingleWriter = options.SingleWriter
+                DefaultAskTimeout = options.DefaultAskTimeout
+
+                OnStarted = options.OnStarted
+                OnStopped = options.OnStopped
+                OnError = options.OnError
+            }
+            let reliable =
+                match snapshot.Mailbox with
+                | AgentMailbox.Unbounded _ | AgentMailbox.BoundedWithControl _ -> true
+                | AgentMailbox.Bounded(_, mode, _) -> mode = BoundedChannelFullMode.Wait
+            Ok {
+                Options = snapshot
+                IsControl = isControl
+                IsReliable = reliable
+            }
 
     let resultForStop reason =
         match reason with
@@ -313,22 +396,24 @@ module private AdmissionTasks =
         | AgentPostResult.Dropped -> dropped
         | AgentPostResult.Full -> full
 
-    let deliveryValue = function
-        | AgentPostResult.Posted -> AgentDeliveryResult.Posted
-        | AgentPostResult.Closed -> AgentDeliveryResult.Closed
-        | AgentPostResult.Canceled -> AgentDeliveryResult.Canceled
-        | AgentPostResult.Full | AgentPostResult.Dropped ->
-            invalidOp "Non-dropping PostAsync violated its admission contract."
-
     let private delivered = Task.FromResult AgentDeliveryResult.Posted
     let private deliveryClosed = Task.FromResult AgentDeliveryResult.Closed
     let private deliveryCanceled = Task.FromResult AgentDeliveryResult.Canceled
 
-    let delivery result =
-        match deliveryValue result with
+    let delivery = function
         | AgentDeliveryResult.Posted -> delivered
         | AgentDeliveryResult.Closed -> deliveryClosed
         | AgentDeliveryResult.Canceled -> deliveryCanceled
+
+    let generalTryDelivery = function
+        | AgentTryDeliveryResult.Posted -> AgentPostResult.Posted
+        | AgentTryDeliveryResult.Full -> AgentPostResult.Full
+        | AgentTryDeliveryResult.Closed -> AgentPostResult.Closed
+
+    let generalDelivery = function
+        | AgentDeliveryResult.Posted -> AgentPostResult.Posted
+        | AgentDeliveryResult.Closed -> AgentPostResult.Closed
+        | AgentDeliveryResult.Canceled -> AgentPostResult.Canceled
 
 /// A send-only address, available only for non-dropping mailboxes.
 /// Posted acknowledges admission, not processing or persistence.
@@ -349,11 +434,11 @@ type ReliableAgentRef<'Message> internal
 /// A send-only address. Admission is not processing or persistence acknowledgement.
 [<Sealed>]
 type AgentRef<'Message> internal
-    (reliable: bool,
+    (reliable: ReliableAgentRef<'Message> option,
      tryPost: 'Message -> AgentPostResult,
      postAsync: 'Message -> CancellationToken -> Task<AgentPostResult>) =
 
-    member _.IsNonDropping = reliable
+    member _.IsNonDropping = reliable.IsSome
 
     member _.TryPost(message) = tryPost message
 
@@ -362,36 +447,12 @@ type AgentRef<'Message> internal
 
     /// Validate mailbox policy once when wiring a protocol that requires reliable replies.
     /// DropWrite, DropOldest and DropNewest cannot provide this address.
-    member _.TryReliable() =
-        if not reliable then
-            None
-        else
-            let deliver message token =
-                try
-                    let admission = postAsync message token
-                    if admission.IsCompletedSuccessfully then
-                        AdmissionTasks.delivery admission.Result
-                    else
-                        task {
-                            let! result = admission
-                            return AdmissionTasks.deliveryValue result
-                        }
-                with error -> Task.FromException<AgentDeliveryResult>(error)
-
-            let tryDeliver message =
-                match tryPost message with
-                | AgentPostResult.Posted -> AgentTryDeliveryResult.Posted
-                | AgentPostResult.Full -> AgentTryDeliveryResult.Full
-                | AgentPostResult.Closed -> AgentTryDeliveryResult.Closed
-                | AgentPostResult.Dropped | AgentPostResult.Canceled ->
-                    invalidOp "Non-dropping TryPost violated its admission contract."
-
-            Some (ReliableAgentRef<'Message>(tryDeliver, deliver))
+    member _.TryReliable() = reliable
 
     /// Narrow an address to one part of the receiving agent's protocol.
     /// The mapping runs on the sender and must not access receiver-owned state.
     member _.Map<'Input>(map: 'Input -> 'Message) =
-        AgentRef<'Input>(reliable, (map >> tryPost), fun value token -> postAsync (map value) token)
+        AgentRef<'Input>(reliable |> Option.map (fun address -> address.Map map), (map >> tryPost), fun value token -> postAsync (map value) token)
 
 /// <summary>
 /// Context passed to each message handler of a base agent, providing access to its lifecycle and self-messaging capabilities.
@@ -407,8 +468,9 @@ type AgentContext<'Message>
             postAsyncImpl: 'Message -> CancellationToken -> Task<AgentPostResult>,
             completeImpl: unit -> bool,
             abortImpl: unit -> unit,
+            failImpl: exn -> unit,
             startBackgroundImpl: (CancellationToken -> Task<unit>) -> unit,
-            reliableMailbox: bool
+            reliableRef: ReliableAgentRef<'Message> option
         ) =
 
     /// <summary>
@@ -416,41 +478,13 @@ type AgentContext<'Message>
     /// </summary>
     member _.Name = name
 
-    member _.Ref = AgentRef<'Message>(reliableMailbox, tryPostImpl, postAsyncImpl)
+    member _.Ref = AgentRef<'Message>(reliableRef, tryPostImpl, postAsyncImpl)
 
-    /// Call only from this agent's handler. The operation and mapper execute outside
-    /// the mailbox: capture immutable inputs, never mutate agent state there.
-    /// Results re-enter the mailbox; cancellation and exceptions are explicit results.
-    /// Requires a non-dropping mailbox. Completion waits for all launched work.
-    member _.PipeToSelf<'Result>
-        (operation: CancellationToken -> Task<'Result>, toMessage: Result<'Result, exn> -> 'Message) =
-        let deliver token = task {
-            let! result = task {
-                try
-                    let! value = operation token
-                    return Ok value
-                with error ->
-                    return Error error
-            }
+    /// A supported capability; dropping mailboxes legitimately have none.
+    member this.TryReliable() = reliableRef |> Option.map (fun address -> ReliableAgentContext<'Message>(this, address))
 
-            if not token.IsCancellationRequested then
-                let! posted = postAsyncImpl (toMessage result) token
-
-                match posted with
-                | AgentPostResult.Posted
-                | AgentPostResult.Closed
-                | AgentPostResult.Canceled -> ()
-                | AgentPostResult.Full
-                | AgentPostResult.Dropped ->
-                    invalidOp "A background completion could not enter its non-dropping mailbox."
-        }
-
-        startBackgroundImpl deliver
-
-    // Ends non-owning observations after dispatch, including graceful completion.
     member internal _.DispatchStopped = dispatchStoppedToken
-
-    member internal _.IsNonDropping = reliableMailbox
+    member internal _.Fail(error: exn) = failImpl error
 
     // Library workers only. Application state remains in the handler.
     member internal _.StartDelivery(operation: CancellationToken -> Task<unit>) =
@@ -488,29 +522,44 @@ type AgentContext<'Message>
     /// </summary>
     member _.Abort() = abortImpl ()
 
+/// The same owner context with admission and tracked work restricted to non-dropping mailboxes.
+and [<Sealed>] ReliableAgentContext<'Message> internal (context: AgentContext<'Message>, address: ReliableAgentRef<'Message>) =
+    member _.Name = context.Name
+    member _.Ref = address
+    member _.CancellationToken = context.CancellationToken
+    member _.Complete() = context.Complete()
+    member _.Abort() = context.Abort()
+    member _.TryPost(message) = address.TryPost message
+    member _.PostAsync(message, ?cancellationToken: CancellationToken) = address.PostAsync(message, ?cancellationToken = cancellationToken)
+    member internal _.DispatchStopped = context.DispatchStopped
+    member internal _.Fail(error: exn) = context.Fail error
+    member internal _.StartDelivery(operation) = context.StartDelivery operation
+
+    /// Call only from this owner's handler. Work receives detached immutable inputs.
+    /// Completion joins every launched operation, including cleanup after Abort.
+    member this.PipeToSelf<'Result>(operation: CancellationToken -> Task<'Result>, toMessage: Result<'Result, exn> -> 'Message) =
+        let deliver token = task {
+            let! result = task {
+                try
+                    let! value = operation token
+                    return Ok value
+                with error -> return Error error
+            }
+            if not token.IsCancellationRequested then
+                let! delivered = address.PostAsync(toMessage result, cancellationToken = token)
+                match delivered with
+                | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
+        }
+        this.StartDelivery deliver
+
 /// <summary>
 /// A task-first asynchronous agent implemented on top of System.Threading.Channels.
 /// Processes messages sequentially without built-in state management.
 /// </summary>
 [<Sealed>]
-type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
-                             isControl: ('Message -> bool) option) =
-    do
-        if isNull (box options) then nullArg (nameof options)
-        if isNull (box handler) then nullArg (nameof handler)
-        validateTimeout "DefaultAskTimeout" options.DefaultAskTimeout
-
-        match options.Mailbox with
-        | AgentMailbox.BoundedWithControl(ordinary, reserve)
-            when ordinary < 1 || reserve < 1 || int64 ordinary + int64 reserve > int64 Int32.MaxValue ->
-            invalidArg "capacity" "Ordinary capacity and control reserve must be positive and fit in Int32."
-        | AgentMailbox.BoundedWithControl _ when isControl.IsNone ->
-            invalidArg "isControl" "A mailbox with reserved control capacity requires a message classifier."
-        | AgentMailbox.Bounded(capacity, _, _) when capacity <= 0 ->
-            invalidArg "capacity" "Bounded mailbox capacity must be greater than zero."
-        | AgentMailbox.Bounded(_, fullMode, _) when not (Enum.IsDefined(fullMode)) ->
-            invalidArg "fullMode" "Unknown bounded mailbox full-mode policy."
-        | _ -> ()
+type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, handler: AgentContext<'Message> -> ReliableAgentContext<'Message> -> 'Message -> Task<unit>) =
+    let options = checkedOptions.Options
+    let isControl = checkedOptions.IsControl
 
     let ordinaryLimit =
         match options.Mailbox with
@@ -566,6 +615,12 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let mutable stopSealed = false
     let mutable stopReason: AgentStopReason option = None
     let mutable cancellationTask: Task = Task.CompletedTask
+    // Protected by lifecycleGate. The same original failure can reach the sink
+    // through delivery and a later join; retain it once, by reference identity.
+    let failures = ResizeArray<exn>()
+    let recordFailure error =
+        if not (failures |> Seq.exists (fun previous -> Object.ReferenceEquals(previous, error))) then
+            failures.Add error
 
     let mailboxDropsWrites =
         match options.Mailbox with
@@ -603,11 +658,6 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let getStopReason () = lock lifecycleGate (fun () -> stopReason)
     let isAcceptingMessages () = Volatile.Read(&accepting) = 1
     let isImmediateStopRequested () = Volatile.Read(&immediateStop) <> 0
-    let isAbortRequested () =
-        match getStopReason () with
-        | Some AgentStopReason.Aborted -> true
-        | _ -> false
-
     let completeCore () =
         if Interlocked.Exchange(&accepting, 0) = 1 then
             let completed = channel.Writer.TryComplete()
@@ -619,6 +669,9 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     let requestImmediateStop reason =
         let selected, cancellation =
             lock lifecycleGate (fun () ->
+                match reason with
+                | AgentStopReason.Faulted error -> recordFailure error
+                | AgentStopReason.Completed | AgentStopReason.Aborted -> ()
                 // Deliveries can fail or be aborted while graceful shutdown joins work.
                 // Escalate until the final reason and cancellation callbacks are sealed.
                 let escalation =
@@ -658,146 +711,207 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                         try
                             let callbacks = lock lifecycleGate (fun () -> lifetime.CancelAsync())
                             do! callbacks
-                        with _ -> ()
+                        with error ->
+                            // CancelAsync's aggregate owns all callback faults, not just
+                            // the exception selected by an await.
+                            lock lifecycleGate (fun () ->
+                                match error with
+                                | :? AggregateException as aggregate ->
+                                    for failure in aggregate.InnerExceptions do recordFailure failure
+                                | error -> recordFailure error)
                         pending.TrySetResult() |> ignore
                     }
-                // Every exception from user cancellation callbacks is observed above. The finish
+                // Every exception from user cancellation callbacks is retained above. The finish
                 // path awaits pending before disposal, including when CancelAsync starts late.
                 cancelAndObserve |> ignore
             termination.TrySetResult(reason) |> ignore
 
     let abortCore () = requestImmediateStop AgentStopReason.Aborted
+    let failCore error = requestImmediateStop (AgentStopReason.Faulted error)
 
-    let tryWriteUnrestricted (envelope: MailboxEnvelope<'Message>) =
+    let attempt (operation: unit -> unit) =
+        try
+            operation ()
+        with error ->
+            failCore error
+
+    let attemptAsync (operation: unit -> Task) = task {
+        let mutable work: Task = null
+        try
+            work <- operation ()
+            do! work
+        with error ->
+            if not (isNull work) && work.IsFaulted then
+                for failure in work.Exception.InnerExceptions do
+                    failCore failure
+            else
+                failCore error
+    }
+
+    let tryWriteReliable (envelope: MailboxEnvelope<'Message>) =
         if not (isAcceptingMessages ()) then
+            AgentTryDeliveryResult.Closed
+        else
+            Interlocked.Increment(&queueLength) |> ignore
+            if channel.Writer.TryWrite envelope then
+                AgentTryDeliveryResult.Posted
+            else
+                Interlocked.Decrement(&queueLength) |> ignore
+                if isAcceptingMessages () then AgentTryDeliveryResult.Full else AgentTryDeliveryResult.Closed
+
+    let tryWriteReserved limit (envelope: MailboxEnvelope<'Message>) =
+        if not (isAcceptingMessages ()) then
+            AgentTryDeliveryResult.Closed
+        elif envelope.IsOrdinary && ordinaryQueued >= limit then
+            AgentTryDeliveryResult.Full
+        else
+            if envelope.IsOrdinary then ordinaryQueued <- ordinaryQueued + 1
+            let result = tryWriteReliable envelope
+            if result <> AgentTryDeliveryResult.Posted && envelope.IsOrdinary then
+                ordinaryQueued <- ordinaryQueued - 1
+            result
+
+    let tryWriteReliableEnvelope envelope =
+        match ordinaryLimit with
+        | Some limit -> lock admissionGate (fun () -> tryWriteReserved limit envelope)
+        | None -> tryWriteReliable envelope
+
+    let tryWriteEnvelope (envelope: MailboxEnvelope<'Message>) =
+        if checkedOptions.IsReliable then
+            tryWriteReliableEnvelope envelope |> AdmissionTasks.generalTryDelivery
+        elif not (isAcceptingMessages ()) then
             AgentPostResult.Closed
         else
-            // Reserve before publishing: a reader or drop callback may run before TryWrite returns.
             Interlocked.Increment(&queueLength) |> ignore
-            if channel.Writer.TryWrite(envelope) then
+            if channel.Writer.TryWrite envelope then
                 if mailboxDropsWrites && envelope.WasDropped then AgentPostResult.Dropped
                 else AgentPostResult.Posted
             else
                 Interlocked.Decrement(&queueLength) |> ignore
-                if isAcceptingMessages () then AgentPostResult.Full else AgentPostResult.Closed
+                AgentPostResult.Closed
 
-    let tryWriteReserved limit (envelope: MailboxEnvelope<'Message>) =
-        if not (isAcceptingMessages ()) then
-            AgentPostResult.Closed
-        elif envelope.IsOrdinary && ordinaryQueued >= limit then
-            AgentPostResult.Full
-        else
-            if envelope.IsOrdinary then ordinaryQueued <- ordinaryQueued + 1
-            let result = tryWriteUnrestricted envelope
-            if result <> AgentPostResult.Posted && envelope.IsOrdinary then
-                ordinaryQueued <- ordinaryQueued - 1
-            result
-
-    let tryWriteEnvelope envelope =
-        match ordinaryLimit with
-        | Some limit -> lock admissionGate (fun () -> tryWriteReserved limit envelope)
-        | None -> tryWriteUnrestricted envelope
-
-    let postEnvelopeAsync (envelope: MailboxEnvelope<'Message>) (token: CancellationToken) =
-        task {
-            let mutable result = AgentPostResult.Full
-            let mutable waiting = true
-            while waiting do
-                if token.IsCancellationRequested then
-                    result <- AgentPostResult.Canceled
+    let postReliableEnvelopeAsync (envelope: MailboxEnvelope<'Message>) (token: CancellationToken) = task {
+        let mutable result = AgentDeliveryResult.Closed
+        let mutable waiting = true
+        while waiting do
+            if token.IsCancellationRequested then
+                result <- AgentDeliveryResult.Canceled
+                waiting <- false
+            else
+                let mutable changed: Task = null
+                let admission =
+                    match ordinaryLimit with
+                    | Some limit ->
+                        lock admissionGate (fun () ->
+                            let admission = tryWriteReserved limit envelope
+                            if admission = AgentTryDeliveryResult.Full then
+                                if isNull admissionChanged then
+                                    admissionChanged <- TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                                changed <- admissionChanged.Task
+                            admission)
+                    | None -> tryWriteReliable envelope
+                match admission with
+                | AgentTryDeliveryResult.Posted ->
+                    result <- AgentDeliveryResult.Posted
                     waiting <- false
-                else
-                    // Capture the change notification together with a failed attempt:
-                    // a dequeue between the two must not leave an asynchronous writer asleep.
-                    let mutable changed: Task = null
-                    result <-
-                        match ordinaryLimit with
-                        | Some limit ->
-                            lock admissionGate (fun () ->
-                                let admission = tryWriteReserved limit envelope
-                                if admission = AgentPostResult.Full then
-                                    if isNull admissionChanged then
-                                        admissionChanged <- TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-                                    changed <- admissionChanged.Task
-                                admission)
-                        | None -> tryWriteUnrestricted envelope
-
-                    match result with
-                    | AgentPostResult.Full ->
-                        try
-                            let! canWrite = task {
-                                if not (isNull changed) then
-                                    do! changed.WaitAsync token
-                                    return true
-                                else
-                                    return! channel.Writer.WaitToWriteAsync(token)
-                            }
-                            if not canWrite then
-                                result <- AgentPostResult.Closed
-                                waiting <- false
-                        with :? OperationCanceledException ->
-                            result <- AgentPostResult.Canceled
+                | AgentTryDeliveryResult.Closed ->
+                    result <- AgentDeliveryResult.Closed
+                    waiting <- false
+                | AgentTryDeliveryResult.Full ->
+                    try
+                        let! canWrite = task {
+                            if not (isNull changed) then
+                                do! changed.WaitAsync token
+                                return true
+                            else
+                                return! channel.Writer.WaitToWriteAsync(token)
+                        }
+                        if not canWrite then
+                            result <- AgentDeliveryResult.Closed
                             waiting <- false
-                    | _ -> waiting <- false
-            return result
-        }
+                    with :? OperationCanceledException ->
+                        result <- AgentDeliveryResult.Canceled
+                        waiting <- false
+        return result
+    }
+
+    let postEnvelopeAsync envelope token = task {
+        if checkedOptions.IsReliable then
+            let! result = postReliableEnvelopeAsync envelope token
+            return AdmissionTasks.generalDelivery result
+        elif token.IsCancellationRequested then return AgentPostResult.Canceled
+        else return tryWriteEnvelope envelope
+    }
 
     let tryPostCore message =
         tryWriteEnvelope (MailboxEnvelope(message, None, None, None) |> classify)
 
+    let tryReliablePostCore message =
+        tryWriteReliableEnvelope (MailboxEnvelope(message, None, None, None) |> classify)
+
+    let postReliableAsyncCore message (token: CancellationToken) =
+        let envelope = MailboxEnvelope(message, None, None, None) |> classify
+        if token.IsCancellationRequested then AdmissionTasks.delivery AgentDeliveryResult.Canceled
+        else
+            match tryWriteReliableEnvelope envelope with
+            | AgentTryDeliveryResult.Posted -> AdmissionTasks.delivery AgentDeliveryResult.Posted
+            | AgentTryDeliveryResult.Closed -> AdmissionTasks.delivery AgentDeliveryResult.Closed
+            | AgentTryDeliveryResult.Full -> postReliableEnvelopeAsync envelope token
+
     let postAsyncCore message (token: CancellationToken) =
         let envelope = MailboxEnvelope(message, None, None, None) |> classify
-        if token.IsCancellationRequested then
-            AdmissionTasks.post AgentPostResult.Canceled
+        if token.IsCancellationRequested then AdmissionTasks.post AgentPostResult.Canceled
         else
             match tryWriteEnvelope envelope with
             | AgentPostResult.Full -> postEnvelopeAsync envelope token
-            | (AgentPostResult.Posted | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped) as result ->
-                AdmissionTasks.post result
+            | (AgentPostResult.Posted | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped) as result -> AdmissionTasks.post result
 
     // Only the handler adds work; finish reads after dispatch has stopped.
     let background = ResizeArray<Task>()
 
     let startBackground operation =
-        match options.Mailbox with
-        | AgentMailbox.Bounded(_, mode, _) when mode <> BoundedChannelFullMode.Wait ->
-            invalidOp "Tracked background work requires an unbounded or bounded-wait mailbox."
-        | _ -> ()
-
         background.RemoveAll(fun work -> work.IsCompleted) |> ignore
 
         let runWork () : Task = task {
             try
                 do! operation lifetimeToken
-            with error ->
-                requestImmediateStop (AgentStopReason.Faulted error)
+            with
+            | :? OperationCanceledException when lifetimeToken.IsCancellationRequested -> ()
+            | error -> failCore error
         }
 
         background.Add(Task.Run(Func<Task>(runWork)))
 
-    let reliableMailbox =
-        match options.Mailbox with
-        | AgentMailbox.Unbounded _
-        | AgentMailbox.BoundedWithControl _
-        | AgentMailbox.Bounded(_, BoundedChannelFullMode.Wait, _) -> true
-        | AgentMailbox.Bounded _ -> false
+    let reliableAddress =
+        if checkedOptions.IsReliable then Some (ReliableAgentRef<'Message>(tryReliablePostCore, postReliableAsyncCore))
+        else None
 
     let context =
         AgentContext<'Message>(
-            options.Name, lifetimeToken, dispatchStopped.Token, tryPostCore, postAsyncCore, completeCore, abortCore, startBackground, reliableMailbox)
+            options.Name, lifetimeToken, dispatchStopped.Token, tryPostCore, postAsyncCore, completeCore, abortCore, failCore, startBackground, reliableAddress)
+
+    let reliableContext = ReliableAgentContext<'Message>(context, ReliableAgentRef<'Message>(tryReliablePostCore, postReliableAsyncCore))
 
     let signalStarted () =
-        safeInvoke (fun () -> startedEvent.Trigger(options.Name))
-        options.OnStarted |> Option.iter (fun callback -> safeInvoke (fun () -> callback options.Name))
+        attempt (fun () -> startedEvent.Trigger(options.Name))
+        options.OnStarted |> Option.iter (fun callback -> attempt (fun () -> callback options.Name))
 
     let reportHandlerError error =
-        safeInvoke (fun () -> errorEvent.Trigger(options.Name, error))
+        let reportFailure callbackError =
+            failCore error
+            failCore callbackError
+        try errorEvent.Trigger(options.Name, error)
+        with callbackError -> reportFailure callbackError
 
-        match options.OnError with
-        | Some decide ->
-            try decide (options.Name, error)
-            with _ -> AgentErrorAction.Stop
-        | None -> AgentErrorAction.Stop
+        let decision =
+            match options.OnError with
+            | Some decide ->
+                try decide (options.Name, error)
+                with callbackError ->
+                    reportFailure callbackError
+                    AgentErrorAction.Stop
+            | None -> AgentErrorAction.Stop
+        if isImmediateStopRequested () then AgentErrorAction.Stop else decision
 
     let tryTakeNext () =
         // Dispatch and Abort are ordered at this gate. At most the current dispatched handler
@@ -813,57 +927,60 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                     Some envelope
                 | false, _ -> None)
 
-    let finish () =
-        task {
-            let reason =
-                lock lifecycleGate (fun () ->
-                    finishing <- true
-                    Interlocked.Exchange(&accepting, 0) |> ignore
-                    let reason = defaultArg stopReason AgentStopReason.Completed
-                    stopReason <- Some reason
-                    reason)
+    let finish () = task {
+        let reason =
+            lock lifecycleGate (fun () ->
+                finishing <- true
+                Interlocked.Exchange(&accepting, 0) |> ignore
+                let reason = defaultArg stopReason AgentStopReason.Completed
+                stopReason <- Some reason
+                reason)
 
-            channel.Writer.TryComplete() |> ignore
-            notifyAdmission ()
-            // The sole reader is now done dispatching. Drop references and settle queued requests.
-            let mutable draining = true
-            while draining do
-                match channel.Reader.TryRead() with
-                | true, envelope ->
-                    Interlocked.Decrement(&queueLength) |> ignore
-                    releaseAdmission envelope
-                    envelope.Discard reason
-                | false, _ -> draining <- false
-            termination.TrySetResult(reason) |> ignore
+        channel.Writer.TryComplete() |> ignore
+        notifyAdmission ()
+        // Independently settle every queued request and release its reservation.
+        let mutable draining = true
+        while draining do
+            match channel.Reader.TryRead() with
+            | true, envelope ->
+                Interlocked.Decrement(&queueLength) |> ignore
+                attempt (fun () -> releaseAdmission envelope)
+                attempt (fun () -> envelope.Discard reason)
+            | false, _ -> draining <- false
+        termination.TrySetResult(reason) |> ignore
 
-            // Detach non-owning observations and close forwarding scopes before joining children.
-            do! dispatchStopped.CancelAsync()
-            do! Task.WhenAll(background)
+        // A failing detach/cancellation callback cannot bypass child joins.
+        do! attemptAsync (fun () -> dispatchStopped.CancelAsync())
+        do! attemptAsync (fun () -> Task.WhenAll(background))
 
-            // Joining work can escalate graceful completion to failure or cancellation.
-            // Capture cancellation after the join so its callbacks cannot outlive the CTS.
-            let reason, callbacks =
-                lock lifecycleGate (fun () ->
-                    stopSealed <- true
-                    defaultArg stopReason reason, cancellationTask)
+        // Seal only after all launched work has returned through the fault sink.
+        let reason, callbacks =
+            lock lifecycleGate (fun () ->
+                stopSealed <- true
+                defaultArg stopReason reason, cancellationTask)
+        do! attemptAsync (fun () -> callbacks)
+        attempt (fun () -> dispatchStopped.Dispose())
+        attempt (fun () -> lock lifecycleGate (fun () -> lifetime.Dispose()))
 
-            try do! callbacks with _ -> ()
-            dispatchStopped.Dispose()
-            lock lifecycleGate (fun () -> lifetime.Dispose())
+        // Every notification sees this same sealed reason. Later notification
+        // faults affect Completion, without rewriting a reason already delivered.
+        attempt (fun () -> stoppedEvent.Trigger(options.Name, reason))
+        options.OnStopped |> Option.iter (fun callback -> attempt (fun () -> callback (options.Name, reason)))
 
-            safeInvoke (fun () -> stoppedEvent.Trigger(options.Name, reason))
-            options.OnStopped |> Option.iter (fun callback -> safeInvoke (fun () -> callback (options.Name, reason)))
-
+        let errors = lock lifecycleGate (fun () -> failures.ToArray())
+        if errors.Length > 0 then
+            completion.TrySetException(errors) |> ignore
+        else
             match reason with
             | AgentStopReason.Completed -> completion.TrySetResult() |> ignore
             | AgentStopReason.Aborted -> completion.TrySetCanceled(lifetimeToken) |> ignore
             | AgentStopReason.Faulted error -> completion.TrySetException(error) |> ignore
-        }
+    }
 
     let runLoop () =
         task {
-            signalStarted ()
             try
+                signalStarted ()
                 let mutable running = true
                 while running && not (isImmediateStopRequested ()) do
                     let! canRead = channel.Reader.WaitToReadAsync(lifetimeToken)
@@ -876,10 +993,16 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                             | None -> draining <- false
                             | Some envelope ->
                                 try
-                                    do! handler context envelope.Message
+                                    do! handler context reliableContext envelope.Message
                                 with
-                                | :? OperationCanceledException when isAbortRequested () ->
-                                    envelope.Discard AgentStopReason.Aborted
+                                | :? OperationCanceledException as error when isImmediateStopRequested () && lifetimeToken.IsCancellationRequested ->
+                                    // A lifetime fault can cancel the current handler just as
+                                    // Abort can. Settle with that chosen cause, not its OCE.
+                                    match getStopReason () with
+                                    | Some reason -> envelope.Discard reason
+                                    | None ->
+                                        envelope.Fault error
+                                        failCore error
                                 | error ->
                                     envelope.Fault error
 
@@ -888,7 +1011,7 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
                                     | AgentErrorAction.Stop ->
                                         requestImmediateStop (AgentStopReason.Faulted error)
             with
-            | :? OperationCanceledException when isAbortRequested () -> ()
+            | :? OperationCanceledException when isImmediateStopRequested () && lifetimeToken.IsCancellationRequested -> ()
             | error -> requestImmediateStop (AgentStopReason.Faulted error)
             do! finish ()
         }
@@ -902,14 +1025,13 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
         task {
             let effectiveTimeout = Option.orElse options.DefaultAskTimeout timeout
             let validationError =
-                try
-                    validateTimeout "timeout" effectiveTimeout
-                    if isNull (box buildMessage) then nullArg (nameof buildMessage)
-                    None
-                with error -> Some error
+                match invalidTimeout effectiveTimeout with
+                | Some value -> Some (AgentRequestError.InvalidTimeout value)
+                | None when isNull (box buildMessage) -> Some (AgentRequestError.NullArgument "buildMessage")
+                | None -> None
 
             match validationError with
-            | Some error -> return AgentAskResult.Faulted error
+            | Some error -> return AgentAskResult.InvalidRequest error
             | None when token.IsCancellationRequested -> return AgentAskResult.Canceled
             | None when effectiveTimeout = Some TimeSpan.Zero -> return AgentAskResult.TimedOut
             | None when not (isAcceptingMessages ()) -> return AgentAskResult.Closed
@@ -967,9 +1089,12 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     /// Send-only address; does not expose lifecycle operations.
     member _.Ref = context.Ref
 
+    member internal _.ReliableAddress = reliableContext.Ref
+
     /// <summary>
     /// Completes after dispatch, queue cleanup, cancellation callbacks, and stopped callbacks finish.
-    /// Succeeds for Completed, is canceled for Aborted, and faults for Faulted.
+    /// Retains original and secondary lifecycle failures. With no such failures,
+    /// succeeds for Completed or is canceled for Aborted. StopReason is sealed before notifications.
     /// Lifecycle callbacks must not block waiting for this task.
     /// </summary>
     member _.Completion : Task = completion.Task :> Task
@@ -1015,27 +1140,12 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
 
     /// <summary>
     /// Constructs a request, waits for admission, and waits for its reply under one timeout budget.
-    /// The first terminal result wins. Invalid timeout arguments return Faulted before construction.
+    /// The first terminal result wins. Invalid arguments return InvalidRequest before construction.
     /// Timeout or cancellation does not retract an admitted command or undo its effects.
     /// BuildMessage must only construct the message; it runs synchronously on the caller.
     /// </summary>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
         tryAskCore buildMessage timeout (defaultArg cancellationToken CancellationToken.None)
-
-    /// <summary>Sends a request and returns the reply, throwing on any unsuccessful request result.</summary>
-    member this.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        task {
-            let! result = this.TryAskAsync(buildMessage, ?timeout = timeout, ?cancellationToken = cancellationToken)
-
-            match result with
-            | AgentAskResult.Replied value -> return value
-            | AgentAskResult.Faulted error -> return! taskFromException<'Reply> error
-            | AgentAskResult.Dropped -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox dropped the request."))
-            | AgentAskResult.Full -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' mailbox is full."))
-            | AgentAskResult.Closed -> return! taskFromException<'Reply> (InvalidOperationException($"Agent '{options.Name}' is not accepting new messages."))
-            | AgentAskResult.TimedOut -> return! taskFromException<'Reply> (TimeoutException($"Request to agent '{options.Name}' timed out."))
-            | AgentAskResult.Canceled -> return! taskFromException<'Reply> (OperationCanceledException($"Ask to agent '{options.Name}' was canceled."))
-        }
 
     /// <summary>Closes admission and gracefully drains every accepted message.</summary>
     member _.Complete() = completeCore ()
@@ -1057,9 +1167,81 @@ type Agent<'Message> private (options: AgentOptions, handler: AgentContext<'Mess
     /// <summary>Validates configuration and starts a sequential background message loop.</summary>
     /// <param name="isControl">Required for BoundedWithControl. Runs at the posting boundary;
     /// it must classify immutable messages without reading or mutating agent-owned state.</param>
-    static member Start(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
-                        ?isControl: 'Message -> bool) =
-        new Agent<'Message>(options, handler, isControl)
+    static member internal StartChecked(checkedOptions: CheckedAgentOptions<'Message>, handler: AgentContext<'Message> -> 'Message -> Task<unit>) =
+        new Agent<'Message>(checkedOptions, fun context _ message -> handler context message)
+
+    static member TryPrepare(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
+                             ?isControl: 'Message -> bool) =
+        checkOptions options handler isControl
+        |> Result.map (fun checkedOptions -> AgentPlan<'Message>(fun () -> new Agent<'Message>(checkedOptions, fun context _ message -> handler context message)))
+
+    /// Preflight actual derived configuration before starting dependent workers.
+    /// The resulting token accepts only trusted local handlers; raw handlers use TryStartReliable.
+    static member TryCheckReliable(options: AgentOptions, ?isControl: 'Message -> bool) =
+        checkOptions options (fun () -> ()) isControl
+        |> Result.bind (fun checkedOptions ->
+            if not checkedOptions.IsReliable then Error AgentStartError.DroppingMailbox
+            else Ok (ReliableAgentConfiguration<'Message> checkedOptions))
+
+    static member internal StartReliableChecked(checkedOptions: CheckedAgentOptions<'Message>, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>) =
+        let agent = new Agent<'Message>(checkedOptions, fun _ context message -> handler context message)
+        new ReliableAgent<'Message>(agent, agent.ReliableAddress)
+
+    static member TryPrepareReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>,
+                                     ?isControl: 'Message -> bool) =
+        if isNull (box handler) then Error (AgentStartError.NullArgument "handler")
+        else
+            Agent<'Message>.TryCheckReliable(options, ?isControl = isControl)
+            |> Result.map (fun configuration -> ReliableAgentPlan<'Message>(fun () -> configuration.Start handler))
+
+    static member TryStartReliable(options: AgentOptions, handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>,
+                                   ?isControl: 'Message -> bool) =
+        Agent<'Message>.TryPrepareReliable(options, handler, ?isControl = isControl)
+        |> Result.map (fun plan -> plan.Start())
+
+    static member TryStart(options: AgentOptions, handler: AgentContext<'Message> -> 'Message -> Task<unit>,
+                           ?isControl: 'Message -> bool) =
+        Agent<'Message>.TryPrepare(options, handler, ?isControl = isControl)
+        |> Result.map (fun plan -> plan.Start())
+
+/// Fully checked construction. Start creates one owner without further raw-input validation.
+and [<Sealed>] AgentPlan<'Message> internal (start: unit -> Agent<'Message>) =
+    member _.Start() = start ()
+
+/// A non-dropping facade over one Agent owner; it adds no queue or lifecycle state.
+and [<Sealed>] ReliableAgent<'Message> internal (agent: Agent<'Message>, address: ReliableAgentRef<'Message>) =
+    member _.Ref = address
+    member _.GeneralRef = agent.Ref
+    member _.Owner = agent
+    member _.Name = agent.Name
+    member _.Completion = agent.Completion
+    member _.QueueLength = agent.QueueLength
+    member _.DroppedCount = agent.DroppedCount
+    member _.IsAcceptingMessages = agent.IsAcceptingMessages
+    member _.StopReason = agent.StopReason
+    member _.Started = agent.Started
+    member _.Errored = agent.Errored
+    member _.Stopped = agent.Stopped
+    member _.TryPost(message) = agent.TryPost message
+    member _.PostAsync(message, ?cancellationToken: CancellationToken) = agent.PostAsync(message, ?cancellationToken = cancellationToken)
+    member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Message, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
+        agent.TryAskAsync(buildMessage, ?timeout = timeout, ?cancellationToken = cancellationToken)
+    member _.Complete() = agent.Complete()
+    member _.Abort() = agent.Abort()
+    member internal _.Agent = agent
+    interface IDisposable with
+        member _.Dispose() = (agent :> IDisposable).Dispose()
+    interface IAsyncDisposable with
+        member _.DisposeAsync() = (agent :> IAsyncDisposable).DisposeAsync()
+
+and [<Sealed>] ReliableAgentPlan<'Message> internal (start: unit -> ReliableAgent<'Message>) =
+    member _.Start() = start ()
+
+/// Checked reusable configuration for resource-ordering preflight. Start is a trusted
+/// construction path for local handlers already known nonnull, not a raw input boundary.
+and [<Sealed>] ReliableAgentConfiguration<'Message> internal (checkedOptions: CheckedAgentOptions<'Message>) =
+    member _.Start(handler: ReliableAgentContext<'Message> -> 'Message -> Task<unit>) =
+        Agent<'Message>.StartReliableChecked(checkedOptions, handler)
 
 /// <summary>
 /// Represents a state transition returned by a stateful agent's command handler.
@@ -1153,7 +1335,7 @@ type private StateQuery<'State, 'Reply>(projection: 'State -> 'Reply, reply: Rep
             try
                 projection state |> reply.Reply
             with error ->
-                reply.ReplyError error
+                reply.ReplyFault error
 
 type private StatefulEnvelope<'State, 'Command> =
     | Command of 'Command
@@ -1203,7 +1385,8 @@ type StatefulAgent<'State, 'Command>
         (
             options: StatefulAgentOptions<'State>,
             initialState: 'State,
-            commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<StatefulTransition<'State>>
+            commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<StatefulTransition<'State>>,
+            checkedOptions: CheckedAgentOptions<StatefulEnvelope<'State, 'Command>>
         ) =
 
     let mutable state = initialState
@@ -1211,7 +1394,11 @@ type StatefulAgent<'State, 'Command>
     let applyState nextState =
         let previous = state
         state <- nextState
-        options.OnTransition |> Option.iter (fun callback -> safeInvoke (fun () -> callback (previous, nextState)))
+        options.OnTransition |> Option.iter (fun callback -> callback (previous, nextState))
+
+    let applyCommandState (context: AgentContext<StatefulEnvelope<'State, 'Command>>) nextState =
+        try applyState nextState
+        with error -> context.Fail error
 
     let onError (name, error) =
         match options.OnUnhandled with
@@ -1231,8 +1418,8 @@ type StatefulAgent<'State, 'Command>
                 AgentErrorAction.Stop
 
     let inner =
-        Agent.Start(
-            { options.AgentOptions with OnError = Some onError },
+        Agent.StartChecked(
+            { checkedOptions with Options = { checkedOptions.Options with OnError = Some onError } },
             fun agentContext envelope ->
                 task {
                     match envelope with
@@ -1246,10 +1433,11 @@ type StatefulAgent<'State, 'Command>
 
                         match transition with
                         | StatefulTransition.Stay -> ()
-                        | StatefulTransition.SetState nextState -> applyState nextState
+                        | StatefulTransition.SetState nextState ->
+                            applyCommandState agentContext nextState
                         | StatefulTransition.Stop -> agentContext.Complete() |> ignore
                         | StatefulTransition.StopWithState nextState ->
-                            applyState nextState
+                            applyCommandState agentContext nextState
                             agentContext.Complete() |> ignore
                 })
 
@@ -1318,17 +1506,13 @@ type StatefulAgent<'State, 'Command>
     /// Timeout includes admission and reply; an admitted command may still execute after timeout.
     /// </summary>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.TryAskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
-    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box buildMessage) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Command (buildMessage reply)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Enqueues a read query to safely project data from the current state.
@@ -1339,24 +1523,13 @@ type StatefulAgent<'State, 'Command>
     /// <param name="timeout">An optional timeout for the query.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>
-    /// Enqueues a read query to safely project data from the current state asynchronously.
-    /// The projection runs sequentially inside the agent loop.
-    /// Throws if the query fails, times out, or the agent is closed.
-    /// </summary>
-    /// <param name="projection">A pure function that extracts data from the agent's state.</param>
-    /// <param name="timeout">An optional timeout for the query.</param>
-    /// <param name="cancellationToken">An optional cancellation token.</param>
-    member _.ReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box projection) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Signals the stateful agent to stop accepting new commands and let the current mailbox drain gracefully.
@@ -1382,8 +1555,14 @@ type StatefulAgent<'State, 'Command>
     /// <param name="options">The configuration options for the agent.</param>
     /// <param name="initialState">The initial state of the agent.</param>
     /// <param name="commandHandler">The asynchronous function that processes commands and returns state transitions.</param>
-    static member Start(options: StatefulAgentOptions<'State>, initialState: 'State, commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<StatefulTransition<'State>>) =
-        new StatefulAgent<'State, 'Command>(options, initialState, commandHandler)
+    static member TryStart(options: StatefulAgentOptions<'State>, initialState: 'State, commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<StatefulTransition<'State>>) =
+        if isNull (box options) then Error (AgentStartError.NullArgument "options")
+        elif options.OnUnhandled |> Option.exists (box >> isNull) then Error (AgentStartError.NullArgument "OnUnhandled")
+        elif options.OnTransition |> Option.exists (box >> isNull) then Error (AgentStartError.NullArgument "OnTransition")
+        else
+            checkOptions options.AgentOptions commandHandler None
+            |> Result.map (fun checkedOptions ->
+                new StatefulAgent<'State, 'Command>({ options with AgentOptions = checkedOptions.Options }, initialState, commandHandler, checkedOptions))
 
 /// <summary>
 /// Helper module providing functional pipelines for base Agent operations.
@@ -1393,8 +1572,11 @@ module Agent =
     /// <summary>
     /// Creates and starts an agent.
     /// </summary>
-    let start options handler =
-        Agent.Start(options, handler)
+    let tryStart options handler =
+        Agent.TryStart(options, handler)
+
+    let tryStartReliable options handler =
+        Agent.TryStartReliable(options, handler)
 
     /// <summary>
     /// Attempts to post a message immediately.
@@ -1407,12 +1589,6 @@ module Agent =
     /// </summary>
     let postAsync message (agent: Agent<_>) =
         agent.PostAsync(message)
-
-    /// <summary>
-    /// Sends a request and waits for a reply, throwing on failure.
-    /// </summary>
-    let askAsync buildMessage (agent: Agent<_>) =
-        agent.AskAsync(buildMessage)
 
     /// <summary>
     /// Sends a request and returns a result union.
@@ -1428,8 +1604,8 @@ module StatefulAgent =
     /// <summary>
     /// Creates and starts a stateful agent.
     /// </summary>
-    let start options initialState commandHandler =
-        StatefulAgent.Start(options, initialState, commandHandler)
+    let tryStart options initialState commandHandler =
+        StatefulAgent.TryStart(options, initialState, commandHandler)
 
     /// <summary>
     /// Attempts to post a command immediately.
@@ -1443,19 +1619,9 @@ module StatefulAgent =
     let postAsync command (agent: StatefulAgent<_, _>) =
         agent.PostAsync(command)
 
-    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
-    let askAsync buildMessage (agent: StatefulAgent<_, _>) =
-        agent.AskAsync(buildMessage)
-
     /// <summary>Sends a command/request and returns a result union.</summary>
     let tryAskAsync buildMessage (agent: StatefulAgent<_, _>) =
         agent.TryAskAsync(buildMessage)
-
-    /// <summary>
-    /// Reads a projection of the current state, throwing on failure.
-    /// </summary>
-    let readAsync projection (agent: StatefulAgent<_, _>) =
-        agent.ReadAsync(projection)
 
     /// <summary>
     /// Reads a projection of the current state and returns a result union.
@@ -1539,7 +1705,8 @@ type MutableStatefulAgent<'State, 'Command>
         (
             options: MutableStatefulAgentOptions<'State>,
             initialState: 'State,
-            commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<MutableStatefulTransition>
+            commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<MutableStatefulTransition>,
+            checkedOptions: CheckedAgentOptions<StatefulEnvelope<'State, 'Command>>
         ) =
 
     let state = initialState
@@ -1556,8 +1723,8 @@ type MutableStatefulAgent<'State, 'Command>
             | MutableStatefulErrorAction.Stop -> AgentErrorAction.Stop
 
     let inner =
-        Agent.Start(
-            { options.AgentOptions with OnError = Some onError },
+        Agent.StartChecked(
+            { checkedOptions with Options = { checkedOptions.Options with OnError = Some onError } },
             fun agentContext envelope ->
                 task {
                     match envelope with
@@ -1640,17 +1807,13 @@ type MutableStatefulAgent<'State, 'Command>
     /// Timeout includes admission and reply; an admitted command may still execute after timeout.
     /// </summary>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.TryAskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>Enqueues a command/request and returns the reply, throwing on unsuccessful results.</summary>
-    member _.AskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box buildMessage) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Command (buildMessage reply)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Enqueues a read query to safely project data from the current mutable state.
@@ -1662,24 +1825,13 @@ type MutableStatefulAgent<'State, 'Command>
     /// <param name="timeout">An optional timeout for the query.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
-
-    /// <summary>
-    /// Enqueues a read query to safely project data from the current mutable state asynchronously.
-    /// The projection runs sequentially inside the agent loop.
-    /// Throws if the query fails, times out, or the agent is closed.
-    /// </summary>
-    /// <param name="projection">A function that extracts data from the current state.</param>
-    /// <param name="timeout">An optional timeout for the query.</param>
-    /// <param name="cancellationToken">An optional cancellation token.</param>
-    member _.ReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        inner.AskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box projection) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Signals the mutable stateful agent to stop accepting new commands and let the current mailbox drain gracefully.
@@ -1705,13 +1857,18 @@ type MutableStatefulAgent<'State, 'Command>
     /// <param name="options">The configuration options for the agent.</param>
     /// <param name="initialState">The initial mutable state instance. Ownership is transferred to the agent.</param>
     /// <param name="commandHandler">The asynchronous function that processes commands and may mutate the state in place.</param>
-    static member Start
+    static member TryStart
         (
             options: MutableStatefulAgentOptions<'State>,
             initialState: 'State,
             commandHandler: StatefulAgentContext -> 'State -> 'Command -> Task<MutableStatefulTransition>
         ) =
-        new MutableStatefulAgent<'State, 'Command>(options, initialState, commandHandler)
+        if isNull (box options) then Error (AgentStartError.NullArgument "options")
+        elif options.OnUnhandled |> Option.exists (box >> isNull) then Error (AgentStartError.NullArgument "OnUnhandled")
+        else
+            checkOptions options.AgentOptions commandHandler None
+            |> Result.map (fun checkedOptions ->
+                new MutableStatefulAgent<'State, 'Command>({ options with AgentOptions = checkedOptions.Options }, initialState, commandHandler, checkedOptions))
 
 /// <summary>
 /// Helper module providing functional pipelines for MutableStatefulAgent operations.
@@ -1721,8 +1878,8 @@ module MutableStatefulAgent =
     /// <summary>
     /// Creates and starts a mutable stateful agent.
     /// </summary>
-    let start options initialState commandHandler =
-        MutableStatefulAgent.Start(options, initialState, commandHandler)
+    let tryStart options initialState commandHandler =
+        MutableStatefulAgent.TryStart(options, initialState, commandHandler)
 
     /// <summary>
     /// Attempts to post a command immediately.
@@ -1736,19 +1893,9 @@ module MutableStatefulAgent =
     let postAsync command (agent: MutableStatefulAgent<_, _>) =
         agent.PostAsync(command)
 
-    /// <summary>Sends a command/request and returns its reply, throwing on failure.</summary>
-    let askAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
-        agent.AskAsync(buildMessage)
-
     /// <summary>Sends a command/request and returns a result union.</summary>
     let tryAskAsync buildMessage (agent: MutableStatefulAgent<_, _>) =
         agent.TryAskAsync(buildMessage)
-
-    /// <summary>
-    /// Reads a projection of the current mutable state, throwing on failure.
-    /// </summary>
-    let readAsync projection (agent: MutableStatefulAgent<_, _>) =
-        agent.ReadAsync(projection)
 
     /// <summary>
     /// Reads a projection of the current mutable state and returns a result union.

@@ -57,11 +57,14 @@ int RunMovementDemo()
       };
       if (!model.Apply(1, PlayerLocationUpdated{7, location}, epoch + std::chrono::milliseconds{delivery.arrival})) return 1;
     }
+
     if (!(*exchange)->Publish(model)) return 1;
     (*exchange)->Drain(output);
     movement->Apply(output.state, epoch + std::chrono::milliseconds{frame});
+
     const auto pose = movement->Sample(7, epoch + std::chrono::milliseconds{frame});
     if (pose) std::cout << frame << ',' << pose->position.X << ',' << movement->HistorySize(7) << '\n';
   }
+
   return 0;
 }

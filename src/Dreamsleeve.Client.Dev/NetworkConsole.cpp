@@ -131,7 +131,13 @@ namespace
       }
       if (!id) return std::nullopt;
       const auto kind = action == "ban" ? Domain::SanctionKind::Ban : Domain::SanctionKind::Mute;
-      return SanctionPlayer{requestId, *id, kind, minutes, rest()};
+      return SanctionPlayer{
+        requestId,
+        *id,
+        kind,
+        minutes,
+        rest()
+      };
     }
     if (action == "lift" && input >> first >> second && (first == "mute" || first == "ban"))
     {
@@ -156,7 +162,12 @@ namespace
     {
       const auto id = ParseId(first);
       if (!id) return std::nullopt;
-      return ClearPlayerMarks{requestId, *id, second != "deaths", second != "notes"};
+      return ClearPlayerMarks{
+        requestId,
+        *id,
+        second != "deaths",
+        second != "notes"
+      };
     }
     if (action == "delete" && input >> first)
     {
@@ -214,6 +225,7 @@ namespace
       };
     if (action == "leave") return GuildRequest{requestId, LeaveGuild{*guild}};
     if (action == "disband") return GuildRequest{requestId, DisbandGuild{*guild}};
+
     // The guild's channel follows from the book; an unknown guild sends nothing.
     if (action == "say" || action == "delete")
     {
@@ -225,6 +237,7 @@ namespace
       if (!message) return std::nullopt;
       return DeleteChatMessage{requestId, found->channelId, *message};
     }
+
     if (!(input >> second)) return std::nullopt;
     const auto player = ParseId(second);
     if (!player) return std::nullopt;
@@ -248,6 +261,7 @@ namespace
           requestId,
           UnmuteGuildMember{*guild, *player}
       };
+
     if (!(input >> third)) return std::nullopt;
     if (action == "role")
     {
@@ -321,7 +335,13 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | "
+    "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | "
+    "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | "
+    "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | "
+    "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | "
+    "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | "
+    "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -447,17 +467,78 @@ namespace
         std::cout << "No position: send move or location first\n";
         return true;
       }
-      const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, lastLocation->rotation.Z};
+      const Domain::GroundMarkPlacement placement{
+        lastLocation->location.locationId,
+        lastLocation->position,
+        0.0f
+      };
       if (line.starts_with("note "))
         command = PlaceGroundNote{*requestId, line.substr(5), placement, ConsoleGameDate};
       else
         command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement, ConsoleGameDate};
     }
+
     if (exchange.Post({generation, std::move(command)}) == CommandPostResult::Queued)
       std::cout << "request " << *requestId << " queued\n";
     else
       std::cout << "Command queue is full or closed\n";
     return true;
+  }
+
+  void PrintCommandResult(std::ostream& console, const CommandResult& result, const ClientStatus& status)
+  {
+    console << "request " << result.requestId << ' ';
+    std::visit(
+      [&](const auto& value) {
+        using Outcome = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<Outcome, MessagePublished>)
+          console << "published message " << value.messageId;
+        else if constexpr (std::is_same_v<Outcome, MarkPlaced>)
+        {
+          console << "placed mark " << value.markId;
+          if (value.evictedId) console << " evicted " << *value.evictedId;
+        }
+        else if constexpr (std::is_same_v<Outcome, MarkRemoved>)
+          console << "removed mark " << value.markId;
+        else if constexpr (std::is_same_v<Outcome, IdentityChanged>)
+          console << "identity "
+                  << (status.pseudonym ? "hidden as " + *status.pseudonym + " " + std::string{HidingName(value.hiding)}
+                                      : std::string{"shown"});
+        else if constexpr (std::is_same_v<Outcome, NameChanged>)
+          console << "display name " << value.displayName;
+        else if constexpr (std::is_same_v<Outcome, ColorChanged>)
+          console << std::format("name color #{:06X}", value.nameColor);
+        else if constexpr (std::is_same_v<Outcome, Sanctioned>)
+          PrintSanction(console << "sanctioned ", value.sanction);
+        else if constexpr (std::is_same_v<Outcome, Lifted>)
+          console << "lifted " << SanctionName(value.kind) << " of " << value.playerId;
+        else if constexpr (std::is_same_v<Outcome, Kicked>)
+          console << "kicked " << value.playerId;
+        else if constexpr (std::is_same_v<Outcome, SanctionsListed>)
+        {
+          console << "sanctions " << value.sanctions.size();
+          for (const auto& sanction : value.sanctions)
+            PrintSanction(console << "\nsanction ", sanction);
+        }
+        else if constexpr (std::is_same_v<Outcome, MarksListed>)
+        {
+          console << "player-marks " << value.playerId << ' ' << value.marks.size();
+          for (const auto& mark : value.marks)
+            console << "\nmark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " text=" << mark.text;
+        }
+        else if constexpr (std::is_same_v<Outcome, MarksCleared>)
+          console << "cleared " << value.removed << " marks of " << value.playerId;
+        else if constexpr (std::is_same_v<Outcome, MessageDeleted>)
+          console << "deleted message " << value.messageId;
+        else if constexpr (std::is_same_v<Outcome, GuildDone>)
+          console << "guild done " << value.guildId;
+        else if constexpr (std::is_same_v<Outcome, ServerRejection>)
+          console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
+        else
+          console << "not sent (local " << static_cast<int>(value) << ')';
+      },
+      result.outcome);
+    console << '\n';
   }
 
   void Print(ClientExchange& exchange, std::uint64_t& generation, Channels& channel, MovementView& movement, bool verbose = true)
@@ -549,68 +630,15 @@ namespace
     }
 
     for (const auto& result : output.results)
-    {
-      console << "request " << result.requestId << ' ';
-      std::visit(
-        [&](const auto& value) {
-          using Outcome = std::decay_t<decltype(value)>;
-          if constexpr (std::is_same_v<Outcome, MessagePublished>)
-            console << "published message " << value.messageId;
-          else if constexpr (std::is_same_v<Outcome, MarkPlaced>)
-          {
-            console << "placed mark " << value.markId;
-            if (value.evictedId) console << " evicted " << *value.evictedId;
-          }
-          else if constexpr (std::is_same_v<Outcome, MarkRemoved>)
-            console << "removed mark " << value.markId;
-          else if constexpr (std::is_same_v<Outcome, IdentityChanged>)
-            console << "identity "
-                    << (output.status.pseudonym ? "hidden as " + *output.status.pseudonym + " " + std::string{HidingName(value.hiding)}
-                                                : std::string{"shown"});
-          else if constexpr (std::is_same_v<Outcome, NameChanged>)
-            console << "display name " << value.displayName;
-          else if constexpr (std::is_same_v<Outcome, ColorChanged>)
-            console << std::format("name color #{:06X}", value.nameColor);
-          else if constexpr (std::is_same_v<Outcome, Sanctioned>)
-            PrintSanction(console << "sanctioned ", value.sanction);
-          else if constexpr (std::is_same_v<Outcome, Lifted>)
-            console << "lifted " << SanctionName(value.kind) << " of " << value.playerId;
-          else if constexpr (std::is_same_v<Outcome, Kicked>)
-            console << "kicked " << value.playerId;
-          else if constexpr (std::is_same_v<Outcome, SanctionsListed>)
-          {
-            console << "sanctions " << value.sanctions.size();
-            for (const auto& sanction : value.sanctions)
-              PrintSanction(console << "\nsanction ", sanction);
-          }
-          else if constexpr (std::is_same_v<Outcome, MarksListed>)
-          {
-            console << "player-marks " << value.playerId << ' ' << value.marks.size();
-            for (const auto& mark : value.marks)
-              console << "\nmark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " text=" << mark.text;
-          }
-          else if constexpr (std::is_same_v<Outcome, MarksCleared>)
-            console << "cleared " << value.removed << " marks of " << value.playerId;
-          else if constexpr (std::is_same_v<Outcome, MessageDeleted>)
-            console << "deleted message " << value.messageId;
-          else if constexpr (std::is_same_v<Outcome, GuildDone>)
-            console << "guild done " << value.guildId;
-          else if constexpr (std::is_same_v<Outcome, ServerRejection>)
-            console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
-          else
-            console << "not sent (local " << static_cast<int>(value) << ')';
-        },
-        result.outcome);
-      console << '\n';
-    }
+      PrintCommandResult(console, result, output.status);
   }
 
   void PrintPose(const MovementView& movement, Domain::PlayerId id)
   {
     const auto pose = movement.Sample(id);
     if (pose)
-      std::cout << "pose " << id << ' ' << pose->position.X << ' ' << pose->position.Y << ' ' << pose->position.Z
-                << " yaw=" << pose->rotation.Z << '\n';
+      std::cout << "pose " << id << ' ' << pose->position.X << ' ' << pose->position.Y << ' ' << pose->position.Z << " camera=("
+                << pose->cameraDirection.X << "," << pose->cameraDirection.Y << "," << pose->cameraDirection.Z << ")" << '\n';
     else
       std::cout << "pose " << id << " absent\n";
   }
@@ -708,6 +736,7 @@ int RunNetworkConsole(int argc, char* argv[])
     settings.client.serverHost = argv[2];
     settings.client.serverPort = static_cast<Port>(port);
   }
+
   Credentials credentials;
   if (!saved)
   {
@@ -719,17 +748,20 @@ int RunNetworkConsole(int argc, char* argv[])
     }
     credentials = {argv[usernameIndex], std::move(*password)};
   }
+
   auto application = ClientApplication::TryCreate(std::move(settings));
   if (!application)
   {
     std::cerr << application.error() << '\n';
     return 1;
   }
+
   // Validated by TryCreate; the view trusts it.
-  auto  movement = MovementView::Create((*application)->Settings().client.movement);
+  auto movement = MovementView::Create((*application)->Settings().client.movement);
   for (const auto& route : (*application)->Routes())
     routeNames.push_back(route.name);
   auto& exchange = (*application)->Exchange();
+
   // Others see a server pseudonym from the very first packet of the session.
   exchange.SetHideIdentity(hiding);
   if (auto started = saved ? (*application)->ConnectSaved() : (*application)->Connect(credentials, registerName, remember); !started)
@@ -848,7 +880,11 @@ int RunNetworkConsole(int argc, char* argv[])
         std::cout << "Usage: color #RRGGBB\n";
       else if (const auto requestId = exchange.NextRequestId(); !requestId)
         std::cout << "Request IDs exhausted\n";
-      else if (exchange.Post({generation, SetNameColor{*requestId, color}}) == CommandPostResult::Queued)
+      else if (
+        exchange.Post({
+            generation,
+            SetNameColor{*requestId, color}
+      }) == CommandPostResult::Queued)
         std::cout << "request " << *requestId << " queued\n";
       else
         std::cout << "Command queue is full or closed\n";

@@ -27,7 +27,8 @@ let private handle (seen: ConcurrentQueue<int>) (context: AgentContext<Message>)
     | Hold(_, entered, release) ->
         entered.TrySetResult() |> ignore
         do! release.Task.WaitAsync context.CancellationToken
-    | Data value | Control value -> seen.Enqueue value
+    | Data value | Control value ->
+        seen.Enqueue value
     | Query(value, reply) ->
         seen.Enqueue value
         reply.Reply value
@@ -35,11 +36,12 @@ let private handle (seen: ConcurrentQueue<int>) (context: AgentContext<Message>)
         entered.TrySetResult() |> ignore
         do! release.Task.WaitAsync context.CancellationToken
         return raise error
-    | Fail error -> return raise error
+    | Fail error ->
+        return raise error
 }
 
 let private start ordinary reserve seen =
-    Agent.Start(options "reserved-admission" (AgentMailbox.boundedWithControl ordinary reserve),
+    TestAgent.Start(options "reserved-admission" (AgentMailbox.boundedWithControl ordinary reserve),
                 handle seen, isControl = isControl)
 
 let private hold control (agent: Agent<Message>) = task {
@@ -81,9 +83,11 @@ let tests = testList "Admission" [
         let seen = ConcurrentQueue<int>()
         use agent = start 1 1 seen
         let! release = hold false agent
+
         equal AgentPostResult.Posted (agent.TryPost(Data 1))
         equal AgentPostResult.Full (agent.TryPost(Data 99))
         equal AgentPostResult.Posted (agent.TryPost(Control 2))
+
         release.SetResult()
         do! complete agent
         equal [|1; 2|] (seen.ToArray())
@@ -162,6 +166,7 @@ let tests = testList "Admission" [
         equal AgentPostResult.Posted (agent.TryPost(Control 101))
         equal AgentPostResult.Full (agent.TryPost(Control 102))
         equal 10 agent.QueueLength
+
         release.SetResult()
         do! complete agent
         equal 10 seen.Count
@@ -213,6 +218,7 @@ let tests = testList "Admission" [
         do! eventually (fun () -> agent.QueueLength = 1)
         let waiting = agent.PostAsync(Data 99)
         equal AgentPostResult.Posted (agent.TryPost(Control 99))
+
         agent.Abort()
         let! closed = awaitResult waiting
         equal AgentPostResult.Closed closed
@@ -234,6 +240,7 @@ let tests = testList "Admission" [
         do! eventually (fun () -> agent.QueueLength = 1)
         let waiting = agent.PostAsync(Data 99)
         equal AgentPostResult.Posted (agent.TryPost(Control 99))
+
         release.SetResult()
         let! closed = awaitResult waiting
         equal AgentPostResult.Closed closed
@@ -247,12 +254,15 @@ let tests = testList "Admission" [
 
     case "continuing after a handler fault leaves ordinary capacity reusable" (fun () -> task {
         let seen = ConcurrentQueue<int>()
-        let settings = { options "continue-reserved" (AgentMailbox.boundedWithControl 1 1) with
-                            OnError = Some(fun _ -> AgentErrorAction.Continue) }
-        use agent = Agent.Start(settings, handle seen, isControl = isControl)
+        let settings = {
+            options "continue-reserved" (AgentMailbox.boundedWithControl 1 1) with
+                OnError = Some(fun _ -> AgentErrorAction.Continue)
+        }
+        use agent = TestAgent.Start(settings, handle seen, isControl = isControl)
         let! release = hold true agent
         equal AgentPostResult.Posted (agent.TryPost(Fail(InvalidOperationException("continue"))))
         let waiting = agent.PostAsync(Data 1)
+
         release.SetResult()
         let! admitted = awaitResult waiting
         equal AgentPostResult.Posted admitted

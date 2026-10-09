@@ -153,6 +153,27 @@ const ranges = [
   ["lineHeight", "Межстрочный интервал", 0.05],
   ["background", "Непрозрачность фона", 0.05],
 ] as const;
+const phantomCountOptions = Array.from(
+  {
+    length: limits.maxVisiblePhantoms.max - limits.maxVisiblePhantoms.min + 1,
+  },
+  (_, i) => {
+    const value = String(limits.maxVisiblePhantoms.min + i);
+    return { value, label: value };
+  },
+);
+const phantomRanges = [
+  ["phantomDrawDistance", "Дальность фантомов", 128, "игр. ед."],
+  ["phantomOpacity", "Непрозрачность фантомов", 0.05, ""],
+  ["phantomSampleRate", "Частота движения", 1, "Гц"],
+  ["phantomDelayMs", "Минимальная задержка сглаживания", 1, "мс"],
+  ["phantomExtrapolationMs", "Продолжение движения без обновлений", 1, "мс"],
+  ["phantomTimeoutMs", "Скрывать при отсутствии обновлений", 50, "мс"],
+  ["phantomMemoryMiB", "Лимит памяти моделей", 64, "МиБ"],
+  ["phantomCacheMiB", "Лимит кеша на диске", 64, "МиБ"],
+  ["phantomUploadKiB", "Отправка моделей", 64, "КиБ/с"],
+  ["phantomDownloadKiB", "Загрузка моделей", 64, "КиБ/с"],
+] as const;
 export function SettingsPanel({
   chat,
   settings: s,
@@ -464,6 +485,73 @@ export function SettingsPanel({
         <p className={styles.muted}>
           Применяются после сохранения, без перезапуска игры. Высота — в игровых
           единицах. Имена пока доступны только в SE/AE.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group} data-part="phantoms">
+        <legend>Фантомы</legend>
+        {(
+          [
+            ["publishPhantoms", "Публиковать мой фантом"],
+            ["showPhantoms", "Показывать фантомы других игроков"],
+            ["phantomFallback", "Показывать светлячок, если фантом недоступен"],
+            ["combatHidePhantoms", "Скрывать фантомы в бою"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              aria-label={label}
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        <label className={styles.choice}>
+          Фантомов рядом
+          <Select
+            label="Фантомов рядом"
+            value={String(s.maxVisiblePhantoms)}
+            options={phantomCountOptions}
+            onChange={(value) =>
+              chat.configure({ maxVisiblePhantoms: Number(value) })
+            }
+          />
+        </label>
+        <ColorField
+          label="Цвет фантомов"
+          value={s.phantomColor}
+          onChange={(phantomColor) => chat.configure({ phantomColor })}
+        />
+        {phantomRanges.map(([key, label, step, unit]) => (
+          <label key={key} className={styles.range}>
+            <span>
+              {label}
+              <output>
+                {s[key].toFixed(step < 1 ? 2 : 0)}
+                {unit && ` ${unit}`}
+              </output>
+            </span>
+            <input
+              type="range"
+              aria-label={label}
+              min={limits[key].min}
+              max={limits[key].max}
+              step={step}
+              value={s[key]}
+              onChange={(e) =>
+                chat.configure({ [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Публикация и просмотр включаются независимо. Частота движения
+          ограничивается сервером. Настройки применяются после сохранения.
+        </p>
+        <p className={styles.muted}>
+          Дальность — в игровых единицах; память и кеш — в МиБ. Кеш на диске
+          хранит готовые модели внешности.
         </p>
       </fieldset>
       <fieldset className={styles.group}>

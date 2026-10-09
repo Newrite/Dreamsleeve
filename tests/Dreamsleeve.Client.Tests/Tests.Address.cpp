@@ -31,6 +31,7 @@ TEST_CASE("DreamNetAddress.IsIpv4Literal - four decimal parts up to 255")
     CAPTURE(std::string_view{text});
     CHECK(DreamNetAddress::IsIpv4Literal(text));
   }
+
   for (const auto text : {"", "256.0.0.1", "1.2.3", "1.2.3.4.5", "1..2.3", "a.b.c.d", "1.2.3.4 ", "1234.1.1.1"})
   {
     CAPTURE(std::string_view{text});
@@ -46,10 +47,12 @@ TEST_CASE("DreamNetAddress.IsHostSyntax - IPv4 literals and DNS names")
     CAPTURE(std::string_view{host});
     CHECK(DreamNetAddress::IsHostSyntax(host));
   }
+
   const std::string label(DreamNetAddress::MaxLabelLength, 'a');
   const auto        longest = label + "." + label + "." + label + "." + std::string(61, 'b');
   REQUIRE(longest.size() == DreamNetAddress::MaxHostNameLength);
   CHECK(DreamNetAddress::IsHostSyntax(longest));
+
   const auto             tooLong   = longest + "b";
   const auto             longLabel = label + "a.org";
   const std::string_view invalid[]{
@@ -78,9 +81,11 @@ TEST_CASE("DreamNetAddress.TryResolve - a literal is parsed, a name is resolved"
 {
   auto runtime = DreamNetRuntime::TryInitialize();
   REQUIRE(runtime.has_value());
+
   auto literal = DreamNetAddress::TryResolve("10.0.0.1", 7777);
   REQUIRE(literal.has_value());
   CHECK(literal->ToString() == "10.0.0.1:7777");
+
   auto named = DreamNetAddress::TryResolve("localhost", 7777);
   REQUIRE(named.has_value());
   CHECK(named->ToString() == "127.0.0.1:7777");

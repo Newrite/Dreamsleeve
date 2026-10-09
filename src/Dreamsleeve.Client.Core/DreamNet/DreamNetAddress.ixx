@@ -29,6 +29,7 @@ export class DreamNetAddress
       const auto end    = part < 3 ? text.find('.', start) : text.size();
       const auto digits = end == IpStrView::npos ? IpStrView{} : text.substr(start, end - start);
       if (digits.empty() || digits.size() > 3 || !std::ranges::all_of(digits, IsDigit)) return false;
+
       unsigned value = 0;
       for (const char digit : digits)
         value = value * 10 + static_cast<unsigned>(digit - '0');
@@ -45,6 +46,7 @@ export class DreamNetAddress
   {
     if (IsIpv4Literal(host)) return true;
     if (host.empty() || host.size() > MaxHostNameLength) return false;
+
     std::size_t start   = 0;
     bool        numeric = false;
     while (true)
@@ -53,6 +55,7 @@ export class DreamNetAddress
       const auto label = host.substr(start, dot == HostNameView::npos ? HostNameView::npos : dot - start);
       if (label.empty() || label.size() > MaxLabelLength || label.front() == '-' || label.back() == '-') return false;
       if (!std::ranges::all_of(label, [](char value) { return IsDigit(value) || IsAsciiLetter(value) || value == '-'; })) return false;
+
       numeric = std::ranges::all_of(label, IsDigit);
       if (dot == HostNameView::npos) break;
       start = dot + 1;

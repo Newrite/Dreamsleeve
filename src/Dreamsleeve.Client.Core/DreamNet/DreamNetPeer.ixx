@@ -159,6 +159,7 @@ export class DreamNetPeer
     }
 
     auto dreamPeer = DreamNetPeer(peer);
+
     if (config)
     {
       auto result = dreamPeer.ApplyRuntimeConfig(config.value());
@@ -239,6 +240,20 @@ export class DreamNetPeer
     return PushPacketImpl(std::move(packet), channelId);
   }
 
+  // ENet promotes unreliable data to reliable at its 16-bit sequence limit.
+  // A zero-byte reliable barrier advances only the transport epoch instead.
+  // Applications using this operation must consume that marker before decoding.
+  NetOperationResult RotateUnreliableSequence(const ChannelId channelId)
+  {
+    if (!CanSend() || channelId >= peer->channelCount)
+      return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidPeerState, "Cannot rotate an unavailable unreliable channel");
+    if (peer->channels[channelId].outgoingUnreliableSequenceNumber != (std::numeric_limits<enet_uint16>::max)()) return {};
+
+    auto barrier = DreamNetPacket::TryAllocate(0, PacketFlag::Reliable);
+    if (!barrier) return std::unexpected(barrier.error());
+    return PushPacketImpl(std::move(*barrier), channelId);
+  }
+
   NetOperationResult PushSpan(
     const DreamNetPacket::DataBytes bytes,
     const ChannelId                 channelId,
@@ -296,6 +311,7 @@ export class DreamNetPeer
   void Disconnect(const DisconnectType type = DisconnectType::Normal, const DisconnectReason reason = DisconnectReason::Unspecified)
   {
     if (!IsValid()) return;
+
     switch (type)
     {
       case DisconnectType::Normal:
@@ -440,41 +456,35 @@ export class DreamNetPeer
     }
 
     return PeerTelemetry{
-        .transportInfo =
-          PeerTelemetry::TransportInfo{
-                                       .mtu                   = peer->mtu,
-                                       .windowSize            = peer->windowSize,
-                                       .incomingDataTotal     = peer->incomingDataTotal,
-                                       .outgoingDataTotal     = peer->outgoingDataTotal,
-                                       .reliableDataInTransit = peer->reliableDataInTransit,
-                                       .lastReceiveTime       = peer->lastReceiveTime,
-                                       .lastSendTime          = peer->lastSendTime,
-                                       .state                 = peer->state,
-                                       },
-
-        .packetStats =
-          PeerTelemetry::PacketStats{
-                                       .packetLoss         = peer->packetLoss,
-                                       .packetLossVariance = peer->packetLossVariance,
-                                       .packetsLost        = peer->packetsLost,
-                                       .packetsSent        = peer->packetsSent,
-                                       },
-
-        .packetThrottleStats =
-          PeerTelemetry::PacketThrottleStats{
-                                       .packetThrottle             = peer->packetThrottle,
-                                       .packetThrottleLimit        = peer->packetThrottleLimit,
-                                       .packetThrottleAcceleration = peer->packetThrottleAcceleration,
-                                       .packetThrottleDeceleration = peer->packetThrottleDeceleration,
-                                       .packetThrottleInterval     = peer->packetThrottleInterval,
-                                       },
-
+        .transportInfo = PeerTelemetry::TransportInfo{
+            .mtu                   = peer->mtu,
+            .windowSize            = peer->windowSize,
+            .incomingDataTotal     = peer->incomingDataTotal,
+            .outgoingDataTotal     = peer->outgoingDataTotal,
+            .reliableDataInTransit = peer->reliableDataInTransit,
+            .lastReceiveTime       = peer->lastReceiveTime,
+            .lastSendTime          = peer->lastSendTime,
+            .state                 = peer->state,
+        },
+        .packetStats = PeerTelemetry::PacketStats{
+            .packetLoss         = peer->packetLoss,
+            .packetLossVariance = peer->packetLossVariance,
+            .packetsLost        = peer->packetsLost,
+            .packetsSent        = peer->packetsSent,
+        },
+        .packetThrottleStats = PeerTelemetry::PacketThrottleStats{
+            .packetThrottle             = peer->packetThrottle,
+            .packetThrottleLimit        = peer->packetThrottleLimit,
+            .packetThrottleAcceleration = peer->packetThrottleAcceleration,
+            .packetThrottleDeceleration = peer->packetThrottleDeceleration,
+            .packetThrottleInterval     = peer->packetThrottleInterval,
+        },
         .roundTripTimeInfo = PeerTelemetry::RoundTripTimeInfo{
-                                       .lastRoundTripTime     = peer->lastRoundTripTime,
-                                       .lowestRoundTripTime   = peer->lowestRoundTripTime,
-                                       .roundTripTime         = peer->roundTripTime,
-                                       .roundTripTimeVariance = peer->roundTripTimeVariance,
-                                       },
+            .lastRoundTripTime     = peer->lastRoundTripTime,
+            .lowestRoundTripTime   = peer->lowestRoundTripTime,
+            .roundTripTime         = peer->roundTripTime,
+            .roundTripTimeVariance = peer->roundTripTimeVariance,
+        },
     };
   }
 

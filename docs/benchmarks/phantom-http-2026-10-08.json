@@ -1,0 +1,126 @@
+{
+  "http": {
+    "success": true,
+    "errors": [],
+    "serverLoad": {
+      "sampleCount": 298,
+      "sampleSpanSeconds": 29.90599999999904,
+      "cpuCoreEquivalent": 1.3046086069685432,
+      "privateMedianMiB": 108.89453125,
+      "privatePeakMiB": 112.9296875,
+      "workingSetPeakMiB": 185.23046875
+    },
+    "allocationMiBPerSecond": 337.4985160300293,
+    "gcPauseMsPerSecond": 46.37975211669892,
+    "poseHzPerActiveSubscription": 9.964556417568476,
+    "poseEnvelopeMiBPerSecond": 76.96340539268678,
+    "poseAgeP95Range": [
+      92.44292938662247,
+      93.37735868048875
+    ],
+    "poseGapP95Range": [
+      167.076694377064,
+      173.90128215631725
+    ],
+    "modelUploadBytes": 0,
+    "modelDownloadBytes": 0,
+    "nativeSendFailures": 0,
+    "encodeBudgetErrors": 95,
+    "loadMetrics": {
+      "runtime.tick.duration": {
+        "count": 17076,
+        "max": 24.062,
+        "p50": 0.030301000000000133,
+        "p95": 1.7318619677157439,
+        "p99": 8.289401355746518,
+        "sum": 4995.835799999976
+      },
+      "outgoing.pose.age": {
+        "count": 611479,
+        "max": 85.2271,
+        "p50": 5.3646646158538625,
+        "p95": 16.044785022367712,
+        "p99": 29.054522588903726,
+        "sum": 3550478.8278000304
+      },
+      "outgoing.queue.bytes": {
+        "count": 275,
+        "max": 3557764,
+        "p50": 118382.94843833445,
+        "p95": 2511622.6978611415,
+        "p99": 3189094.633248145,
+        "sum": 160703814
+      }
+    }
+  },
+  "enetBaseline": {
+    "success": true,
+    "errors": [],
+    "serverLoad": {
+      "sampleCount": 298,
+      "sampleSpanSeconds": 29.936999999999898,
+      "cpuCoreEquivalent": 1.446266325951169,
+      "privateMedianMiB": 113.32421875,
+      "privatePeakMiB": 123.4609375,
+      "workingSetPeakMiB": 195.18359375
+    },
+    "allocationMiBPerSecond": 343.41873614171715,
+    "gcPauseMsPerSecond": 63.20639403823709,
+    "poseHzPerActiveSubscription": 9.42625588175816,
+    "poseEnvelopeMiBPerSecond": 72.45455766303263,
+    "poseAgeP95Range": [
+      157.33584909519058,
+      170.4550359340429
+    ],
+    "poseGapP95Range": [
+      289.52469645873066,
+      501.17907702946576
+    ],
+    "modelUploadBytes": 0,
+    "modelDownloadBytes": 0,
+    "nativeSendFailures": 0,
+    "encodeBudgetErrors": 0,
+    "loadMetrics": {
+      "runtime.tick.duration": {
+        "count": 14203,
+        "max": 27.4099,
+        "p50": 0.030301000000000133,
+        "p95": 1.7867723932668307,
+        "p99": 11.645916636849327,
+        "sum": 6167.683100000093
+      },
+      "outgoing.pose.age": {
+        "count": 602405,
+        "max": 103.3324,
+        "p50": 23.145689438646585,
+        "p95": 50.9499808388952,
+        "p99": 64.30959471456865,
+        "sum": 14328946.847900294
+      },
+      "outgoing.queue.bytes": {
+        "count": 274,
+        "max": 8584494,
+        "p50": 2099759.8981445283,
+        "p95": 6150042.853004238,
+        "p99": 7356358.430133308,
+        "sum": 632211516
+      }
+    }
+  },
+  "coldNative": {
+    "compressedBytes": 13318718,
+    "fullMs": 5399.43,
+    "prepareUploadCommitMs": 2785.99,
+    "downloadDecodeMs": 2601.22,
+    "chatDuringDownloadMs": 17.245,
+    "environment": "loopback, 5 MiB/s, no game renderer, build/http-smoke-real-idle"
+  },
+  "coldManaged": {
+    "compressedBytes": 13288628,
+    "uploadCommitMs": 2609.4877,
+    "uploadAndVerifiedDownloadMs": 5187.6542,
+    "verifiedDownloads": 1,
+    "unfinishedDownloads": 0,
+    "environment": "normal Program auth host, loopback, build/http-benchmark/cold2-complete"
+  }
+}

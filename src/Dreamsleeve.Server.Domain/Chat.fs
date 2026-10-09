@@ -6,7 +6,10 @@ open FSharp.UMX
 
 /// A range of message text in UTF-8 bytes, the unit of the wire string.
 [<Struct>]
-type TextSpan = { Start: int; Length: int }
+type TextSpan = {
+    Start: int
+    Length: int
+}
 
 /// Channel entities. The client "all" view aggregates channels and is not one.
 /// Party and direct channels are planned kinds with their own targets.
@@ -54,14 +57,23 @@ type Announcement = {
 
 [<RequireQualifiedAccess>]
 module Announcement =
-    let server kind = { Source = AnnouncementSource.Server; Kind = kind; Signature = ValueNone }
+    let server kind = {
+        Source = AnnouncementSource.Server
+        Kind = kind
+        Signature = ValueNone
+    }
 
     let fromClient source kind signature =
         let origin =
             match source with
             | ClientAnnouncementSource.TrustedClient -> AnnouncementSource.TrustedClient
             | ClientAnnouncementSource.ThirdParty -> AnnouncementSource.ThirdParty
-        { Source = origin; Kind = kind; Signature = signature }
+
+        {
+            Source = origin
+            Kind = kind
+            Signature = signature
+        }
 
     /// Kinds a client may request; administrator and scheduled notices belong to the server.
     let clientMayRequest kind =
@@ -94,13 +106,17 @@ module ChatChannels =
     /// for an ID that names no channel.
     let classify (id: ChatChannelId) : struct (ChatChannelKind * GuildId voption) voption =
         let raw = ChatChannelId.value id
-        if id = globalId then ValueSome(struct (ChatChannelKind.Global, ValueNone))
-        elif id = systemId then ValueSome(struct (ChatChannelKind.System, ValueNone))
+
+        if id = globalId then
+            ValueSome(struct (ChatChannelKind.Global, ValueNone))
+        elif id = systemId then
+            ValueSome(struct (ChatChannelKind.System, ValueNone))
         elif raw > GuildBase then
             match GuildId.create (raw - GuildBase) with
             | Ok guild -> ValueSome(struct (ChatChannelKind.Guild, ValueSome guild))
             | Error _ -> ValueNone
-        else ValueNone
+        else
+            ValueNone
 
     let kindOf id =
         match classify id with
@@ -191,6 +207,16 @@ type ChatSnapshot = {
     HistoryCapacity: int
 }
 
+/// Checked retained-message count shared by future guild channels.
+[<Struct>]
+type ChatHistoryCapacity = private ChatHistoryCapacity of int
+
+[<RequireQualifiedAccess>]
+module ChatHistoryCapacity =
+    let create value =
+        if value < 1 then Error (DomainError.InvalidLimit("historyCapacity", value))
+        else Ok (ChatHistoryCapacity value)
+
 /// Mutable state owned exclusively by one agent. All operations, including reads,
 /// must run inside that owner. No function exposes its live collections.
 [<NoEquality; NoComparison>]
@@ -211,22 +237,27 @@ type Chat =
 
 [<RequireQualifiedAccess>]
 module Chat =
+    let private createChecked channelId kind (ChatHistoryCapacity historyCapacity) =
+        {
+            channelId = channelId
+            kind = kind
+            historyCapacity = historyCapacity
+            players = HashSet<PlayerId>()
+            messages = Queue<ChatMessage>()
+            lastAcceptedId = ValueNone
+            lastEvictedId = ValueNone
+        }
+
     /// The channel ID must name a channel of the kind (ChatChannels.classify).
     let create channelId kind historyCapacity =
-        if historyCapacity <= 0 then
-            Error (DomainError.InvalidLimit ("historyCapacity", historyCapacity))
-        elif ChatChannels.kindOf channelId <> ValueSome kind then
-            Error DomainError.ChannelMismatch
-        else
-            Ok {
-                channelId = channelId
-                kind = kind
-                historyCapacity = historyCapacity
-                players = HashSet<PlayerId>()
-                messages = Queue<ChatMessage>()
-                lastAcceptedId = ValueNone
-                lastEvictedId = ValueNone
-            }
+        ChatHistoryCapacity.create historyCapacity
+        |> Result.bind (fun capacity ->
+            if ChatChannels.kindOf channelId <> ValueSome kind then Error DomainError.ChannelMismatch
+            else Ok (createChecked channelId kind capacity))
+
+    /// A checked guild ID determines its channel; capacity was checked before owner startup.
+    let createGuild capacity guild =
+        createChecked (ChatChannels.ofGuild guild) ChatChannelKind.Guild capacity
 
     /// Returns true only when membership was added.
     let join playerId (chat: Chat) =
@@ -258,6 +289,7 @@ module Chat =
             match message.Author with
             | ValueSome author when not (chat.players.Contains author.PlayerId) -> ValueSome author.PlayerId
             | ValueSome _ | ValueNone -> ValueNone
+
         if message.ChannelId <> chat.channelId
            || message.Announcement.IsSome <> ChatChannelKind.carriesAnnouncements chat.kind then
             Error DomainError.ChannelMismatch
@@ -329,9 +361,16 @@ module Chat =
         match chat.messages |> Seq.tryFind (fun message -> message.MessageId = messageId) with
         | None -> ValueNone
         | Some removed ->
-            let kept = chat.messages |> Seq.filter (fun message -> message.MessageId <> messageId) |> Seq.toArray
+            let kept =
+                chat.messages
+                |> Seq.filter (fun message -> message.MessageId <> messageId)
+                |> Seq.toArray
+
             chat.messages.Clear()
-            for message in kept do chat.messages.Enqueue message
+
+            for message in kept do
+                chat.messages.Enqueue message
+
             ValueSome removed
 
     /// Removes retained messages but preserves accepted/evicted cursor tracking.

@@ -1,4 +1,4 @@
-# Прикладной протокол сессии, версия 15
+# Прикладной протокол сессии, версия 26
 
 Схемы разделены по назначению:
 
@@ -8,21 +8,23 @@
 | [chat.proto](chat.proto) | SendChat, ChatMessage, ChatPublished, ChatChannel и ChatChannelKind; объявления: Announcement, PostAnnouncement, AnnouncementPolicy и их enum |
 | [player.proto](player.proto) | Состояние персонажа, движение, actor values, Details и уведомления |
 | [session.proto](session.proto) | OpenSession, JoinAsGuest и начальный SessionOpened; скрытое имя: SetIdentityVisibility и IdentityVisibilityChanged; смена отображаемого имени: ChangeDisplayName и DisplayNameChanged; цвет имени: SetNameColor и NameColorChanged; мут и конец сессии: MuteState, MuteChanged, SessionEndReason, SessionEnded |
+| [guild.proto](guild.proto) | Гильдии, членство, invites, ranks и общий список |
 | [ground.proto](ground.proto) | Метки на земле: GroundMark, GroundMarkKind, PlaceGroundNote, ReportDeath, RemoveGroundMark, GroundMarksChanged, GroundMarkPlaced, GroundMarkRemoved, OwnGroundMarks |
 | [moderation.proto](moderation.proto) | Роль и инструменты модератора: PlayerRole, SanctionKind, RoleChanged, SanctionEntry, запросы наказаний, списков и удаления контента с их ответами |
 | [protocol.proto](protocol.proto) | ClientPacket/ServerPacket, подтверждение обновления и общие отказы |
+| [phantom.proto](phantom.proto) | Независимые оболочки моделей/поз, manifest, политики, допуск HTTP-передач и подтверждения |
 | [network.proto](network.proto) | Причины отключения ENet и фиксированные DeliveryLane |
 
 Граф импортов направлен от оболочек к сообщениям, от сообщений к общим типам;
 циклов нет. Package `Dreamsleeve.Protocol.Chat` сохранён для существующих C++/C#
 имён. Файловое разделение не меняет номера, типы, oneof, reserved или wire-формат;
-Версия 15 даёт модератору инструменты в игре; версия 14 добавляет муты, баны и кик; версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Версии 1–14 несовместимы с текущей. Native-код, работающий с оболочками, включает `protocol.pb.h`.
+Версия 15 даёт модератору инструменты в игре; версия 14 добавляет муты, баны и кик; версия 13 оставляет клиента подключённым гостем до входа; версия 12 датирует метки игровым календарём; версия 11 позволяет игроку сменить своё отображаемое имя; версия 10 позволяет скрыть свои имена за серверным псевдонимом; версия 9 присылает игроку полный список его меток; версия 8 добавляет метки на земле; версия 7 открывает сессию списком каналов (общий и системный); версия 6 отделила движение от команд. Клиент и сервер выпускаются вместе: все предыдущие версии несовместимы с текущей, legacy-путей нет. Native-код, работающий с оболочками, включает `protocol.pb.h`.
 Генерация всех схем выполняется одной командой `python Scripts/generate_protocol.py`.
 
 ## Оболочки и сессия
 
 Одно protobuf-сообщение занимает один ENet packet без внешнего length prefix.
-Все оболочки содержат protocol_version = 15. Неизвестные дополнительные поля
+Все оболочки содержат protocol_version = 26. Неизвестные дополнительные поля
 допускаются; отсутствие ожидаемого payload или другая версия дают ошибку codec.
 
 | Канал | DeliveryLane | Назначение |
@@ -30,8 +32,10 @@
 | 0 | Control | ClientPacket/ServerPacket: сессия, lifecycle, UpdatePlayer, метки, скрытое имя, смена имени, модерация (кроме удаления сообщений) и ответы, reliable |
 | 1 | Chat | ClientPacket/ServerPacket: SendChat, PostAnnouncement, DeleteChatMessage, ChatPublished, ChatMessageRemoved и ответы чата, reliable |
 | 2 | Realtime | ClientMovementPacket/ServerMovementPacket: абсолютные pose, unreliable sequenced (flags=0) |
+| 3 | Models | ClientAssetPacket/ServerAssetPacket: настройки, публикации, offers, HTTP capabilities/complete/cancel, reliable |
+| 4 | Poses | ClientPosePacket/ServerPosePacket: сжатый полный snapshot с bounds, unreliable sequenced с UNRELIABLE_FRAGMENT |
 
-Нужно минимум три согласованных канала. Номера фиксированы в network.proto,
+Нужно минимум пять согласованных каналов. Номера фиксированы в network.proto,
 надёжность задаётся флагом пакета. RequestRejected возвращается на канал исходной
 команды; SessionOpened с историей всегда Control. Между каналами общего порядка нет.
 Flags=0 — не Unsequenced/UnreliableFragment. При исчерпании unreliable sequence
@@ -336,7 +340,7 @@ character_name — снимок опубликованного имени пер
 updated тоже несут PlayerInfo.
 
 PlayerLocation содержит Location(FormKey(plugin_name/local_form_id), location_name),
-Position XYZ в world units и Rotation XYZ в радианах. Клиент шлёт свои показания как
+Position XYZ в world units и CameraDirection XYZ — мировой forward камеры. Клиент шлёт свои показания как
 ActorValueEntry: key, display_name и oneof scalar (float) / resource (current/maximum, sint32 —
 целые очки, отрицательные допустимы: игра не обрезает удар, превысивший здоровье). Scalar 0
 присутствует явно; отсутствующий oneof — ошибка. Сервер публикует их как ActorValue с номером
@@ -690,7 +694,7 @@ Location=None/ViewRevision=0 не очищает позицию того же п
 
 playerSampleIntervalMs задаёт период повторения последней локальной позы,
 ReplicationIntervalMs — период серверной рассылки актуального состояния. По умолчанию
-оба 50 мс (20 Гц); тики не синхронизированы и автоматически не согласуются. Чат/команды
+оба 100 мс (10 Гц); тики не синхронизированы и автоматически не согласуются. Чат/команды
 обрабатываются независимо. Сохранять все промежуточные samples не требуется.
 
 ### Организация преобразований
@@ -731,3 +735,135 @@ bootstrap может фрагментироваться, realtime — нет. П
 PlayerMoved.location=2 зарезервированы. SetLocation использует tag8, видимость — часть
 PresenceChanged; pose/token/sequence движения — отдельные realtime оболочки. Старые ветки
 одновременно не поддерживаются.
+
+
+## Фантомы, версия 26
+
+Модели и позы имеют отдельные оболочки с той же обязательной версией 26.
+`phantom.proto` отделён от чата и UpdatePlayer; массивы геометрии не идут через
+UI bridge. Максимальный frame модели: compressed 64 МиБ, raw 128 МиБ;
+позы: compressed 128 КиБ, raw 256 КиБ; 4096 узлов нативной сцены.
+Серверная policy может уменьшить эти пределы. Локальный кеш и сцена имеют
+отдельное ограничение RAM; лимит размеров wire не обещает вместимость renderer.
+
+Manifest фиксирует SHA-256 **compressed** целого asset, format_version=2,
+appearance generation, точные длины и число выбранных каналов поз. Поле geometry удалено (tag reserved). Published content
+immutable: повтор той же generation допустим только с идентичным manifest.
+Смена контекста/привязок оружия не обязана менять внешний asset.
+
+Publish/Download получают положительный request_id, который Transfer и Complete
+обязательно повторяют. Он отделяет поздние результаты IO предыдущей попытки
+от новой передачи той же модели. Complete с transfer_id=0 обозначает отказ
+до назначения передачи либо принятую публикацию уже кешированного hash;
+содержит player/generation, upload, request_id и retry.
+Нулевой retry — окончательный отказ; положительный — задержка повтора в мс.
+Transfer.http_token — одноразовый случайный ключ (64 hex), выданный actor после
+допуска и pinning storage. PUT/GET `/phantoms/content` используют существующий
+HTTP origin авторизации, `Authorization: Bearer <key>` и бинарное тело. PUT требует
+точного Content-Length; GET возвращает точный Content-Length. Hash не является
+разрешением на скачивание. Ключ связан с направлением, размером и передачей;
+отмена/AOI departure/disconnect отзывают его. Успех PUT — 204, GET — 200.
+Actor посылает Complete после проверки storage/завершения записи HTTP тела;
+получатель ждёт одновременно полное HTTP тело и accepted Complete, независимо
+от порядка их прихода. Затем проверяет hash и декодирует production asset.
+Размер ENet model-control envelope ограничен 4096 байт. Chunk/Progress и
+Policy.window_chunks удалены, их номера зарезервированы. Прикладного окна и
+подтверждений частей больше нет; повтор после обрыва требует нового допуска.
+Первое поколение начинает pose delivery после принятой целой публикации.
+Замена допускает bundled pose после admission Publish, до upload commit.
+
+PoseSample повторяет generation, context_revision, sequence, sampled_at_us;
+сжатый payload содержит эти значения и **полную** таблицу TRS/hidden, world
+spheres всей геометрии. Каналы определяются preorder проверенного NIF: root,
+геометрия и skin roots/bones. Payload60 + channels*23 + bounds*16 байт до Zstd1; pose version3.
+Каналы и bounds переставляются в байтовые плоскости отдельно, заголовок не
+переставляется. Значения квантования и точность не изменены.
+NIF-контейнер: magic uint32, version uint32=2, length uint32, NIF bytes; Zstd3.
+Нет зависимых дельт. Получатель сверяет envelope с декодированным payload и готовым manifest.
+
+Один большой pose передаётся штатным ENet UNRELIABLE_FRAGMENT. Потерянный
+фрагмент не даёт частичного снимка приложению; следующий снимок независим.
+При outgoing unreliable sequence=FFFF ENet по умолчанию превращает фрагменты
+в reliable. Поэтому оба transport owners ставят **пустой reliable packet** на
+lane4 для смены транспортной эпохи перед следующей позой. Receive-адаптер
+поглощает только этот пустой reliable marker; сама поза остаётся unreliable.
+Это не прикладное подтверждение позы и не гарантированная доставка кадров.
+
+Сервер авторизует загрузку по существующей Presence/AOI view, ограничивает
+sources/subscribers/traffic, хранит compressed bytes и проверяет hash потоково,
+без интерпретации NIF; для дельт восстанавливает полный asset вне actor. Все параметры и default находятся в `[Phantoms]`.
+Нативный NIF, проверка до NiStream и владельцы состояний:
+[PhantomsRu](../docs/PhantomsRu.md).
+
+### Переход поколений в23
+
+ClientPosePacket.previous_sample=3 и ServerPosePacket.previous_sample=5 —
+optional полный независимый sample предыдущего NIF. Его generation строго
+меньше основного, context_revision и sampled_at_us совпадают, sequence независим.
+Пакет атомарен на границе ENet reassembly; частично полученная пара не применяется.
+Граница server ingress: 2*Limits.PoseBytes+256; значение PoseBytes относится к
+одному сжатому sample, а byte credits — к целой protobuf оболочке.
+
+ClientAssetPacket.displayed=9 подтверждает (player_id, view_revision, generation)
+после успешного Apply+Attach сцены. ServerAssetPacket.settled=9 сообщает
+(generation, context_revision) источнику после подтверждений текущего audience
+или TransferTimeoutMs после commit. Источник держит не более двух поколений;
+новые изменения объединяются до завершения перехода. Сервер сохраняет watermark
+(generation, sequence) отдельно от истекающего Latest, проверяет session/context
+и не разрешает публикацию только на основании исторического HighManifest.
+
+Wire26 не совместим с25; negotiation и сетевого legacy decoder нет. Только
+offline diagnostic reader допускает сохранённые DLPDIAG2/protocol22–25 записи
+с проверкой фактического asset/pose формата.
+
+## Камера и спрос на позы (v24)
+
+`CameraDirection camera_direction` заменяет movement `Rotation rotation` на тех же
+номерах полей PlayerLocation/MovementPose. Это мировой вектор forward реальной
+камеры, а не поворот персонажа. Нулевой вектор означает недоступную камеру;
+компоненты конечны, масштаб не используется для определения угла. Сервер применяет
+направление только для выбора phantom-подписок внутри существующего AOI.
+В downstream movement камера пустая: направление наблюдателя другим игрокам не пересылается.
+Поворот нативного фантома по-прежнему находится в самостоятельной позе.
+
+`ServerAssetPacket.pose_demand` (10) содержит `context_revision` и `required`.
+Сервер посылает его надёжно при изменении наличия выбранных зрителей или контекста.
+Пока команда ещё не пришла, клиент допускает позы; `false` останавливает live sample,
+кодирование и отправку, но не начальную публикацию модели и не диагностику.
+Exchange хранит раннюю команду будущего контекста до подтверждения movement:
+между Models и Control общего порядка нет. Новый ENet session очищает команду.
+Переход pause/resume инвалидирует token работы с позой, а не работу с моделью.
+Предыдущие версии несовместимы, native asset v2 и pose v3 не меняются.
+
+
+### Дельты нативного asset (v26)
+
+`Publish.delta=4` и `Transfer.delta=7`: optional `AssetDelta{base_hash, hash,
+compressed_bytes}`. Оба hash — SHA-256 (32 байта), размер дельты положителен и
+меньше полного manifest.compressed_bytes, base_hash отличается от target hash.
+`Download.base_hash=4` сообщает имеющуюся базу. Отсутствующий delta в Transfer
+всегда означает полное тело; HTTP Content-Length и бюджет относятся к выбранному
+телу. Manifest продолжает описывать **полный** compressed asset format=2.
+
+Тело delta — один Zstd frame (level3, prefix = raw предыдущего asset,
+windowLog27, long-distance matching). Полный результат канонически сжимается
+Zstd level3. Проверяются hash patch, точные raw/compressed размеры и hash полного
+результата. Библиотеки клиента и сервера проверяются на побайтовое совпадение;
+изменение канонического кодирования требует нового контракта. Отдельного NIF
+parser/renderer на сервере нет.
+
+Actor разрешает upload delta от одной из двух последних различных committed баз
+этого источника в текущей character/session. Смена movement context и Withdraw
+снимают готовность показа, но не авторизацию этих hash. Storage удерживает
+базу до завершения/отмены, восстанавливает полный архив вне actor, после чего
+обычный commit публикует поколение. Новому клиенту отдаётся полный архив; дельта
+доступна только получателю с точно совпадающей базой. Сервер хранит одну входящую
+дельту на target; цепочки дельт по сети не выдаются. После перезапуска полные архивы
+сохраняются, временные delta удаляются и используются полные передачи.
+
+Клиент повторно проверяет базу из дискового кеша непосредственно перед apply.
+Пропавшая база, ошибка восстановления или недостаток рабочего бюджета приводят
+к запросу полного asset. Терминальный отказ delta upload или отсутствие базы
+повторяется полным upload; retryable admission (cooldown/занятость/ожидание первого
+Displayed) сохраняет delta. Pose wire
+не менялся: каждый sample остаётся самостоятельным, привязанным к поколению.

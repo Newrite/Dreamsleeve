@@ -10,6 +10,8 @@ import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PlacedReferences;
 import Dreamsleeve.Host.Hud;
 import Dreamsleeve.UI.Nameplates;
+import Dreamsleeve.Game.Phantoms;
+import Dreamsleeve.Game.PlayerLabels;
 
 // Presence of other players as a glowing placed reference per visible player.
 // One reference per player, moved every frame from MovementView; nothing else
@@ -39,7 +41,6 @@ namespace Fireflies
     auto& state = Get();
     state.refs.Clear();
     state.space.reset();
-    Runtime::Get().bubbles.Clear();
   }
 
   // kDataLoaded: the base form is resolved once; a missing form disables fireflies.
@@ -81,21 +82,17 @@ namespace Fireflies
     const auto observer = World::Observe(player);
     if (!observer || (state.space && *state.space != observer->space)) ClearAll();
     if (!observer) return;
+
     state.space        = observer->space;
     const auto& space  = observer->space;
     const auto& origin = observer->position;
 
-    const float height    = static_cast<float>(ui.fireflyHeightOffset);
-    const auto  style     = Dreamsleeve::Host::Hud::PlayerBubble(ui);
-    const auto  nameColor = Dreamsleeve::Host::Hud::NameColor(ui);
+    const float height = static_cast<float>(ui.fireflyHeightOffset);
 
     std::unordered_set<Domain::PlayerId> visible;
-    // Expired texts and those of players who left are dropped here, once per
-    // frame; a message is never kept waiting for its author to appear.
-    runtime.bubbles.Prune(now, ui, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
     for (const auto& [id, remote] : runtime.session.OnlinePlayers())
     {
-      if (runtime.session.SelfId() == id || runtime.session.GuildmatesOnlyHides(id, ui.fireflyGuildmatesOnly)) continue;
+      if (runtime.session.HidesPlayerRepresentation(id, ui.fireflyGuildmatesOnly) || !Phantoms::UseFirefly(id)) continue;
       const auto pose = runtime.movement->Sample(id, now);
       if (!pose || !Domain::Spatial::Reach(space, origin, pose->location.locationId, pose->position, settings.visibilityDistance)) continue;
 
@@ -114,31 +111,9 @@ namespace Fireflies
         // The pose is already interpolated by MovementView.
         ref->Update3DPosition(true);
       }
+
       visible.insert(id);
-      // Name and bubble share one anchor, projection and occlusion pick. The
-      // name size is passed even when names are hidden: it fixes the baseline
-      // above which the bubble sits.
-      Nameplates::Label label{
-          .key       = {Nameplates::LabelKind::Player, id},
-          .nameSize  = static_cast<float>(ui.fireflyNameFontSize),
-          .nameColor = nameColor,
-          .style     = style
-      };
-      // Same resolver as the web UI, so a pseudonym matches on both surfaces.
-      if (ui.showFireflyNames && !(combat && ui.combatHideNames))
-      {
-        auto name  = runtime.session.PlayerNames().NameFor(id, remote.data, remote.characterName, ui);
-        label.name = Dreamsleeve::Host::Names::PlateName(std::move(name), remote.data);
-      }
-      if (ui.showBubbles && !(combat && ui.combatHideBubbles))
-        if (const auto active = runtime.bubbles.Find(id, now, ui))
-        {
-          label.bubble      = std::string{active->text};
-          label.bubbleAlpha = active->alpha;
-        }
-      auto anchor  = position;
-      anchor.z    += static_cast<float>(ui.fireflyNameOffset);
-      Nameplates::Add(names, std::move(label), anchor, ui.fireflyNameOcclusion);
+      PlayerLabels::Add(names, id, position, remote, now);
     }
 
     state.refs.Retain(visible);

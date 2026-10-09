@@ -43,20 +43,33 @@ let example () = task {
         { AgentOptions.create "echo" with
             Mailbox = AgentMailbox.boundedWait 64
             DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.) }
-
-    use agent =
-        Agent<Command>.Start(options, fun _ (Echo (text, reply)) -> task {
-            reply.Reply text
-        })
-
-    let! text = agent.AskAsync(fun reply -> Echo ("hello", reply))
-    printfn "%s" text
-    agent.Complete() |> ignore
-    do! agent.Completion
+    match Agent<Command>.TryStart(options, fun _ (Echo (text, reply)) -> task { reply.Reply text }) with
+    | Error error -> eprintfn "Startup rejected: %A" error
+    | Ok owner ->
+        use agent = owner
+        let! result = agent.TryAskAsync(fun reply -> Echo ("hello", reply))
+        match result with
+        | AgentAskResult.Replied text -> printfn "%s" text
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
+            eprintfn "Request not confirmed: %A; do not retry automatically" failure
+        agent.Complete() |> ignore
+        do! agent.Completion
 }
 ```
 
-`TryPost` сразу пытается поставить сообщение в очередь. `PostAsync` ждёт места в ограниченной очереди с режимом `Wait` и возвращает `AgentPostResult`. `Posted` означает приём, а не завершение обработки. `TryAskAsync` возвращает `AgentAskResult<'Reply>`; `AskAsync` превращает неуспешные исходы в исключения. Оба варианта с состоянием поддерживают команды с ответом и запросы проекции состояния через `TryReadAsync` / `ReadAsync`.
+`TryPost` сразу пытается поставить сообщение в очередь. `PostAsync` ждёт места в ограниченной очереди с режимом `Wait` и возвращает `AgentPostResult`. `Posted` означает приём, а не завершение обработки. `TryAskAsync` возвращает `AgentAskResult<'Reply>`. Обе обёртки с состоянием читают проекции через `TryReadAsync`. Бросающие методы `AskAsync` / `ReadAsync` и pipeline-функции `askAsync` / `readAsync` удалены: вызывающий код переходит на `TryAskAsync` / `TryReadAsync` (или `tryAskAsync` / `tryReadAsync`) и явно разбирает все исходы. `Faulted` сохраняет исходное исключение обработчика; `Completion` по-прежнему сообщает сбой жизненного цикла.
+
+## Проверенное создание и надёжные владельцы
+
+Сырые аргументы принимают `Agent.TryStart`, `StatefulAgent.TryStart` и `MutableStatefulAgent.TryStart`, возвращающие `Result<_, AgentStartError>`. Неверная ёмкость, неподдерживаемый таймаут, отсутствие классификатора control, null обязательной функции и неизвестный режим очереди отклоняются до ресурсов и callbacks. На этой границе options копируются. Бросающей совместимой фабрики `Start` нет.
+
+`TryPrepare(options, handler)` проверяет аргументы один раз и возвращает план с запуском `Start()`. Если перед созданием зависимых workers требуется проверить вычисленные бюджеты, `Agent<'Message>.TryCheckReliable` возвращает повторно используемую проверенную конфигурацию. Её `Start(localHandler)` — доверенный путь для локально написанного обработчика, заведомо не null; внешний обработчик проходит `TryStartReliable` или `TryPrepareReliable`.
+
+`TryStartReliable` отклоняет очереди с потерями и передаёт `ReliableAgentContext`. Фасад `ReliableAgent` делегирует одному владельцу и сразу предоставляет `ReliableAgentRef` через `Ref`. Фоновая работа, Own/Watch, outbox, dispatcher, reply scope и ticker требуют эту capability. Общий владелец с потерями сохраняет `AgentContext`; `TryReliable()` позволяет необязательно преобразовать совместимый общий адрес/контекст на границе.
+
+Сырые helper-фабрики используют `tryCreate`/`TryCreate`, `tryCreateHandler`, `tryStart` или `tryStartWithTimeProvider` и сохраняют `AgentStartError`. Доверенные helpers принимают проверенные `AgentDeliveryCapacity` или `AgentTickerInterval`. Ёмкость доставки положительна, без произвольного лимита библиотеки. Интервал таймера после усечения должен составлять 1..4294967294 миллисекунд, как у `PeriodicTimer`.
+
+Неверный таймаут Ask/Read, null конструктора или проекции дают `InvalidRequest of AgentRequestError` до создания/приёма команды. Исключения конструктора/проекции сохраняются как `Faulted` с исходной причиной. `TryReplyError` возвращает `Result<bool, AgentRequestError>`: null ошибка отклоняется без завершения ответа, а `Ok false` означает уже выигравшее завершение. `ReplyError` возвращает `Result<unit, AgentRequestError>`.
 
 ## Основные контракты
 
@@ -66,9 +79,9 @@ let example () = task {
 - **Владение:** проекция выполняется внутри агента, но возврат живого словаря, ленивой последовательности, изменяемого массива или вложенного объекта может нарушить изоляцию. Создавай независимый снимок внутри проекции.
 - **Завершение:** `Complete()` закрывает приём и обрабатывает накопленные сообщения. `Abort()` запрашивает кооперативную отмену и отбрасывает остаток очереди. Для фактического завершения ожидай `Completion`.
 - **Ошибки:** стандартная политика останавливает агент с `Faulted`. Текущий неуспешный Ask получает `Faulted`, даже если выбранная политика продолжает работу. `OnUnhandled` обёртки с состоянием имеет приоритет над базовым `OnError`; без него используется базовая политика.
-- **Completion:** успешна для `Completed`, отменена для `Aborted`, содержит исключение для `Faulted`. Публикуется после очистки и обработчиков остановки. `IDisposable.Dispose` запрашивает abort; `IAsyncDisposable.DisposeAsync` завершает корректно и ожидает остановки.
+- **Completion:** ожидает принадлежащую работу и все попытки cleanup/уведомлений остановки. Без отказов жизненного цикла успешна для `Completed` и отменена для `Aborted`; иначе сохраняет исходные и вторичные исключения. `StopReason` фиксируется перед уведомлениями, поэтому отказ callback меняет исход Completion, но не уже сообщённую причину. `IDisposable.Dispose` запрашивает abort; `IAsyncDisposable.DisposeAsync` завершает корректно и ожидает остановки.
 - **Взаимные блокировки:** не ожидай собственный Ask/Read, собственный `PostAsync` при заполненной ограниченной очереди, собственный `Completion` внутри callback жизненного цикла или циклические запросы между агентами.
-- **Старт:** `Start` запускает работу сразу. Для гарантированного наблюдения старта задавай `OnStarted` в options; событие `Started` не воспроизводится для поздних подписчиков.
+- **Старт:** успешный `TryStart` запускает работу сразу; подготовка плана не запускает. Для гарантированного наблюдения старта задавай `OnStarted` в options; событие `Started` не воспроизводится для поздних подписчиков.
 
 [Полное руководство](docs/index.html#ru) содержит таблицы результатов, детали завершения и политик ошибок, изменения поведения и рекомендации для сервера Dreamsleeve. Модуль не предоставляет автоматические перезапуски, дерево супервизоров, гарантированное сохранение сообщений, объединение обновлений по ключу или протокол распределённых акторов.
 
@@ -126,9 +139,9 @@ Complete сразу закрывает приём: ещё не отправле�
 
 ## Ограниченные последовательные отправки
 
-Для каждого независимого маршрута создаётся AgentOutbox(capacity, destination).
+Для каждого независимого маршрута создаётся AgentOutbox.TryCreate(capacity, destination).
 В обработчике владельца вызывается `TrySend(context, message, onFailure)`.
-False означает заполнение локального лимита: сообщение не запланировано.
+False означает заполнение локального лимита, остановку владельца или отказ планирования: сообщение не запланировано.
 True означает приём в outbox, а не доставку или обработку адресатом. Лимит включает
 очередь, текущую отправку и незавершённое уведомление об ошибке. Фактически выполняется
 один допуск в mailbox; порядок отправок сохраняется.
@@ -162,8 +175,8 @@ PipeToSelf остаётся для фоновых операций, резуль
 
 ## Обработчики запросов с ответами
 
-`AgentOutbox.createHandler capacity output execute` сохраняет порядок ответов одному
-адресату. `AgentReplyDispatcher.createHandler capacity replyTo execute` доставляет
+`AgentOutbox.createHandler checkedCapacity output execute` сохраняет порядок ответов одному
+адресату. `AgentReplyDispatcher.createHandler checkedCapacity replyTo execute` доставляет
 ответы разным адресатам независимо. Порядок независимых ответов может меняться;
 сопоставляйте их по OperationId. Каждый обработчик создаётся один раз для своего агента.
 
@@ -180,7 +193,7 @@ Complete дренирует доставки; Abort отменяет ожида�
 
 ### Фоновое выполнение запросов
 
-`AgentReplyDispatcher.createAsyncHandler capacity replyTo execute` принимает
+`AgentReplyDispatcher.createAsyncHandler checkedCapacity replyTo execute` принимает
 `execute: CancellationToken -> Request -> Task<Reply>`. Место резервируется до
 запуска операции в существующем отслеживаемом фоновом worker. Даже синхронный код
 execute до первого await выполняется вне mailbox handler: дополнительный Task.Run
@@ -215,7 +228,7 @@ execute не получает state или context владельца. Если 
 если ребёнок завершился до присоединения. Abort или сбой родителя отменяет ребёнка
 и ждёт его очистку. Штатный Stop ребёнка задаёт приложение: сначала завершить детей,
 затем вызывать Complete родителя. Игнорирующая отмену очистка может задержать родителя.
-Own не перезапускает ребёнка и не восстанавливает его состояние; перезапуск — `AgentSupervisor`.
+Own не перезапускает ребёнка и не восстанавливает его состояние; перезапуск — `AgentSupervisor`. Доставленный отказ ребёнка сохраняет все причины: одиночное исходное исключение или упорядоченный AggregateException для нескольких. Если остановка или отказ уведомления мешает доставке, Own сохраняет каждую исходную причину в Completion родителя. Поглощается только фактическая отмена ребёнка при отмене родителя.
 
 `context.Watch(target, stopped)` наблюдает общую зависимость без владения ею.
 Перегрузка `Watch(completion: Task, stopped)` даёт то же наблюдение, когда наружу
@@ -226,12 +239,12 @@ Own не перезапускает ребёнка и не восстанавл�
 
 ## Перенаправленные запросы
 
-`AgentReplyScope.create context target capacity closedReply busyReply` создаёт одну
+`AgentReplyScope.create context target checkedCapacity closedReply busyReply` создаёт одну
 область ожиданий на маршрут. `scope.Forward(reply, send)` ограничивает незавершённые
 ReplyChannel и вызывает синхронную функцию планирования отправки. Она работает вне
 библиотечного lock и может использовать outbox для сохранения порядка с другими
 командами адресата. False означает отказ планирования и завершает запрос closedReply;
-исключение завершает запрос ошибкой и передаётся политике ошибок владельца.
+исключение завершает запрос исходной ошибкой, освобождает резерв области и завершает жизненный цикл владельца ошибкой.
 
 При завершении адресата или остановке владельца ожидания закрываются автоматически,
 даже если mailbox владельца занят. `scope.Close()` закрывает маршрут раньше, например
@@ -249,7 +262,7 @@ busyReply. Завершённые и отменённые запросы уда�
 ## Допуск со служебным резервом
 
 `AgentMailbox.boundedWithControl ordinaryCapacity controlReserve` создаёт одну FIFO
-с общей ёмкостью `ordinaryCapacity + controlReserve`. В `Agent.Start` передаётся
+с общей ёмкостью `ordinaryCapacity + controlReserve`. В `Agent.TryStartReliable` передаётся
 именованный чистый классификатор `isControl = isControlMessage`. Он выполняется
 на отправителе, включая Map и Ask, и не обращается к состоянию получателя.
 Существующие варианты mailbox и вызовы Start не меняются.
@@ -275,7 +288,7 @@ TCS общего admission notification создаётся только при �
 
 ## Периодический тикер
 
-`AgentTicker.start interval context toMessage` создаёт один owned PeriodicTimer.
+`AgentTicker.start checkedInterval context toMessage` создаёт один owned PeriodicTimer.
 После обработки tick владелец вызывает `Acknowledge()`: до этого новые периоды
 объединяются, пропущенные периоды не догоняются пачкой. Callback строит только сообщение,
 не читает mutable state агента. Нужен non-dropping mailbox. Complete/Abort останавливают
@@ -284,7 +297,7 @@ Timestamp поля AgentTick относятся к TimeProvider.
 
 ## Супервизор
 
-`AgentSupervisor.start name policy start observe` держит одного ребёнка и перезапускает его
+`AgentSupervisor.tryStart name policy start observe` держит одного ребёнка и перезапускает его
 по `RestartPolicy`. Супервизор — сам агент: запуск ребёнка, его завершение и задержки рестарта
 приходят ему сообщениями. `start` возвращает `SupervisedChild`: значение для потребителей,
 `Completion` — полная остановка вместе со всем, чем ребёнок владеет, и `Stop` — штатная остановка.
@@ -299,5 +312,12 @@ Timestamp поля AgentTick относятся к TimeProvider.
 штатно и заканчивает надзор: отменяет ожидающий рестарт, а ребёнка, который ещё запускается,
 останавливает сразу после запуска. `observe` получает события (`Started`, `StartFailed`,
 `Stopped`, `Restarting`, `GaveUp`) в обработчике супервизора: только быстрые действия вроде
-лога, исключения игнорируются. Состояние ребёнка супервизор не восстанавливает и принятые им
+лога; отказ наблюдателя останавливает надзор и завершает его ошибкой. Состояние ребёнка супервизор не восстанавливает и принятые им
 команды не повторяет. `startWithTimeProvider` позволяет проверять окно отказов без ожидания.
+
+
+Функция запуска ребёнка возвращает `Task<Result<SupervisedChild<'Child>, 'StartError>>`. `SupervisorEvent<'Child,'StartError>.StartRejected` сохраняет ожидаемый отказ создания, а `StartFailed` — неожиданное исходное исключение. Оба используют существующую политику пересоздания целого ребёнка. При исчерпании попыток `SupervisorGaveUpException<'StartError>.Failure` хранит `SupervisorFailure.StartRejected reason`, `Faulted originalException` или `CompletedUnexpectedly`; `InnerException` содержит только реальное исключение. Отказавшая фабрика освобождает и ожидает частично полученные ресурсы до возврата typed ошибки. Политика пересоздания не повторяет отдельную уже принятую операцию.
+
+Уведомления жизненного цикла и callback отмены принадлежат владельцу. Их неожиданный отказ закрывает приём и останавливает обработку; отказ уведомления об ошибке отменяет решение Continue. Замена состояния фиксируется до OnTransition; при отказе этого уведомления зафиксированный владелец останавливается, без восстановления и следующей команды. Event и отдельный настроенный callback вызываются независимо; обычный multicast event прекращает свой вызов на первом отказавшем подписчике. Completion ожидает принадлежащую работу и все попытки cleanup, освобождает ожидающие запросы и резервы очереди, сохраняет исходные и вторичные исключения без повторов по ссылке. StopReason фиксируется перед уведомлениями остановки: отказ Stopped/OnStopped завершает Completion ошибкой, не изменяя уже сообщённую причину. При отсутствии таких отказов Completed успешен, Aborted отменён.
+
+Отказ наблюдателя супервизора останавливает надзор и ожидает полученного ребёнка; Completion завершается ошибкой без нового пересоздания. Одновременные вызовы StopAsync ожидают одну остановку ребёнка и его фактический Completion. Обе операции выполняются независимо, с сохранением исходных исключений. StopAsync поглощает только единственный ранее сообщённый отказ исчерпания попыток этого супервизора; дополнительные ошибки очистки и наблюдателей передаются вызывающему. Await StopAsync показывает одно исключение, поэтому полный результат жизненного цикла хранится в Completion: все причины доступны в Exception.InnerExceptions. После обработки уведомления о завершении текущего ребёнка его результат принадлежит существующей политике пересоздания. Запоздавшее ожидание владельца не останавливает этого ребёнка повторно и не добавляет уже обработанный сбой как отдельную причину cleanup. Необработанные результаты ребёнка и реальные ошибки Stop или наблюдателей остаются в Completion; отдельная операция не повторяется.

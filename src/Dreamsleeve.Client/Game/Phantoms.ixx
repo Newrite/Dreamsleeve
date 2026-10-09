@@ -1,0 +1,801 @@
+module;
+#include "Prelude.hpp"
+export module Dreamsleeve.Game.Phantoms;
+import std;
+import Dreamsleeve.Runtime;
+import Dreamsleeve.Game.World;
+import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Game.PhantomCaptureRules;
+import Dreamsleeve.Game.PhantomScene;
+import Dreamsleeve.Game.PlayerLabels;
+import Dreamsleeve.UI.Nameplates;
+import Dreamsleeve.Host.PhantomSettings;
+import Dreamsleeve.Client.Phantom.Exchange;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
+
+namespace Phantoms
+{
+  namespace P       = Dreamsleeve::Client::Phantom;
+  namespace Capture = Dreamsleeve::Game::PhantomCapture;
+  namespace Scene   = Dreamsleeve::Game::PhantomScene;
+  using Clock       = std::chrono::steady_clock;
+
+  struct Slot
+  {
+    std::uint64_t                 view{};
+    P::Generation                 generation;
+    Scene::Context                context;
+    std::unique_ptr<Scene::Scene> scene;
+  };
+
+  struct Visual
+  {
+    std::optional<Slot>                                    current, candidate;
+    std::optional<std::pair<std::uint64_t, P::Generation>> rejected;
+    Clock::time_point                                      applied{};
+    bool                                                   active{};
+    std::optional<std::pair<P::Vec3, float>>               look;
+
+    std::uint64_t MemoryBytes() const
+    {
+      return (current ? current->scene->MemoryBytes() : 0) + (candidate ? candidate->scene->MemoryBytes() : 0);
+    }
+  };
+
+  struct RetainedSource
+  {
+    P::Generation                    generation;
+    P::Sequence                      sequence;
+    std::unique_ptr<Capture::Source> source;
+  };
+
+  struct State
+  {
+    Capture::Engine                              engine;
+    std::unique_ptr<Capture::Source>             source;
+    std::optional<RetainedSource>                previous;
+    std::unordered_map<Domain::PlayerId, Visual> visuals;
+    P::Generation                                generation;
+    // Allocation high-watermark never rolls back with the retained native Source.
+    std::uint64_t                  lastGeneration{};
+    P::Sequence                    sequence;
+    std::optional<P::ViewSettings> settings;
+    Capture::Cadence               cadence;
+    Clock::time_point              nextFailure{};
+    std::uint32_t                  omittedGeometry{}, hiddenGeometry{};
+    Capture::Context               context;
+    bool                           waiting{};
+    std::uint64_t                  cursor{};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
+    bool                                     publishing{};
+    Clock::time_point                        nextNetworkReport{};
+#endif
+  };
+
+  State& Get()
+  {
+    static auto* state = new State;
+    return *state;
+  }
+
+  std::uint64_t Micros(Clock::time_point now)
+  {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
+  }
+
+  void Error(const P::Error& error, Clock::time_point now)
+  {
+    auto& state = Get();
+    if (now < state.nextFailure) return;
+    state.nextFailure = now + std::chrono::seconds(5);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Event("failure", std::format("\"code\":{}", static_cast<int>(error.reason)));
+#endif
+    logger::warn("Phantom: {} ({})", error.field, static_cast<int>(error.reason));
+  }
+
+  export void Install(Capture::Engine engine)
+  {
+    Get().engine = engine;
+  }
+
+  void ResetResources()
+  {
+    auto& state   = Get();
+    auto& runtime = Runtime::Get();
+    if (runtime.app)
+    {
+      if (state.source) runtime.app->Exchange().Phantoms().RestartCapture();
+      for (const auto& [id, visual] : state.visuals)
+        runtime.app->Exchange().Phantoms().SceneMemory(id, 0);
+    }
+    state.visuals.clear();
+    state.source.reset();
+    state.previous.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    state.diagnosticAsset.reset();
+#endif
+  }
+
+  export void Clear(std::string_view reason = "game-context-ended")
+  {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (Get().source || !Get().visuals.empty())
+      Dreamsleeve::Client::Diagnostics::Trace::Event("clear", std::format("\"reason\":\"{}\"", reason));
+    auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
+    if (recorder.Active()) logger::info("Phantom recording stopped: {}", reason);
+    recorder.Stop(reason);
+    Dreamsleeve::Game::PhantomReplay::Stop(reason);
+#endif
+    ResetResources();
+    Get().context.Reset();
+    Get().waiting = false;
+  }
+
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  export void StartRecording(std::uint32_t scenario, bool thirtySeconds)
+  {
+    Dreamsleeve::Game::PhantomReplay::Stop();
+    auto& runtime = Runtime::Get();
+    if (!runtime.app || runtime.context != Runtime::GameContext::Playing) return;
+    if (
+      Dreamsleeve::Client::Diagnostics::Phantoms().Start(
+        runtime.clientPath.parent_path() / "phantom-diagnostics" / "recordings",
+        scenario,
+        thirtySeconds ? 30 : 15,
+        runtime.app->Exchange().Phantoms().Settings().sampleRate))
+    {
+      Get().source.reset();
+      Get().previous.reset();
+      Get().diagnosticAsset.reset();
+      Get().cadence.Reset();
+      logger::info("Phantom diagnostics recording requested");
+    }
+  }
+
+  export void StartReplay(std::uint32_t scenario)
+  {
+    if (Runtime::Get().context != Runtime::GameContext::Playing || Dreamsleeve::Client::Diagnostics::Phantoms().Active()) return;
+    const auto directory = Runtime::Get().clientPath.parent_path() / "phantom-diagnostics" / "recordings";
+    const auto logs      = SKSE::log::log_directory();
+    if (
+      Dreamsleeve::Game::PhantomReplay::Start(
+        directory,
+        scenario,
+        Get().engine,
+        logs ? *logs / "DreamsleevePhantomDiagnostics" : std::filesystem::path{}))
+      ResetResources();
+  }
+
+  void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
+  {
+    auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
+    if (!recorder.Active()) return;
+    const auto position = player.GetPosition(), angle = player.GetAngle();
+    recorder.Sample(
+      Get().diagnosticAsset,
+      std::move(pose),
+      {
+          0,
+          0,
+          Micros(start),
+          {position.x, position.y, position.z},
+          {angle.x,    angle.y,    angle.z   }
+    },
+      std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
+      firstPerson);
+  }
+#endif
+
+  void ReportCaptureHealth()
+  {
+    auto&      state  = Get();
+    const auto status = state.source->ReadStatus();
+    if (state.omittedGeometry != status.omitted || state.hiddenGeometry != status.hidden)
+    {
+      logger::info("Phantom capture health: omitted={}, hidden={}, {}", status.omitted, status.hidden, status.detail);
+      state.omittedGeometry = status.omitted;
+      state.hiddenGeometry  = status.hidden;
+    }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Phantoms().Partial(status.omitted, status.hidden, status.detail);
+#endif
+  }
+
+  // Tick owns capture and playback on the same main-loop thread, after the
+  // game's frame update. No actor-update callback touches this state.
+  void CapturePlayer(RE::PlayerCharacter& player)
+  {
+    auto&      runtime        = Runtime::Get();
+    auto&      state          = Get();
+    const auto now            = Clock::now();
+    auto&      exchange       = runtime.app->Exchange().Phantoms();
+    const auto settings       = exchange.Settings();
+    const auto observer       = World::Observe(&player);
+    const auto captureContext = observer ? exchange.CaptureContext(observer->space) : std::nullopt;
+    bool       publishing     = captureContext.has_value() && settings.publish;
+    P::Limits  captureLimits;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const bool recording = Dreamsleeve::Client::Diagnostics::Phantoms().Active();
+    if (recording)
+    {
+      publishing    = false;
+      captureLimits = Dreamsleeve::Client::Diagnostics::CaptureLimits();
+    }
+    if (state.source && state.publishing != publishing)
+    {
+      state.source.reset();
+      state.previous.reset();
+    }
+    state.publishing = publishing;
+    if (!publishing && !recording)
+#else
+    if (!publishing)
+#endif
+    {
+      state.source.reset();
+      state.previous.reset();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      state.diagnosticAsset.reset();
+#endif
+      return;
+    }
+
+    if (state.source && publishing && !exchange.Capturing(state.generation))
+    {
+      if (state.previous && exchange.Capturing(state.previous->generation))
+      {
+        state.source     = std::move(state.previous->source);
+        state.generation = state.previous->generation;
+        state.sequence   = state.previous->sequence;
+        state.previous.reset();
+      }
+      else
+        state.source.reset();
+      state.cadence.Defer(now);
+      return;
+    }
+
+    if (!state.source && publishing && exchange.Capturing(state.generation)) exchange.RestartCapture();
+    if (!state.cadence.Due(now, settings.sampleRate)) return;
+
+    const auto* camera      = RE::PlayerCamera::GetSingleton();
+    const bool  firstPerson = camera && camera->IsInFirstPerson();
+    if (state.previous && !exchange.Capturing(state.previous->generation)) state.previous.reset();
+    const auto priorPose = [&]() -> std::shared_ptr<const P::Snapshot> {
+      if (!publishing || !state.previous) return {};
+      auto& old = *state.previous;
+      if (old.sequence.value == std::numeric_limits<std::uint64_t>::max()) return {};
+      auto pose = old.source->Sample(player, firstPerson, {old.generation, {++old.sequence.value}, 1, Micros(now)}, true);
+      return pose ? std::make_shared<const P::Snapshot>(std::move(*pose)) : nullptr;
+    };
+
+    if (!state.source || ((!publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now))))
+    {
+      const auto changeReason = state.source ? state.source->ChangeReason() : std::string_view{"initial"};
+      if (state.source) state.source->DeferRebuild(Micros(now));
+      const auto replace = [&]() -> bool {
+        if (state.lastGeneration == std::numeric_limits<std::uint64_t>::max()) return false;
+        const P::Generation nextGeneration{state.lastGeneration + 1};
+        auto                opened = Capture::Open(state.engine, player, firstPerson, {nextGeneration, {1}, 1, Micros(now)}, captureLimits);
+        if (!opened)
+        {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+          Dreamsleeve::Client::Diagnostics::Phantoms().Failed(opened.error());
+#endif
+          Error(opened.error(), now);
+          return false;
+        }
+
+        auto asset = std::move(opened->asset);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Trace::Event(
+          "captured",
+          std::format(
+            "\"generation\":{},\"reason\":\"{}\",\"raw_bytes\":{},\"channels\":{},\"elapsed_ms\":{}",
+            nextGeneration.value,
+            changeReason,
+            asset.Value().nif.size(),
+            asset.Layout().requiredChannels.size(),
+            std::chrono::duration<double, std::milli>(Clock::now() - now).count()));
+#endif
+        logger::info(
+          "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB native NIF, {:.2f} ms, reason={}",
+          nextGeneration.value,
+          asset.Layout().requiredChannels.size(),
+          asset.Layout().bounds.size(),
+          asset.Value().nif.size() / 1048576.0,
+          std::chrono::duration<double, std::milli>(Clock::now() - now).count(),
+          changeReason);
+
+        if (publishing && !exchange.Submit(*captureContext, nextGeneration, asset)) return false;
+        if (publishing && state.source && exchange.Capturing(state.generation))
+          state.previous = RetainedSource{state.generation, state.sequence, std::move(state.source)};
+        state.generation     = nextGeneration;
+        state.lastGeneration = nextGeneration.value;
+        state.sequence       = {1};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(asset));
+#endif
+
+        state.source = std::move(opened->source);
+        ReportCaptureHealth();
+        auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Record(initial, player, now, firstPerson);
+#endif
+        if (publishing) exchange.Submit(std::move(initial), priorPose());
+        return true;
+      };
+
+      if (replace()) return;
+      if (!state.source)
+      {
+        state.cadence.Defer(now);
+        return;
+      }
+    }
+
+    if (publishing && !exchange.PosesRequired()) return;
+    if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
+    {
+      state.source.reset();
+      return;
+    }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto poseStart = Clock::now();
+#endif
+    auto pose =
+      state.source->Sample(player, firstPerson, {state.generation, P::Sequence{++state.sequence.value}, 1, Micros(now)}, publishing);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::CapturePose,
+      std::chrono::duration<double, std::milli>(Clock::now() - poseStart).count());
+#endif
+    if (!pose)
+    {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Phantoms().Failed(pose.error());
+#endif
+      Error(pose.error(), now);
+      if (pose.error().reason == P::Failure::Stale)
+        state.source.reset();
+      else
+        state.cadence.Defer(now);
+      return;
+    }
+
+    ReportCaptureHealth();
+    auto sampled = std::make_shared<const P::Snapshot>(std::move(*pose));
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Record(sampled, player, now, firstPerson);
+#endif
+    if (publishing) exchange.Submit(std::move(sampled), priorPose());
+  }
+
+  export bool UseFirefly(Domain::PlayerId id)
+  {
+    const auto& state = Get();
+    if (!state.settings || !state.settings->receive) return true;
+    const auto found = state.visuals.find(id);
+    if (found != state.visuals.end() && found->second.active) return false;
+    return state.settings->fallback;
+  }
+
+  export std::size_t Count()
+  {
+    return std::ranges::count_if(Get().visuals, [](const auto& entry) { return entry.second.active; });
+  }
+
+  bool Matches(const Slot& slot, const P::Remote& remote, Scene::Context context)
+  {
+    return slot.view == remote.view && slot.generation == remote.descriptor.generation && slot.context == context;
+  }
+
+  void Hide(Visual& visual, Clock::time_point now)
+  {
+    if (visual.current)
+    {
+      auto hidden = visual.current->scene->Hide(visual.current->context);
+      if (!hidden) Error(hidden.error(), now);
+    }
+    visual.active = false;
+  }
+
+  void ForgetCleared(Visual& visual, P::Exchange& exchange, Domain::PlayerId id)
+  {
+    if (visual.candidate && visual.candidate->scene->MemoryBytes() == 0) visual.candidate.reset();
+    if (visual.current && visual.current->scene->MemoryBytes() == 0)
+    {
+      visual.current.reset();
+      visual.look.reset();
+      visual.active = false;
+    }
+    if (visual.current && !visual.current->scene->Ready()) visual.active = false;
+    exchange.SceneMemory(id, visual.MemoryBytes());
+  }
+
+  // Commit an already posed and attached candidate on the game thread.
+  // The current scene stays owned until this accepted replacement is promoted.
+  void PromoteRemoteScene(Visual& visual, const P::Remote& remote, P::Exchange& exchange)
+  {
+    visual.current = std::move(visual.candidate);
+    exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
+    logger::info(
+      "[Phantom] native scene displayed: player={} generation={} bytes={}",
+      remote.player,
+      remote.descriptor.generation.value,
+      visual.current->scene->MemoryBytes());
+    visual.candidate.reset();
+    visual.look.reset();
+    exchange.SceneMemory(remote.player, visual.MemoryBytes());
+  }
+
+  export void Tick(Clock::time_point now, Nameplates::Frame& names)
+  {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Span tickSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::GameTick);
+    static Clock::time_point                      lastFrame{}, nextTrace{};
+    if (lastFrame != Clock::time_point{})
+      Dreamsleeve::Client::Diagnostics::Trace::Observe(
+        Dreamsleeve::Client::Diagnostics::Trace::Metric::Frame,
+        std::chrono::duration<double, std::milli>(now - lastFrame).count());
+    lastFrame = now;
+    if (now >= nextTrace)
+    {
+      Dreamsleeve::Client::Diagnostics::Trace::FlushMetrics();
+      nextTrace = now + std::chrono::seconds(1);
+    }
+#endif
+    auto& runtime = Runtime::Get();
+    auto& state   = Get();
+    if (!runtime.app || !state.engine.mainThread) return;
+    auto&      exchange = runtime.app->Exchange().Phantoms();
+    const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
+    if (!state.settings || settings != *state.settings)
+    {
+      if (state.settings && (settings.memoryBytes < state.settings->memoryBytes || settings.publish != state.settings->publish))
+        ResetResources();
+      state.settings = settings;
+      exchange.Configure(settings);
+    }
+
+    // Apply visibility even while waiting for the local player/cell or replay.
+    if (!settings.receive && !state.visuals.empty())
+    {
+      for (const auto& [id, visual] : state.visuals)
+        exchange.SceneMemory(id, 0);
+      state.visuals.clear();  // Scene destruction detaches each root on this game thread.
+    }
+
+    auto* player = RE::PlayerCharacter::GetSingleton();
+    auto* cell   = player ? player->GetParentCell() : nullptr;
+    auto* root   = player ? player->Get3D(false) : nullptr;
+    auto* parent = root ? root->parent : nullptr;
+    if (runtime.context != Runtime::GameContext::Playing)
+    {
+      Clear("game-context-ended");
+      return;
+    }
+
+    const auto space = player && cell ? World::CurrentSpace(player) : std::nullopt;
+    const bool ready = World::PlayerReady() && cell && cell->IsAttached() && parent && space;
+    const auto observed = state.context.Observe(ready
+      ? std::optional<Capture::Context::Space>{{space->form->GetFormID(), space->interior}}
+      : std::nullopt);
+    if (observed == Capture::Context::Observation::Waiting)
+    {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Game::PhantomReplay::Pause();
+#endif
+      if (!state.waiting)
+      {
+        logger::info(
+          "Phantom capture waiting: player={}, cell={}, attached={}, root={}, parent={}, space={}",
+          player != nullptr,
+          cell != nullptr,
+          cell && cell->IsAttached(),
+          root != nullptr,
+          parent != nullptr,
+          space.has_value());
+        // A transient missing cell/3D is not an appearance change. Retain
+        // owned capture bindings and masks; only hide remote visuals.
+        for (auto& [id, visual] : state.visuals)
+          Hide(visual, now);
+        state.waiting = true;
+      }
+      return;
+    }
+
+    if (state.waiting) logger::info("Phantom capture resumed in {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
+    state.waiting = false;
+    if (observed == Capture::Context::Observation::Changed)
+    {
+      logger::info("Phantom coordinate space changed to {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "space",
+        std::format("\"form\":{},\"interior\":{}", space->form->GetFormID(), space->interior));
+#endif
+      Clear("space-changed");
+      state.context.Observe(Capture::Context::Space{space->form->GetFormID(), space->interior});
+    }
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (Dreamsleeve::Game::PhantomReplay::Active())
+    {
+      Dreamsleeve::Game::PhantomReplay::Tick(*parent, {space->form->GetFormID(), space->interior}, {settings.color, settings.opacity}, now);
+      return;
+    }
+#endif
+
+    CapturePlayer(*player);
+    auto display = exchange.Read();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (now >= state.nextNetworkReport)
+    {
+      state.nextNetworkReport = now + std::chrono::seconds(5);
+      const auto stats        = exchange.Stats();
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "exchange",
+        std::format(
+          "\"epoch\":{},\"model_bytes_total\":{},\"pose_bytes_total\":{},\"rejected_total\":{},\"dropped_total\":{},\"cache_hits_total\":{},\"queued\":{},\"sample_rate\":{}",
+          exchange.Epoch(),
+          stats.modelBytes,
+          stats.poseBytes,
+          stats.rejected,
+          stats.dropped,
+          stats.cacheHits,
+          stats.queued,
+          stats.sampleRate));
+      for (const auto& remote : display.remotes)
+      {
+        const auto timing    = remote.playback.Inspect(Micros(now), settings);
+        const auto visual    = state.visuals.find(remote.player);
+        const auto displayed = visual != state.visuals.end() && visual->second.current ? visual->second.current->generation.value : 0;
+        Dreamsleeve::Client::Diagnostics::Trace::Event(
+          "playback",
+          std::format(
+            "\"player\":{},\"view\":{},\"generation\":{},\"displayed\":{},\"samples\":{},\"sequence\":{},\"age_us\":{},\"ahead_us\":{},\"delay_us\":{}",
+            remote.player,
+            remote.view,
+            remote.descriptor.generation.value,
+            displayed,
+            timing.samples,
+            timing.sequence,
+            timing.ageUs,
+            timing.aheadUs,
+            timing.delayUs));
+        logger::info(
+          "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f} target_delay_ms={:.1f} speed={:.3f}",
+          remote.player,
+          remote.descriptor.generation.value,
+          displayed,
+          static_cast<int>(remote.State()),
+          timing.samples,
+          timing.sequence,
+          timing.sourceGapUs / 1000.0,
+          timing.arrivalGapUs / 1000.0,
+          timing.ageUs / 1000.0,
+          timing.aheadUs / 1000.0,
+          timing.delayUs / 1000.0,
+          timing.speed);
+      }
+    }
+#endif
+    if (!display.available)
+    {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      if (Dreamsleeve::Client::Diagnostics::Phantoms().Active())
+      {
+        for (const auto& [id, visual] : state.visuals)
+          exchange.SceneMemory(id, 0);
+        state.visuals.clear();
+        return;
+      }
+#endif
+      ResetResources();
+      return;
+    }
+
+    if (!settings.receive) return;
+    const auto observer = World::Observe(player);
+    if (!observer) return;
+    const auto&                          ui = runtime.ui.ui.chat;
+    std::unordered_set<Domain::PlayerId> retained;
+    std::ranges::sort(display.remotes, {}, &P::Remote::player);
+    const auto first = std::ranges::upper_bound(display.remotes, state.cursor, {}, &P::Remote::player);
+    std::rotate(display.remotes.begin(), first, display.remotes.end());
+
+    std::uint32_t      buildSteps = 1;
+    Scene::FrameBudget frame{65536};
+    for (const auto& remote : display.remotes)
+    {
+      const auto online   = runtime.session.OnlinePlayers().find(remote.player);
+      const auto movement = runtime.movement ? runtime.movement->Sample(remote.player, now) : std::nullopt;
+      if (
+        online == runtime.session.OnlinePlayers().end() || !movement ||
+        runtime.session.HidesPlayerRepresentation(remote.player, ui.fireflyGuildmatesOnly) ||
+        !Domain::Spatial::Reach(observer->space, observer->position, movement->location.locationId, movement->position, settings.distance))
+        continue;
+
+      retained.insert(remote.player);
+      auto&      visual   = state.visuals[remote.player];
+      const auto revision = std::pair{remote.view, remote.descriptor.generation};
+      if (visual.rejected && *visual.rejected != revision) visual.rejected.reset();
+      ForgetCleared(visual, exchange, remote.player);
+      if (remote.previous && visual.current && visual.current->generation == remote.previous->descriptor.generation)
+      {
+        if (auto previousPose = remote.previous->playback.At(Micros(now), settings))
+        {
+          const Scene::Context c{
+              previousPose->context,
+              {space->form->GetFormID(), space->interior}
+          };
+          if (auto applied = visual.current->scene->Apply(*previousPose, c, frame); applied)
+          {
+            visual.applied = now;
+            visual.active  = true;
+          }
+        }
+      }
+
+      auto pose = remote.playback.At(Micros(now), settings);
+      if (remote.Asset() && pose)
+      {
+        const Scene::Context context{
+            pose->context,
+            {space->form->GetFormID(), space->interior}
+        };
+        if (visual.current && visual.current->context != context)
+        {
+          visual.current.reset();
+          visual.active = false;
+          visual.look.reset();
+        }
+        if (visual.candidate && !Matches(*visual.candidate, remote, context)) visual.candidate.reset();
+        exchange.SceneMemory(remote.player, visual.MemoryBytes());
+        if ((!visual.current || !Matches(*visual.current, remote, context)) && !visual.candidate && !visual.rejected && buildSteps)
+        {
+          auto scene = Scene::Scene::Begin(
+            *remote.Asset(),
+            state.engine,
+            context,
+            remote.descriptor.generation,
+            {settings.color, settings.opacity},
+            Scene::Budget{exchange.RemainingMemory()});
+          if (scene && exchange.SceneMemory(remote.player, visual.MemoryBytes() + (*scene)->MemoryBytes()))
+            visual.candidate = Slot{remote.view, remote.descriptor.generation, context, std::move(*scene)};
+          else if (!scene)
+            Error(scene.error(), now);
+        }
+
+        const auto failedTarget = [&](const P::Error& error) {
+          Error(error, now);
+          if (visual.candidate)
+          {
+            visual.rejected = revision;
+            visual.candidate.reset();
+            exchange.SceneMemory(remote.player, visual.MemoryBytes());
+          }
+          else
+            Hide(visual, now);
+        };
+
+        Slot* target = nullptr;
+        if (visual.candidate)
+        {
+          target = &*visual.candidate;
+        }
+        else if (visual.current && Matches(*visual.current, remote, context))
+        {
+          target = &*visual.current;
+        }
+        if (target)
+        {
+          if (visual.candidate && buildSteps)
+          {
+            auto built = target->scene->Advance(context);
+            --buildSteps;
+            state.cursor = remote.player;
+            if (!built)
+            {
+              Error(built.error(), now);
+              // A rejected native asset must not invoke NiStream Load every frame.
+              // A new view/generation or context reset permits another attempt.
+              if (built.error().reason != P::Failure::Busy) visual.rejected = revision;
+              visual.candidate.reset();
+              exchange.SceneMemory(remote.player, visual.MemoryBytes());
+              target = nullptr;
+            }
+          }
+
+          if (target && !(settings.hideInCombat && player->IsInCombat()))
+          {
+            auto applied = target->scene->Apply(*pose, context, frame);
+            if (applied)
+            {
+              auto attached = target->scene->Attach(*parent, context);
+              if (attached)
+              {
+                if (visual.candidate)
+                {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+                  Dreamsleeve::Client::Diagnostics::Trace::Event(
+                    "displayed",
+                    std::format(
+                      "\"player\":{},\"view\":{},\"generation\":{},\"context\":{},\"space\":{}",
+                      remote.player,
+                      remote.view,
+                      remote.descriptor.generation.value,
+                      context.epoch,
+                      context.space.id));
+#endif
+                  PromoteRemoteScene(visual, remote, exchange);
+                }
+
+                visual.applied = now;
+                visual.active  = true;
+                state.cursor   = remote.player;
+              }
+              else
+              {
+                failedTarget(attached.error());
+              }
+            }
+            else if (applied.error().reason != P::Failure::Busy)
+            {
+              failedTarget(applied.error());
+            }
+          }
+        }
+      }
+      ForgetCleared(visual, exchange, remote.player);
+
+      if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
+      {
+        Hide(visual, now);
+        ForgetCleared(visual, exchange, remote.player);
+        continue;
+      }
+      if (settings.hideInCombat && player->IsInCombat())
+      {
+        Hide(visual, now);
+        ForgetCleared(visual, exchange, remote.player);
+        visual.active = visual.current && visual.current->scene->Ready();
+        continue;
+      }
+
+      if (!visual.active || !visual.current) continue;
+      const auto look = std::pair{settings.color, settings.opacity};
+      if (visual.look != look)
+      {
+        auto changed = visual.current->scene->SetLook({settings.color, settings.opacity}, visual.current->context);
+        if (!changed)
+        {
+          Error(changed.error(), now);
+          Hide(visual, now);
+          ForgetCleared(visual, exchange, remote.player);
+          continue;
+        }
+        visual.look = look;
+      }
+
+      PlayerLabels::Add(names, remote.player, visual.current->scene->LabelAnchor(), online->second, now);
+    }
+
+    std::erase_if(state.visuals, [&](const auto& entry) {
+      if (retained.contains(entry.first)) return false;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Trace::Event(
+        "scene_removed",
+        std::format("\"player\":{},\"reason\":\"not-retained\"", entry.first));
+#endif
+      exchange.SceneMemory(entry.first, 0);
+      return true;
+    });
+  }
+
+}

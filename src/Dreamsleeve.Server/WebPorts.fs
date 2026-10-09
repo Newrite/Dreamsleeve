@@ -20,9 +20,13 @@ module WebPorts =
     let DescribeTimeoutMs = 1000
 
     let private listener passwordVariable proxies (settings: HttpListenerSettings) : ListenerSettings =
-        { ListenUrl = settings.ListenUrl; CertificatePath = settings.CertificatePath
-          CertificatePasswordVariable = passwordVariable; TrustForwardedHeaders = settings.TrustForwardedHeaders
-          TrustedProxies = proxies }
+        {
+            ListenUrl = settings.ListenUrl
+            CertificatePath = settings.CertificatePath
+            CertificatePasswordVariable = passwordVariable
+            TrustForwardedHeaders = settings.TrustForwardedHeaders
+            TrustedProxies = proxies
+        }
 
     /// Players reach it through the server's proxies too; the admin panel never.
     let authListener (settings: ApplicationConfig) =
@@ -39,22 +43,31 @@ module WebPorts =
 
     let authRoutes (settings: ApplicationConfig) : AuthRouteSettings =
         let authentication = settings.Authentication
-        { SteamPublicUrls = steamUrls settings
-          RequestsPerMinute = authentication.Listener.RequestsPerMinute
-          RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
-          MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
-          Input = settings.Server.ChatInput }
+        {
+            SteamPublicUrls = steamUrls settings
+            RequestsPerMinute = authentication.Listener.RequestsPerMinute
+            RequestTimeoutSeconds = authentication.Listener.RequestTimeoutSeconds
+            MaxConnections = 2 * authentication.Service.MailboxCapacity + authentication.Service.MaxConcurrentOperations
+            Input = settings.Server.ChatInput
+        }
 
     let adminListener (settings: ApplicationConfig) = listener "DREAMSLEEVE_ADMIN_CERTIFICATE_PASSWORD" [] settings.Admin.Listener
 
     let adminRoutes (settings: ApplicationConfig) moderation : AdminRouteSettings =
         let admin = settings.Admin
-        { SessionHours = admin.Service.SessionHours; LoginAttemptsPerMinute = admin.Service.LoginAttemptsPerMinute
-          RequestsPerMinute = admin.Listener.RequestsPerMinute; RequestTimeoutSeconds = admin.Listener.RequestTimeoutSeconds
-          MaxConnections = admin.MaxConnections; DescribeTimeoutMs = DescribeTimeoutMs
-          Input = settings.Server.ChatInput; Moderation = moderation
-          SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours
-          AddressHistoryDays = settings.Authentication.Service.SignInHistoryDays }
+        {
+            SessionHours = admin.Service.SessionHours
+            LoginAttemptsPerMinute = admin.Service.LoginAttemptsPerMinute
+            RequestsPerMinute = admin.Listener.RequestsPerMinute
+            RequestTimeoutSeconds = admin.Listener.RequestTimeoutSeconds
+            MaxConnections = admin.MaxConnections
+            DescribeTimeoutMs = DescribeTimeoutMs
+
+            Input = settings.Server.ChatInput
+            Moderation = moderation
+            SetupCodeHours = settings.Authentication.Service.SetupLifetimeHours
+            AddressHistoryDays = settings.Authentication.Service.SignInHistoryDays
+        }
 
     // One client for every Steam call; each call has its own deadline as well.
     let private steamHttp = lazy (new HttpClient(Timeout = TimeSpan.FromSeconds 15.))
@@ -62,15 +75,24 @@ module WebPorts =
     let steam (settings: ApplicationConfig) : SteamPorts =
         let publicUrls = steamUrls settings
         let key = Environment.GetEnvironmentVariable SteamKeyVariable
-        { Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrls flow fields token
-          Profile = fun steamId token ->
-            if String.IsNullOrWhiteSpace key then Task.FromResult { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
-            else SteamOpenId.profile steamHttp.Value key steamId token }
+        {
+            Verify = fun flow fields token -> SteamOpenId.verify steamHttp.Value publicUrls flow fields token
+            Profile = fun steamId token ->
+                if String.IsNullOrWhiteSpace key then
+                    Task.FromResult (Ok {
+                        SteamId = steamId
+                        PersonaName = ValueNone
+                        Created = ValueNone
+                    })
+                else SteamOpenId.profile steamHttp.Value key steamId token
+        }
 
-    let auth (settings: ApplicationConfig) (authentication: Agent<AuthMessage>) : AuthPorts =
-        { Access = fun command timeout token ->
-            authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
-          Steam = steam settings }
+    let auth (settings: ApplicationConfig) (authentication: ReliableAgent<AuthMessage>) : AuthPorts =
+        {
+            Access = fun command timeout token ->
+                authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
+            Steam = steam settings
+        }
 
     let private posted result =
         match result with
@@ -79,23 +101,27 @@ module WebPorts =
 
     /// runtime is the game runtime now serving, none while it restarts: the panel
     /// then reports it unavailable, and stored changes apply at the next sign-in.
-    let admin (service: Agent<AdminMessage>) (authentication: Agent<AuthMessage>) (runtime: unit -> Agent<ServerRuntimeMessage> option)
+    let admin (service: ReliableAgent<AdminMessage>) (authentication: ReliableAgent<AuthMessage>) (runtime: unit -> ReliableAgent<ServerRuntimeMessage> option)
               (describer: Agent<DescribeRequest>) configuration : AdminPorts =
         let ask message timeout token =
             match runtime () with
             | Some agent -> agent.TryAskAsync(message, timeout, token)
             | None -> Task.FromResult AgentAskResult.Closed
         let tell message = runtime () |> Option.exists (fun agent -> agent.TryPost message |> posted)
-        { Admin = fun command timeout token -> service.TryAskAsync((fun reply -> AdminMessage.Access(command, reply)), timeout, token)
-          Account = fun command timeout token -> authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
-          Snapshot = ask ServerRuntimeMessage.Read
-          Guilds = fun command -> ask (fun reply -> ServerRuntimeMessage.Guilds(command, reply))
-          Sessions = ask ServerRuntimeMessage.ListSessions
-          Describe = fun timeout row ->
-            match row.Session with
-            | Some session -> SessionDescriber.describe describer timeout session
-            | None -> Task.FromResult None
-          Announce = fun announcement -> tell (ServerRuntimeMessage.Announce announcement)
-          ApplyRole = fun playerId role -> tell (ServerRuntimeMessage.SetPlayerRole(playerId, role))
-          ApplyProfile = fun profile -> tell (ServerRuntimeMessage.RenamePlayer profile)
-          Configuration = configuration }
+        {
+            Admin = fun command timeout token -> service.TryAskAsync((fun reply -> AdminMessage.Access(command, reply)), timeout, token)
+            Account = fun command timeout token -> authentication.TryAskAsync((fun reply -> AuthMessage.Access(command, reply)), timeout, token)
+
+            Snapshot = ask ServerRuntimeMessage.Read
+            Guilds = fun command -> ask (fun reply -> ServerRuntimeMessage.Guilds(command, reply))
+            Sessions = ask ServerRuntimeMessage.ListSessions
+            Describe = fun timeout row ->
+                match row.Session with
+                | Some session -> SessionDescriber.describe describer timeout session
+                | None -> Task.FromResult(Ok None)
+
+            Announce = fun announcement -> tell (ServerRuntimeMessage.Announce announcement)
+            ApplyRole = fun playerId role -> tell (ServerRuntimeMessage.SetPlayerRole(playerId, role))
+            ApplyProfile = fun profile -> tell (ServerRuntimeMessage.RenamePlayer profile)
+            Configuration = configuration
+        }

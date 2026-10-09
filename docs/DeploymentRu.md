@@ -206,6 +206,16 @@ cookie. Заголовки принимаются только от `127.0.0.1`/
 (`moderation.toml`) описан в `moderation.example.toml` и в разделе «Модерация», псевдонимы
 (`pseudonyms.toml`) — в `pseudonyms.example.toml`.
 
+Файлы `server.toml` и псевдонимов ограничены 64 KiB, словарь модерации — 1 MiB.
+Предел проверяется при чтении из одного открытого файла, включая байты BOM;
+декодирование UTF-8 и определение UTF-16/UTF-32 по BOM сохраняются. Ошибка чтения
+не считается отсутствием файла. Для модерации только отсутствие даёт пустой
+словарь с предупреждением; отказ чтения, превышение размера и некорректный TOML
+останавливают запуск. Псевдонимы остаются необязательными: отсутствие, отказ чтения,
+слишком большой или сломанный файл дают встроенный список с отдельной причиной
+в предупреждении. Экспорт настроек сообщает отказ записи; проверка типов настроек
+и создание доменных правил выполняются вне адаптеров файлов и TOML.
+
 **Вход через Steam** (по желанию): игрок жмёт «Войти через Steam», игра открывает браузер со
 страницей Steam, после входа Steam возвращает браузер на ваш сервер, и игра входит в аккаунт этого
 SteamID (новый создаётся, если режим регистрации `open` или `steam`). Регистрировать сайт в Steam не
@@ -376,9 +386,49 @@ server {
         proxy_read_timeout 30s;
     }
 
+    # Полные модели и дельты: тот же origin, отдельная политика тела.
+    location = /phantoms/content {
+        client_max_body_size 64m;
+        proxy_pass http://127.0.0.1:8779;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_cache off;
+        # Capability одноразовая: повтором управляет клиент, не nginx.
+        proxy_next_upstream off;
+        proxy_ignore_client_abort off;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        client_body_timeout 30s;
+        send_timeout 30s;
+    }
+
     location / { return 404; }
 }
 ```
+
+`/phantoms/content` обслуживает PUT/GET полных моделей и дельт на том же
+Kestrel:8779. Этот location нужен **на каждом HTTP-прокси цепочки**, включая
+прокси выбранного `routes[].authUrl`. Имя `authUrl` сохраняется; новый порт
+или сервис не нужен. `[Proxies] Trusted` и Steam `ProxyUrls` не создают маршруты nginx.
+
+64m — текущий максимальный размер сжатого HTTP-тела (64 MiB), не raw NIF или RAM.
+Это существующий предел `PhantomOptions`, а не новый меньший лимит прокси.
+При будущем увеличении протокольного предела обновите оба location вместе с ним.
+Авторизация сохраняет отдельный лимит 8k. Нельзя кэшировать ответы с одноразовой
+capability, удалять Authorization/Content-Length, включать преобразование тела
+или делать редирект на другой origin. Клиент проверяет точный размер и hash.
+Отключение request/response buffering позволяет передавать данные сразу, без
+полного промежуточного файла; отмена клиента закрывает upstream.
+Таймауты 30s ограничивают бездействие между операциями, а не общую длительность
+скачивания. Лимиты скорости остаются в Dreamsleeve.
+Семантика директив: [nginx proxy module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
 
 Требования клиента к этому адресу:
 
@@ -626,6 +676,32 @@ server {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 30s;
+    }
+
+    # Полные модели и дельты: тот же origin, отдельная политика тела.
+    location = /phantoms/content {
+        client_max_body_size 64m;
+        proxy_pass https://auth.example.org;
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_cache off;
+        # Capability одноразовая: повтором управляет клиент, не nginx.
+        proxy_next_upstream off;
+        proxy_ignore_client_abort off;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+        client_body_timeout 30s;
+        send_timeout 30s;
     }
 
     location / { return 404; }
@@ -915,3 +991,26 @@ loopback, по сокету на клиента, движение 20 Гц; [от
 | 502 Bad Gateway | сервер не запущен или `ListenUrl` не совпадает с `proxy_pass` |
 | Вход проходит, игровое соединение нет | UDP 8778 закрыт в firewall/облаке, неверные `serverHost`/`serverPort`, `BindAddress = "127.0.0.1"` |
 | Клиент сразу отключается, в логе сервера `the server is full` | достигнут `Runtime.MaxSessions` (не вошедшие клиенты тоже считаются) |
+
+
+## Развёртывание фантомов
+
+Клиент и сервер этой фичи обновляются вместе до protocol 21. ENet требуется
+пять каналов; историческое client.toml значение channelLimit=3 при чтении
+поднимается до 5 без перезаписи пользовательского файла. В server.toml
+добавляются `[Phantoms]` и `[Phantoms.Limits]` из server.example.toml; отсутствие
+секций даёт documented defaults. Подробности — [PhantomsRu](PhantomsRu.md).
+
+`Phantoms.StoragePath` (default `phantoms`) доступен серверному worker на запись:
+по умолчанию 4 GiB disk quota, 64 MiB RAM cache, TTL 86400 s. Это кеш opaque
+сжатой внешности, отдельно от SQLite. Его удаление приводит к повторной
+загрузке, а не удалению аккаунтов. Клиентский кеш default
+Data/SKSE/Plugins/Dreamsleeve/phantom-cache. Локальные ограничения RAM/disk и
+отправки/загрузки моделей доступны в UI; серверные caps всегда действуют.
+
+Новый пакет не содержит cache/storage, captures, дампов, IDA DB или логов.
+При повторной сборке dist пользовательские настройки и уже существующие
+storage/cache сохраняются отдельно от чистого содержимого пакета. Обновление
+установки MO2 заменяет сборочные файлы с резервной копией, сохраняя TOML.
+Тёплый кеш сокращает traffic; для холодной модели 13 MiB при 5 MiB/s следует
+ожидать минимум около 2.6 s на передачу в одну сторону, плюс конкуренция и overhead.

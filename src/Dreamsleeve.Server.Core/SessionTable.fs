@@ -10,7 +10,12 @@ open Dreamsleeve.Server.Domain
 /// panel reads the same value. A guest has not signed in: it stays connected
 /// without a deadline and may open a session later on the same connection.
 [<RequireQualifiedAccess>]
-type RuntimeSessionPhase = Waiting | Guest | Opening | Ready | Closing
+type RuntimeSessionPhase =
+    | Waiting
+    | Guest
+    | Opening
+    | Ready
+    | Closing
 
 /// These records are touched only by the runtime handler, never by session agents.
 [<RequireQualifiedAccess>]
@@ -23,10 +28,12 @@ module internal SessionTable =
         /// The proxy of the server the connection comes through.
         mutable Proxy: IPAddress option
         ConnectedAt: DateTimeOffset
+
         mutable Phase: RuntimeSessionPhase
         mutable Deadline: int64
         mutable PlayerId: PlayerId option
-        mutable Child: Agent<PlayerSessionMessage> option
+        mutable Child: ReliableAgent<PlayerSessionMessage> option
+
         mutable ChildStopped: bool
         mutable TransportClosed: bool
         mutable ChatDetached: bool
@@ -42,6 +49,7 @@ module internal SessionTable =
         /// Names shown for each reserved player and the pseudonyms of hidden ones;
         /// freed together with the PlayerId reservation.
         Names: PseudonymBook
+
         /// Roles and stored profiles an administrator changed since the runtime
         /// started. They are newer than any ticket issued before the change, so a
         /// session reserving its PlayerId later still receives them. Bounded by
@@ -53,18 +61,37 @@ module internal SessionTable =
         Mutes: Dictionary<PlayerId, Sanction voption>
     }
 
-    let create dictionary =
-        { Connections = Dictionary(); Players = Dictionary(); Names = PseudonymBook.create dictionary
-          Roles = Dictionary(); Profiles = Dictionary(); Mutes = Dictionary() }
+    let create dictionary = {
+        Connections = Dictionary()
+        Players = Dictionary()
+        Names = PseudonymBook.create dictionary
+
+        Roles = Dictionary()
+        Profiles = Dictionary()
+        Mutes = Dictionary()
+    }
 
     let add connectionId address connectedAt deadline state =
         let entry = {
-            ConnectionId = connectionId; Address = address; Proxy = None; ConnectedAt = connectedAt; Phase = RuntimeSessionPhase.Waiting
+            ConnectionId = connectionId
+            Address = address
+            Proxy = None
+            ConnectedAt = connectedAt
+
+            Phase = RuntimeSessionPhase.Waiting
             Deadline = deadline
-            PlayerId = None; Child = None; ChildStopped = false; TransportClosed = false
-            ChatDetached = false; SystemDetached = false; PresenceDetached = false; GroundMarksDetached = false
+            PlayerId = None
+            Child = None
+
+            ChildStopped = false
+            TransportClosed = false
+            ChatDetached = false
+            SystemDetached = false
+            PresenceDetached = false
+            GroundMarksDetached = false
             GuildsDetached = false
         }
+
         state.Connections.Add(connectionId, entry)
         entry
 
@@ -77,20 +104,25 @@ module internal SessionTable =
     /// pseudonym with pick (an index below the dictionary size).
     let reserve (profile: PlayerData) hiding pick entry state =
         let playerId = profile.PlayerId
+
         match entry.Phase, entry.PlayerId with
         | RuntimeSessionPhase.Opening, None when not (state.Players.ContainsKey playerId) ->
             state.Players.Add(playerId, entry.ConnectionId)
             entry.PlayerId <- Some playerId
             IdentityAdmission.Reserved(PseudonymBook.apply pick hiding profile state.Names)
-        | RuntimeSessionPhase.Opening, None | RuntimeSessionPhase.Opening, Some _ -> IdentityAdmission.AlreadyInUse
-        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> IdentityAdmission.Closed
+        | RuntimeSessionPhase.Opening, None | RuntimeSessionPhase.Opening, Some _ ->
+            IdentityAdmission.AlreadyInUse
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ ->
+            IdentityAdmission.Closed
 
     /// See PseudonymBook.apply. None when the connection is not a ready session
     /// holding its reservation.
     let changeIdentity hiding pick (entry: Entry) state =
         match entry.Phase, entry.PlayerId |> Option.map (fun playerId -> PseudonymBook.tryProfile playerId state.Names) with
-        | RuntimeSessionPhase.Ready, Some (ValueSome profile) -> Some (PseudonymBook.apply pick hiding profile state.Names)
-        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> None
+        | RuntimeSessionPhase.Ready, Some (ValueSome profile) ->
+            Some (PseudonymBook.apply pick hiding profile state.Names)
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ ->
+            None
 
     /// Keeps the pseudonym and hiding of the player; None when this connection
     /// is not the ready or opening owner of the reservation.
@@ -98,12 +130,20 @@ module internal SessionTable =
         match entry.Phase, entry.PlayerId with
         | (RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready), Some playerId when playerId = profile.PlayerId ->
             PseudonymBook.rename profile state.Names
-            if own then state.Profiles.Remove playerId |> ignore
+
+            if own then
+                state.Profiles.Remove playerId |> ignore
+
             true
-        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ -> false
+        | (RuntimeSessionPhase.Waiting | RuntimeSessionPhase.Guest | RuntimeSessionPhase.Opening | RuntimeSessionPhase.Ready | RuntimeSessionPhase.Closing), _ ->
+            false
 
     let domainClean (entry: Entry) =
-        entry.ChildStopped && entry.ChatDetached && entry.SystemDetached && entry.PresenceDetached && entry.GroundMarksDetached
+        entry.ChildStopped
+        && entry.ChatDetached
+        && entry.SystemDetached
+        && entry.PresenceDetached
+        && entry.GroundMarksDetached
         && entry.GuildsDetached
 
     let clean (entry: Entry) = domainClean entry && entry.TransportClosed
@@ -111,6 +151,7 @@ module internal SessionTable =
     /// A reservation survives transport removal and is freed only after cleanup.
     let remove entry state =
         state.Connections.Remove entry.ConnectionId |> ignore
+
         match entry.PlayerId with
         | Some playerId ->
             match state.Players.TryGetValue playerId with

@@ -253,10 +253,16 @@ public:
 
     ClientSnapshot Snapshot() const
     {
-      ClientSnapshot
-        result{.generation = generation, .revision = revision, .selfPlayerId = selfPlayerId, .players = players.Snapshot(), .chats = {}};
+      ClientSnapshot result{
+        .generation = generation,
+        .revision = revision,
+        .selfPlayerId = selfPlayerId,
+        .players = players.Snapshot(),
+        .chats = {}
+      };
       result.groundMarks = groundMarks.Snapshot();
       result.observedAt  = MovementClock::now();
+
       result.chats.reserve(chats.size());
       for (const auto& [channelId, cache] : chats)
       {
@@ -352,7 +358,10 @@ private:
         }
       }
 
-      pendingChanges.chatContent.emplace_back(Removal{.channelId = channelId, .messageIds = std::move(messageIds)});
+      pendingChanges.chatContent.emplace_back(Removal{
+        .channelId = channelId,
+        .messageIds = std::move(messageIds)
+      });
     }
 
     void AppendChatContent(ChatChannelId channelId, std::vector<ChatMessage> messages)
@@ -369,7 +378,10 @@ private:
         }
       }
 
-      pendingChanges.chatContent.emplace_back(ChatMessagesAdded{.channelId = channelId, .messages = std::move(messages)});
+      pendingChanges.chatContent.emplace_back(ChatMessagesAdded{
+        .channelId = channelId,
+        .messages = std::move(messages)
+      });
     }
 
     void RecordChatMerge(ChatChannelId channelId, ChatMergeResult result)
@@ -388,6 +400,7 @@ private:
 
       // A clear supersedes everything not yet taken; the recipient starts over.
       if (!changes.empty() && std::holds_alternative<GroundMarksCleared>(changes.front())) pendingChanges.groundMarks.clear();
+
       pendingChanges.groundMarks.insert(
         pendingChanges.groundMarks.end(),
         std::make_move_iterator(changes.begin()),
@@ -516,6 +529,7 @@ private:
     std::map<ChatChannelId, ChatCache> chats;
     GroundMarkStore                    groundMarks;
     std::optional<PlayerId>            selfPlayerId;
+
     ChangeBatch                        pendingChanges;
     std::uint64_t                      generation{1};
     std::uint64_t                      revision{};

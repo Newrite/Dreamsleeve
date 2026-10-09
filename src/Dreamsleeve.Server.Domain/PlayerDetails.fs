@@ -3,7 +3,10 @@ namespace Dreamsleeve.Server.Domain
 open System
 
 /// Stable record identity and a display label; never a runtime pointer or load-order ID.
-type NamedForm = private { form: FormKey; name: string } with
+type NamedForm = private {
+    form: FormKey
+    name: string
+} with
     member this.Form = this.form
     member this.Name = this.name
 
@@ -11,17 +14,43 @@ type NamedForm = private { form: FormKey; name: string } with
 module NamedForm =
     let create maxLength form name =
         PrimitiveValidation.label "NamedForm.Name" maxLength name
-        |> Result.map (fun label -> { form = form; name = label })
+        |> Result.map (fun label -> {
+            form = form
+            name = label
+        })
 
 [<RequireQualifiedAccess>]
 type ActivityKind =
-    | Unknown | Exploring | Combat | Talking | Bartering | Training | Reading
-    | Lockpicking | Crafting | UsingObject | Riding | Sneaking | Swimming | Flying
-    | Dead | Ragdoll | Menu | NewGame | Loading
+    | Unknown
+    | Exploring
+    | Combat
+    | Talking
+    | Bartering
+    | Training
+    | Reading
+    | Lockpicking
+    | Crafting
+    | UsingObject
+    | Riding
+    | Sneaking
+    | Swimming
+    | Flying
+    | Dead
+    | Ragdoll
+    | Menu
+    | NewGame
+    | Loading
 
 [<RequireQualifiedAccess>]
 type LockDifficulty =
-    | Unknown | Unlocked | VeryEasy | Easy | Average | Hard | VeryHard | RequiresKey
+    | Unknown
+    | Unlocked
+    | VeryEasy
+    | Easy
+    | Average
+    | Hard
+    | VeryHard
+    | RequiresKey
 
 /// The optional target is a display label, not a remotely addressable game object.
 type PlayerActivity = private {
@@ -37,8 +66,12 @@ type PlayerActivity = private {
 
 [<RequireQualifiedAccess>]
 module PlayerActivity =
-    let unknown = { kind = ActivityKind.Unknown; targetName = ValueNone
-                    lockDifficulty = LockDifficulty.Unknown; menuKey = ValueNone }
+    let unknown = {
+        kind = ActivityKind.Unknown
+        targetName = ValueNone
+        lockDifficulty = LockDifficulty.Unknown
+        menuKey = ValueNone
+    }
 
     let private acceptsTarget = function
         | ActivityKind.Combat | ActivityKind.Talking | ActivityKind.Bartering
@@ -53,20 +86,38 @@ module PlayerActivity =
         | ValueSome value -> validate value |> Result.map ValueSome
 
     let private keyFormat value =
-        if value |> Seq.forall (fun c -> PrimitiveValidation.asciiLetterOrDigit c || c = '_' || c = '-' || c = ':' || c = '.') then ValueNone
-        else ValueSome TextError.InvalidCharacters
+        if value |> Seq.forall (fun c -> PrimitiveValidation.asciiLetterOrDigit c || c = '_' || c = '-' || c = ':' || c = '.') then
+            ValueNone
+        else
+            ValueSome TextError.InvalidCharacters
 
     let create textLimit keyLimit kind (targetName: string voption) difficulty (menuKey: string voption) =
         let invalid field = Error (DomainError.InvalidPlayerDetails field)
-        if targetName.IsSome && not (acceptsTarget kind) then invalid "activity.target_name"
-        elif kind <> ActivityKind.Lockpicking && difficulty <> LockDifficulty.Unknown then invalid "activity.lock_difficulty"
-        elif (kind = ActivityKind.Menu) <> menuKey.IsSome then invalid "activity.menu_key"
+
+        if targetName.IsSome && not (acceptsTarget kind) then
+            invalid "activity.target_name"
+        elif kind <> ActivityKind.Lockpicking && difficulty <> LockDifficulty.Unknown then
+            invalid "activity.lock_difficulty"
+        elif (kind = ActivityKind.Menu) <> menuKey.IsSome then
+            invalid "activity.menu_key"
         else
-            let target = optionalText (PrimitiveValidation.text "Activity.TargetName" textLimit id false PrimitiveValidation.unrestricted) targetName
-            let menu = optionalText (PrimitiveValidation.text "Activity.MenuKey" keyLimit PrimitiveValidation.asciiLower false keyFormat) menuKey
+            let target =
+                optionalText
+                    (PrimitiveValidation.text "Activity.TargetName" textLimit id false PrimitiveValidation.unrestricted)
+                    targetName
+            let menu =
+                optionalText
+                    (PrimitiveValidation.text "Activity.MenuKey" keyLimit PrimitiveValidation.asciiLower false keyFormat)
+                    menuKey
+
             match target, menu with
             | Ok target, Ok menu ->
-                Ok { kind = kind; targetName = target; lockDifficulty = difficulty; menuKey = menu }
+                Ok {
+                    kind = kind
+                    targetName = target
+                    lockDifficulty = difficulty
+                    menuKey = menu
+                }
             | Error error, _ | _, Error error -> Error error
 
 /// Descriptive place data is independent from the WRLD/CELL coordinate space.
@@ -86,20 +137,33 @@ type PlaceDescription = private {
 
 [<RequireQualifiedAccess>]
 module PlaceDescription =
+    let private validateMarkerKind keyLimit markerKind =
+        PrimitiveValidation.label "Place.MarkerKind" keyLimit markerKind
+        |> Result.bind (fun value ->
+            if value |> Seq.forall (fun c -> PrimitiveValidation.asciiLetterOrDigit c || c = '_' || c = '-' || c = ':' || c = '.') then
+                Ok (PrimitiveValidation.asciiLower value)
+            else
+                Error (DomainError.InvalidText("Place.MarkerKind", TextError.InvalidCharacters)))
+
     let create textLimit keyLimit worldspaceName locationName nearbyMarkerName markerKind isInterior =
         let label field = PrimitiveValidation.label field textLimit
-        let marker =
-            PrimitiveValidation.label "Place.MarkerKind" keyLimit markerKind
-            |> Result.bind (fun value ->
-                if value |> Seq.forall (fun c -> PrimitiveValidation.asciiLetterOrDigit c || c = '_' || c = '-' || c = ':' || c = '.') then
-                    Ok (PrimitiveValidation.asciiLower value)
-                else Error (DomainError.InvalidText("Place.MarkerKind", TextError.InvalidCharacters)))
+        let marker = validateMarkerKind keyLimit markerKind
+
         match label "Place.WorldspaceName" worldspaceName, label "Place.LocationName" locationName,
               label "Place.NearbyMarkerName" nearbyMarkerName, marker with
         | Ok world, Ok location, Ok nearby, Ok kind ->
-            Ok { worldspaceName = world; locationName = location; nearbyMarkerName = nearby
-                 markerKind = kind; isInterior = isInterior }
-        | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error
+            Ok {
+                worldspaceName = world
+                locationName = location
+                nearbyMarkerName = nearby
+                markerKind = kind
+                isInterior = isInterior
+            }
+        | Error error, _, _, _
+        | _, Error error, _, _
+        | _, _, Error error, _
+        | _, _, _, Error error ->
+            Error error
 
 /// Slowly changing observations. The time is the client's reported game-process
 /// start, not the ENet connection time or a server-authoritative elapsed duration.
@@ -118,11 +182,22 @@ type PlayerDetails = private {
 
 [<RequireQualifiedAccess>]
 module PlayerDetails =
-    let empty = { race = ValueNone; level = ValueNone; activity = PlayerActivity.unknown
-                  place = ValueNone; gameStartedAt = ValueNone }
+    let empty = {
+        race = ValueNone
+        level = ValueNone
+        activity = PlayerActivity.unknown
+        place = ValueNone
+        gameStartedAt = ValueNone
+    }
 
     let create race level activity place gameStartedAt =
-        { race = race; level = level; activity = activity; place = place; gameStartedAt = gameStartedAt }
+        {
+            race = race
+            level = level
+            activity = activity
+            place = place
+            gameStartedAt = gameStartedAt
+        }
 
 /// The components that changed between two details of one player. ValueSome
 /// replaces a component; for an optional one, ValueSome ValueNone clears it.
@@ -138,7 +213,9 @@ type DetailsPatch = {
 module DetailsPatch =
     /// ValueNone when nothing changed.
     let between (previous: PlayerDetails) (latest: PlayerDetails) =
-        let changed old next = if old = next then ValueNone else ValueSome next
+        let changed old next =
+            if old = next then ValueNone else ValueSome next
+
         let patch = {
             Race = changed previous.Race latest.Race
             Level = changed previous.Level latest.Level
@@ -146,6 +223,12 @@ module DetailsPatch =
             Place = changed previous.Place latest.Place
             GameStartedAt = changed previous.GameStartedAt latest.GameStartedAt
         }
-        if patch.Race.IsNone && patch.Level.IsNone && patch.Activity.IsNone && patch.Place.IsNone && patch.GameStartedAt.IsNone then
+
+        if patch.Race.IsNone
+           && patch.Level.IsNone
+           && patch.Activity.IsNone
+           && patch.Place.IsNone
+           && patch.GameStartedAt.IsNone then
             ValueNone
-        else ValueSome patch
+        else
+            ValueSome patch

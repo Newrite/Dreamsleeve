@@ -46,9 +46,11 @@ module internal SessionCodec =
                 | PublicIdentity.Pseudonymous _ -> false)
 
         value.Players.Length <= config.MaxInitialPlayers
-        && Set.count (Set.ofList ids) = ids.Length && selfShown
+        && Set.count (Set.ofList ids) = ids.Length
+        && selfShown
         && PlayerCodec.numberedPlayers value.Kinds value.Players
-        && not channels.IsEmpty && Set.count (Set.ofList channels) = channels.Length
+        && not channels.IsEmpty
+        && Set.count (Set.ofList channels) = channels.Length
         && List.forall validChannel value.Channels
 
     let decodeTicket (source: Dreamsleeve.Protocol.Chat.OpenSession) =
@@ -56,7 +58,9 @@ module internal SessionCodec =
         if isNull ticket || ticket.Length <> 43
            || ticket |> Seq.exists (fun ch -> not (Char.IsAsciiLetterOrDigit ch || ch = '-' || ch = '_')) then
             Error(ProtocolCodecFailure.InvalidPayload "session_ticket")
-        else decodeHiding "hidden_identity" source.HiddenIdentity |> Result.map (fun value -> ClientCommand.OpenSession(ticket, value))
+        else
+            decodeHiding "hidden_identity" source.HiddenIdentity
+            |> Result.map (fun value -> ClientCommand.OpenSession(ticket, value))
 
     let decodeDisplayName (config: ServerConfig) (source: Dreamsleeve.Protocol.Chat.ChangeDisplayName) =
         DisplayName.create config.ChatInput.DisplayName source.DisplayName
@@ -74,7 +78,8 @@ module internal SessionCodec =
     let ended (value: SessionEnd) =
         let result = Dreamsleeve.Protocol.Chat.SessionEnded()
         match value with
-        | SessionEnd.AccessRevoked -> result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked
+        | SessionEnd.AccessRevoked ->
+            result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked
         | SessionEnd.Banned ban ->
             result.Reason <- Dreamsleeve.Protocol.Chat.SessionEndReason.Banned
             result.Text <- SanctionReason.value ban.Reason
@@ -93,10 +98,12 @@ module internal SessionCodec =
             ServerName = config.ServerName,
             SelfPlayerId = PlayerId.value value.SelfPlayerId,
             Announcements = ChatCodec.policy config.ChatInput value.AnnouncementSources)
+
         value.OwnPseudonym |> ValueOption.iter (fun name -> result.OwnPseudonym <- Pseudonym.value name)
         value.Mute |> ValueOption.iter (fun sanction -> result.Mute <- mute sanction)
         result.Role <- ModerationCodec.role value.Role
         result.HiddenIdentity <- hiding value.Hiding
+
         result.ActorValueKinds.AddRange(value.Kinds.Defined |> Seq.map PlayerCodec.kind)
         result.Players.AddRange(value.Players |> Seq.map (PlayerCodec.player value.Kinds))
         result.Channels.AddRange(value.Channels |> Seq.map ChatCodec.channel)

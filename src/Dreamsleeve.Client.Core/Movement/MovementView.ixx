@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.MovementView;
 
 import std;
+import Dreamsleeve.Client.PlayoutClock;
 export import Dreamsleeve.Client.StateUpdateQueue;
 export import Dreamsleeve.Client.Config;
 
@@ -39,8 +40,9 @@ public:
       const auto found = tracks.find(id);
       if (found == tracks.end()) return std::nullopt;
 
-      const auto& samples = found->second.samples;
-      const auto  target  = now - settings.delay;
+      const auto&             samples = found->second.samples;
+      const Clock::time_point target{std::chrono::duration_cast<Clock::duration>(
+        std::chrono::microseconds{found->second.clock.At(Microseconds(now))})};
       if (target <= samples.front().time) return samples.front().location;
 
       for (std::size_t index = 1; index < samples.size(); ++index)
@@ -70,9 +72,16 @@ private:
     {
       std::uint64_t           viewRevision{};
       std::uint64_t           characterGeneration{};
+
       Clock::time_point       receivedAt{};
       std::deque<SamplePoint> samples;
+      PlayoutClock            clock;
     };
+
+    static std::uint64_t Microseconds(Clock::time_point value)
+    {
+      return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(value.time_since_epoch()).count());
+    }
 
     explicit MovementView(MovementSettings value) : settings{value} {}
 
@@ -86,7 +95,9 @@ private:
     // Another view, character or space, a pause beyond maxGap or a teleport: snap.
     bool Discontinuous(const Track& track, const MovementObservation& observation) const
     {
-      return track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
+      return track.viewRevision != observation.viewRevision ||
+             track.characterGeneration != observation.characterGeneration ||
+             observation.receivedAt < track.receivedAt ||
              observation.receivedAt - track.receivedAt > settings.maxGap ||
              Domain::Spatial::Jumped(track.samples.back().location, *observation.location, settings.teleportDistance);
     }
@@ -100,7 +111,7 @@ private:
         previous.location.sampledAtUs,
         observation.location->sampledAtUs,
         observation.receivedAt,
-        settings.delay,
+        track.samples.size() < 2 ? settings.delay : settings.maxGap,
         settings.maxGap);
     }
 
@@ -120,8 +131,12 @@ private:
 
       const auto mapped = track.samples.empty() || Discontinuous(track, observation) ? std::nullopt : MapTime(track, observation);
       const auto time   = mapped.value_or(observation.receivedAt);
+
       if (!mapped)
+      {
         track.samples.clear();
+        track.clock.Clear();
+      }
       else if (time <= track.samples.back().time)
       {
         // Co-timed observations replace, so interpolation never divides by zero.
@@ -133,6 +148,14 @@ private:
       track.viewRevision        = observation.viewRevision;
       track.characterGeneration = observation.characterGeneration;
       track.receivedAt          = observation.receivedAt;
+
+      track.clock.Push(
+        Microseconds(time),
+        Microseconds(observation.receivedAt),
+        1,
+        std::chrono::duration_cast<std::chrono::microseconds>(settings.delay).count(),
+        settings.historyCapacity);
+
       track.samples.push_back({time, *observation.location});
       while (track.samples.size() > settings.historyCapacity)
         track.samples.pop_front();
@@ -141,6 +164,7 @@ private:
     void Replace(const std::vector<Domain::Player>& players, Clock::time_point now)
     {
       tracks.clear();
+
       for (const auto& player : players)
         Observe({player.data.playerId, player.characterGeneration, now, player.location, player.viewRevision});
     }
@@ -163,6 +187,7 @@ private:
     void ApplyOne(const ClientStateDelta& delta, Clock::time_point now)
     {
       if (Older(delta.generation, delta.revision) || (hasCursor && delta.generation == generation && delta.revision == revision)) return;
+
       if (!ready || delta.generation != generation)
       {
         tracks.clear();
@@ -181,11 +206,13 @@ private:
 
       for (const auto id : delta.removedPlayers)
         tracks.erase(id);
+
       revision = delta.revision;
     }
 
     MovementSettings                            settings;
     std::unordered_map<Domain::PlayerId, Track> tracks;
+
     std::uint64_t                               generation{};
     std::uint64_t                               revision{};
     bool                                        hasCursor{};

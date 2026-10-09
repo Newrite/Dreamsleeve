@@ -75,7 +75,7 @@ export namespace Domain::Checks
     return Finite(value.X, value.Y, value.Z);
   }
 
-  bool Finite(const Rotation& value)
+  bool Finite(const CameraDirection& value)
   {
     return Finite(value.X, value.Y, value.Z);
   }
@@ -95,9 +95,11 @@ export namespace Domain::Checks
   // years 1..99999, Tamriel months of fixed length, 24 hours.
   bool ValidGameDate(const GameDate& value)
   {
-    return value.era >= 1 && value.era <= 99 && value.year >= 1 && value.year <= 99999 && value.month >= 1 && value.month <= 12 &&
-           value.day >= 1 && value.day <= Calendar::MonthLength(value.month) && value.dayOfWeek <= 6 && value.hour <= 23 &&
-           value.minute <= 59;
+    return value.era >= 1 && value.era <= 99 &&
+           value.year >= 1 && value.year <= 99999 &&
+           value.month >= 1 && value.month <= 12 &&
+           value.day >= 1 && value.day <= Calendar::MonthLength(value.month) &&
+           value.dayOfWeek <= 6 && value.hour <= 23 && value.minute <= 59;
   }
 
 }
@@ -173,14 +175,6 @@ export namespace Domain::Spatial
 export namespace Domain::Motion
 {
 
-  // The shorter way round from one angle to another, at alpha (0..1) of the turn.
-  float BlendAngle(float from, float to, double alpha)
-  {
-    constexpr auto Turn       = 2.0 * std::numbers::pi;
-    const auto     difference = std::remainder(static_cast<double>(to) - from, Turn);
-    return static_cast<float>(std::remainder(from + difference * alpha, Turn));
-  }
-
   // Adjacent movement samples of one context replace each other: both absent,
   // or both in one space.
   bool SameContext(const std::optional<PlayerLocation>& previous, const std::optional<PlayerLocation>& next)
@@ -191,9 +185,9 @@ export namespace Domain::Motion
   // A sample moves a placed player within its space and view.
   void Apply(PlayerLocation& location, const MovementPose& pose)
   {
-    location.position    = pose.position;
-    location.rotation    = pose.rotation;
-    location.sampledAtUs = pose.sampledAtUs;
+    location.position        = pose.position;
+    location.cameraDirection = pose.cameraDirection;
+    location.sampledAtUs     = pose.sampledAtUs;
   }
 
   // When a sample happened on this receiver's clock: the previous sample's
@@ -202,14 +196,14 @@ export namespace Domain::Motion
   // clock restarted or paused beyond maxGap, only one sample is stamped, or
   // the time strays from receipt beyond the interpolation budget (ahead by
   // more than delay, behind by more than maxGap). Ordinary jitter is kept.
-  template <class Clock>
-  std::optional<typename Clock::time_point> SourceTime(
-    typename Clock::time_point previousTime,
-    std::uint64_t              previousStampUs,
-    std::uint64_t              stampUs,
-    typename Clock::time_point receivedAt,
-    std::chrono::milliseconds  delay,
-    std::chrono::milliseconds  maxGap)
+  template <class Clock, class Duration = typename Clock::duration>
+  std::optional<std::chrono::time_point<Clock, Duration>> SourceTime(
+    std::chrono::time_point<Clock, Duration> previousTime,
+    std::uint64_t                            previousStampUs,
+    std::uint64_t                            stampUs,
+    std::chrono::time_point<Clock, Duration> receivedAt,
+    std::chrono::milliseconds                delay,
+    std::chrono::milliseconds                maxGap)
   {
     auto time = receivedAt;
     if (stampUs != 0 && previousStampUs != 0)
@@ -218,10 +212,11 @@ export namespace Domain::Motion
       if (stampUs < previousStampUs) return std::nullopt;
       const auto elapsed = stampUs - previousStampUs;
       if (elapsed > static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(maxGap).count())) return std::nullopt;
-      time = previousTime + std::chrono::duration_cast<typename Clock::duration>(std::chrono::microseconds{elapsed});
+      time = previousTime + std::chrono::duration_cast<Duration>(std::chrono::microseconds{elapsed});
     }
     else if ((stampUs == 0) != (previousStampUs == 0))
       return std::nullopt;
+
     if (time - receivedAt > delay || receivedAt - time > maxGap) return std::nullopt;
     return time;
   }
@@ -233,13 +228,9 @@ export namespace Domain::Motion
     const auto lerp = [alpha](float a, float b) {
       return static_cast<float>(std::lerp(static_cast<double>(a), static_cast<double>(b), alpha));
     };
-    auto result     = to;
-    result.position = {lerp(from.position.X, to.position.X), lerp(from.position.Y, to.position.Y), lerp(from.position.Z, to.position.Z)};
-    result.rotation = {
-        BlendAngle(from.rotation.X, to.rotation.X, alpha),
-        BlendAngle(from.rotation.Y, to.rotation.Y, alpha),
-        BlendAngle(from.rotation.Z, to.rotation.Z, alpha)
-    };
+
+    auto result        = to;
+    result.position    = {lerp(from.position.X, to.position.X), lerp(from.position.Y, to.position.Y), lerp(from.position.Z, to.position.Z)};
     result.sampledAtUs = 0;
     return result;
   }
@@ -284,6 +275,7 @@ export namespace Domain::Players
   {
     for (const auto& key : patch.removed)
       values.erase(key);
+
     for (const auto& [key, info] : patch.set)
       values.insert_or_assign(key, info);
   }

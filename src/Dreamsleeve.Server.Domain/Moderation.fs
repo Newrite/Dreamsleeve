@@ -30,7 +30,9 @@ type ModerationRules =
 
 /// A rule that matched outside every exception. Pattern is the configured
 /// rule text for server diagnostics; never echo it back to other players.
-type ModerationMatch = { Pattern: string }
+type ModerationMatch = {
+    Pattern: string
+}
 
 /// Configured lists of one tier: whole words or phrases, explicit substrings
 /// and allowed words that would otherwise contain a match.
@@ -69,19 +71,38 @@ module Moderation =
     /// Normalized text with, for every character, the UTF-16 range of the
     /// source text it came from.
     [<NoEquality; NoComparison>]
-    type private Projection = { Text: string; Starts: int array; Ends: int array }
+    type private Projection = {
+        Text: string
+        Starts: int array
+        Ends: int array
+    }
+
+    let private foldRune (rune: Rune) =
+        if rune.IsAscii then
+            (Rune.ToLowerInvariant rune).ToString()
+        else
+            try
+                rune.ToString().Normalize(NormalizationForm.FormKC).ToLowerInvariant().Normalize(NormalizationForm.FormD)
+            with :? ArgumentException ->
+                rune.ToString().ToLowerInvariant()
 
     // Folded rune by rune so every output character keeps its source range.
     // Marks are removed after decomposition, so per-rune NFKC gives the same
     // letters as normalizing the whole string.
     let private project (source: string) =
-        if String.IsNullOrEmpty source then { Text = ""; Starts = Array.empty; Ends = Array.empty }
+        if String.IsNullOrEmpty source then
+            {
+                Text = ""
+                Starts = Array.empty
+                Ends = Array.empty
+            }
         else
             let builder = StringBuilder(source.Length)
             let starts = ResizeArray<int>(source.Length)
             let ends = ResizeArray<int>(source.Length)
             let mutable spaceStart = -1
             let mutable spaceEnd = -1
+
             let append (text: string) first last =
                 // Line breaks and tabs separate words like spaces do; leading
                 // and trailing whitespace is dropped, runs collapse to one space.
@@ -91,11 +112,14 @@ module Moderation =
                         starts.Add spaceStart
                         ends.Add spaceEnd
                     spaceStart <- -1
+
                 for character in text do
                     builder.Append character |> ignore
                     starts.Add first
                     ends.Add last
+
             let mutable offset = 0
+
             while offset < source.Length do
                 let mutable rune = Unchecked.defaultof<Rune>
                 let length =
@@ -104,11 +128,8 @@ module Moderation =
                         rune <- Rune.ReplacementChar
                         1
                 let first, last = offset, offset + length
-                let folded =
-                    if rune.IsAscii then (Rune.ToLowerInvariant rune).ToString()
-                    else
-                        try rune.ToString().Normalize(NormalizationForm.FormKC).ToLowerInvariant().Normalize(NormalizationForm.FormD)
-                        with :? ArgumentException -> rune.ToString().ToLowerInvariant()
+                let folded = foldRune rune
+
                 for part in folded.EnumerateRunes() do
                     match Rune.GetUnicodeCategory part with
                     | UnicodeCategory.NonSpacingMark | UnicodeCategory.EnclosingMark | UnicodeCategory.Format -> ()
@@ -119,8 +140,14 @@ module Moderation =
                     | _ when part.IsBmp && homoglyphs.ContainsKey(char part.Value) ->
                         append (string homoglyphs[char part.Value]) first last
                     | _ -> append (part.ToString()) first last
+
                 offset <- last
-            { Text = builder.ToString(); Starts = starts.ToArray(); Ends = ends.ToArray() }
+
+            {
+                Text = builder.ToString()
+                Starts = starts.ToArray()
+                Ends = ends.ToArray()
+            }
 
     /// Matching projection: NFKC, invariant lower case, removed marks, format
     /// and control characters, folded look-alike letters and collapsed spaces.
@@ -147,21 +174,29 @@ module Moderation =
             normalize rule
             |> String.filter (fun c -> c = ' ' || Char.IsLetterOrDigit c || Char.IsSurrogate c)
         let normalized = normalized.Trim()
-        if normalized.Length = 0 then None
+
+        if normalized.Length = 0 then
+            None
         else
             let parts = ResizeArray<string>()
             let mutable index = 0
+
             while index < normalized.Length do
                 let current = normalized[index]
                 let mutable count = 1
+
                 while index + count < normalized.Length && normalized[index + count] = current do
                     count <- count + 1
+
                 if current = ' ' then
                     parts.Add(@"(?>(?:\s|" + separator + ")+)")
                 else
-                    if parts.Count > 0 && normalized[index - 1] <> ' ' then parts.Add("(?>" + separator + "*)")
+                    if parts.Count > 0 && normalized[index - 1] <> ' ' then
+                        parts.Add("(?>" + separator + "*)")
                     parts.Add($"(?>{letterClass current}{{{count},}})")
+
                 index <- index + count
+
             let body = String.concat "" parts
             Some(if wholeWord then boundaryBefore + body + boundaryAfter else body)
 
@@ -174,14 +209,21 @@ module Moderation =
             values
             |> List.distinct
             |> List.choose (fun rule -> compile wholeWord rule |> Option.map (fun regex -> rule, regex))
+
         {
             Rules = Array.ofList (entries true source.Words @ entries false source.Substrings)
             Exceptions = source.Exceptions |> List.distinct |> List.choose (compile true) |> Array.ofList
         }
 
-    let private none = { Rules = Array.empty; Exceptions = Array.empty }
+    let private none = {
+        Rules = Array.empty
+        Exceptions = Array.empty
+    }
 
-    let empty = { block = none; flag = none }
+    let empty = {
+        block = none
+        flag = none
+    }
 
     /// Block tier. Blank entries are ignored. Exceptions are whole words or phrases.
     let create (source: ModerationSource) : ModerationRules = { empty with block = tier source }
@@ -195,28 +237,39 @@ module Moderation =
         let allowed =
             lazy [| for allowedRule in tier.Exceptions do
                         for found in allowedRule.Matches text -> struct (found.Index, found.Index + found.Length) |]
+
         let excepted (found: Match) =
-            allowed.Value |> Array.exists (fun struct (start, finish) -> found.Index >= start && found.Index + found.Length <= finish)
+            allowed.Value
+            |> Array.exists (fun struct (start, finish) -> found.Index >= start && found.Index + found.Length <= finish)
+
         let result = ResizeArray<string * int * int>()
         let mutable ruleIndex = 0
+
         while ruleIndex < tier.Rules.Length && not (firstOnly && result.Count > 0) do
             let rule, regex = tier.Rules[ruleIndex]
             let mutable found = regex.Match(text, 0)
+
             while found.Success && not (firstOnly && result.Count > 0) do
                 // Lookbehind still sees the text before startat, so boundaries hold.
-                if excepted found then found <- regex.Match(text, found.Index + 1)
+                if excepted found then
+                    found <- regex.Match(text, found.Index + 1)
                 else
                     result.Add((rule, found.Index, found.Index + found.Length))
                     found <- regex.Match(text, found.Index + found.Length)
+
             ruleIndex <- ruleIndex + 1
+
         result
 
     /// Finds the first block rule match not contained in an exception occurrence.
     let check (rules: ModerationRules) (text: string) : ModerationMatch voption =
-        if rules.block.Rules.Length = 0 || String.IsNullOrEmpty text then ValueNone
+        if rules.block.Rules.Length = 0 || String.IsNullOrEmpty text then
+            ValueNone
         else
             let found = matches rules.block true (normalize text)
-            if found.Count = 0 then ValueNone
+
+            if found.Count = 0 then
+                ValueNone
             else
                 let rule, _, _ = found[0]
                 ValueSome { Pattern = rule }
@@ -226,9 +279,11 @@ module Moderation =
     /// Flag tier ranges of the original text in UTF-8 bytes: merged, ascending,
     /// on code point boundaries. Empty when nothing matched.
     let flag (rules: ModerationRules) (text: string) : TextSpan list =
-        if rules.flag.Rules.Length = 0 || String.IsNullOrEmpty text then []
+        if rules.flag.Rules.Length = 0 || String.IsNullOrEmpty text then
+            []
         else
             let projection = project text
+
             let ranges =
                 matches rules.flag false projection.Text
                 |> Seq.map (fun (_, start, finish) -> projection.Starts[start], projection.Ends[finish - 1])
@@ -239,10 +294,17 @@ module Moderation =
                         (previousStart, max previousFinish finish) :: rest
                     | _ -> (start, finish) :: merged) []
                 |> List.rev
+
             let bytes (index: int) = Encoding.UTF8.GetByteCount(text.AsSpan(0, index))
-            ranges |> List.map (fun (start, finish) ->
+
+            ranges
+            |> List.map (fun (start, finish) ->
                 let first = bytes start
-                { Start = first; Length = bytes finish - first })
+
+                {
+                    Start = first
+                    Length = bytes finish - first
+                })
 
     /// Placeholder for a stored display name that fails the current rules.
     let fallbackDisplayName (playerId: PlayerId) : DisplayName =
@@ -265,7 +327,11 @@ module Moderation =
     /// for the server in any client.
     let reservedUsername (username: Username) =
         let text = Username.value username
-        text.StartsWith HiddenUsernamePrefix || text.StartsWith SteamUsernamePrefix || text = "server" || text = "system"
+
+        text.StartsWith HiddenUsernamePrefix
+        || text.StartsWith SteamUsernamePrefix
+        || text = "server"
+        || text = "system"
 
     /// A name a new account may take: not reserved and allowed by the block
     /// rules. Registration and accounts created in the panel check it; sign-in never does.
@@ -278,8 +344,12 @@ module Moderation =
         let username =
             if allows rules (Username.value profile.Username) then profile.Username
             else fallbackUsername profile.PlayerId
+
         let displayName =
             if allows rules (DisplayName.value profile.DisplayName) then profile.DisplayName
             else fallbackDisplayName profile.PlayerId
-        if username = profile.Username && displayName = profile.DisplayName then profile
-        else PlayerData.create profile.PlayerId username displayName profile.NameColor
+
+        if username = profile.Username && displayName = profile.DisplayName then
+            profile
+        else
+            PlayerData.create profile.PlayerId username displayName profile.NameColor

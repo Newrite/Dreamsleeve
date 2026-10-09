@@ -117,7 +117,9 @@ export namespace Dreamsleeve::Host
     };
 
     std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return fallback("Alias dictionary not found; using built-in names");
+    const bool      exists = std::filesystem::exists(path, probe);
+    if (probe) return fallback("Cannot inspect alias dictionary: " + probe.message() + "; using built-in names");
+    if (!exists) return fallback("Alias dictionary not found; using built-in names");
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return fallback("Cannot open alias dictionary; using built-in names");
     const auto length = input.tellg();
@@ -185,6 +187,7 @@ public:
       std::unordered_set<std::string> used;
       for (const auto& record : book.aliases)
         if (record.server == scope) used.insert(record.name);
+
       std::uniform_int_distribution<std::size_t> pick{0, aliasNames.size() - 1};
       const auto&                                base = aliasNames[pick(random)];
       auto                                       name = base;
@@ -203,6 +206,7 @@ public:
         book.aliases.push_back({scope, std::to_string(id), name});
         aliasIndex.emplace(key, book.aliases.size() - 1);
       }
+
       dirty = true;
       return name;
     }

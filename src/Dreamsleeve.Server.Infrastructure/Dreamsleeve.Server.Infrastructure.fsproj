@@ -7,6 +7,7 @@
     <Compile Include="Generated/AccountSchema.fs">
       <Visible>False</Visible>
     </Compile>
+    <Compile Include="SqliteStored.fs" />
     <Compile Include="SqliteDatabase.fs" />
     <Compile Include="SqliteStatements.fs" />
     <Compile Include="Secrets.fs" />
@@ -21,7 +22,12 @@
     <Compile Include="AuthService.fs" />
     <Compile Include="AdminService.fs" />
     <Compile Include="TransportOwner.fs" />
+    <Compile Include="PhantomStorage.fs" />
+    <Compile Include="PhantomHttp.fs" />
     <Compile Include="EnetTransport.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dreamsleeve.Server.Tests" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Dreamsleeve.Server.Core/Dreamsleeve.Server.Core.fsproj" />

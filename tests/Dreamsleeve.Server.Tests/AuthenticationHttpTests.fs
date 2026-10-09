@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.AuthenticationHttpTests
+module Dreamsleeve.Server.Tests.AuthenticationHttpTests
 
 open System
 open System.Collections.Concurrent
@@ -15,23 +15,37 @@ open Dreamsleeve.Server
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 open Dreamsleeve.Server.Web.Authentication
+open Dreamsleeve.Server.Web
+open Microsoft.AspNetCore.Http
 open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private password = "Boundary-Password-2026!"
 let private profile = PlayerData.create (PlayerId.create 42UL |> ok)
                           (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) NameColor.unknown
 let private ticket = String('a', 43)
-let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; SessionTicket = ticket; ExpiresInSeconds = 60; RememberToken = "" })
+let private signedIn = Ok (AccountAccessResult.SignedIn {
+    Profile = profile
+    SessionTicket = ticket
+    ExpiresInSeconds = 60
+    RememberToken = ""
+})
 
-let private moderation = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
+let private moderation = Moderation.create {
+    Words = ["badword"]
+    Substrings = []
+    Exceptions = []
+}
 
 // steam replaces the Steam ports of the composition root.
-let private withHostUsing (steam: SteamPorts option) customize execute run = task {
+let private withHostUsingPorts (alter: AuthPorts -> AuthPorts) (logs: ConcurrentQueue<Serilog.Events.LogEvent>) (steam: SteamPorts option) customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
-    let handle (_: AgentContext<AuthMessage>) message = task {
+    let handle (_: ReliableAgentContext<AuthMessage>) message = task {
         match message with
         | AuthMessage.Access(command, reply) ->
             received.Enqueue command
@@ -40,37 +54,58 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
         | AuthMessage.WorkersStopped _ | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ | AuthMessage.Stop
         | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
     }
-    use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
-    use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
+    use auth = Agent.TryStartReliable(AgentOptions.create "http-test-auth", handle) |> expectStarted
+    let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
+    use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let initial = {
         Configuration.defaults with
-            Authentication = { Configuration.defaults.Authentication with
-                                   Listener = { Configuration.defaults.Authentication.Listener with ListenUrl = "http://127.0.0.1:0" } }
+            Authentication = {
+                Configuration.defaults.Authentication with
+                    Listener = {
+                        Configuration.defaults.Authentication.Listener with
+                            ListenUrl = "http://127.0.0.1:0"
+                    }
+            }
     }
     let settings = customize initial
+
     // The host exactly as Program builds it: the same settings mapping and ports.
     let ports = WebPorts.auth settings auth
-    let ports = match steam with Some steam -> { ports with Steam = steam } | None -> ports
-    let app = AuthRoutes.build (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
+    let ports =
+        (match steam with
+         | Some steam -> { ports with Steam = steam }
+         | None -> ports)
+        |> alter
+    let app = AuthRoutes.buildWithPhantoms (fun () -> None) 128 (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
+
     let! outcome = task {
         try
             do! app.StartAsync()
             use http = new HttpClient(BaseAddress = Uri(Seq.head app.Urls), Timeout = guard)
             do! run http received
             return Ok ()
-        with failure -> return Error failure
+        with failure ->
+            return Error failure
     }
+
     do! app.StopAsync()
     do! app.DisposeAsync().AsTask()
     auth.Complete() |> ignore
     do! awaitUnit auth.Completion
-    match outcome with Ok () -> () | Error failure -> return raise failure
+
+    match outcome with
+    | Ok () -> ()
+    | Error failure -> return raise failure
 }
 
+let private withHostUsing steam customize execute run = withHostUsingPorts id (ConcurrentQueue()) steam customize execute run
 let private withHost customize execute run = withHostUsing None customize execute run
 
 let private reply result _ (response: ReplyChannel<_>) = response.Reply result
-let private credentials = {| username = "player"; password = password |}
+let private credentials = {|
+    username = "player"
+    password = password
+|}
 let private post (http: HttpClient) (path: string) body = http.PostAsJsonAsync(path, body)
 let private status expected (response: HttpResponseMessage) = equal expected (int response.StatusCode)
 let private code (response: HttpResponseMessage) = task {
@@ -79,7 +114,101 @@ let private code (response: HttpResponseMessage) = task {
     return body.RootElement.GetProperty("code").GetString()
 }
 
+type private FailedBody(error: exn) =
+    inherit MemoryStream()
+    override _.ReadAsync(_: Memory<byte>, _: CancellationToken) = ValueTask<int>(Task.FromException<int> error)
+
 let tests = testSequenced (testList "Authentication HTTP" [
+    case "body dependency adapters retain I/O faults and only classify cancellation with an owning token" (fun () -> task {
+        let original = IOException("request-stream-failure")
+        let context = DefaultHttpContext()
+        use body = new FailedBody(original)
+        context.Request.Body <- body
+        let! io = WebHost.readBody context 4096 CancellationToken.None
+        match io with
+        | Error (WebHost.BodyError.Io actual) -> check (obj.ReferenceEquals(original, actual)) "Original stream I/O error is retained."
+        | other -> failtestf "Expected I/O failure, received %A" other
+
+        for statusCode, expected in [ 413, WebHost.BodyError.TooLarge; 400, WebHost.BodyError.BadRequest ] do
+            use bad = new FailedBody(BadHttpRequestException("bad framing", statusCode))
+            context.Request.Body <- bad
+            let! framing = WebHost.readBody context 4096 CancellationToken.None
+            match framing with
+            | Error actual -> equal expected actual
+            | Ok _ -> failtest "Invalid framing was accepted."
+
+        use canceled = new CancellationTokenSource()
+        canceled.Cancel()
+        use cancelBody = new FailedBody(OperationCanceledException())
+        context.Request.Body <- cancelBody
+        let! deadline = WebHost.readBody context 4096 canceled.Token
+        match deadline with
+        | Error WebHost.BodyError.Deadline -> ()
+        | other -> failtestf "%A" other
+
+        context.RequestAborted <- canceled.Token
+        let! caller = WebHost.readBody context 4096 canceled.Token
+        match caller with
+        | Error WebHost.BodyError.CallerCanceled -> ()
+        | other -> failtestf "%A" other
+
+        context.RequestAborted <- CancellationToken.None
+        let unexplained = OperationCanceledException("unowned cancellation")
+        use unexpectedBody = new FailedBody(unexplained)
+        context.Request.Body <- unexpectedBody
+        let work = WebHost.readBody context 4096 CancellationToken.None
+        let! fault = terminal work
+        check (fault |> Option.exists (fun actual -> obj.ReferenceEquals(unexplained, actual))) "Unowned cancellation remains a lifetime fault."
+    })
+
+    case "deferred JSON Unicode decoding is validated before authentication admission" (fun () ->
+        withHost id (reply signedIn) (fun http received -> task {
+            for json in [
+                """{"username":"pl\uD800ayer","password":"Boundary-Password-2026!"}"""
+                """{"username":"player","password":"Boundary-\uD800Password-2026!"}"""
+                """{"username":"player","password":"Boundary-Password-2026!","device":"\uD800"}"""
+                """{"us\uD800ername":"player","password":"Boundary-Password-2026!"}"""
+                """{"username":"player","password":"Boundary-Password-2026!","extra":{"\uD800":["value"]}}"""
+                """{"username":"player","password":"Boundary-Password-2026!","extra":["\uDC00"]}"""
+            ] do
+                // Parse accepts these escapes; decoding names/string values is deferred.
+                use parsed = JsonDocument.Parse json
+                equal JsonValueKind.Object parsed.RootElement.ValueKind
+                use content = new StringContent(json, Encoding.UTF8, "application/json")
+                use! response = http.PostAsync("auth/login", content)
+                status 400 response
+                let! actual = code response
+                equal "invalid_request" actual
+                equal 0 received.Count
+            use valid = new StringContent("""{"username":"player","password":"Boundary-\uD83D\uDE00-Password-2026!","extra":{"\uD83D\uDE00":["\uD83D\uDE00"]}}""", Encoding.UTF8, "application/json")
+            use! accepted = http.PostAsync("auth/login", valid)
+            status 200 accepted
+            equal 1 received.Count
+        }))
+
+    case "typed owner failure returns unavailable but unexpected port exceptions remain Kestrel failures" (fun () -> task {
+        for original in [ InvalidOperationException("unexpected-account-port") :> exn; JsonException("unexpected-business-json") :> exn ] do
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let alter ports = { ports with Access = fun _ _ _ -> Task.FromException<_> original }
+            do! withHostUsingPorts alter logs None id (reply signedIn) (fun http received -> task {
+                use! response = post http "auth/login" credentials
+                status 500 response
+                equal 0 received.Count
+                check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Kestrel retains the original unexpected fault."
+            })
+        let original = InvalidOperationException("typed-account-owner-fault")
+        let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+        let alter ports = { ports with Access = fun _ _ _ -> Task.FromResult(AgentAskResult.Faulted original) }
+        do! withHostUsingPorts alter logs None id (reply signedIn) (fun http received -> task {
+            use! response = post http "auth/login" credentials
+            status 503 response
+            let! actual = code response
+            equal "unavailable" actual
+            equal 0 received.Count
+            check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Typed owner failure preserves the original diagnostic."
+        })
+    })
+
     case "remember resume logout and reset map to dedicated public commands" (fun () ->
         let execute command (response: ReplyChannel<_>) =
             match command with
@@ -96,7 +225,11 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _
             | AccountAccessCommand.SignInSteam _ -> failtest "Unexpected public command"
         withHost id execute (fun http received -> task {
-            use! remembered = post http "auth/login" {| username = "player"; password = password; rememberMe = true |}
+            use! remembered = post http "auth/login" {|
+                username = "player"
+                password = password
+                rememberMe = true
+            |}
             status 200 remembered
             use! resumed = post http "auth/resume" {| token = ticket |}
             status 200 resumed
@@ -109,7 +242,11 @@ let tests = testSequenced (testList "Authentication HTTP" [
             equal [| AccountAccessCommand.RememberLogin(Username.create 32 "player" |> ok, password, local)
                      AccountAccessCommand.Resume(ticket, local); AccountAccessCommand.Logout ticket
                      AccountAccessCommand.ResetPassword(ticket, password) |] (received.ToArray())
-            use! invalidRemember = post http "auth/login" {| username = "player"; password = password; rememberMe = "true" |}
+            use! invalidRemember = post http "auth/login" {|
+                username = "player"
+                password = password
+                rememberMe = "true"
+            |}
             status 400 invalidRemember
             use! admin = post http "auth/create-password-reset" {| username = "player" |}
             status 404 admin
@@ -132,7 +269,9 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | AccountAccessCommand.SignInSteam _ -> failtest "Unexpected command"
         withHost id execute (fun http received -> task {
             use! created = post http "auth/register" {|
-                username = " PLAYER "; displayName = " e\u0301 "; password = password
+                username = " PLAYER "
+                displayName = " e\u0301 "
+                password = password
             |}
             status 201 created
             let! createdText = created.Content.ReadAsStringAsync()
@@ -176,7 +315,11 @@ let tests = testSequenced (testList "Authentication HTTP" [
                                                      "system", "Fine", "username_not_allowed"
                                                      "steam.76561198000000000", "Fine", "username_not_allowed"
                                                      "player", "B4DW0RD", "display_name_not_allowed" ] do
-                use! response = post http "auth/register" {| username = username; displayName = displayName; password = password |}
+                use! response = post http "auth/register" {|
+                    username = username
+                    displayName = displayName
+                    password = password
+                |}
                 status 400 response
                 let! actual = code response
                 equal expected actual
@@ -233,7 +376,11 @@ let tests = testSequenced (testList "Authentication HTTP" [
     case "a closed registration answers 403 with the code of the mode in force" (fun () -> task {
         for mode, expected in [ RegistrationMode.Manual, "registration_closed"; RegistrationMode.Steam, "registration_steam_only" ] do
             do! withHost id (reply (Error (AccountAccessError.RegistrationClosed mode))) (fun http received -> task {
-                use! response = post http "auth/register" {| username = "player"; displayName = "Player"; password = password |}
+                use! response = post http "auth/register" {|
+                    username = "player"
+                    displayName = "Player"
+                    password = password
+                |}
                 status 403 response
                 let! actual = code response
                 equal expected actual
@@ -244,8 +391,12 @@ let tests = testSequenced (testList "Authentication HTTP" [
 
     case "a banned address answers 403 with the reason and the end, like an account ban" (fun () ->
         let ban : AddressBan = {
-            Id = 1L; Range = AddressRange.parse "127.0.0.0/8" |> ok; Reason = SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
-            IssuedAt = DateTimeOffset.UtcNow; Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L)
+            Id = 1L
+            Range = AddressRange.parse "127.0.0.0/8" |> ok
+            Reason = SanctionReason.create "Рейд" |> ok
+            IssuedBy = ValueNone
+            IssuedAt = DateTimeOffset.UtcNow
+            Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L)
         }
         withHost id (reply (Error (AccountAccessError.AddressBanned ban))) (fun http _ -> task {
             use! response = post http "auth/login" credentials
@@ -265,7 +416,11 @@ let tests = testSequenced (testList "Authentication HTTP" [
             | _ -> failtest "Unexpected command"
         task {
             do! withHost id execute (fun http received -> task {
-                use! accepted = post http "auth/login" {| username = "player"; password = password; device = hash |}
+                use! accepted = post http "auth/login" {|
+                    username = "player"
+                    password = password
+                    device = hash
+                |}
                 status 200 accepted
                 match received.ToArray() with
                 | [| AccountAccessCommand.Login(_, _, origin) |] ->
@@ -273,15 +428,29 @@ let tests = testSequenced (testList "Authentication HTTP" [
                     equal (ValueSome Net.IPAddress.Loopback) origin.Address
                 | other -> failtestf "%A" other
                 for wrong in [ box (hash.ToUpperInvariant()); box "short"; box 42 ] do
-                    use! refused = post http "auth/login" {| username = "player"; password = password; device = wrong |}
+                    use! refused = post http "auth/login" {|
+                        username = "player"
+                        password = password
+                        device = wrong
+                    |}
                     status 400 refused
                 equal 1 received.Count
             })
-            let ban = Sanction.issue (SanctionId.create 3L |> ok) DateTimeOffset.UtcNow
-                          { Target = PlayerId.create 9UL |> ok; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted
-                            Reason = SanctionReason.create "Спам" |> ok; IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok); Devices = true }
+            let ban = Sanction.issue (SanctionId.create 3L |> ok) DateTimeOffset.UtcNow {
+                Target = PlayerId.create 9UL |> ok
+                Kind = SanctionKind.Ban
+                Term = SanctionTerm.UntilLifted
+                Reason = SanctionReason.create "Спам" |> ok
+                IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok)
+                Devices = true
+            }
             do! withHost id (reply (Error (AccountAccessError.DeviceBanned ban))) (fun http _ -> task {
-                use! response = post http "auth/register" {| username = "fresh"; displayName = "Fresh"; password = password; device = hash |}
+                use! response = post http "auth/register" {|
+                    username = "fresh"
+                    displayName = "Fresh"
+                    password = password
+                    device = hash
+                |}
                 status 403 response
                 let! actual = code response
                 equal "device_banned" actual
@@ -291,7 +460,17 @@ let tests = testSequenced (testList "Authentication HTTP" [
     case "Steam sign-in starts a flow with Steam's URL, is polled by the client and is off unless enabled" (fun () -> task {
         let flow, secret = String('f', 43), String('s', 43)
         let steamOn (config: ApplicationConfig) =
-            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779/"; ProxyUrls = [] } } }
+            {
+                config with
+                    Authentication = {
+                        config.Authentication with
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "http://127.0.0.1:8779/"
+                                ProxyUrls = []
+                            }
+                    }
+            }
         let execute command (response: ReplyChannel<_>) =
             match command with
             | AccountAccessCommand.BeginSteam(origin, true) when origin.Address.IsSome -> response.Reply(Ok (AccountAccessResult.SteamStarted(flow, secret, 600)))
@@ -340,17 +519,223 @@ let tests = testSequenced (testList "Authentication HTTP" [
         })
     })
 
+    case "Steam verification categories and optional profile failures retain identity without logging secrets" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            {
+                config with
+                    Authentication = {
+                        config.Authentication with
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "http://127.0.0.1:8779"
+                                ProxyUrls = []
+                            }
+                    }
+            }
+        let unknown id = {
+            SteamId = id
+            PersonaName = ValueNone
+            Created = ValueNone
+        }
+        for failure, expected in [
+            SteamVerifyError.UserCanceled, 200
+            SteamVerifyError.InvalidAnswer, 400
+            SteamVerifyError.NotConfirmed, 400
+            SteamVerifyError.Request (SteamRequestError.HttpStatus 503), 502
+            SteamVerifyError.Request (SteamRequestError.Transport (HttpRequestException("canceled"))), 502
+            SteamVerifyError.Request SteamRequestError.TimedOut, 504
+            SteamVerifyError.Request SteamRequestError.RequestCanceled, 504
+        ] do
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Error failure)
+                Profile = fun id _ -> Task.FromResult (Ok (unknown id))
+            }
+            do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status expected response
+                equal 0 received.Count
+            })
+        let secret = "steam-key-secret-never-log"
+        for failure in [
+            SteamProfileError.Request (SteamRequestError.Transport (HttpRequestException(secret)))
+            SteamProfileError.Request (SteamRequestError.HttpStatus 503)
+            SteamProfileError.Request SteamRequestError.TimedOut
+            SteamProfileError.InvalidResponse SteamProfileFormatError.Json
+            SteamProfileError.InvalidResponse SteamProfileFormatError.Identity
+        ] do
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromResult (Error failure)
+            }
+            do! withHostUsingPorts id logs (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status 200 response
+                match received.ToArray() with
+                | [| AccountAccessCommand.CompleteSteam(_, actual, name) |] ->
+                    equal (unknown steamId) actual
+                    equal "Steam 0042" (DisplayName.value name)
+                | other -> failtestf "%A" other
+                let entries = logs.ToArray()
+                check (entries |> Array.exists (fun entry -> entry.MessageTemplate.Text.Contains "Optional Steam profile unavailable")) "Optional failure has a category diagnostic."
+                check (entries |> Array.forall (fun entry -> not (entry.RenderMessage().Contains secret) && isNull entry.Exception)) "Expected optional failure never logs URL/key/cause text."
+            })
+        for failingVerify in [ true; false ] do
+            let original = InvalidOperationException("unexpected Steam port")
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let steam = {
+                Verify = fun _ _ _ ->
+                    if failingVerify then
+                        Task.FromException<_> original
+                    else
+                        Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromException<_> original
+            }
+            do! withHostUsingPorts id logs (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status 500 response
+                equal 0 received.Count
+                check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Unexpected Steam port fault remains original Kestrel failure."
+            })
+    })
+
+    case "Steam cancellation prevents completion even after an immediate unknown-profile success" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            {
+                config with
+                    Authentication = {
+                        config.Authentication with
+                            Listener = {
+                                config.Authentication.Listener with
+                                    RequestTimeoutSeconds = 1
+                            }
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "http://127.0.0.1:8779"
+                                ProxyUrls = []
+                            }
+                    }
+            }
+        let unknown = {
+            SteamId = steamId
+            PersonaName = ValueNone
+            Created = ValueNone
+        }
+        let steam = {
+            Verify = fun _ _ token -> task {
+                // Deliberately late verified result ignores cancellation; the route
+                // must still guard its next admission, including no-key fast path.
+                let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore)
+                do! canceled.Task.WaitAsync guard
+                return Ok steamId
+            }
+            Profile = fun _ _ -> Task.FromResult (Ok unknown)
+        }
+        do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+            use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+            status 504 response
+            equal 0 received.Count
+        })
+        let entered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let observed = ref None
+        let aborting = {
+            Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+            Profile = fun _ token -> task {
+                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore)
+                entered.TrySetResult() |> ignore
+                do! canceled.Task.WaitAsync guard
+                return Ok unknown
+            }
+        }
+        do! withHostUsing (Some aborting) on (reply signedIn) (fun http received -> task {
+            observed.Value <- Some received
+            use clientAbort = new CancellationTokenSource()
+            let request = http.GetAsync($"auth/steam/return?flow={flow}", clientAbort.Token)
+            do! entered.Task.WaitAsync guard
+            clientAbort.Cancel()
+            let! outcome = terminal request
+            check (outcome |> Option.exists (fun error -> error :? OperationCanceledException)) "Client aborted its HTTP request."
+            do! canceled.Task.WaitAsync guard
+        })
+
+        equal 0 observed.Value.Value.Count
+    })
+
+    case "a small valid display-name limit rejects only the unavailable Steam fallback" (fun () -> task {
+        let flow = String('f', 43)
+        let steamId = 76561198000000042UL
+        let on (config: ApplicationConfig) =
+            {
+                config with
+                    Server = {
+                        config.Server with
+                            ChatInput = {
+                                config.Server.ChatInput with
+                                    DisplayName = 1
+                            }
+                    }
+                    Authentication = {
+                        config.Authentication with
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "http://127.0.0.1:8779"
+                                ProxyUrls = []
+                            }
+                    }
+            }
+        for persona, expected in [ ValueNone, 503; ValueSome "Я", 200 ] do
+            let steam = {
+                Verify = fun _ _ _ -> Task.FromResult (Ok steamId)
+                Profile = fun _ _ -> Task.FromResult (Ok {
+                    SteamId = steamId
+                    PersonaName = persona
+                    Created = ValueNone
+                })
+            }
+            do! withHostUsing (Some steam) on (reply signedIn) (fun http received -> task {
+                use! response = http.GetAsync $"auth/steam/return?flow={flow}"
+                status expected response
+                equal (if expected = 200 then 1 else 0) received.Count
+            })
+    })
+
     case "the browser's return is verified with Steam, named from a clean persona and answered with a page" (fun () -> task {
         let flow = String('f', 43)
         let steamOn (config: ApplicationConfig) =
-            { config with Authentication = { config.Authentication with Steam = { Enabled = true; PublicUrl = "http://127.0.0.1:8779"; ProxyUrls = [] } } }
+            {
+                config with
+                    Authentication = {
+                        config.Authentication with
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "http://127.0.0.1:8779"
+                                ProxyUrls = []
+                            }
+                    }
+            }
         let steamId = 76561198000000042UL
         let persona = ref "Довакин"
         let steam = {
             Verify = fun f fields _ ->
                 let mode = fields |> List.tryFind (fun (key, _) -> key = "openid.mode") |> Option.map snd
-                Task.FromResult(if f = flow && mode = Some "id_res" then Ok steamId elif mode = Some "cancel" then Error "canceled" else Error "bad")
-            Profile = fun id _ -> Task.FromResult { SteamId = id; PersonaName = ValueSome persona.Value; Created = ValueNone }
+                Task.FromResult(
+                    if f = flow && mode = Some "id_res" then
+                        Ok steamId
+                    elif mode = Some "cancel" then
+                        Error SteamVerifyError.UserCanceled
+                    else
+                        Error SteamVerifyError.InvalidAnswer)
+            Profile = fun id _ -> Task.FromResult (Ok {
+                SteamId = id
+                PersonaName = ValueSome persona.Value
+                Created = ValueNone
+            })
         }
         let execute command (response: ReplyChannel<_>) =
             match command with
@@ -382,7 +767,16 @@ let tests = testSequenced (testList "Authentication HTTP" [
     })
 
     case "per-IP rate limit has no waiting queue and ignores spoofed forwarded addresses" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestsPerMinute = 1 } } }
+        let limit config = {
+            config with
+                Authentication = {
+                    config.Authentication with
+                        Listener = {
+                            config.Authentication.Listener with
+                                RequestsPerMinute = 1
+                        }
+                }
+        }
         withHost limit (reply signedIn) (fun http received -> task {
             use! first = post http "auth/login" credentials
             status 200 first
@@ -414,10 +808,18 @@ let tests = testSequenced (testList "Authentication HTTP" [
         equal (ValueSome "127.0.0.1", ValueNone) (resolve false proxies "127.0.0.1" [ "192.0.2.1" ])
 
         let throughProxy config =
-            { config with Proxies = { Trusted = [ "127.0.0.1" ] }
-                          Authentication = { config.Authentication with
-                                                 Steam = { Enabled = true; PublicUrl = "https://auth.example.org"
-                                                           ProxyUrls = [ "https://proxy.example.org" ] } } }
+            {
+                config with
+                    Proxies = { Trusted = [ "127.0.0.1" ] }
+                    Authentication = {
+                        config.Authentication with
+                            Steam = {
+                                Enabled = true
+                                PublicUrl = "https://auth.example.org"
+                                ProxyUrls = [ "https://proxy.example.org" ]
+                            }
+                    }
+            }
         let execute command (response: ReplyChannel<_>) =
             match command with
             | AccountAccessCommand.BeginSteam _ -> response.Reply (Ok (AccountAccessResult.SteamStarted(String('f', 43), String('s', 43), 300)))
@@ -451,7 +853,16 @@ let tests = testSequenced (testList "Authentication HTTP" [
         }))
 
     case "request deadline includes a client that never finishes its HTTP body" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestTimeoutSeconds = 1 } } }
+        let limit config = {
+            config with
+                Authentication = {
+                    config.Authentication with
+                        Listener = {
+                            config.Authentication.Listener with
+                                RequestTimeoutSeconds = 1
+                        }
+                }
+        }
         withHost limit (reply signedIn) (fun http received -> task {
             use client = new TcpClient()
             do! client.ConnectAsync(http.BaseAddress.Host, http.BaseAddress.Port)
@@ -466,7 +877,16 @@ let tests = testSequenced (testList "Authentication HTTP" [
         }))
 
     case "HTTP timeout completes without stopping the authentication dependency" (fun () ->
-        let limit config = { config with Authentication = { config.Authentication with Listener = { config.Authentication.Listener with RequestTimeoutSeconds = 1 } } }
+        let limit config = {
+            config with
+                Authentication = {
+                    config.Authentication with
+                        Listener = {
+                            config.Authentication.Listener with
+                                RequestTimeoutSeconds = 1
+                        }
+                }
+        }
         withHost limit (fun _ _ -> ()) (fun http received -> task {
             use! response = post http "auth/login" credentials
             status 503 response

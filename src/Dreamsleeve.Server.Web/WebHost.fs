@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Web
 
 open System
 open System.Net
+open System.IO
 open System.Threading
 open System.Threading.Tasks
 open System.Threading.RateLimiting
@@ -64,7 +65,10 @@ module Forwarding =
             | (ValueSome _ | ValueNone) :: _ | [] ->
                 // A proxy that names no client leaves the client unknown.
                 let client = if isProxy current then ValueNone else ValueSome current
-                { Client = client; Proxy = proxy }
+                {
+                    Client = client
+                    Proxy = proxy
+                }
         walk (plain peer) ValueNone hops
 
 
@@ -89,7 +93,12 @@ module WebHost =
 
     /// The one error shape of both hosts: {code, message}.
     let error (status: int) (code: string) (message: string) : IResult =
-        Results.Json({| code = code; message = message |}, statusCode = status)
+        Results.Json(
+            {|
+                code = code
+                message = message
+            |},
+            statusCode = status)
 
     let write (context: HttpContext) (result: IResult) = result.ExecuteAsync context
 
@@ -104,7 +113,10 @@ module WebHost =
         | true, (:? ForwardedClient as value) -> value
         | true, _ | false, _ ->
             let remote = context.Connection.RemoteIpAddress
-            { Client = (if isNull remote then ValueNone else ValueSome remote); Proxy = ValueNone }
+            {
+                Client = (if isNull remote then ValueNone else ValueSome remote)
+                Proxy = ValueNone
+            }
 
     // Trusted hops speak for the client: the connection takes its address
     // (rate limits, sign-in history and bans follow the player) and the scheme
@@ -137,6 +149,24 @@ module WebHost =
     type BodyError =
         | UnsupportedType
         | TooLarge
+        | BadRequest
+        | CallerCanceled
+        | Deadline
+        | Io of IOException
+
+    // Only the request-stream dependency is adapted. Unknown exceptions leave
+    // the request lifetime and remain Kestrel failures.
+    let private readChunk (context: HttpContext) (buffer: Memory<byte>) (token: CancellationToken) = task {
+        try
+            let! received = context.Request.Body.ReadAsync(buffer, token)
+            return Ok received
+        with
+        | :? OperationCanceledException when context.RequestAborted.IsCancellationRequested -> return Error BodyError.CallerCanceled
+        | :? OperationCanceledException when token.IsCancellationRequested -> return Error BodyError.Deadline
+        | :? Microsoft.AspNetCore.Http.BadHttpRequestException as error ->
+            return Error (if error.StatusCode = 413 then BodyError.TooLarge else BodyError.BadRequest)
+        | :? IOException as error -> return Error (BodyError.Io error)
+    }
 
     /// Reads at most maxBytes; a larger declared or chunked body is refused.
     let readBody (context: HttpContext) maxBytes (token: CancellationToken) = task {
@@ -147,12 +177,17 @@ module WebHost =
             let bytes = Array.zeroCreate<byte> (maxBytes + 1)
             let mutable count = 0
             let mutable ended = false
-            while not ended && count < bytes.Length do
-                let! received = context.Request.Body.ReadAsync(bytes.AsMemory(count), token)
-                if received = 0 then ended <- true
-                else count <- count + received
-            if count > maxBytes then return Error BodyError.TooLarge
-            else return Ok (ReadOnlyMemory<byte>(bytes, 0, count))
+            let mutable failure = None
+            while not ended && failure.IsNone && count < bytes.Length do
+                match! readChunk context (bytes.AsMemory(count)) token with
+                | Error error -> failure <- Some error
+                | Ok 0 -> ended <- true
+                | Ok received -> count <- count + received
+
+            match failure with
+            | Some error -> return Error error
+            | None when count > maxBytes -> return Error BodyError.TooLarge
+            | None -> return Ok (ReadOnlyMemory<byte>(bytes, 0, count))
     }
 
     /// Browsers get no inline script or style, no framing and no referrer; the
@@ -205,6 +240,7 @@ module WebHost =
         builder.Host.UseSerilog(logger, dispose = false) |> ignore
         builder.WebHost.ConfigureKestrel(Action<KestrelServerOptions>(configureServer listener limits)) |> ignore
         builder.Services.AddRateLimiter(Action<RateLimiterOptions>(configureRate rule rejected)) |> ignore
+
         let app = builder.Build()
         if listener.TrustForwardedHeaders || not listener.TrustedProxies.IsEmpty then
             // Only a proxy on this machine or a proxy of the server may speak for the client.

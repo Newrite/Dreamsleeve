@@ -9,10 +9,12 @@
         <Compile Include="Logging.fs" />
         <Compile Include="Configuration.fs" />
         <Compile Include="WebPorts.fs" />
+        <Compile Include="ServiceLifetime.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="Dreamsleeve.Server.Tests" />
         <PackageReference Include="Tomlyn" Version="2.10.1" />
       <ProjectReference Include="..\Dreamsleeve.Server.Core\Dreamsleeve.Server.Core.fsproj" />
       <ProjectReference Include="..\Dreamsleeve.Server.Infrastructure\Dreamsleeve.Server.Infrastructure.fsproj" />

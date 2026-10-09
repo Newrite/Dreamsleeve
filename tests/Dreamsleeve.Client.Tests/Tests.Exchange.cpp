@@ -62,8 +62,10 @@ TEST_CASE("Command admission reports full and closed without losing admitted FIF
         1,
         SendChat{3, 1, "Third"}
   }) == CommandPostResult::Full);
+
   exchange->CloseInput();
   CHECK(exchange->Post({1, RequestSnapshot{}}) == CommandPostResult::Closed);
+
   std::vector<QueuedClientCommand> commands;
   CHECK(exchange->TakeCommands(commands));
   REQUIRE(commands.size() == 2);
@@ -91,6 +93,7 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
   exchange->Drain(output);
   CHECK(output.state.updates.empty());
   REQUIRE(model.FindChatState(1)->count == 1);
+
   Receive(model, 2);
   REQUIRE(exchange->Publish(model));
   exchange->Drain(output);
@@ -101,6 +104,7 @@ TEST_CASE("Posting chat does not mutate history and accepted messages are delive
   const auto& messages = std::get<ChatMessagesAdded>(delta.chatContent[0]).messages;
   REQUIRE(messages.size() == 1);
   CHECK(messages[0].messageId == 2);  // No copy of existing history in the payload.
+
   model.ResetSession();
   REQUIRE(exchange->Publish(model));
   CHECK(messages[0].messageId == 2);  // Already drained data is independent.
@@ -183,8 +187,11 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
 {
   auto              exchange = Exchange();
   std::barrier      phase{2};
-  bool              applied{}, accepted{}, exhausted{};
-  ClientOutput      initial, final;
+  bool              applied{};
+  bool              accepted{};
+  bool              exhausted{};
+  ClientOutput      initial;
+  ClientOutput      final;
   CommandPostResult posted{};
   {
     std::jthread owner{[&] {
@@ -222,6 +229,7 @@ TEST_CASE("Owner receives commands and publishes final output before joined shut
     exchange->CloseInput();
     phase.arrive_and_wait();
   }
+
   exchange->Drain(final);
   CHECK(posted == CommandPostResult::Queued);
   CHECK(applied);

@@ -47,7 +47,15 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     if (!source.has_game_date()) return std::optional<Domain::GameDate>{};
     const auto&            date = source.game_date();
-    const Domain::GameDate value{date.era(), date.year(), date.month(), date.day(), date.day_of_week(), date.hour(), date.minute()};
+    const Domain::GameDate value{
+        date.era(),
+        date.year(),
+        date.month(),
+        date.day(),
+        date.day_of_week(),
+        date.hour(),
+        date.minute()
+    };
     if (!ValidGameDate(value)) return Invalid("game_date");
     return std::optional{value};
   }
@@ -67,6 +75,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (source.kind() == P::GROUND_MARK_KIND_UNSPECIFIED) return Invalid("kind");
     if (source.kind() == P::GROUND_MARK_KIND_NOTE && source.text().empty()) return Invalid("text");
     if (!ValidUnixMs(source.created_at_unix_ms())) return Invalid("created_at_unix_ms");
+
     auto author = Profile(source.author());
     if (!author) return std::unexpected{author.error()};
     auto placement = ReadPlacement(source.placement());
@@ -75,6 +84,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (!flagged) return std::unexpected{flagged.error()};
     auto gameDate = ReadGameDate(source);
     if (!gameDate) return std::unexpected{gameDate.error()};
+
     return Domain::GroundMark{
         source.mark_id(),
         std::move(*author),
@@ -92,6 +102,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     if (source.view_revision() == 0) return Invalid("view_revision");
     if (!source.clear() && source.added().empty() && source.removed_ids().empty()) return Invalid("ground_marks_changed");
+
     GroundMarksChanged result{source.view_revision(), {}, {}, source.clear()};
     result.added.reserve(static_cast<std::size_t>(source.added_size()));
     for (const auto& value : source.added())
@@ -100,6 +111,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!mark) return std::unexpected{mark.error()};
       result.added.push_back(std::move(*mark));
     }
+
     for (const auto id : source.removed_ids())
     {
       if (id == Domain::InvalidId) return Invalid("removed_ids");

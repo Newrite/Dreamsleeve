@@ -306,7 +306,10 @@ export function makeChat(send: Send, now = () => Date.now()) {
           break;
         }
         const shown = new Set(event.messages.map(keyOf));
-        // A new session: its guilds come after the snapshot.
+        // A new session: old removal replies cannot settle its operations.
+        removals.clear();
+        moderator.reset();
+        // Its guilds come after the snapshot.
         guilds.reset();
         store.setState({
           channels,

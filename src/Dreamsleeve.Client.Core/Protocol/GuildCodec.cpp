@@ -121,7 +121,12 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (static_cast<std::size_t>(source.recent_messages_size()) > config.maxRecentMessages) return Invalid("initial_count");
 
       GuildOpened result{
-          {guildId, source.name(), source.channel_id(), source.created_at_unix_ms()}
+          {
+              guildId,
+              source.name(),
+              source.channel_id(),
+              source.created_at_unix_ms()
+          }
       };
       for (const auto& value : source.members())
       {
@@ -129,6 +134,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!member) return std::unexpected{member.error()};
         result.guild.members.push_back(std::move(*member));
       }
+
       for (const auto& value : source.recent_messages())
       {
         auto message = Message(value);
@@ -144,7 +150,12 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (source.guild_name().empty()) return Invalid("guild_name");
       if (source.invited_by_player_id() == Domain::InvalidId) return Invalid("invited_by_player_id");
       if (!ValidUnixMs(source.expires_at_unix_ms())) return Invalid("expires_at_unix_ms");
-      return Domain::GuildInvite{source.guild_id(), source.guild_name(), source.invited_by_player_id(), source.expires_at_unix_ms()};
+      return Domain::GuildInvite{
+          source.guild_id(),
+          source.guild_name(),
+          source.invited_by_player_id(),
+          source.expires_at_unix_ms()
+      };
     }
 
   }
@@ -157,11 +168,17 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<GuildsSnapshot> ReadGuilds(const Configuration& config, const P::GuildsSnapshot& source)
   {
     if (!source.has_limits()) return Invalid("limits");
+
     const auto&    limits = source.limits();
     GuildsSnapshot result{
         {},
         {},
-        {limits.max_guilds_per_player(), limits.max_members(), limits.name_min_length(), limits.name_max_length()}
+        {
+            limits.max_guilds_per_player(),
+            limits.max_members(),
+            limits.name_min_length(),
+            limits.name_max_length()
+        }
     };
     for (const auto& value : source.guilds())
     {
@@ -169,6 +186,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!guild) return std::unexpected{guild.error()};
       result.guilds.push_back(std::move(*guild));
     }
+
     for (const auto& value : source.invites())
     {
       auto invite = Invite(value);

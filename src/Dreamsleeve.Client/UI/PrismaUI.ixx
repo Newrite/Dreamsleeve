@@ -229,24 +229,29 @@ namespace PrismaUI
       logger::warn("UI command rejected: {}", command.error());
       return;
     }
+
     auto& runtime = Runtime::Get();
     if (!runtime.app) return;
+
     Dreamsleeve::Host::CommandContext context{
         .exchange         = runtime.app->Exchange(),
         .session          = runtime.session,
         .ui               = runtime.ui,
         .bubbles          = runtime.bubbles,
         .manualDisconnect = runtime.manualDisconnect,
-        .ports = {
-                  .saveUi        = Runtime::SaveUi,
-                  .close         = Deactivate,
-                  .activationKey = Events::SetActivationKey,
-                  .noteSpot      = World::Spot,
-                  .copyText      = Dreamsleeve::Utils::Clipboard::Copy}
+        .ports            = {
+                             .saveUi        = Runtime::SaveUi,
+                             .close         = Deactivate,
+                             .activationKey = Events::SetActivationKey,
+                             .noteSpot      = World::Spot,
+                             .copyText      = Dreamsleeve::Utils::Clipboard::Copy
+        }
     };
+
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)
       logger::warn("{}", note);
+
     Dispatch(output.events);
   }
 

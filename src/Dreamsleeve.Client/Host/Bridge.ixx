@@ -40,7 +40,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::to_array<std::string_view>({"disconnected", "authenticating", "connecting", "opening", "connected", "disconnecting", "faulted"});
   constexpr auto OperationNames =
     std::to_array<std::string_view>({"none", "passwordLogin", "resume", "signOut", "forgetSavedLogin", "resetPassword", "steamLogin"});
-  constexpr auto FailureNames     = std::to_array<std::string_view>({
+  constexpr auto FailureNames = std::to_array<std::string_view>({
       "none",
       "invalidCredentials",
       "usernameTaken",
@@ -59,11 +59,13 @@ export namespace Dreamsleeve::Host::Bridge
       "steamExpired",
       "unreachable",
   });
+
   // Auth::RegistrationMode from GET /auth/methods.
   constexpr auto RegistrationNames = std::to_array<std::string_view>({"unknown", "open", "steam", "manual"});
-  constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
-  constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
-  constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
+  constexpr auto OriginNames       = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
+  constexpr auto KindNames         = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
+  constexpr auto MarkKindNames     = std::to_array<std::string_view>({"note", "death"});
+
   // Domain::ChatChannelKind from Global; the numbers have gaps, the names follow the enumerators.
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "guild", "system"});
   // Domain::SessionEndReason from AccessRevoked.
@@ -285,8 +287,7 @@ export namespace Dreamsleeve::Host::Bridge
 
     // The page of the Steam sign-in in progress onto the clipboard.
     struct CopySteamLink
-    {
-    };
+    {};
 
     // A guild request: action is GuildActionNames and decides which values
     // count (role: member or officer; no minutes: until lifted). The server
@@ -400,6 +401,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::string                              username;
     std::optional<std::string>               character;
     bool                                     inCharacter{};
+
     std::optional<std::uint32_t>             level;
     std::optional<std::string>               location;
     std::optional<std::string>               zone;
@@ -407,11 +409,13 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::string>               nearbyMarker;
     std::optional<std::string>               markerKind;
     std::optional<bool>                      interior;
+
     std::optional<std::string>               activity;
     std::optional<std::string>               activityTarget;
     std::optional<std::string>               lockDifficulty;
     std::optional<std::string>               menu;
     std::optional<std::int64_t>              gameStartedAt;
+
     std::optional<std::vector<UiActorValue>> actorValues;
     bool                                     pseudonymous{};
   };
@@ -1299,7 +1303,11 @@ export namespace Dreamsleeve::Host::Bridge
     if (action == "leave") return Client::LeaveGuild{guild};
     if (action == "exclude") return Client::ExcludeGuildMember{guild, player};
     if (action == "setRole")
-      return Client::SetGuildRole{guild, player, command.role == GuildRoleNames[1] ? Domain::GuildRole::Officer : Domain::GuildRole::Member};
+      return Client::SetGuildRole{
+          guild,
+          player,
+          command.role == GuildRoleNames[1] ? Domain::GuildRole::Officer : Domain::GuildRole::Member
+      };
     if (action == "transfer") return Client::TransferGuild{guild, player};
     if (action == "mute") return Client::MuteGuildMember{guild, player, command.minutes, std::move(command.reason)};
     if (action == "unmute") return Client::UnmuteGuildMember{guild, player};
@@ -1331,6 +1339,7 @@ export namespace Dreamsleeve::Host::Bridge
   {
     auto player =
       ToUiAuthor(source.data, source.characterName, source.characterName.has_value() || source.characterNameWithheld, names, settings);
+
     const auto& details = source.details;
     player.level        = details.level;
     if (details.race) player.race = Text(details.race->name);
@@ -1364,9 +1373,11 @@ export namespace Dreamsleeve::Host::Bridge
           value.value = static_cast<double>(std::get<Domain::ScalarActorValue>(info.state).value);
         values.push_back(std::move(value));
       }
+
       std::ranges::sort(values, {}, &UiActorValue::key);
       player.actorValues = std::move(values);
     }
+
     return player;
   }
 
@@ -1523,10 +1534,11 @@ export namespace Dreamsleeve::Host::Bridge
     event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = ShownUsername(status, streamerMode);
-    event.registration   = NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
-    event.steam          = status.methods.steam;
-    event.browserFailed  = !status.steamBrowserError.empty();
-    event.phase          = PhaseName(status);
+    event.registration =
+      NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
+    event.steam         = status.methods.steam;
+    event.browserFailed = !status.steamBrowserError.empty();
+    event.phase         = PhaseName(status);
     return event;
   }
 
@@ -1657,8 +1669,9 @@ export namespace Dreamsleeve::Host::Bridge
         // "The name color can be changed again in N s."
         constexpr std::string_view prefix = "The name color can be changed again in ";
         std::uint64_t              seconds{};
-        if (message.starts_with(prefix) &&
-            std::from_chars(message.data() + prefix.size(), message.data() + message.size(), seconds).ec == std::errc{} && seconds > 0)
+        if (
+          message.starts_with(prefix) &&
+          std::from_chars(message.data() + prefix.size(), message.data() + message.size(), seconds).ec == std::errc{} && seconds > 0)
           return std::format("Цвет можно сменить снова через {} с", seconds);
         return "Цвет меняли только что. Попробуйте чуть позже";
       }

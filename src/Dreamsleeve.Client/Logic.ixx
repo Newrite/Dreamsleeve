@@ -10,6 +10,7 @@ import Dreamsleeve.PrismaUI;
 import Dreamsleeve.Game.Telemetry;
 import Dreamsleeve.Game.Fireflies;
 import Dreamsleeve.Game.GroundMarks;
+import Dreamsleeve.Game.Phantoms;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
@@ -64,12 +65,17 @@ namespace Logic
   void LeavePlaying(Runtime::GameContext next)
   {
     auto& runtime = Runtime::Get();
+    // Each context needs a fresh readiness window, even if the whole load
+    // completes between frames and no not-ready observation reaches the hook.
+    Get().readySince = {};
     if (runtime.context == Runtime::GameContext::Playing)
     {
       Telemetry::EndContext();
       logger::info("Character context ended");
     }
     Fireflies::ClearAll();
+    Phantoms::Clear(next == Runtime::GameContext::Loading ? "save-load" : "left-game");
+    runtime.bubbles.Clear();
     GroundMarks::EndContext();
     Nameplates::Publish({});
     Nameplates::Release();
@@ -127,13 +133,31 @@ namespace Logic
         runtime.manualDisconnect = true;
         runtime.app->Disconnect();
         break;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      case Runtime::NoticeKind::PhantomRecordingStart:
+        Phantoms::StartRecording(notice.formId, notice.flag);
+        break;
+      case Runtime::NoticeKind::PhantomReplayStart:
+        Phantoms::StartReplay(notice.formId);
+        break;
+      case Runtime::NoticeKind::PhantomReplayStop:
+        Dreamsleeve::Game::PhantomReplay::Stop();
+        break;
+      case Runtime::NoticeKind::PhantomRecordingStop:
+        Dreamsleeve::Client::Diagnostics::Phantoms().Stop();
+        break;
+#endif
     }
   }
 
   void HandleNotices()
   {
     auto& state = Get();
-    if (Runtime::Take(state.notices)) PrismaUI::RecomputeMenus();
+    if (Runtime::Take(state.notices))
+    {
+      logger::warn("Realtime game notices were dropped because the notice inbox was full");
+      PrismaUI::RecomputeMenus();
+    }
     for (const auto& notice : state.notices)
       Handle(notice);
   }
@@ -228,6 +252,7 @@ namespace Logic
       frame);
     for (const auto& note : frame.notes)
       logger::warn("{}", note);
+
     // The server confirmed a switch of "hide my name": the next session opens so too.
     if (frame.hideIdentity && *frame.hideIdentity != Dreamsleeve::Host::Bridge::HidingOf(runtime.ui.ui.hideIdentity))
     {
@@ -235,6 +260,7 @@ namespace Logic
       runtime.app->Exchange().SetHideIdentity(*frame.hideIdentity);
       if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
     }
+
     // Chosen automatically, the route that answered is where the next start begins.
     if (const auto& status = state.output.status; status.routeReached && runtime.ui.ui.route.empty())
     {
@@ -246,12 +272,14 @@ namespace Logic
         if (auto saved = Runtime::SaveUi(); !saved) logger::warn("{}", saved.error());
       }
     }
+
     // Reconnecting would be refused again until the player turns the choice off.
     if (frame.identityRefused)
     {
       runtime.manualDisconnect = true;
       logger::warn("The server does not allow hidden names; automatic reconnect stopped");
     }
+
     // A moderator or an administrator ended the session: coming straight back
     // would undo a kick, and a ban refuses it anyway. The player signs in again by hand.
     if (
@@ -261,7 +289,9 @@ namespace Logic
       runtime.manualDisconnect = true;
       logger::info("The server ended the session; automatic reconnect stopped");
     }
+
     PrismaUI::Dispatch(frame.events);
+
     // New pseudonyms are batched: at most one ui.toml write per interval.
     if (now >= state.nextNamesSave && runtime.session.PlayerNames().TakeDirty())
     {
@@ -298,7 +328,10 @@ namespace Logic
   // and a pause or hidden HUD drops them together.
   void PublishNameplates(Clock::time_point now)
   {
+    auto& runtime = Runtime::Get();
+    runtime.bubbles.Prune(now, runtime.ui.ui.chat, [&](Domain::PlayerId id) { return runtime.session.OnlinePlayers().contains(id); });
     Nameplates::Frame names;
+    Phantoms::Tick(now, names);
     Fireflies::Tick(now, names);
     GroundMarks::Tick(now, names);
     auto* menus = RE::UI::GetSingleton();
@@ -311,14 +344,27 @@ namespace Logic
     auto&                 runtime = Runtime::Get();
     auto&                 status  = Get().output.status;
     Runtime::MenuSnapshot snapshot;
-    snapshot.phase          = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
-    snapshot.serverName     = status.serverName;
-    snapshot.savedUsername  = Dreamsleeve::Host::Bridge::ShownUsername(status, runtime.ui.ui.chat.streamerMode);
-    snapshot.error          = status.error;
-    snapshot.activationKey  = runtime.ui.ui.chat.activationKey;
-    snapshot.online         = runtime.session.OnlinePlayers().size();
-    snapshot.fireflies      = Fireflies::Count();
-    snapshot.groundMarks    = GroundMarks::Count();
+    snapshot.phase             = std::string{Dreamsleeve::Host::Bridge::PhaseName(status)};
+    snapshot.serverName        = status.serverName;
+    snapshot.savedUsername     = Dreamsleeve::Host::Bridge::ShownUsername(status, runtime.ui.ui.chat.streamerMode);
+    snapshot.error             = status.error;
+    snapshot.activationKey     = runtime.ui.ui.chat.activationKey;
+    snapshot.online            = runtime.session.OnlinePlayers().size();
+    snapshot.fireflies         = Fireflies::Count();
+    snapshot.groundMarks       = GroundMarks::Count();
+    snapshot.phantoms          = Phantoms::Count();
+    const auto phantom         = runtime.app->Exchange().Phantoms().Stats();
+    snapshot.phantomModels     = phantom.modelBytes;
+    snapshot.phantomPoses      = phantom.poseBytes;
+    snapshot.phantomRejected   = phantom.rejected;
+    snapshot.phantomDropped    = phantom.dropped;
+    snapshot.phantomCacheHits  = phantom.cacheHits;
+    snapshot.phantomSampleRate = phantom.sampleRate;
+    snapshot.phantomError      = phantom.error;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    snapshot.recording = Dreamsleeve::Client::Diagnostics::Phantoms().Read();
+    snapshot.replay    = Dreamsleeve::Game::PhantomReplay::Read();
+#endif
     snapshot.savedLogin     = status.savedLogin;
     snapshot.authenticating = status.authenticating;
     snapshot.hideUi         = runtime.ui.ui.hideUi;
@@ -336,6 +382,10 @@ namespace Logic
       LeavePlaying(Runtime::GameContext::MainMenu);
       Nameplates::Shutdown();  // GFx objects go before the engine tears Scaleform down.
       Runtime::Shutdown();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      Dreamsleeve::Client::Diagnostics::Phantoms().Shutdown();
+      Dreamsleeve::Game::PhantomReplay::Shutdown();
+#endif
       return;
     }
 

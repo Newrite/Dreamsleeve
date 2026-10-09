@@ -11,16 +11,26 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let ok = function Ok value -> value | Error error -> failwithf "%A" error
+let ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let username value = Username.create 32 value |> ok
 let display = DisplayName.create 64 "Player" |> ok
-let start capacity = MemoryProfileStore.start { MailboxCapacity = capacity; MaxPendingReplies = 4 } |> ok
+let start capacity =
+    MemoryProfileStore.start
+        { MailboxCapacity = capacity
+          MaxPendingReplies = 4 }
+    |> ok
+
 let request command (reply: AgentRef<ProfileReply>) : ProfileRequest =
     let reliable =
         reply.TryReliable()
         |> Option.defaultWith (fun () -> failwith "Test reply mailbox must be non-dropping.")
 
-    { OperationId = Guid.NewGuid(); Command = command; ReplyTo = reliable }
+    { OperationId = Guid.NewGuid()
+      Command = command
+      ReplyTo = reliable }
 
 let collect (output: Channel<ProfileReply>) (_: AgentContext<ProfileReply>) reply = task {
     check (output.Writer.TryWrite reply) "Test reply channel closed."
@@ -56,7 +66,7 @@ let slowReceiver (received: TaskCompletionSource<ProfileReply>) (_: AgentContext
 let tests = testList "Profiles" [
     case "concurrent get-or-create requests resolve to one profile" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "replies", collect output)
         use profiles = start 4
         let requests = [|
             for index in 0..31 ->
@@ -95,7 +105,7 @@ let tests = testList "Profiles" [
 
     case "get-or-create preserves an existing profile and its identity" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "replies", collect output)
         use profiles = start 2
         let name = username "player"
         do! send profiles (request (ProfileCommand.Create(name, display)) receiver.Ref)
@@ -124,7 +134,7 @@ let tests = testList "Profiles" [
 
     case "concurrent senders reserve a canonical username exactly once" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "replies", collect output)
         use profiles = start 4
         let requests = [|
             for index in 0..31 ->
@@ -143,18 +153,22 @@ let tests = testList "Profiles" [
 
         equal (requests |> Array.map _.OperationId |> Set.ofArray) (replies |> Seq.map _.OperationId |> Set.ofSeq)
         let created = replies |> Seq.choose (fun reply ->
-            match reply.Result with Ok (ProfileOutcome.Created player) -> Some player | _ -> None) |> Seq.toList
+            match reply.Result with
+            | Ok (ProfileOutcome.Created player) -> Some player
+            | _ -> None) |> Seq.toList
         equal 1 created.Length
         equal (username "user") created.Head.Username
         equal 31 (replies |> Seq.filter (fun reply ->
-            match reply.Result with Error ProfileStoreError.UsernameTaken -> true | _ -> false) |> Seq.length)
+            match reply.Result with
+            | Error ProfileStoreError.UsernameTaken -> true
+            | _ -> false) |> Seq.length)
 
         do! stop receiver
     })
 
     case "different profiles receive distinct stable IDs" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "replies", collect output)
         use profiles = start 2
         do! send profiles (request (ProfileCommand.Create(username "one", display)) receiver.Ref)
         do! send profiles (request (ProfileCommand.Create(username "two", display)) receiver.Ref)
@@ -178,7 +192,7 @@ let tests = testList "Profiles" [
 
     case "unknown username returns absence without creating a profile" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use receiver = Agent.Start(AgentOptions.create "replies", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "replies", collect output)
         use profiles = start 2
         do! send profiles (request (ProfileCommand.FindByUsername(username "missing")) receiver.Ref)
         let! absent = receive output
@@ -198,8 +212,8 @@ let tests = testList "Profiles" [
 
     case "profiles outlive individual consumers" (fun () -> task {
         let firstOutput, secondOutput = Channel.CreateUnbounded<ProfileReply>(), Channel.CreateUnbounded<ProfileReply>()
-        use first = Agent.Start(AgentOptions.create "first-session", collect firstOutput)
-        use second = Agent.Start(AgentOptions.create "next-session", collect secondOutput)
+        use first = TestAgent.Start(AgentOptions.create "first-session", collect firstOutput)
+        use second = TestAgent.Start(AgentOptions.create "next-session", collect secondOutput)
         use profiles = start 2
         do! send profiles (request (ProfileCommand.Create(username "player", display)) first.Ref)
         let! created = receive firstOutput
@@ -217,9 +231,9 @@ let tests = testList "Profiles" [
 
     case "closed reply target does not roll back an accepted write" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
-        use closed = Agent.Start(AgentOptions.create "closed", collect output)
+        use closed = TestAgent.Start(AgentOptions.create "closed", collect output)
         do! stop closed
-        use receiver = Agent.Start(AgentOptions.create "live", collect output)
+        use receiver = TestAgent.Start(AgentOptions.create "live", collect output)
         use profiles = start 2
         do! send profiles (request (ProfileCommand.Create(username "stored", display)) closed.Ref)
         do! send profiles (request (ProfileCommand.FindByUsername(username "stored")) receiver.Ref)
@@ -234,39 +248,52 @@ let tests = testList "Profiles" [
 
     case "a slow reply target does not delay another caller" (fun () -> task {
         let entered, release, received = gate<unit>(), gate<unit>(), gate<ProfileReply>()
-        use slow = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
+        use slow = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
         slow.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         slow.TryPost Filler |> ignore
         let replies = Channel.CreateUnbounded<ProfileReply>()
-        use fast = Agent.Start(AgentOptions.create "fast", collect replies)
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 2 } |> ok
+        use fast = TestAgent.Start(AgentOptions.create "fast", collect replies)
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 2
+                  MaxPendingReplies = 2 }
+            |> ok
         let create = request (ProfileCommand.Create(username "stored", display)) (slow.Ref.Map Reply)
         let lookup = request (ProfileCommand.FindByUsername(username "stored")) fast.Ref
+
         do! send profiles create
         do! send profiles lookup
         let! found = receive replies
+
         equal lookup.OperationId found.OperationId
         match found.Result with
         | Ok (ProfileOutcome.Found(Some profile)) -> equal (username "stored") profile.Username
         | other -> failwithf "The later query did not observe the write: %A" other
+
         profiles.Complete() |> ignore
         check (not profiles.Completion.IsCompleted) "Completion skipped the slow reply."
+
         release.SetResult()
         do! awaitUnit profiles.Completion
         let! saved = awaitResult received.Task
         equal create.OperationId saved.OperationId
+
         do! stop slow
         do! stop fast
     })
 
     case "mailbox bounds queued requests and completion drains them" (fun () -> task {
         let entered, release, received = gate<unit>(), gate<unit>(), gate<ProfileReply>()
-        use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
+        use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         equal AgentPostResult.Posted (receiver.TryPost Filler)
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 1
+                  MaxPendingReplies = 1 }
+            |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
@@ -293,11 +320,15 @@ let tests = testList "Profiles" [
 
     case "abort interrupts waiting for a full reply mailbox" (fun () -> task {
         let entered, release, received = gate<unit>(), gate<unit>(), gate<ProfileReply>()
-        use receiver = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
+        use receiver = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), slowReceiver received)
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         receiver.TryPost Filler |> ignore
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 1
+                  MaxPendingReplies = 1 }
+            |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
@@ -313,7 +344,7 @@ let tests = testList "Profiles" [
     case "dropping mailboxes cannot supply a profile reply address" (fun () -> task {
         let output = Channel.CreateUnbounded<ProfileReply>()
         for mode in [BoundedChannelFullMode.DropWrite; BoundedChannelFullMode.DropOldest; BoundedChannelFullMode.DropNewest] do
-            use receiver = Agent.Start(options "drop" (AgentMailbox.bounded 1 mode), collect output)
+            use receiver = TestAgent.Start(options "drop" (AgentMailbox.bounded 1 mode), collect output)
             check (receiver.Ref.TryReliable().IsNone) "Dropping reply address was accepted."
             check ((receiver.Ref.Map id).TryReliable().IsNone) "Mapping lost the mailbox policy."
             check receiver.IsAcceptingMessages "Checking reply policy must not crash the recipient."

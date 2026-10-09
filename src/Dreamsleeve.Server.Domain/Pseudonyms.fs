@@ -30,7 +30,11 @@ module PseudonymDictionary =
             |> Seq.filter (fun name -> seen.Add(key (Pseudonym.value name)))
             |> Seq.truncate MaxEntries
             |> Array.ofSeq
-        if names.Length = 0 then ValueNone else ValueSome { names = names }
+
+        if names.Length = 0 then
+            ValueNone
+        else
+            ValueSome { names = names }
 
     /// The 24 names of the client's built-in aliases.toml, in the same order.
     let builtIn =
@@ -56,7 +60,10 @@ type PseudonymBook =
 
 [<RequireQualifiedAccess>]
 module PseudonymBook =
-    let create dictionary : PseudonymBook = { dictionary = dictionary; players = Dictionary() }
+    let create dictionary : PseudonymBook = {
+        dictionary = dictionary
+        players = Dictionary()
+    }
 
     let private realNames (profile: PlayerData) =
         [ Username.value profile.Username; DisplayName.value profile.DisplayName ]
@@ -78,13 +85,19 @@ module PseudonymBook =
     let private choose (pick: int -> int) (profile: PlayerData) (book: PseudonymBook) : Pseudonym =
         let names = book.dictionary.names
         let chosen = names[(pick names.Length % names.Length + names.Length) % names.Length]
+
         let used = HashSet<string>(realNames profile |> List.map PseudonymDictionary.key)
+
         for entry in book.players do
             if entry.Key <> profile.PlayerId then
-                for name in shownNames entry.Value do used.Add(PseudonymDictionary.key name) |> ignore
+                for name in shownNames entry.Value do
+                    used.Add(PseudonymDictionary.key name) |> ignore
+
         let mutable number = 1
+
         while used.Contains(PseudonymDictionary.key (Pseudonym.value (Pseudonym.numbered number chosen))) do
             number <- number + 1
+
         Pseudonym.numbered number chosen
 
     /// Hides the player's names as chosen. A player who showed them everywhere
@@ -100,6 +113,7 @@ module PseudonymBook =
                 match book.players.TryGetValue profile.PlayerId with
                 | true, struct (_, ValueSome pseudonym, _) -> pseudonym
                 | true, struct (_, ValueNone, _) | false, _ -> choose pick profile book
+
             book.players[profile.PlayerId] <- struct (profile, ValueSome current, hiding)
             ValueSome current
 
@@ -107,7 +121,8 @@ module PseudonymBook =
     /// real names counted as visible change.
     let rename (profile: PlayerData) (book: PseudonymBook) =
         match book.players.TryGetValue profile.PlayerId with
-        | true, struct (_, pseudonym, hiding) -> book.players[profile.PlayerId] <- struct (profile, pseudonym, hiding)
+        | true, struct (_, pseudonym, hiding) ->
+            book.players[profile.PlayerId] <- struct (profile, pseudonym, hiding)
         | false, _ -> ()
 
     /// The profile the online player was registered with.

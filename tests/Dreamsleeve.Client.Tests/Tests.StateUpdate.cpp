@@ -55,6 +55,7 @@ TEST_CASE("State publication owns player data and distinguishes self removal fro
     REQUIRE(model.SetSelfPlayer(model.Generation(), 7));
     update = TakeStateUpdate(model, scratch);
     CHECK_FALSE(TakeStateUpdate(model, scratch));
+
     auto renamed             = MakePlayer(7);
     renamed.data.displayName = "Renamed";
     REQUIRE(model.Apply(model.Generation(), PlayerUpserted{renamed}));

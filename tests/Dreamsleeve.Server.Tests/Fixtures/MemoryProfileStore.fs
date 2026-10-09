@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Infrastructure
 
 open System.Collections.Generic
 open Dreamsleeve.Agent
+open Dreamsleeve.Server.Tests.AgentTests
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
 
@@ -60,11 +61,14 @@ module MemoryProfileStore =
         if config.MailboxCapacity < 1 || config.MaxPendingReplies < 1 then
             Error "Profile mailbox and pending reply capacities must be positive."
         else
-            let state = { Profiles = Dictionary<Username, PlayerData>(); NextId = 1UL }
+            let state = {
+                Profiles = Dictionary<Username, PlayerData>()
+                NextId = 1UL
+            }
             let options = {
                 AgentOptions.create "profiles" with
                     Mailbox = AgentMailbox.boundedWait config.MailboxCapacity
             }
 
-            let handle = AgentReplyDispatcher.createHandler config.MaxPendingReplies (fun request -> request.ReplyTo) (reply state)
-            Ok (Agent.Start(options, handle))
+            let handle = TestReplyDispatcher.createHandler config.MaxPendingReplies (fun request -> request.ReplyTo) (reply state)
+            Ok (TestAgent.StartReliable(options, handle))

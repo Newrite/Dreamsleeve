@@ -11,6 +11,12 @@ export import Dreamsleeve.Client.MovementView;
 export import Dreamsleeve.Host.Session;
 export import Dreamsleeve.Host.UiSettings;
 export import Dreamsleeve.Host.Bubbles;
+export import Dreamsleeve.Host.Notices;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+export import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+export import Dreamsleeve.Game.PhantomReplay;
+#endif
 
 // Single owner of the Core application, the interpolation view, the UI session
 // projection and the settings files. Every accessor below is main-thread only,
@@ -28,30 +34,9 @@ export namespace Runtime
   constexpr std::string_view UiConfig        = "ui.toml"sv;
   constexpr std::string_view AliasConfig     = "aliases.toml"sv;
 
-  enum class NoticeKind
-  {
-    NewGame,          // TESQuest::NewGame finished; the world is not ready yet.
-    PreLoadGame,      // A load attempt started under g_loadGameLock.
-    PostLoadGame,     // flag = the load succeeded.
-    SaveGame,         // Sent before the save is written.
-    MenuChanged,      // Recompute visibility from the current menu set.
-    ActivationKey,    // The chat activation key went down.
-    PlayerDeath,      // flag = dead (TESDeathEvent.dead).
-    PlayerActivated,  // formId = the activated object.
-    UiHidden,         // flag = user opt-out from the SKSE menu.
-    ActivationKeyF2,  // flag = F2 instead of Enter, from the SKSE menu.
-    ResumeLogin,      // SKSE menu: sign in with the saved login.
-    Disconnect        // SKSE menu: close the session and stop reconnecting.
-  };
-
-  // A handle is a value: the sink never resolves it, the frame does.
-  struct Notice
-  {
-    NoticeKind          kind{};
-    bool                flag{};
-    std::uint32_t       formId{};
-    RE::ObjectRefHandle handle{};  // PlayerDeath: the killer, if any.
-  };
+  using NoticeKind      = Host::Notices::Kind;
+  using Notice          = Host::Notices::Notice<RE::ObjectRefHandle>;
+  using NoticeAdmission = Host::Notices::Admission;
 
   enum class GameContext
   {
@@ -63,18 +48,26 @@ export namespace Runtime
   // Copy for the SKSE menu renderer, which runs outside the game thread.
   struct MenuSnapshot
   {
-    std::string phase{"disconnected"};
-    std::string serverName;
-    std::string savedUsername;
-    std::string error;
-    std::string activationKey{"Enter"};
-    std::size_t online{};
-    std::size_t fireflies{};
-    std::size_t groundMarks{};
-    bool        savedLogin{};
-    bool        authenticating{};
-    bool        hideUi{};
-    bool        available{};
+    std::string   phase{"disconnected"};
+    std::string   serverName;
+    std::string   savedUsername;
+    std::string   error;
+    std::string   activationKey{"Enter"};
+    std::size_t   online{};
+    std::size_t   fireflies{};
+    std::size_t   groundMarks{};
+    bool          savedLogin{};
+    bool          authenticating{};
+    bool          hideUi{};
+    bool          available{};
+    std::size_t   phantoms{};
+    std::uint64_t phantomModels{}, phantomPoses{}, phantomRejected{}, phantomDropped{}, phantomCacheHits{};
+    std::uint32_t phantomSampleRate{};
+    std::string   phantomError;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Status recording;
+    Dreamsleeve::Game::PhantomReplay::Status replay;
+#endif
   };
 
   struct State
@@ -84,9 +77,11 @@ export namespace Runtime
     Host::Session                 session;
     Host::Bubbles                 bubbles;  // Active chat texts above fireflies; main thread only.
     Host::UiFile                  ui;
+
     std::filesystem::path         clientPath{std::filesystem::path{ConfigDirectory} / ClientConfig};
     std::filesystem::path         uiPath{std::filesystem::path{ConfigDirectory} / UiConfig};
     std::filesystem::path         aliasPath{std::filesystem::path{ConfigDirectory} / AliasConfig};
+
     GameContext                   context{GameContext::MainMenu};
     bool                          dataLoaded{};
     bool                          shutdown{};
@@ -102,45 +97,25 @@ export namespace Runtime
   namespace Detail
   {
 
-    constexpr std::size_t MaxNotices = 64;
-
-    struct NoticeQueue
+    Host::Notices::Inbox<RE::ObjectRefHandle>& Queue()
     {
-      std::mutex          mutex;
-      std::vector<Notice> notices;
-      bool                overflow{};
-    };
-
-    NoticeQueue& Queue()
-    {
-      static NoticeQueue queue;
+      static Host::Notices::Inbox<RE::ObjectRefHandle> queue;
       return queue;
     }
 
   }
 
-  // Any thread. Overflow drops the notice and is reported to the frame, which
-  // then recomputes everything that notices would only have accelerated.
-  void Post(Notice notice)
+  // Any thread. Reliable controls report Busy before admission; lifecycle
+  // barriers are retained in bounded gaps even when ordinary slots are full.
+  NoticeAdmission Post(Notice notice)
   {
-    auto&           queue = Detail::Queue();
-    std::lock_guard lock{queue.mutex};
-    if (queue.notices.size() >= Detail::MaxNotices)
-    {
-      queue.overflow = true;
-      return;
-    }
-    queue.notices.push_back(notice);
+    return Detail::Queue().Post(std::move(notice));
   }
 
-  // Main thread, once per frame. Returns whether notices were lost since the last take.
+  // Main thread, once per frame. True reports realtime saturation only.
   bool Take(std::vector<Notice>& output)
   {
-    output.clear();
-    auto&           queue = Detail::Queue();
-    std::lock_guard lock{queue.mutex};
-    output.swap(queue.notices);
-    return std::exchange(queue.overflow, false);
+    return Detail::Queue().Take(output);
   }
 
   namespace Detail
@@ -246,6 +221,17 @@ export namespace Runtime
     return Host::SaveUiFile(state.uiPath, state.ui);
   }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  void StopTrace()
+  {
+    const auto trace = Dream::Diagnostics::Trace::Stop();
+    if (!trace)
+      logger::warn("Phantom trace cleanup could not start: {}", trace.error().detail);
+    else if (*trace == Dream::Diagnostics::Trace::StopOutcome::CleanupPending)
+      logger::warn("Phantom trace cleanup is pending; diagnostics may be incomplete");
+  }
+#endif
+
   // Creates Core objects. Skyrim data is not needed; the network thread starts here.
   bool Initialize()
   {
@@ -261,11 +247,28 @@ export namespace Runtime
       return false;
     }
 
+    if (!settings->client.phantomCacheDirectory.empty())
+    {
+      auto cache = std::filesystem::u8path(settings->client.phantomCacheDirectory);
+      if (cache.is_relative()) cache = state.clientPath.parent_path() / cache;
+      const auto utf8 = cache.u8string();
+      settings->client.phantomCacheDirectory.assign(utf8.begin(), utf8.end());
+    }
+
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    if (settings->client.phantomDiagnostics)
+      if (auto trace = Dream::Diagnostics::Trace::Start(state.clientPath.parent_path() / "phantom-diagnostics"); !trace)
+        logger::warn("Cannot start phantom diagnostics in Data: {}; gameplay continues", trace.error().detail);
+#else
+    if (settings->client.phantomDiagnostics) logger::warn("phantomDiagnostics requires a diagnostics build");
+#endif
+
     // Before the network starts: the first connection goes by the remembered route.
     if (auto ui = Host::LoadUiFile(state.uiPath))
       state.ui = *ui;
     else
       logger::warn("UI settings ignored: {}", ui.error());
+
     const auto routes = Dream::RoutesOf(*settings);
     const auto chosen = state.ui.ui.route.empty() ? std::nullopt : Dream::RouteIndex(routes, state.ui.ui.route);
     if (!state.ui.ui.route.empty() && !chosen)
@@ -280,10 +283,15 @@ export namespace Runtime
     if (!app)
     {
       logger::error("Cannot create client application: {}", app.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      StopTrace();
+#endif
       return false;
     }
-    state.session.ConfigureRoutes(routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
-                                  state.ui.ui.route);
+
+    state.session.ConfigureRoutes(
+      routes | std::views::transform(&Dream::ConnectionRoute::name) | std::ranges::to<std::vector>(),
+      state.ui.ui.route);
 
     // Account IDs are unique per server: "host:port" as configured scopes
     // pseudonyms and ignores (DNS names fold ASCII case).
@@ -300,9 +308,14 @@ export namespace Runtime
 
     state.movement = Dream::MovementView::Create(settings->client.movement);
     state.app      = std::move(*app);
+
     // The first session already opens with the saved "hide my name" choice.
     state.app->Exchange().SetHideIdentity(Host::Bridge::HidingOf(state.ui.ui.hideIdentity));
-    logger::info("Client application started; server {}:{}, {} route(s)", settings->client.serverHost, settings->client.serverPort, routes.size());
+    logger::info(
+      "Client application started; server {}:{}, {} route(s)",
+      settings->client.serverHost,
+      settings->client.serverPort,
+      routes.size());
     return true;
   }
 
@@ -316,6 +329,10 @@ export namespace Runtime
     if (state.session.PlayerNames().TakeDirty())
       if (auto saved = SaveUi(); !saved) logger::warn("{}", saved.error());
     if (state.app) state.app->Stop();
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dream::Diagnostics::Trace::FlushMetrics();
+    StopTrace();
+#endif
     logger::info("Client application stopped");
   }
 

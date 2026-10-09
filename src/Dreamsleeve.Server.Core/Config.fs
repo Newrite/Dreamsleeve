@@ -49,6 +49,7 @@ type ServerConfig =
         ServiceTimeoutMs: uint32
         EventBudget: int
         Worker: TransportWorkerOptions
+
         MaxPacketBytes: int
         /// Zero uses the negotiated MTU; positive values can lower the realtime payload target.
         MovementPacketTargetBytes: int
@@ -61,6 +62,7 @@ type ServerConfig =
         MaxOutgoingBytes: int
         MaxInitialPlayers: int
         MaxRecentMessages: int
+
         ChatInput: ChatInputLimits
         PlayerInput: PlayerInputLimits
     }
@@ -74,12 +76,18 @@ module ServerConfig =
             BindAddress = IPAddress.Loopback
             Port = 8778us
             PeerLimit = 544
-            ChannelLimit = 3
+            ChannelLimit = 5
             ServiceTimeoutMs = 0u
             EventBudget = 256
-            Worker = { QueueCapacity = 65536; QueueBytes = 16 * 1024 * 1024
-                       SendCommandsPerPass = 2048; SendBytesPerPass = 4 * 1024 * 1024
-                       WorkBudgetMs = 2; IdleWaitMs = 1 }
+            Worker = {
+                QueueCapacity = 65536
+                QueueBytes = 16 * 1024 * 1024
+                SendCommandsPerPass = 2048
+                SendBytesPerPass = 4 * 1024 * 1024
+                WorkBudgetMs = 2
+                IdleWaitMs = 1
+            }
+
             MaxPacketBytes = 1024 * 1024
             MovementPacketTargetBytes = 0
             ReceiveBufferBytes = 4 * 1024 * 1024
@@ -91,12 +99,24 @@ module ServerConfig =
             MaxOutgoingBytes = 256 * 1024 * 1024
             MaxInitialPlayers = 4096
             MaxRecentMessages = 512
-            ChatInput = { Username = 32; DisplayName = 64; MessageText = 2000; AnnouncementText = 500; AnnouncementSignature = 64
-                          GroundNoteText = 200; DeathMarkText = 64 }
+            ChatInput = {
+                Username = 32
+                DisplayName = 64
+                MessageText = 2000
+                AnnouncementText = 500
+                AnnouncementSignature = 64
+                GroundNoteText = 200
+                DeathMarkText = 64
+            }
             PlayerInput = {
-                CharacterName = 128; PluginName = 260; LocationName = 256
-                ActorValueKey = 128; ActorValueName = 128; MaxActorValues = 64
-                DetailsText = 256; ActivityKey = 64
+                CharacterName = 128
+                PluginName = 260
+                LocationName = 256
+                ActorValueKey = 128
+                ActorValueName = 128
+                MaxActorValues = 64
+                DetailsText = 256
+                ActivityKey = 64
             }
         }
 
@@ -136,7 +156,7 @@ module ServerConfig =
 
     /// ENet channels: at least the three delivery lanes, at most what one byte addresses.
     [<Literal>]
-    let MinChannelLimit = 3
+    let MinChannelLimit = 5
 
     [<Literal>]
     let MaxChannelLimit = 255
@@ -182,11 +202,15 @@ module ServerConfig =
                 yield! protocolErrors config
             ]
 
-        if List.isEmpty errors then Ok config else Error errors
+        if List.isEmpty errors then
+            Ok config
+        else
+            Error errors
 
     /// Apply before serving any peers; the codec uses the same settings.
     let applyPacketLimits config (host: Enet.EnetHost) =
-        if not host.IsCreated then Error ["ENet host must be created."]
+        if not host.IsCreated then
+            Error ["ENet host must be created."]
         else
             host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
             host.SetMaximumWaitingData(unativeint config.MaxWaitingData)

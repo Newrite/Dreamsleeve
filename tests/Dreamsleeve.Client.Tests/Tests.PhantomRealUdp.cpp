@@ -1,0 +1,622 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <doctest/doctest.h>
+#include <enet/enet.h>
+#include <zstd.h>
+#include <cstdlib>
+#include "protocol.pb.h"
+#include "phantom.pb.h"
+import std;
+import DreamNet.Peer;
+import Dreamsleeve.Client.Phantom.Streaming;
+import Dreamsleeve.Client.ProtocolCodec;
+
+#include "PhantomFixture.hpp"
+
+namespace
+{
+  namespace P                     = Dreamsleeve::Client::Phantom;
+  namespace Models                = Dreamsleeve::Protocol::Phantom;
+  namespace Chat                  = Dreamsleeve::Protocol::Chat;
+  using Clock                     = std::chrono::steady_clock;
+  constexpr std::size_t NodeCount = 1024;
+
+  std::optional<std::string> Environment(const char* name, std::size_t maximum = 4096)
+  {
+    char*       text{};
+    std::size_t length{};
+    if (_dupenv_s(&text, &length, name) != 0) return {};
+    const auto value = std::unique_ptr<char, decltype(&std::free)>(text, &std::free);
+    if (!value || length == 0 || length > maximum + 1) return {};
+    return std::string(value.get());
+  }
+
+  std::uint64_t NowUs()
+  {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+  }
+
+  P::ValidatedAsset Model()
+  {
+    if (const auto path = Environment("DREAMSLEEVE_PHANTOM_SMOKE_MODEL"))
+    {
+      std::ifstream input(*path, std::ios::binary);
+      REQUIRE(input);
+      P::Bytes   bytes(std::istreambuf_iterator<char>{input}, {});
+      const auto rawBytes = ZSTD_getFrameContentSize(bytes.data(), bytes.size());
+      REQUIRE(rawBytes <= P::Limits{}.assetBytes);
+      auto parsed = P::ReadAsset(bytes, static_cast<std::uint32_t>(rawBytes));
+      REQUIRE(parsed);
+      return std::move(*parsed);
+    }
+    auto raw    = PhantomFixture::Model(NodeCount, 64);
+    auto parsed = P::ValidatedAsset::Parse(std::move(raw));
+    REQUIRE(parsed);
+    return std::move(*parsed);
+  }
+
+  std::shared_ptr<const P::Snapshot> Pose(std::uint64_t generation, std::uint64_t sequence)
+  {
+    P::Snapshot pose;
+    pose.generation  = {generation};
+    pose.sequence    = {sequence};
+    pose.context     = 10;
+    pose.sampledAtUs = NowUs();
+    pose.channels.resize(NodeCount);
+    std::mt19937 random(21 + static_cast<unsigned>(sequence));
+    for (auto& channel : pose.channels)
+      channel.world.position = {
+          static_cast<float>(random() % 10000) / 10000,
+          static_cast<float>(random() % 10000) / 10000,
+          static_cast<float>(random() % 10000) / 10000
+      };
+    pose.bounds.resize(
+      NodeCount - 1,
+      {
+          {0, 0, 0},
+          4
+    });
+    return std::make_shared<const P::Snapshot>(std::move(pose));
+  }
+
+  bool dropFragment{};
+  bool fragmentDropped{};
+
+  int DropOnePoseFragment(ENetHost* host, ENetEvent*)
+  {
+    if (!dropFragment || host->receivedDataLength < sizeof(ENetProtocolHeader) + sizeof(ENetProtocolCommandHeader)) return 0;
+    enet_uint16 peer{};
+    std::memcpy(&peer, host->receivedData, sizeof(peer));
+    const auto header = (ENET_NET_TO_HOST_16(peer) & ENET_PROTOCOL_HEADER_FLAG_SENT_TIME) ? sizeof(ENetProtocolHeader)
+                                                                                          : offsetof(ENetProtocolHeader, sentTime);
+    if (
+      (host->receivedData[header] & ENET_PROTOCOL_COMMAND_MASK) != ENET_PROTOCOL_COMMAND_SEND_UNRELIABLE_FRAGMENT ||
+      host->receivedData[header + 1] != P::Wire::PosesLane)
+      return 0;
+    dropFragment    = false;
+    fragmentDropped = true;
+    return 1;
+  }
+
+  struct Client
+  {
+    P::Exchange                                             exchange;
+    P::Streaming                                            stream;
+    std::unique_ptr<ENetHost, decltype(&enet_host_destroy)> host{nullptr, &enet_host_destroy};
+    ENetPeer*                                               peer{};
+
+    bool connected{};
+    bool welcomed{};
+    bool located{};
+    bool policy{};
+    bool chatReceived{};
+
+    std::uint64_t self{};
+    std::uint64_t readyGeneration{};
+    std::uint64_t offerRevision{};
+    std::uint64_t removeRevision{};
+    std::uint64_t poseSequence{};
+
+    std::uint64_t chunksSent{};
+    std::uint64_t downloadedBytes{};
+    std::uint64_t uploadId{};
+    std::uint64_t uploadSent{};
+    std::uint64_t uploadAcknowledged{};
+    std::uint32_t windowChunks{};
+    std::uint32_t deltaUploads{};
+    std::uint32_t deltaDownloads{};
+    std::uint64_t modelControlBytes{};
+    std::size_t   largestPose{};
+
+    std::uint64_t chatSentAt{};
+    std::uint64_t chatReceivedAt{};
+    std::uint64_t firstChunkAt{};
+    std::uint64_t lastChunkAt{};
+    std::uint64_t uploadAcceptedAt{};
+
+    std::uint64_t lastPumpUs{};
+    std::uint64_t pumpCount{};
+    std::uint64_t pumpTotalUs{};
+    std::uint64_t pumpMaxUs{};
+    std::uint64_t maxChunkBatch{};
+    std::uint64_t traceAt{};
+    std::uint64_t ackDelayUs{};
+
+    std::deque<std::pair<std::uint64_t, std::uint64_t>> sentTimes;
+    std::string                                         modelHash;
+    std::unordered_set<std::uint64_t>                   requests;
+
+    Client(std::uint16_t port, const std::filesystem::path& cache, bool publish) : stream(exchange, cache)
+    {
+      stream.ConfigureHttp(Environment("DREAMSLEEVE_PHANTOM_SMOKE_HTTP").value_or("http://127.0.0.1:" + std::to_string(port)), false);
+      P::ViewSettings settings;
+      settings.publish   = publish;
+      settings.maximum   = 1;
+      settings.timeoutMs = 3000;
+      exchange.Configure(settings);
+      host.reset(enet_host_create(nullptr, 1, 5, 0, 0));
+      REQUIRE(host);
+      ENetAddress address{};
+      REQUIRE(enet_address_set_host_ip(&address, "127.0.0.1") == 0);
+      address.port = port;
+      peer         = enet_host_connect(host.get(), &address, 5, 0);
+      REQUIRE(peer);
+    }
+
+    void Send(std::uint8_t lane, std::span<const std::uint8_t> bytes, enet_uint32 flags)
+    {
+      auto wrapped = DreamNetPeer::TryFromNative(peer);
+      REQUIRE(wrapped);
+      REQUIRE(wrapped->PushSpan(bytes, lane, static_cast<PacketFlag>(flags)));
+    }
+
+    template <class F>
+    void Command(std::uint64_t id, F fill, std::uint8_t lane = 0)
+    {
+      Chat::ClientPacket packet;
+      packet.set_protocol_version(Dreamsleeve::Client::Wire::Version);
+      packet.set_request_id(id);
+      fill(packet);
+      P::Bytes bytes(packet.ByteSizeLong());
+      REQUIRE(packet.SerializeToArray(bytes.data(), static_cast<int>(bytes.size())));
+      Send(lane, bytes, ENET_PACKET_FLAG_RELIABLE);
+    }
+
+    void Open(std::string name)
+    {
+      name.resize(43, '_');
+      Command(1, [&](auto& packet) { packet.mutable_open_session()->set_session_ticket(name); });
+    }
+
+    void Locate()
+    {
+      Command(2, [](auto& packet) { packet.mutable_update_player()->mutable_begin_character()->set_name("Native UDP"); });
+      Move(10, 60);
+    }
+
+    void Move(std::uint64_t context, std::uint32_t form)
+    {
+      located = false;
+      stream.Context(context, false);
+      Command(context, [=](auto& packet) {
+        auto* update = packet.mutable_update_player()->mutable_set_location();
+        update->set_context_revision(context);
+        auto* location = update->mutable_location();
+        auto* space    = location->mutable_location();
+        space->mutable_location_id()->set_plugin_name("Skyrim.esm");
+        space->mutable_location_id()->set_local_form_id(form);
+        space->set_location_name("Whiterun");
+        location->mutable_position();
+        location->mutable_camera_direction();
+      });
+    }
+
+    void Receive(const ENetEvent& event)
+    {
+      auto       packet   = std::unique_ptr<ENetPacket, decltype(&enet_packet_destroy)>(event.packet, &enet_packet_destroy);
+      const auto reliable = (packet->flags & ENET_PACKET_FLAG_RELIABLE) != 0;
+      const std::span<const std::uint8_t> bytes(packet->data, packet->dataLength);
+      if (event.channelID == P::Wire::PosesLane)
+      {
+        if (bytes.empty())
+        {
+          REQUIRE(reliable);
+          return;
+        }
+        REQUIRE_FALSE(reliable);
+        REQUIRE((packet->flags & ENET_PACKET_FLAG_UNSEQUENCED) == 0);
+        Models::ServerPosePacket value;
+        REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
+        REQUIRE(value.player_id() == 1);
+        largestPose  = (std::max)(largestPose, bytes.size());
+        poseSequence = value.sample().sequence();
+        REQUIRE(stream.ReceivePose(bytes, NowUs()));
+      }
+      else if (event.channelID == P::Wire::ModelsLane)
+      {
+        REQUIRE(reliable);
+        Models::ServerAssetPacket value;
+        REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
+        if (value.has_policy())
+        {
+          policy       = true;
+          windowChunks = 0;
+          std::cout << "PHANTOM_POLICY modelBytesPerSecond=" << value.policy().model_bytes_per_second()
+                    << " windowChunks=" << windowChunks << std::endl;
+        }
+        if (value.has_transfer())
+        {
+          if (value.transfer().has_delta())
+          {
+            if (value.transfer().upload()) ++deltaUploads;
+            else ++deltaDownloads;
+          }
+          REQUIRE(requests.contains(value.transfer().request_id()));
+          REQUIRE(value.transfer().player_id() == 1);
+          if (value.transfer().upload())
+          {
+            uploadId   = value.transfer().transfer_id();
+            uploadSent = value.transfer().has_delta() ? value.transfer().delta().compressed_bytes() : value.transfer().asset().compressed_bytes();
+            uploadAcknowledged = 0;
+          }
+          else if (!firstChunkAt) firstChunkAt = NowUs();
+        }
+        if (value.has_complete())
+        {
+          REQUIRE(requests.contains(value.complete().request_id()));
+          if (value.complete().accepted() && value.complete().upload())
+          {
+            readyGeneration  = value.complete().generation();
+            uploadAcceptedAt = NowUs();
+          }
+        }
+        if (value.has_offer()) offerRevision = value.offer().view_revision();
+        if (value.has_remove()) removeRevision = value.remove().view_revision();
+        REQUIRE(stream.ReceiveAsset(bytes));
+      }
+      else if (event.channelID <= 1)
+      {
+        REQUIRE(reliable);
+        Chat::ServerPacket value;
+        REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+        REQUIRE(value.protocol_version() == Dreamsleeve::Client::Wire::Version);
+        if (value.has_session_opened())
+        {
+          welcomed = true;
+          self     = value.session_opened().self_player_id();
+        }
+        if ((value.request_id() == 10 || value.request_id() == 12) && value.has_player_update_accepted())
+        {
+          located = true;
+          stream.Context(value.request_id(), true);
+        }
+        if (value.has_chat_published() && value.chat_published().message().text() == "native-streaming-udp")
+        {
+          chatReceived   = true;
+          chatReceivedAt = NowUs();
+        }
+      }
+    }
+
+    void Pump()
+    {
+      const auto pumpAt = NowUs();
+      if (lastPumpUs)
+      {
+        const auto gap = pumpAt - lastPumpUs;
+        ++pumpCount;
+        pumpTotalUs += gap;
+        pumpMaxUs    = std::max(pumpMaxUs, gap);
+      }
+      lastPumpUs              = pumpAt;
+      const auto beforeChunks = chunksSent;
+      ENetEvent  event{};
+      for (int count = 0; count < 128; ++count)
+      {
+        const auto result = enet_host_service(host.get(), &event, 0);
+        REQUIRE(result >= 0);
+        if (result == 0) break;
+        if (event.type == ENET_EVENT_TYPE_CONNECT) connected = true;
+        if (event.type == ENET_EVENT_TYPE_DISCONNECT)
+        {
+          connected = false;
+          FAIL("Server disconnected smoke peer");
+        }
+        if (event.type == ENET_EVENT_TYPE_RECEIVE) Receive(event);
+      }
+
+      if (welcomed && policy)
+        for (const auto& value : stream.Poll())
+        {
+          if (value.lane == P::Wire::ModelsLane)
+          {
+            modelControlBytes += value.bytes.size();
+            REQUIRE(value.bytes.size() <= P::Wire::MaxAssetPacketBytes);
+            Models::ClientAssetPacket request;
+            REQUIRE(request.ParseFromArray(value.bytes.data(), static_cast<int>(value.bytes.size())));
+            if (request.has_publish())
+            {
+              REQUIRE(request.publish().request_id() > 0);
+              requests.insert(request.publish().request_id());
+              P::Digest digest{};
+              REQUIRE(request.publish().asset().hash().size() == digest.size());
+              std::memcpy(digest.data(), request.publish().asset().hash().data(), digest.size());
+              modelHash = P::Hex(digest);
+            }
+            if (request.has_download())
+            {
+              REQUIRE(request.download().request_id() > 0);
+              requests.insert(request.download().request_id());
+            }
+            Send(value.lane, value.bytes, ENET_PACKET_FLAG_RELIABLE);
+          }
+          else
+          {
+            REQUIRE(value.lane == P::Wire::PosesLane);
+            auto wrapped = DreamNetPeer::TryFromNative(peer);
+            REQUIRE(wrapped);
+            REQUIRE(wrapped->RotateUnreliableSequence(value.lane));
+            Send(value.lane, value.bytes, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+          }
+        }
+
+      maxChunkBatch = std::max(maxChunkBatch, chunksSent - beforeChunks);
+      enet_host_flush(host.get());
+      if (uploadId && pumpAt >= traceAt + 1000000)
+      {
+        traceAt = pumpAt;
+        std::cout << "PHANTOM_FLIGHT atUs=" << pumpAt << " sent=" << uploadSent << " ack=" << uploadAcknowledged << " ackUs=" << ackDelayUs
+                  << " nativeFlight=" << peer->reliableDataInTransit << " rtt=" << peer->roundTripTime << " lost=" << peer->packetsLost
+                  << std::endl;
+      }
+    }
+  };
+
+  template <class F>
+  void Await(Client& alice, Client& bob, std::string_view phase, F ready)
+  {
+    const auto started    = Clock::now();
+    const auto configured = Environment("DREAMSLEEVE_PHANTOM_SMOKE_DEADLINE_SECONDS", 3);
+    const auto seconds    = configured ? std::clamp(std::atoi(configured->c_str()), 1, 600) : 90;
+    const auto deadline   = started + std::chrono::seconds(seconds);
+    while (!ready() && Clock::now() < deadline)
+    {
+      alice.Pump();
+      bob.Pump();
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    INFO("phase: ", phase, "; alice error: ", alice.exchange.Stats().error, "; bob error: ", bob.exchange.Stats().error);
+    REQUIRE(ready());
+    std::cout << "PHANTOM_PHASE phase=" << phase << " ms=" << std::chrono::duration<double, std::milli>(Clock::now() - started).count()
+              << " aliceWindow=" << alice.peer->windowSize << " bobWindow=" << bob.peer->windowSize << '\n';
+  }
+
+  bool Loaded(Client& client, std::uint64_t generation)
+  {
+    const auto remote = client.exchange.Find(1);
+    return remote && remote->State() == P::Representation::Ready && remote->Asset() && remote->descriptor.generation.value == generation;
+  }
+
+  bool Played(Client& client, std::uint64_t sequence)
+  {
+    const auto remote = client.exchange.Find(1);
+    if (!remote) return false;
+    const auto pose = remote->playback.At(NowUs(), client.exchange.Settings());
+    return pose && pose->sequence.value == sequence;
+  }
+
+}
+
+// Opt-in: normal pure test runs need no listening server. run.ps1 starts the
+// controlled-auth production server fixture and requires the success sentinel.
+TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
+{
+  REQUIRE(Dreamsleeve::Client::Wire::Version == 26);
+  const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
+  REQUIRE(portText);
+  const auto port = std::stoul(*portText);
+  REQUIRE(port > 0);
+  REQUIRE(port <= 65535);
+  const auto statePath = Environment("DREAMSLEEVE_PHANTOM_SMOKE_STATE");
+  REQUIRE(statePath);
+
+  struct Network
+  {
+    Network()
+    {
+      REQUIRE(enet_initialize() == 0);
+    }
+
+    ~Network()
+    {
+      enet_deinitialize();
+    }
+  } network;
+
+  const std::filesystem::path directory(*statePath);
+  Client                      alice(static_cast<std::uint16_t>(port), directory / "alice-cache", true);
+  Client                      bob(static_cast<std::uint16_t>(port), directory / "bob-cache", false);
+  Await(alice, bob, "connect", [&] { return alice.connected && bob.connected; });
+  CHECK_FALSE(alice.policy);
+  CHECK_FALSE(bob.policy);
+  alice.Open("alice");
+  bob.Open("bob");
+  Await(alice, bob, "auth/policy", [&] { return alice.welcomed && bob.welcomed && alice.policy && bob.policy; });
+  REQUIRE(alice.self == 1);
+  REQUIRE(bob.self == 2);
+  alice.Locate();
+  bob.Locate();
+  Await(alice, bob, "movement authority", [&] { return alice.located && bob.located; });
+  // No hand-made Prepared completion: Streaming's own Worker consumes admitted
+  // Submit and calls Prepared(epoch, localRevision, ...) using production codecs.
+  auto       model            = Model();
+  const auto expectedChannels = model.Layout().requiredChannels.size();
+  const auto expectedBounds   = model.Layout().bounds.size();
+  REQUIRE(alice.exchange.Submit(10, P::Generation{1}, std::move(model)));
+  const auto coldStarted = NowUs();
+  Await(alice, bob, "cold native prepare/upload/download/decode", [&] {
+    // Exercise control while reliable download fragments are already in flight.
+    if (bob.firstChunkAt && !bob.chatSentAt)
+    {
+      bob.chatSentAt = NowUs();
+      bob.Command(
+        11,
+        [](auto& packet) {
+          auto* chat = packet.mutable_send_chat();
+          chat->set_channel_id(1);
+          chat->set_text("native-streaming-udp");
+        },
+        1);
+    }
+    if (bob.chatSentAt && !bob.chatReceived) REQUIRE(NowUs() - bob.chatSentAt < 2000000);
+    if (Loaded(bob, 1) && !bob.downloadedBytes)
+    {
+      bob.downloadedBytes = alice.uploadSent;
+      bob.lastChunkAt = NowUs();
+    }
+    return alice.readyGeneration == 1 && Loaded(bob, 1) && bob.chatReceived;
+  });
+  REQUIRE(bob.chatReceivedAt >= bob.chatSentAt);
+  REQUIRE(bob.chatReceivedAt - bob.chatSentAt < 2000000);
+  std::cout << "PHANTOM_TRANSFER uploadMs=" << (alice.uploadAcceptedAt - coldStarted) / 1000.0
+            << " downloadMs=" << (bob.lastChunkAt - bob.firstChunkAt) / 1000.0
+            << " chatDuringDownloadMs=" << (bob.chatReceivedAt - bob.chatSentAt) / 1000.0 << '\n';
+  REQUIRE(alice.uploadSent > 16384);
+  CHECK(alice.exchange.Stats().modelBytes == alice.uploadSent + alice.modelControlBytes);
+  REQUIRE(alice.chunksSent == 0);
+  REQUIRE(bob.downloadedBytes == alice.uploadSent);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().requiredChannels.size() == expectedChannels);
+  CHECK(bob.exchange.Find(1)->Asset()->Layout().bounds.size() == expectedBounds);
+  Await(alice, bob, "atomic cache completion", [&] {
+    return std::filesystem::exists(directory / "server-cache" / (alice.modelHash + ".zst")) &&
+           std::filesystem::exists(directory / "bob-cache" / (alice.modelHash + ".zst"));
+  });
+
+  if (Environment("DREAMSLEEVE_PHANTOM_SMOKE_MODEL"))
+  {
+    std::cout << "PHANTOM_PUMP meanUs=" << double(alice.pumpTotalUs) / alice.pumpCount << " maxUs=" << alice.pumpMaxUs
+              << " maxChunkBatch=" << alice.maxChunkBatch << '\n';
+    std::cout << "PHANTOM_NATIVE_ASSET_UDP_PASS coldBytes=" << bob.downloadedBytes << '\n';
+    return;  // The synthetic fixture below separately guarantees multi-fragment poses.
+  }
+
+  alice.peer->channels[P::Wire::PosesLane].outgoingUnreliableSequenceNumber = 0xFFFF;
+  alice.exchange.Submit(Pose(1, 1));
+  Await(alice, bob, "native epoch rollover + fragmented pose decode/playback", [&] { return Played(bob, 1); });
+  REQUIRE(bob.largestPose > bob.peer->mtu);
+  bob.host->intercept = DropOnePoseFragment;
+  dropFragment        = true;
+  fragmentDropped     = false;
+  alice.exchange.Submit(Pose(1, 2));
+  Await(alice, bob, "real incoming fragment loss", [&] { return fragmentDropped; });
+  const auto quiet = Clock::now() + std::chrono::milliseconds(200);
+  while (Clock::now() < quiet)
+  {
+    alice.Pump();
+    bob.Pump();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  CHECK(bob.poseSequence == 1);
+
+  bob.host->intercept = nullptr;
+  alice.exchange.Submit(Pose(1, 3));
+  Await(alice, bob, "next independent complete pose after loss", [&] { return Played(bob, 3); });
+
+  const auto oldView    = bob.offerRevision;
+  const auto downloaded = bob.downloadedBytes;
+  auto       settings = bob.exchange.Settings();
+  settings.receive    = false;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "receive=false authority revocation", [&] { return bob.removeRevision > oldView; });
+  CHECK_FALSE(bob.exchange.Find(1));
+  settings.receive = true;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "reentry uses native disk cache", [&] { return Loaded(bob, 1) && bob.offerRevision > bob.removeRevision; });
+  CHECK(bob.downloadedBytes == downloaded);
+  REQUIRE(bob.exchange.Stats().cacheHits > 0);
+
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{1}});
+  Await(alice, bob, "display acknowledgement releases generation bridge", [&] { return alice.exchange.CanReplace(); });
+  const auto sent = alice.chunksSent;
+  REQUIRE(alice.exchange.Submit(10, P::Generation{2}, Model()));
+  Await(alice, bob, "warm server publication and native cached generation", [&] { return alice.readyGeneration == 2 && Loaded(bob, 2); });
+  CHECK(alice.chunksSent == sent);
+  CHECK(bob.downloadedBytes == downloaded);
+  auto current       = Pose(2, 1);
+  auto prior         = std::make_shared<P::Snapshot>(*Pose(1, 4));
+  prior->sampledAtUs = current->sampledAtUs;
+  alice.exchange.Submit(current, prior);
+  Await(alice, bob, "both generations independently decoded from one packet", [&] {
+    const auto remote = bob.exchange.Find(1);
+    if (!remote || !remote->previous || !Played(bob, 1)) return false;
+    const auto pose = remote->previous->playback.At(NowUs(), bob.exchange.Settings());
+    return pose && pose->generation.value == 1 && pose->sequence.value == 4;
+  });
+  CHECK_FALSE(alice.exchange.CanReplace());
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{2}});
+  Await(alice, bob, "retire only after new generation displayed", [&] { return alice.exchange.CanReplace(); });
+  CHECK_FALSE(bob.exchange.Find(1)->previous);
+  CHECK(alice.exchange.Stats().rejected == 0);
+  CHECK(bob.exchange.Stats().rejected == 0);
+  // Revoke while WinHTTP is still reading, then admit a fresh capability.
+  // The old callback/completion must neither restore the removed scene nor
+  // cancel the replacement request. A low receiver rate makes this deterministic.
+  settings.downloadBytesPerSecond = 65536;
+  bob.exchange.Configure(settings);
+  const auto beforeCancel = bob.exchange.Stats().modelBytes;
+  auto changed = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 65));
+  REQUIRE(changed);
+  REQUIRE(alice.exchange.Submit(10, P::Generation{3}, std::move(*changed)));
+  Await(alice, bob, "HTTP body in progress", [&] { return bob.exchange.Stats().modelBytes > beforeCancel; });
+  CHECK_FALSE(Loaded(bob, 3));
+  const auto canceledView = bob.offerRevision;
+  settings.receive = false;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "active HTTP cancellation", [&] { return bob.removeRevision > canceledView; });
+  CHECK_FALSE(bob.exchange.Find(1));
+  settings.receive = true;
+  settings.downloadBytesPerSecond = 5 * 1024 * 1024;
+  bob.exchange.Configure(settings);
+  Await(alice, bob, "HTTP reentry after canceled callbacks", [&] { return Loaded(bob, 3); });
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{3}});
+  Await(alice, bob, "replacement generation displayed", [&] { return alice.exchange.CanReplace(); });
+
+  const auto deltaUp   = alice.deltaUploads;
+  const auto deltaDown = bob.deltaDownloads;
+  auto fourth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 66));
+  REQUIRE(fourth);
+  REQUIRE(alice.exchange.Submit(10, P::Generation{4}, std::move(*fourth)));
+  Await(alice, bob, "native delta upload/server reconstruction/download", [&] { return alice.readyGeneration == 4 && Loaded(bob, 4); });
+  CHECK(alice.deltaUploads > deltaUp);
+  CHECK(bob.deltaDownloads > deltaDown);
+  std::cout << "PHANTOM_DELTA_PASS upload=" << alice.deltaUploads << " download=" << bob.deltaDownloads << " bodyBytes=" << alice.uploadSent << '\n';
+  bob.exchange.Displayed({1, bob.offerRevision, P::Generation{4}});
+  Await(alice, bob, "fourth generation settled", [&] { return alice.exchange.CanReplace(); });
+  settings.downloadBytesPerSecond = 65536;
+  bob.exchange.Configure(settings);
+  auto pendingContext = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 67));
+  REQUIRE(pendingContext);
+  REQUIRE(alice.exchange.Submit(10, P::Generation{5}, std::move(*pendingContext)));
+  Await(alice, bob, "pending replacement before context switch", [&] { return alice.readyGeneration == 5; });
+  REQUIRE_FALSE(Loaded(bob, 5));
+  settings.downloadBytesPerSecond = 5 * 1024 * 1024;
+  bob.exchange.Configure(settings);
+  alice.Move(12, 61);
+  bob.Move(12, 61);
+  Await(alice, bob, "new location authority", [&] { return alice.located && bob.located; });
+
+  const auto contextDeltaUp   = alice.deltaUploads;
+  const auto contextDeltaDown = bob.deltaDownloads;
+  auto fifth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 68));
+  REQUIRE(fifth);
+  REQUIRE(alice.exchange.Submit(12, P::Generation{6}, std::move(*fifth)));
+  Await(alice, bob, "context transition delta upload and download", [&] { return alice.readyGeneration == 6 && Loaded(bob, 6); });
+  CHECK(alice.deltaUploads > contextDeltaUp);
+  CHECK(bob.deltaDownloads > contextDeltaDown);
+  std::cout << "PHANTOM_CONTEXT_DELTA_PASS\n";
+  std::cout << "PHANTOM_NATIVE_UDP_PASS coldBytes=" << downloaded << " windowChunks=" << alice.windowChunks
+            << " fragmentedPoseBytes=" << bob.largestPose << " requestIds=positive loss=discarded rollover=unreliable warmChunks=0\n";
+}

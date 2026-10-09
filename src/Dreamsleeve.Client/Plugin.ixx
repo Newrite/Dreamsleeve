@@ -80,13 +80,20 @@ namespace Plugin
 
   export bool Load(const SKSE::LoadInterface* skse)
   {
-    Logging::SetupLog();
+    if (auto logging = Logging::SetupLog(); !logging)
+    {
+      // Available before file logging and SKSE initialization; no failing path
+      // conversion or dependency fatal reporter is needed for this diagnostic.
+      const auto diagnostic = std::format("DreamsleeveClient: {}\n", logging.error().detail);
+      REX::W32::OutputDebugStringA(diagnostic.c_str());
+      return false;
+    }
 
     const auto plugin = SKSE::PluginDeclaration::GetSingleton();
     logger::info("{} v{} is loading on runtime {}", plugin->GetName(), plugin->GetVersion(), REL::Module::get().version().string());
 
-    // The logger above is ours; the two 5-byte calls (Main::Update, input
-    // dispatch) need 14 trampoline bytes each.
+    // Three 5-byte calls (frame, input, model completion): 3*14 bytes.
+    // Two 6-byte controller calls: 2*8 bytes. Total58, within64.
     SKSE::Init(skse, {.log = false, .trampoline = true, .trampolineSize = 64});
 
     const auto messaging = SKSE::GetMessagingInterface();

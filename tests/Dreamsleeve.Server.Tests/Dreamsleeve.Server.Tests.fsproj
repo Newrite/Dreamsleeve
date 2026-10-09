@@ -14,6 +14,8 @@
     <Compile Include="ModerationTests.fs" />
     <Compile Include="PlayerDetailsTests.fs" />
     <Compile Include="AgentTests.fs" />
+    <Compile Include="ConstructionTests.fs" />
+    <Compile Include="OwnedCleanupTests.fs" />
     <Compile Include="AdminDomainTests.fs" />
     <Compile Include="CodecTests.fs" />
     <Compile Include="BackgroundTests.fs" />
@@ -27,7 +29,9 @@
     <Compile Include="Fixtures/MemoryProfileStore.fs" />
     <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="SqliteAccountStoreTests.fs" />
+    <Compile Include="SqliteBoundaryTests.fs" />
     <Compile Include="AuthServiceTests.fs" />
+    <Compile Include="ServiceLifetimeTests.fs" />
     <Compile Include="SteamOpenIdTests.fs" />
     <Compile Include="SanctionTests.fs" />
     <Compile Include="AdminStoreTests.fs" />
@@ -35,15 +39,21 @@
     <Compile Include="PlayerSessionTests.fs" />
     <Compile Include="ChatRoomAgentTests.fs" />
     <Compile Include="PresenceAgentTests.fs" />
+    <Compile Include="PhantomTests.fs" />
+    <Compile Include="PhantomHttpTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
+    <Compile Include="RuntimeStartupTests.fs" />
     <Compile Include="EnetTransportTests.fs" />
+    <Compile Include="PhantomE2ETests.fs" />
     <Compile Include="TransportOwnerTests.fs" />
     <Compile Include="ConfigurationTests.fs" />
+    <Compile Include="ContinuousDiagnosticsTests.fs" />
     <Compile Include="AnnouncementTests.fs" />
     <Compile Include="GroundMarkTests.fs" />
     <Compile Include="GuildTests.fs" />
     <Compile Include="AuthenticationHttpTests.fs" />
     <Compile Include="AdminHttpTests.fs" />
+    <Compile Include="RelayTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -55,4 +65,5 @@
     <PackageReference Include="Expecto" Version="11.1.0" />
     <PackageReference Include="Faqt" Version="5.1.0" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="../Dreamsleeve.Network.Relay/Dreamsleeve.Network.Relay.csproj" /></ItemGroup>
 </Project>

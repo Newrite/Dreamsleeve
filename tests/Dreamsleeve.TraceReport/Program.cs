@@ -7,6 +7,11 @@ using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 
 // Offline only; neither the server nor the load generator references this tool.
+if (args.Length == 3 && args[0] == "--alloc-stacks")
+{
+    AllocationReport.Write(args[1], args[2]);
+    return 0;
+}
 if (args.Length == 3 && args[0] == "--udp")
 {
     UdpReport.Write(args[1], args[2]);

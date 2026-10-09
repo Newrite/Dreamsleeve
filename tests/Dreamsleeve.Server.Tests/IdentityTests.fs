@@ -24,6 +24,18 @@ let private hide pick profile book =
     PseudonymBook.apply pick HiddenIdentity.Everywhere profile book |> ValueOption.get
 
 let private primitiveTests = testList "Pseudonym" [
+    testCase "comparison normalization is checked without changing display spelling" <| fun _ ->
+        let invalid = "Name\uFFFE"
+        let expected = Error (DomainError.InvalidText("Pseudonym", TextError.InvalidUnicode))
+        Expect.equal (Pseudonym.create invalid) expected "Reject before trusted dictionary comparison."
+        Expect.equal (Pseudonym.restore invalid) expected "Stored names use the same invariant."
+        for source in [ "Cafe\u0301"; "Bard\U0001F984" ] do
+            let value = Pseudonym.create source |> ok
+            Expect.equal (Pseudonym.value value) source "Original display text remains exact."
+            Expect.equal (Pseudonym.restore source) (Ok value) "Restore shares construction."
+            let names = PseudonymDictionary.create [ value ]
+            Expect.equal (names |> ValueOption.map _.Names) (ValueSome [value]) "Trusted comparison cannot fail."
+
     testCase "entries follow the client alias rules and are kept exactly" <| fun _ ->
         Expect.equal (Pseudonym.value (pseudonym "Наёмник")) "Наёмник" "Cyrillic entry"
         Expect.equal (Pseudonym.value (pseudonym "Dark Elf")) "Dark Elf" "inner space"
@@ -66,7 +78,12 @@ let private bookTests = testList "PseudonymBook" [
     testCase "a pseudonym comes from the dictionary by pick, never from the player's names" <| fun _ ->
         let book = PseudonymBook.create (dictionary [ "Бард"; "Страж"; "Рыбак" ])
         let mutable asked = 0
-        let chosen = hide (fun count -> asked <- count; 2) (profile 1UL "rybak" "Nerevar") book
+        let chosen =
+            hide
+                (fun count ->
+                    asked <- count
+                    2)
+                (profile 1UL "rybak" "Nerevar") book
         Expect.equal asked 3 "pick sees the dictionary size"
         Expect.equal (Pseudonym.value chosen) "Рыбак" "the picked entry"
         let other = PseudonymBook.create (dictionary [ "Бард"; "Страж"; "Рыбак" ])
@@ -94,7 +111,10 @@ let private bookTests = testList "PseudonymBook" [
         let book = PseudonymBook.create (dictionary [ "Бард"; "Страж" ])
         let player = profile 5UL "user5" "Nerevar"
         let mutable next = 0
-        let pick _ = next <- next + 1; next - 1
+        let pick _ =
+            next <- next + 1
+            next - 1
+
         let before = hide pick player book
         PseudonymBook.show player book
         Expect.isTrue (PseudonymBook.tryFind player.PlayerId book).IsNone "shown again"
@@ -106,7 +126,10 @@ let private bookTests = testList "PseudonymBook" [
         let book = PseudonymBook.create (dictionary [ "Бард"; "Страж" ])
         let player = profile 5UL "user5" "Страж"
         let mutable next = 0
-        let pick _ = next <- next + 1; next - 1
+        let pick _ =
+            next <- next + 1
+            next - 1
+
         let hidden = hide pick player book
         let narrowed = PseudonymBook.apply pick HiddenIdentity.ExceptGroundMarks player book
         Expect.equal narrowed (ValueSome hidden) "only the marks changed: the same pseudonym"

@@ -17,7 +17,7 @@ let private position x = Position.create x 0.0f 0.0f |> ok
 let private heading = Radian.create 1.5f |> ok
 let private placement space x = GroundMarkPlacement.create space (position x) heading
 let private observer space x =
-    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) Rotation.zero)
+    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) CameraDirection.zero)
 let private rules = GroundMarkRules.create 2 3 30 7 100.0f 50.0f |> ok
 let private epoch = DateTimeOffset.UnixEpoch
 let private note id author x text =

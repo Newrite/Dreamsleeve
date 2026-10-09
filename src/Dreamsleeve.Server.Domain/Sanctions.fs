@@ -10,6 +10,7 @@ open FSharp.UMX
 module SanctionUMX =
     [<Measure>]
     type sanctionId
+
     [<Measure>]
     type sanctionReason
 
@@ -26,7 +27,8 @@ type SanctionKind =
 /// Where a sanction holds. A guild's own discipline is not a sanction: its
 /// mute belongs to the membership (GuildMute), its exclusion ends the membership.
 [<RequireQualifiedAccess>]
-type SanctionScope = | Server
+type SanctionScope =
+    | Server
 
 /// How long a sanction holds.
 [<RequireQualifiedAccess>]
@@ -80,7 +82,10 @@ module SanctionId =
 
     /// Storage issues positive IDs.
     let create raw : Result<SanctionId, DomainError> =
-        if raw <= 0L then Error(DomainError.InvalidId "SanctionId") else Ok(UMX.tag<sanctionId> raw)
+        if raw <= 0L then
+            Error(DomainError.InvalidId "SanctionId")
+        else
+            Ok(UMX.tag<sanctionId> raw)
 
 [<RequireQualifiedAccess>]
 module SanctionKind =
@@ -126,9 +131,12 @@ module SanctionTerm =
     /// None: until lifted.
     let create (minutes: int voption) : Result<SanctionTerm, DomainError> =
         match minutes with
-        | ValueNone -> Ok SanctionTerm.UntilLifted
-        | ValueSome minutes when minutes >= 1 && minutes <= MaxMinutes -> Ok(SanctionTerm.For(TimeSpan.FromMinutes(float minutes)))
-        | ValueSome minutes -> Error(DomainError.InvalidLimit("SanctionTerm", minutes))
+        | ValueNone ->
+            Ok SanctionTerm.UntilLifted
+        | ValueSome minutes when minutes >= 1 && minutes <= MaxMinutes ->
+            Ok(SanctionTerm.For(TimeSpan.FromMinutes(float minutes)))
+        | ValueSome minutes ->
+            Error(DomainError.InvalidLimit("SanctionTerm", minutes))
 
 [<RequireQualifiedAccess>]
 module Sanction =
@@ -158,4 +166,6 @@ module Sanction =
 
     /// The one sanction of a kind in force at now, if any.
     let find kind now (sanctions: Sanction seq) =
-        sanctions |> Seq.tryFind (fun sanction -> sanction.Kind = kind && activeAt now sanction) |> ValueOption.ofOption
+        sanctions
+        |> Seq.tryFind (fun sanction -> sanction.Kind = kind && activeAt now sanction)
+        |> ValueOption.ofOption

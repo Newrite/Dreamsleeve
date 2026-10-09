@@ -9,6 +9,10 @@ import Dreamsleeve.Logic;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Game.Input;
+import Dreamsleeve.Game.Phantoms;
+import Dreamsleeve.Game.PhantomNative;
+import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Client.Phantom.NifOutput;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -32,6 +36,23 @@ namespace Hooks
     // VR (0x140C52BC0) has no entry in its database, so VR is only range-checked.
     auto DispatchInput = REL::RelocationID(67355, 68655);
 
+    // Completed synchronous branch of AIProcess::Update3DModel_Impl. The
+    // queued branch does not reach this call; it returns without notification.
+    constexpr auto UpdateActor3D = REL::VariantID(38404, 39395, 0x65A140);
+    constexpr auto Clear3DFlags  = REL::VariantID(38868, 39909, 0x687870);
+
+    constexpr auto ObjectNetCopy         = REL::VariantID(69139, 70500, 0xCA5580);
+    constexpr auto ObjectNetProcessClone = REL::VariantID(69162, 70523, 0xCA6A50);
+
+    constexpr auto StreamCtor      = REL::VariantID(68971, 70324, 0xC9EC40);
+    constexpr auto StreamDtor      = REL::VariantID(68972, 70325, 0xC9EEA0);
+    constexpr auto StreamLoad      = REL::VariantID(68978, 70331, 0xC9F470);
+    constexpr auto AlphaFactory    = REL::VariantID(69311, 70684, 0xCADF10);
+    constexpr auto LightingFactory = REL::VariantID(99847, 106492, 0x1302ED0);
+
+    // Actual string -> no-argument loader registry; the adjacent qword is not it.
+    constexpr auto StreamLoaders = REL::VariantID(523904, 410484, 0x316AC08);
+
   }
 
   namespace Offset
@@ -48,6 +69,10 @@ namespace Hooks
     // IMenu::AdvanceMovie in the HUDMenu vtable, SE and AE alike.
     constexpr std::size_t HudAdvanceMovie = 0x05;
 
+    constexpr std::size_t ArrayFreeIndex = 0x14, ArraySize = 0x18;
+    constexpr std::size_t LoaderBuckets = 0x08, LoaderTable = 0x10, LoaderCount = 0x18;
+    constexpr std::size_t LoaderNext = 0x00, LoaderName = 0x08, LoaderFactory = 0x10;
+
   }
 
   // Bytes right before the dispatch call on all three runtimes:
@@ -57,10 +82,46 @@ namespace Hooks
   constexpr std::uint8_t CallOpcode         = 0xE8;
   constexpr std::size_t  CallSize           = 5;
 
+  struct ModelCompleted
+  {
+    static void Clear(RE::AIProcess* process)
+    {
+      Original(process);
+      // Can be reached on an engine task thread. No actor lookup, ownership,
+      // clone or compression here; notifications coalesce into a bounded audit.
+      Dreamsleeve::Game::PhantomCapture::RequestAudit();
+    }
+
+    static inline REL::Relocation<decltype(Clear)> Original;
+
+    static void Install()
+    {
+      const auto   site = Address::UpdateActor3D.address() + REL::Relocate(0x400, 0x402, 0x400);
+      const auto*  code = reinterpret_cast<const std::uint8_t*>(site);
+      std::int32_t displacement{};
+      std::memcpy(&displacement, code + 1, sizeof(displacement));
+      const auto target = site + CallSize + displacement;
+      // A changed/foreign call site is not evidence of the audited completion.
+      if (code[0] != CallOpcode || target != Address::Clear3DFlags.address())
+      {
+        logger::warn("Phantom completion hook unavailable at {:X}; bounded audit remains active", site);
+        return;
+      }
+      Original = SKSE::GetTrampoline().write_call<5>(site, Clear);
+      logger::info("Phantom completed 3D update hook installed at {:X}", site);
+    }
+  };
+
+  bool InstallPhantomNative();
+
   struct MainUpdate
   {
     static void Update(RE::Main* self)
     {
+      // kDataLoaded runs on the loader's thread. Bind native scene ownership to
+      // this verified main-loop entry instead, before any frame work.
+      static const bool nativeInstalled = InstallPhantomNative();
+      (void)nativeInstalled;
       UpdateOriginal(self);
       Logic::OnFrame();
     }
@@ -90,6 +151,377 @@ namespace Hooks
 
     static inline REL::Relocation<decltype(Dispatch)> Original;
   };
+
+  namespace P = Dreamsleeve::Client::Phantom;
+  std::thread::id phantomThread;
+
+  bool PhantomThread() noexcept
+  {
+    return std::this_thread::get_id() == phantomThread;
+  }
+
+  struct StreamDeleter
+  {
+    void operator()(RE::NiStream* stream) const
+    {
+      if (!stream) return;
+      // Non-deleting destructor, followed by its matching engine allocator.
+      REL::Relocation<void(RE::NiStream*)>{Address::StreamDtor}(stream);
+      RE::free(stream);
+    }
+  };
+
+  std::unique_ptr<RE::NiStream, StreamDeleter> CreateStream()
+  {
+    auto* memory = static_cast<RE::NiStream*>(RE::malloc(0x620));
+    if (!memory) return {};
+    auto* stream = REL::Relocation<RE::NiStream*(RE::NiStream*)>{Address::StreamCtor}(memory);
+    return std::unique_ptr<RE::NiStream, StreamDeleter>{stream};
+  }
+
+  void SeedStream(RE::NiStream& stream, RE::NiNode* root)
+  {
+    auto& top   = stream.topObjects;
+    using Array = std::remove_reference_t<decltype(top)>;
+    top.~Array();
+    new (&top) Array(1);
+    new (top.begin()) RE::NiPointer<RE::NiObject>{root};
+    const std::uint32_t one = 1;
+    std::memcpy(reinterpret_cast<std::byte*>(&top) + Offset::ArrayFreeIndex, &one, sizeof(one));
+    std::memcpy(reinterpret_cast<std::byte*>(&top) + Offset::ArraySize, &one, sizeof(one));
+  }
+
+  template <class T>
+  T StreamField(const void* object, std::size_t offset)
+  {
+    T value{};
+    std::memcpy(&value, static_cast<const std::byte*>(object) + offset, sizeof(value));
+    return value;
+  }
+
+  std::expected<void, std::string> AuditPhantom(RE::NiStream& stream)
+  {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Span auditSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeAudit);
+#endif
+    // Reuse this registration for Save. The native RegisterSaveObject returns
+    // false for a known root, so SaveStream's repeated RegisterObjects stops
+    // before traversing its children. Do not mutate the tree between audit/Save.
+    stream.RegisterObjects();
+    if (!stream.objects.size() || stream.objects.size() > 65536) return std::unexpected{"NiStream preflight: invalid object count"};
+
+    const auto* registry = *REL::Relocation<const void**>{Address::StreamLoaders};
+    if (!registry) return std::unexpected{"NiStream preflight: loader registry unavailable"};
+    const auto  buckets = StreamField<std::uint32_t>(registry, Offset::LoaderBuckets);
+    const auto  count   = StreamField<std::uint32_t>(registry, Offset::LoaderCount);
+    const auto* table   = StreamField<const void* const*>(registry, Offset::LoaderTable);
+    if (!table || !buckets || buckets > 65536 || count > 65536)
+      return std::unexpected{"NiStream preflight: invalid loader registry layout"};
+
+    std::unordered_set<std::string> factories;
+    std::size_t                     visited = 0;
+    for (std::uint32_t i = 0; i < buckets; ++i)
+      for (const void* entry = table[i]; entry; entry = StreamField<const void*>(entry, Offset::LoaderNext))
+      {
+        if (++visited > count) return std::unexpected{"NiStream preflight: loader registry chain/count mismatch"};
+        const auto* name = StreamField<const char*>(entry, Offset::LoaderName);
+        if (name && StreamField<std::uintptr_t>(entry, Offset::LoaderFactory)) factories.emplace(name);
+      }
+    if (visited != count) return std::unexpected{"NiStream preflight: incomplete loader registry"};
+
+    std::map<std::string, std::size_t> types;
+    for (const auto& object : stream.objects)
+    {
+      const auto* type = object ? object->GetStreamableRTTI() : nullptr;
+      if (!type || !type->GetName()) return std::unexpected{"NiStream preflight: missing streamable RTTI"};
+      ++types[type->GetName()];
+    }
+
+    std::string missing;
+    logger::info(
+      "[Phantom] NiStream preflight: {} objects, {} types, {} loader factories",
+      stream.objects.size(),
+      types.size(),
+      factories.size());
+    for (const auto& [name, instances] : types)
+    {
+      const bool present = factories.contains(name);
+      logger::info("[Phantom] NiStream type: {} x{} — {}", name, instances, present ? "loader present" : "MISSING loader");
+      if (!present)
+      {
+        if (!missing.empty()) missing += ", ";
+        missing += std::format("{} x{}", name, instances);
+      }
+    }
+    if (!missing.empty()) return std::unexpected{"NiStream missing loaders: " + missing};
+    return {};
+  }
+
+  class PhantomOutput final : public RE::NiBinaryStream
+  {
+    P::NifOutput output;
+
+    static std::uint32_t Read(RE::NiBinaryStream* stream, void*, std::uint32_t, std::uint32_t*, std::uint32_t)
+    {
+      static_cast<PhantomOutput*>(stream)->output.Reject();
+      return 0;
+    }
+
+    static std::uint32_t Write(RE::NiBinaryStream* stream, const void* bytes, std::uint32_t size, std::uint32_t*, std::uint32_t)
+    {
+      return static_cast<PhantomOutput*>(stream)->output.Write({static_cast<const std::uint8_t*>(bytes), size});
+    }
+
+public:
+
+    explicit PhantomOutput(std::uint32_t reserve) : output(P::Limits{}.assetBytes, reserve)
+    {
+      _readFn  = Read;
+      _writeFn = Write;
+    }
+
+    bool good() const override
+    {
+      return output.Good();
+    }
+
+    P::NifOutput::Error Status() const noexcept
+    {
+      return output.Status();
+    }
+
+    void seek(std::int32_t delta) override
+    {
+      output.Seek(delta);
+      _absoluteCurrentPos = output.Position();
+    }
+
+    std::uint32_t tell() const override
+    {
+      return output.Position();
+    }
+
+    void get_info(BufferInfo& info) override
+    {
+      info           = {};
+      info.buffer    = const_cast<std::uint8_t*>(output.Bytes().data());
+      info.totalSize = info.bufferAllocSize = info.bufferReadSize = static_cast<std::uint32_t>(output.Bytes().size());
+      info.bufferPos = info.streamPos = output.Position();
+    }
+
+    void set_endian_swap(bool swap) override
+    {
+      // This production profile emits only little-endian SSE stream-100 NIF.
+      if (swap) output.Reject();
+    }
+
+    std::vector<std::uint8_t> Take() &&
+    {
+      return std::move(output).Take();
+    }
+  };
+
+  P::Result<std::vector<std::uint8_t>> SavePhantom(RE::NiNode* root)
+  {
+    if (!PhantomThread()) return std::unexpected(P::Error{P::Failure::Busy, "native.thread"});
+    auto stream = CreateStream();
+    if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
+    SeedStream(*stream, root);
+    if (auto audited = AuditPhantom(*stream); !audited) return std::unexpected(P::Error{P::Failure::InvalidFormat, audited.error()});
+
+    // A size hint, not a limit or retained allocation. Only the game thread
+    // accesses it. Each vector belongs exclusively to its resulting asset.
+    static std::uint32_t previousBytes{};
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto nativeStart = std::chrono::steady_clock::now();
+#endif
+    PhantomOutput output(previousBytes);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeReserve,
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
+#endif
+    // Native Save(NiBinaryStream*) (slot 04) still registers objects and invokes
+    // their SaveBinary. Only the grow/copy output storage is supplied by us.
+    const bool saved = stream->Save1(&output);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Observe(
+      Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeSave,
+      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
+#endif
+    if (!output.good())
+      return std::unexpected(
+        P::Error{
+            output.Status() == P::NifOutput::Error::Limit ? P::Failure::LimitExceeded : P::Failure::InvalidFormat,
+            std::format("native.output:{}", static_cast<unsigned>(output.Status()))
+        });
+    if (!saved)
+      return std::unexpected(
+        P::Error{P::Failure::InvalidFormat, std::format("NiStream Save: {} {}", stream->lastError, stream->lastErrorMessage)});
+
+    auto result = std::move(output).Take();
+    if (result.empty()) return std::unexpected(P::Error{P::Failure::InvalidFormat, "native.empty-output"});
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Event(
+      "native_output",
+      std::format("\"reserve_hint\":{},\"raw_bytes\":{},\"capacity\":{}", previousBytes, result.size(), result.capacity()));
+#endif
+
+    previousBytes = static_cast<std::uint32_t>(result.size());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+    Dreamsleeve::Client::Diagnostics::Trace::Span disposeSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeDispose);
+#endif
+    stream.reset();
+    return result;
+  }
+
+  P::Result<RE::NiPointer<RE::NiNode>> LoadPhantom(const P::ValidatedAsset& asset)
+  {
+    if (!PhantomThread()) return std::unexpected(P::Error{P::Failure::Busy, "native.thread"});
+    const auto& bytes  = asset.Value().nif;
+    auto        stream = CreateStream();
+    if (!stream) return std::unexpected(P::Error{P::Failure::Busy, "native.stream-allocation"});
+    static const REL::Relocation<bool(RE::NiStream*, char*, std::uint32_t)> load{Address::StreamLoad};
+    const bool                                                              loaded =
+      load(stream.get(), reinterpret_cast<char*>(const_cast<std::uint8_t*>(bytes.data())), static_cast<std::uint32_t>(bytes.size()));
+    if (!loaded || stream->topObjects.size() != 1 || !stream->topObjects[0] || !stream->topObjects[0]->AsNode())
+      return std::unexpected(
+        P::Error{P::Failure::InvalidFormat, std::format("NiStream Load: {} {}", stream->lastError, stream->lastErrorMessage)});
+    return RE::NiPointer<RE::NiNode>{stream->topObjects[0]->AsNode()};
+  }
+
+  RE::NiAlphaProperty* PhantomAlpha()
+  {
+    return REL::Relocation<RE::NiAlphaProperty*()>{Address::AlphaFactory}();
+  }
+
+  RE::BSLightingShaderProperty* PhantomLighting()
+  {
+    // Native factory allocates/constructs 0x160 bytes on SE/AE, 0x178 on VR.
+    // It owns a default lighting material; NiPointer takes the returned object.
+    return REL::Relocation<RE::BSLightingShaderProperty*()>{Address::LightingFactory}();
+  }
+
+  void Normalize(RE::BSFlattenedBoneTree& tree)
+  {
+    auto& data = tree.GetRuntimeData();
+    if (!data.boneEntries) return;
+    if (!data.numBones)
+    {
+      RE::free(reinterpret_cast<std::byte*>(data.boneEntries) - sizeof(std::uint64_t));
+      data.boneEntries = nullptr;
+      return;
+    }
+
+    const auto bytes  = data.numBones * sizeof(RE::BSFlattenedBoneTree::BoneEntry);
+    auto*      native = static_cast<RE::BSFlattenedBoneTree::BoneEntry*>(RE::malloc(bytes));
+    if (!native && bytes)
+    {
+      // Move the allocation down over its cookie so the destructor can still
+      // release every name and the correct allocation without another allocation.
+      auto* allocation = reinterpret_cast<std::byte*>(data.boneEntries) - sizeof(std::uint64_t);
+      std::memmove(allocation, data.boneEntries, bytes);
+      data.boneEntries = reinterpret_cast<RE::BSFlattenedBoneTree::BoneEntry*>(allocation);
+      return;
+    }
+
+    std::memcpy(native, data.boneEntries, bytes);
+    RE::free(reinterpret_cast<std::byte*>(data.boneEntries) - sizeof(std::uint64_t));
+    data.boneEntries = native;
+  }
+
+  // NiObjectNET's controller edges only. The native geometry/skin clone still
+  // executes both passes. Never detach or edit controllers on the live actor.
+  struct PhantomClone
+  {
+    static inline thread_local RE::NiCloningProcess* snapshot{};
+
+    static RE::NiObject* ControllerCopy(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      return snapshot == &process ? nullptr : controller->CreateClone(process);
+    }
+
+    static void ControllerProcess(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      if (snapshot != &process) controller->ProcessClone(process);
+    }
+
+    static RE::NiPointer<RE::NiObject> Clone(RE::NiNode* root, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs)
+    {
+      if (!PhantomThread() || !root) return {};
+      const RE::NiPointer<RE::NiNode> source{root};
+      RE::NiCloningProcess            process{};
+      process.copyType = 1;  // Native CopyMembers: preserve names without suffixes.
+      process.scale    = {1, 1, 1};
+
+      struct Scope
+      {
+        RE::NiCloningProcess* previous;
+
+        ~Scope()
+        {
+          snapshot = previous;
+        }
+      } scope{std::exchange(snapshot, &process)};
+
+      RE::NiPointer<RE::NiObject> clone{source->CreateClone(process)};
+      if (clone)
+      {
+        source->ProcessClone(process);
+        // Export the native identity map while its process is still alive.
+        // Duplicate names and reordered/compacted child arrays are irrelevant.
+        for (const auto& [original, copied] : process.cloneMap)
+        {
+          auto* from = netimmerse_cast<RE::NiAVObject*>(original);
+          auto* to   = netimmerse_cast<RE::NiAVObject*>(copied);
+          if (from && to) pairs.emplace(from, to);
+        }
+      }
+      return clone;
+    }
+
+    static bool Install()
+    {
+      const auto                            copy    = Address::ObjectNetCopy.address() + REL::Relocate(0x259, 0x25B, 0x259);
+      const auto                            process = Address::ObjectNetProcessClone.address() + 0x64;
+      constexpr std::array<std::uint8_t, 6> copyBytes{0xFF, 0x90, 0xB8, 0, 0, 0};
+      constexpr std::array<std::uint8_t, 6> processBytes{0xFF, 0x90, 0xE8, 0, 0, 0};
+      if (
+        !std::ranges::equal(copyBytes, std::span{reinterpret_cast<const std::uint8_t*>(copy), 6}) ||
+        !std::ranges::equal(processBytes, std::span{reinterpret_cast<const std::uint8_t*>(process), 6}))
+      {
+        logger::error("Native phantom disabled: controller clone call sites changed");
+        return false;
+      }
+      // The audited original is a register-indirect call, not RIP-relative.
+      // Both full instructions were checked above; no original target is saved.
+      SKSE::GetTrampoline().write_call<6>(copy, ControllerCopy, true);
+      SKSE::GetTrampoline().write_call<6>(process, ControllerProcess, true);
+      logger::info("Phantom controller-free clone installed at {:X}/{:X}", copy, process);
+      return true;
+    }
+  };
+
+  bool InstallPhantomNative()
+  {
+    const auto version = REL::Module::get().version();
+    const bool known   = (REL::Module::IsSE() && version == REL::Version{1, 5, 97, 0}) ||
+                         (REL::Module::IsAE() && version == REL::Version{1, 6, 1170, 0}) ||
+                         (REL::Module::IsVR() && version == REL::Version{1, 4, 15, 0});
+    if (!known)
+    {
+      logger::warn("Native phantom disabled for unaudited runtime {}", version.string());
+      return false;
+    }
+    if (!PhantomClone::Install()) return false;
+    ModelCompleted::Install();
+    phantomThread = std::this_thread::get_id();
+    const Dreamsleeve::Game::PhantomNative::Engine
+      engine{PhantomThread, SavePhantom, LoadPhantom, PhantomAlpha, PhantomLighting, Normalize, PhantomClone::Clone};
+    Phantoms::Install(engine);
+    logger::info("Native NiStream phantom operations bound to Main::Update, runtime {}", version.string());
+    return true;
+  }
 
   void InstallMainUpdate()
   {

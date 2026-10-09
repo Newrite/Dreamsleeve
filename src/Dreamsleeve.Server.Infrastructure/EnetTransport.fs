@@ -9,6 +9,7 @@ open System.Net
 open System.Net.Sockets
 open Microsoft.Extensions.Logging
 open Enet
+open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure.Interop
 
@@ -53,7 +54,12 @@ module PumpHealth =
         | Report of failures: int * last: SocketError
         | Broken of persistent: bool
 
-    let create () = { FailingSince = ValueNone; Unreported = 0; LastError = SocketError.Success; LastReport = ValueNone }
+    let create () = {
+        FailingSince = ValueNone
+        Unreported = 0
+        LastError = SocketError.Success
+        LastReport = ValueNone
+    }
 
     let private due state now =
         state.Unreported > 0 && state.LastReport |> ValueOption.forall (fun last -> now - last >= ReportIntervalMs)
@@ -74,6 +80,7 @@ module PumpHealth =
             if state.FailingSince.IsNone then state.FailingSince <- ValueSome now
             state.Unreported <- state.Unreported + 1
             state.LastError <- error
+
             if now - state.FailingSince.Value >= MaxFailingMs then Verdict.Broken true
             elif due state now then report state now
             else Verdict.Passing
@@ -87,11 +94,14 @@ module EnetTransport =
         ConnectId: uint32
         Outgoing: PacketBudget
         mutable Closing: bool
+        mutable PoseReceivedAt: int64
+        mutable PoseSamples: double
     }
 
     type private State = {
         Diagnostics: TransportDiagnostics
         Config: ServerConfig
+        Phantoms: PhantomOptions
         Logger: ILogger
         Pump: PumpHealth.State
         Host: EnetHost
@@ -122,7 +132,7 @@ module EnetTransport =
         | true, _ | false, _ -> ()
 
     let private connected state (events: ResizeArray<ServerTransportEvent>) (peer: EnetPeer) =
-        if peer.ChannelCount < 3un then
+        if peer.ChannelCount < unativeint ServerConfig.MinChannelLimit then
             peer.DisconnectNow(0u)
         else
             match state.Slots.TryGetValue peer.IncomingPeerId with
@@ -137,6 +147,9 @@ module EnetTransport =
                 ConnectId = peer.ConnectId
                 Outgoing = PacketBudget(state.Config.MaxOutgoingPacketsPerPeer, int64 state.Config.MaxOutgoingBytesPerPeer)
                 Closing = false
+
+                PoseReceivedAt = Environment.TickCount64
+                PoseSamples = 2.0
             }
             state.Connections.Add(connection.Id, connection)
             state.Slots.Add(peer.IncomingPeerId, connection)
@@ -159,15 +172,32 @@ module EnetTransport =
         | true, connection when connection.ConnectId = event.Peer.ConnectId && not connection.Closing ->
             let reliable = (packet.Flags &&& EnetPacketFlag.Reliable) = EnetPacketFlag.Reliable
             let unsequenced = (packet.Flags &&& EnetPacketFlag.Unsequenced) = EnetPacketFlag.Unsequenced
-            if event.ChannelId > byte DeliveryLane.Realtime || unsequenced
-               || (event.ChannelId <> byte DeliveryLane.Realtime && not reliable)
-               || packet.DataLength > unativeint state.Config.MaxPacketBytes
-               || (event.ChannelId = byte DeliveryLane.Realtime
-                   && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
+
+            match DeliveryLane.fromChannel event.ChannelId with
+            | Error _ ->
                 reset state connection.Id
                 events.Add(ServerTransportEvent.Disconnected connection.Id)
-            else
-                events.Add(ServerTransportEvent.Received(connection.Id, enum<DeliveryLane>(int event.ChannelId), packet.AsSpan().ToArray()))
+            | Ok lane ->
+                let time = Environment.TickCount64
+                if lane = DeliveryLane.Poses then
+                    connection.PoseSamples <- min 2.0 (connection.PoseSamples + double (time - connection.PoseReceivedAt) / double state.Phantoms.PoseIntervalMs)
+                    connection.PoseReceivedAt <- time
+
+                // The only reliable Poses packet is ENet's empty epoch marker at
+                // unreliable sequence rollover. It never reaches the domain codec.
+                if lane = DeliveryLane.Poses && reliable && not unsequenced && packet.DataLength = 0un then ()
+                elif unsequenced || LanePolicy.reliable lane <> reliable
+                   || packet.DataLength > unativeint state.Config.MaxPacketBytes
+                   || (lane = DeliveryLane.Models && packet.DataLength > unativeint PhantomAssetLimits.assetPacketBytes)
+                   || (lane = DeliveryLane.Poses && packet.DataLength > unativeint (PhantomAssetLimits.posePacketBytes state.Phantoms.Limits))
+                   || (lane = DeliveryLane.Realtime
+                       && packet.DataLength > unativeint (OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer)) then
+                    reset state connection.Id
+                    events.Add(ServerTransportEvent.Disconnected connection.Id)
+                elif lane = DeliveryLane.Poses && connection.PoseSamples < 1.0 then ()
+                else
+                    if lane = DeliveryLane.Poses then connection.PoseSamples <- connection.PoseSamples - 1.0
+                    events.Add(ServerTransportEvent.Received(connection.Id, lane, packet.AsSpan().ToArray()))
         | true, _ | false, _ -> ()
 
     let private poll state () =
@@ -226,27 +256,35 @@ module EnetTransport =
     let private send state (connectionId, packet: TransportPacket) =
         let bytes = packet.Bytes
         if state.Disposed then
-            Error "ENet transport is disposed."
-        elif not (Enum.IsDefined packet.Lane) then Error "Invalid delivery lane."
+            Error(TransportSendError.Closed "ENet transport is disposed.")
         elif isNull bytes || bytes.Length = 0 || bytes.Length > state.Config.MaxPacketBytes then
-            Error "Outgoing packet size is outside the configured limits."
+            Error(TransportSendError.InvalidPacket "Outgoing packet size is outside the configured limits.")
         else
             match state.Connections.TryGetValue connectionId with
-            | false, _ -> Error "Connection is closed."
-            | true, connection when connection.Closing -> Error "Connection is closing."
+            | false, _ -> Error(TransportSendError.Closed "Connection is closed.")
+            | true, connection when connection.Closing -> Error(TransportSendError.Closed "Connection is closing.")
             | true, connection when packet.Lane = DeliveryLane.Realtime && bytes.Length > OutgoingPackets.GetUnfragmentedPayloadBytes connection.Peer ->
-                Error "Realtime payload exceeds negotiated MTU."
+                Error(TransportSendError.InvalidPacket "Realtime payload exceeds negotiated MTU.")
             | true, connection ->
                 let started = TransportDiagnostics.BeginSend()
-                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, byte packet.Lane, packet.Lane <> DeliveryLane.Realtime)
+                let delivery =
+                    match LanePolicy.reliability packet.Lane with
+                    | LaneReliability.Reliable when LanePolicy.bulk (LanePolicy.admissionLane packet) -> PacketDelivery.ReliableBulk
+                    | LaneReliability.Reliable -> PacketDelivery.Reliable
+                    | LaneReliability.Sequenced -> PacketDelivery.Sequenced
+                    | LaneReliability.SequencedFragmented -> PacketDelivery.SequencedFragmented
+
+                let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, DeliveryLane.toChannel packet.Lane, delivery)
                 TransportDiagnostics.EndSend(started, bytes.Length)
+
                 match result with
                 | PacketSendResult.Sent ->
                     TransportDiagnostics.RecordAcceptedPacket(connection.Peer, bytes.Length)
                     Ok ()
-                | PacketSendResult.BudgetExceeded -> Error "Outgoing ENet packet budget exceeded."
-                | PacketSendResult.PeerRejected -> Error "ENet peer rejected the outgoing packet."
-                | unknown when not (Enum.IsDefined unknown) -> Error "Unknown ENet packet admission result."
+                | PacketSendResult.BudgetExceeded -> Error(TransportSendError.BudgetExceeded "Outgoing ENet packet budget exceeded.")
+                | PacketSendResult.PeerRejected -> Error(TransportSendError.PeerRejected "ENet peer rejected the outgoing packet.")
+                | PacketSendResult.InvalidDelivery -> Error(TransportSendError.Faulted "Outgoing ENet delivery policy is invalid.")
+                | unknown when not (Enum.IsDefined unknown) -> Error(TransportSendError.Faulted "Unknown ENet packet admission result.")
 
     let private dispose state () =
         if not state.Disposed then
@@ -255,7 +293,7 @@ module EnetTransport =
                 // Graceful shutdown has no remaining peers. On fault/Abort notify
                 // any still tracked peers before freeing their queued packets.
                 for connection in state.Connections.Values do
-                    try connection.Peer.DisconnectNow(0u) with _ -> ()
+                    connection.Peer.DisconnectNow(0u)
             finally
                 state.Connections.Clear()
                 state.Slots.Clear()
@@ -264,7 +302,22 @@ module EnetTransport =
                 finally
                     enet.ENET_API.enet_deinitialize()
 
-    let private allocate config (logger: ILogger) =
+    let private tryCreateHost address (config: ServerConfig) =
+        try
+            Ok (EnetHost.Create(address, unativeint config.PeerLimit, unativeint config.ChannelLimit,
+                                0u, 0u, EnetHostOption.Ipv4))
+        with
+        | :? SocketException as error -> Error ($"ENet host creation failed: {error.Message}", error :> exn)
+        | :? ArgumentException as error -> Error ($"ENet host configuration failed: {error.Message}", error :> exn)
+
+    let internal readBuffers host =
+        let mutable buffers = struct (0, 0)
+        let mutable error = Unchecked.defaultof<SocketException>
+        if TransportDiagnostics.TryReadBuffers(host, &buffers, &error) then Ok buffers
+        else Error error
+
+    // The injected dependency reader lets ownership tests observe the real socket.
+    let internal allocateWith (readBuffers: EnetHost -> Result<struct (int * int), SocketException>) phantoms config (logger: ILogger) =
         let mutable address = Unchecked.defaultof<enet.ENetAddress>
         let resolved = enet.ENetAddress.FromIpAddress(config.BindAddress, config.Port, &address)
 
@@ -273,57 +326,72 @@ module EnetTransport =
         elif enet.ENET_API.enet_initialize() <> 0 then
             Error "ENet initialization failed."
         else
+            let mutable transferred = false
             try
-                let host = EnetHost.Create(address, unativeint config.PeerLimit, unativeint config.ChannelLimit,
-                                           0u, 0u, EnetHostOption.Ipv4)
-                if not (TransportDiagnostics.ConfigureBuffers(host, config.ReceiveBufferBytes, config.SendBufferBytes)) then
-                    host.Dispose()
-                    enet.ENET_API.enet_deinitialize()
-                    Error "Could not configure ENet UDP socket buffers."
-                else
-                    // Linux silently caps the sizes at net.core.rmem_max/wmem_max and
-                    // reports double what it grants; Windows grants them as asked.
-                    let granted value = if OperatingSystem.IsLinux() then value / 2 else value
-                    let struct (receive, sent) = TransportDiagnostics.ReadBuffers host
-                    let receive, sent = granted receive, granted sent
-                    logger.LogInformation("ENet UDP socket buffers: receive {Receive} bytes, send {Send} bytes", receive, sent)
-                    if receive < config.ReceiveBufferBytes || sent < config.SendBufferBytes then
-                        logger.LogWarning(
-                            "The system granted smaller UDP socket buffers than Server.ReceiveBufferBytes {Receive} / SendBufferBytes {Send}; on Linux raise net.core.rmem_max and net.core.wmem_max",
-                            config.ReceiveBufferBytes, config.SendBufferBytes)
-                    // Checksums and compression stay disabled, matching the native client.
-                    host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
-                    host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
+                match tryCreateHost address config with
+                | Error (message, error) ->
+                    logger.LogError(error, "ENet host creation rejected")
+                    Error message
+                | Ok host ->
+                    try
+                        if not (TransportDiagnostics.ConfigureBuffers(host, config.ReceiveBufferBytes, config.SendBufferBytes)) then
+                            Error "Could not configure ENet UDP socket buffers."
+                        else
+                            match readBuffers host with
+                            | Error error ->
+                                logger.LogError(error, "Could not read ENet UDP socket buffers")
+                                Error "Could not read ENet UDP socket buffers."
+                            | Ok (struct (receive, sent)) ->
+                                // Linux silently caps the sizes at net.core.rmem_max/wmem_max and
+                                // reports double what it grants; Windows grants them as asked.
+                                let granted value = if OperatingSystem.IsLinux() then value / 2 else value
+                                let receive, sent = granted receive, granted sent
+                                logger.LogInformation("ENet UDP socket buffers: receive {Receive} bytes, send {Send} bytes", receive, sent)
+                                if receive < config.ReceiveBufferBytes || sent < config.SendBufferBytes then
+                                    logger.LogWarning(
+                                        "The system granted smaller UDP socket buffers than Server.ReceiveBufferBytes {Receive} / SendBufferBytes {Send}; on Linux raise net.core.rmem_max and net.core.wmem_max",
+                                        config.ReceiveBufferBytes, config.SendBufferBytes)
 
-                    let state = {
-                        Diagnostics = TransportDiagnostics()
-                        Config = config
-                        Logger = logger
-                        Pump = PumpHealth.create ()
-                        Host = host
-                        Connections = Dictionary()
-                        Slots = Dictionary()
-                        Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes, max 1 (min config.PeerLimit (max 1 (config.MaxOutgoingPackets / 8))))
-                        Disposed = false
-                    }
-                    Ok {
-                        Poll = poll state
-                        SetReadyHandler = ignore
-                        Send = send state
-                        MaxUnfragmentedPayloadBytes = maxUnfragmentedPayloadBytes state
-                        Close = close state
-                        Reset = reset state
-                        Dispose = dispose state
-                    }
-            with
-            | :? SocketException as error ->
-                enet.ENET_API.enet_deinitialize()
-                Error (sprintf "ENet host creation failed: %s" error.Message)
-            | :? ArgumentException as error ->
-                enet.ENET_API.enet_deinitialize()
-                Error (sprintf "ENet host configuration failed: %s" error.Message)
+                                // Checksums and compression stay disabled, matching the native client.
+                                host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
+                                host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
+
+                                let state = {
+                                    Diagnostics = TransportDiagnostics(fun error -> logger.LogWarning(error, "Optional ENet diagnostic probe disabled"))
+                                    Config = config
+                                    Phantoms = phantoms
+                                    Logger = logger
+                                    Pump = PumpHealth.create ()
+                                    Host = host
+                                    Connections = Dictionary()
+                                    Slots = Dictionary()
+
+                                    Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes, max 1 (min config.PeerLimit (max 1 (config.MaxOutgoingPackets / 8))))
+
+                                    Disposed = false
+                                }
+                                let transport = {
+                                    Poll = poll state
+                                    SetReadyHandler = ignore
+                                    Send = send state
+                                    MaxUnfragmentedPayloadBytes = maxUnfragmentedPayloadBytes state
+                                    Close = close state
+                                    Reset = reset state
+                                    Dispose = dispose state
+                                }
+                                transferred <- true
+                                Ok transport
+                    finally
+                        // Before publication there are no packets, compressor or user callbacks.
+                        if not transferred then host.Dispose()
+            finally
+                if not transferred then enet.ENET_API.enet_deinitialize()
+
+    let private allocate phantoms config logger = allocateWith readBuffers phantoms config logger
 
     /// The settings come checked by GameSettings.create.
-    let createInline config logger = allocate config logger
+    let createInline config logger = allocate PhantomOptions.defaults config logger
 
-    let create config logger = TransportOwner.create config (fun () -> allocate config logger)
+    let create config logger = TransportOwner.create config (fun () -> allocate PhantomOptions.defaults config logger)
+
+    let createWithPhantoms config phantoms logger = TransportOwner.create config (fun () -> allocate phantoms config logger)

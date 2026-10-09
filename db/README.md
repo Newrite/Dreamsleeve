@@ -161,3 +161,38 @@ password hash compare-and-swap, cancellation, unsupported/damaged schema rejecti
 non-reuse after deletion. The admin, sanction and ground mark stores: migrations 5..9 over
 schema 4 and their rollback, sessions, tokens, roles, search, audit, sanction terms and
 issuers, marks with their pseudonym and game date across restarts and account deletion.
+
+
+## Stored representation and failure boundaries
+
+Each read projection checks the actual SQLite INTEGER/TEXT/BLOB representation
+before provider getters can coerce it. Signed identifiers must stay positive,
+integer-to-Int32 values must fit their width, and Unix milliseconds must fit
+DateTimeOffset's supported range. Numeric REAL projections also permit SQLite
+INTEGER values. Domain constructors continue to own enum and value validation;
+nullable fields and genuinely missing rows retain their documented absence.
+Credential expiry is projected and checked before the expiry decision: saved credentials
+keep INTEGER seconds; panel sessions keep supported INTEGER milliseconds. Valid
+expired tokens retain their existing invalid-credential/absence outcomes. An audit
+line with both administrator and moderator issuers is corruption; both deleted
+issuers remain legitimate absence.
+The account, administrator and ground-mark read projections inspect raw columns
+before materialization; generated inserts and transaction ordering are unchanged.
+
+A unit of work owns its connection, query context and transaction. Expected
+SqliteException values retain their original cause in AccountStoreError.Failed;
+owned cancellation is Canceled. Unexpected work faults leave this dependency
+adapter after deterministic disposal/rollback. Authentication and admin workers
+supervise a fresh isolated request: they log the original fault, return
+unavailable, and never retry the work. Their actor-owned state changes only from
+completed results, so this boundary does not resume partially mutated actor state.
+Guild and ground-mark writers instead terminate and let the runtime reconstruct
+its state from storage when a write fails.
+
+Startup adapts filesystem/path failures only around those dependency calls, and
+Migrondi's documented source/setup/application failures only around migration
+execution. An aggregate containing an unexpected cause escapes to the startup
+lifetime. Failure still prevents listeners from starting; the schema remains 14.
+The SQLite boundaries suite uses temporary owned databases to check coercion,
+corrupt stored values, provider locking/open failures, rollback and resource
+release on an original unexpected fault, cancellation and startup failures.

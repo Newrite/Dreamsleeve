@@ -5,6 +5,7 @@ module;
 export module Dreamsleeve.Game.Telemetry;
 
 import std;
+import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Game.World;
 
@@ -212,8 +213,8 @@ namespace Telemetry
     const auto& settings = runtime.app->Settings().client;
     if (now >= state.nextMovement)
     {
-      state.nextMovement = now + std::chrono::milliseconds{settings.playerSampleIntervalMs};
-      auto location      = World::ReadLocation(player, *space);
+      Dreamsleeve::Utils::Time::AdvanceSample(state.nextMovement, now, std::chrono::milliseconds{settings.playerSampleIntervalMs});
+      auto location = World::ReadLocation(player, *space);
       // A new space or a teleport starts a new motion context on the server.
       if (!state.sent.location || Domain::Spatial::Jumped(*state.sent.location, location, settings.movement.teleportDistance))
         Post(Dream::LocalLocation{location});

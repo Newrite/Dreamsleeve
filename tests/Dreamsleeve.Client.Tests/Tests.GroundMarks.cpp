@@ -195,6 +195,7 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
   CHECK(exchange.Post({1, PlaceGroundNote{first, "hello", Placement(0), Date}}) == CommandPostResult::Queued);
   CHECK(exchange.Post({1, ReportDeath{*exchange.NextRequestId(), "", Placement(0), Date}}) == CommandPostResult::Queued);
   CHECK(exchange.Post({1, RemoveGroundMark{*exchange.NextRequestId(), 5}}) == CommandPostResult::Full);
+
   std::vector<QueuedClientCommand> commands;
   exchange.TakeCommands(commands);
   REQUIRE(commands.size() == 2);
@@ -296,6 +297,7 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   auto noAuthor = Changed(3, {1});
   noAuthor.mutable_ground_marks_changed()->mutable_added(0)->clear_author();
   CHECK_FALSE(codec.Decode(Bytes(noAuthor)));
+
   auto emptyDeath = Changed(3, {});
   WriteMark(*emptyDeath.mutable_ground_marks_changed()->add_added(), 8, P::GROUND_MARK_KIND_DEATH);
   auto death = codec.Decode(Bytes(emptyDeath));
@@ -305,6 +307,7 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].characterName);
   // A mark stored before protocol 12 has no date; a present date must be valid.
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].gameDate);
+
   auto badDate = Changed(3, {1});
   badDate.mutable_ground_marks_changed()->mutable_added(0)->mutable_game_date()->set_month(13);
   CHECK_FALSE(codec.Decode(Bytes(badDate)));

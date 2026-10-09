@@ -36,24 +36,66 @@ public:
     }
   };
 
-  export auto SetupLog() -> void
+  export enum class ErrorKind
+  {
+    MissingDirectory,
+    PathEncoding,
+    Sink
+  };
+
+  export struct Error
+  {
+    ErrorKind   kind;
+    std::string detail;
+  };
+
+  std::expected<std::string, Error> LogFileName(const std::filesystem::path& path)
+  {
+    // MSVC path.string() can reject a native filename in the current code page.
+    try
+    {
+      return path.string();
+    }
+    catch (const std::system_error& failure)
+    {
+      return std::unexpected(Error{ErrorKind::PathEncoding, std::format("Cannot encode the SKSE log filename: {}", failure.what())});
+    }
+  }
+
+  std::expected<std::shared_ptr<spdlog::sinks::basic_file_sink_mt>, Error> OpenLog(const std::string& filename)
+  {
+    // The sink dependency reports ordinary directory/open failures by exception.
+    try
+    {
+      return std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
+    }
+    catch (const spdlog::spdlog_ex& failure)
+    {
+      return std::unexpected(Error{ErrorKind::Sink, std::format("Cannot open the SKSE log: {}", failure.what())});
+    }
+  }
+
+  export auto SetupLog() -> std::expected<void, Error>
   {
     auto logs_folder = SKSE::log::log_directory();
-    if (!logs_folder) SKSE::stl::report_and_fail("SKSE log_directory not provided, logs disabled.");
+    if (!logs_folder) return std::unexpected(Error{ErrorKind::MissingDirectory, "SKSE log directory is unavailable."});
 
-    auto plugin_name     = SKSE::PluginDeclaration::GetSingleton()->GetName();
-    auto log_file_path   = *logs_folder / std::format("{}.log", plugin_name);
-    auto file_logger_ptr = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file_path.string(), true);
-    auto logger_ptr      = std::make_shared<spdlog::logger>("log", std::move(file_logger_ptr));
+    auto plugin_name   = SKSE::PluginDeclaration::GetSingleton()->GetName();
+    auto log_file_path = *logs_folder / std::format("{}.log", plugin_name);
+    auto filename      = LogFileName(log_file_path);
+    if (!filename) return std::unexpected(std::move(filename.error()));
+    auto sink = OpenLog(*filename);
+    if (!sink) return std::unexpected(std::move(sink.error()));
+
+    auto logger_ptr = std::make_shared<spdlog::logger>("log", std::move(*sink));
+    auto formatter  = std::make_unique<spdlog::pattern_formatter>();
+    formatter->add_flag<FormatterFlag>('*').set_pattern("[%H:%M:%S.%e][%s:%#]%*%v");
+    logger_ptr->set_formatter(std::move(formatter));
 
     spdlog::set_default_logger(std::move(logger_ptr));
     spdlog::set_level(spdlog::level::debug);
     spdlog::flush_on(spdlog::level::trace);
-
-    auto formatter = std::make_unique<spdlog::pattern_formatter>();
-    formatter->add_flag<FormatterFlag>('*').set_pattern("[%H:%M:%S.%e][%s:%#]%*%v");
-    spdlog::set_formatter(std::move(formatter));
-    //spdlog::set_pattern("[%H:%M:%S.%e] %16s:%-5# | %v"); // %<x>s: x = # of characters in longest file name//https://github.com/gabime/spdlog/wiki/Custom-formatting
+    return {};
   }
 
 }

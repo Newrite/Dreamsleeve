@@ -5,6 +5,8 @@ open Expecto
 [<EntryPoint>]
 let main argv =
     testList "Tests" [
+        RelayTests.tests
+        ContinuousDiagnosticsTests.tests
         DomainTests.tests
         IdentityTests.tests
         GroundMarkDomainTests.tests
@@ -13,6 +15,8 @@ let main argv =
         AdminDomainTests.tests
         PlayerDetailsTests.tests
         AgentTests.tests
+        ConstructionTests.tests
+        OwnedCleanupTests.tests
         CodecTests.tests
         BackgroundTests.tests
         OutboxTests.tests
@@ -23,19 +27,25 @@ let main argv =
         SupervisorTests.tests
         ProfileStoreTests.tests
         SqliteAccountStoreTests.tests
+        SqliteBoundaryTests.tests
         AuthServiceTests.tests
+        ServiceLifetimeTests.tests
         SteamOpenIdTests.tests
         SanctionTests.tests
         AdminStoreTests.tests
         AdminServiceTests.tests
         ChatRoomAgentTests.tests
         PresenceAgentTests.tests
+        PhantomTests.tests
+        PhantomHttpTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
+        RuntimeStartupTests.tests
         ServerRuntimeTests.hiddenIdentityTests
         ServerRuntimeTests.adminTests
         ServerRuntimeTests.displayNameTests
         EnetTransportTests.tests
+        PhantomE2ETests.tests
         TransportOwnerTests.tests
         ConfigurationTests.tests
         AnnouncementTests.tests

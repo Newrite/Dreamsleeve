@@ -2,6 +2,7 @@ module Dreamsleeve.Server.Tests.ConfigurationTests
 
 open System
 open System.IO
+open System.Text
 open Expecto
 open Dreamsleeve.Agent
 open Dreamsleeve.Server
@@ -13,6 +14,24 @@ let private withFile (text: string) action =
         action path
     finally
         File.Delete path
+
+// A stream can grow after a length check or decline to report its length.
+// Small chunks also exercise the bounded loop rather than a one-read shortcut.
+type private MisreportedLengthStream(bytes: byte[]) =
+    inherit MemoryStream(bytes, false)
+    override _.Length = 0L
+    override _.Read(buffer, offset, count) = base.Read(buffer, offset, min count 3)
+
+let private withEncodedFile (encoding: Encoding) (source: string) action =
+    let path = Path.Combine(Path.GetTempPath(), "dreamsleeve-config-encoding-" + Guid.NewGuid().ToString("N") + ".toml")
+    try
+        File.WriteAllBytes(path, Array.append (encoding.GetPreamble()) (encoding.GetBytes source))
+        action path
+    finally
+        File.Delete path
+
+let private paddedBytes maximum (source: string) =
+    source + "\n#" + String('x', maximum - Encoding.UTF8.GetByteCount source - 2)
 
 let private parsed path =
     match Configuration.parse [|"--config"; path|] with
@@ -38,6 +57,14 @@ let rec private keys prefix (table: Tomlyn.Model.TomlTable) = [
 ]
 
 let tests = testList "Server configuration" [
+    testCase "native phantom configuration preserves asset budgets and rejects removed geometry option" <| fun _ ->
+        let config = parsed (example())
+        Expect.equal config.Phantoms.Limits Configuration.defaults.Phantoms.Limits "Example matches native policy."
+        Expect.equal config.Phantoms.Limits.RawBytes (128 * 1024 * 1024) "Raw NIF container cap."
+        Expect.equal config.Phantoms.ModelBytesPerSecond (5 * 1024 * 1024) "Shared model traffic default."
+        withFile "[Phantoms.Limits]\nGeometry = 512\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Removed renderer setting is not silently accepted.")
+
     testCase "moderation is on by default, switchable and loads a separate word list" <| fun _ ->
         Expect.isTrue Configuration.defaults.Moderation.Enabled "enabled by default"
         withFile "[Moderation]\nEnabled = false\nRulesPath = ''\n" (fun path ->
@@ -52,9 +79,13 @@ let tests = testList "Server configuration" [
             | other -> failtestf "%A" other)
         withFile "[Moderation]\nRulesPath = ''\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "enabled moderation needs a path")
-        match Configuration.loadModeration { Enabled = true; RulesPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") } with
+
+        match Configuration.loadModeration
+            { Enabled = true
+              RulesPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") } with
         | Ok (rules, Some _) -> Expect.isTrue rules.IsEmpty "missing file warns and runs with an empty list"
         | other -> failtestf "%A" other
+
         withFile "words = ['badword']\nsubstrings = ['cunt']\nexceptions = ['Scunthorpe']\n" (fun path ->
             match Configuration.loadModeration { Enabled = true; RulesPath = path } with
             | Ok (rules, None) ->
@@ -63,6 +94,86 @@ let tests = testList "Server configuration" [
             | other -> failtestf "%A" other)
         for invalid in ["words = 'badword'\n"; "words = [1]\n"; "phrases = ['x']\n"; "words = ['x'\n"] do
             Expect.isError (Configuration.parseModeration invalid) $"invalid rules: {invalid}"
+
+    testCase "an existing directory is a read failure rather than missing optional rules" <| fun _ ->
+        let directory = Path.Combine(Path.GetTempPath(), "dreamsleeve-config-directory-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        try
+            Expect.isError (Configuration.loadModeration { Enabled = true; RulesPath = directory }) "A directory cannot silently disable moderation as a missing file."
+            let names, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = directory }
+            Expect.equal names.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "The optional dictionary still falls back."
+            Expect.stringContains warning.Value "Cannot read pseudonyms" "The diagnostic distinguishes read failure from absence."
+            Expect.isError (Configuration.parse [|"--config"; directory|]) "The required configuration cannot be a directory."
+            Expect.isError (Configuration.writeDefaults directory) "An export write failure remains typed."
+            match Configuration.loadModeration { Enabled = false; RulesPath = directory } with
+            | Ok (rules, None) -> Expect.isTrue rules.IsEmpty "Disabled moderation never opens the rejected path."
+            | other -> failtestf "Unexpected disabled moderation outcome: %A" other
+        finally
+            Directory.Delete directory
+
+    testCase "the bounded reader does not trust Length and leaves the stream owned by its caller" <| fun _ ->
+        use growing = new MisreportedLengthStream(Array.create 1000 (byte 'x'))
+        Expect.equal (Configuration.readBounded growing 64) (Error FileReadError.TooLarge) "A misleading length cannot bypass the byte cap."
+        Expect.equal growing.Position 65L "Only cap+1 bytes were consumed."
+        Expect.isTrue growing.CanRead "The caller still owns the rejected stream."
+
+        use exact = new MisreportedLengthStream(Array.create 64 (byte 'x'))
+        Expect.equal (Configuration.readBounded exact 64) (Ok (String('x', 64))) "The exact limit remains readable through partial reads."
+        Expect.isTrue exact.CanRead "Successful read also leaves ownership with the caller."
+
+    testCase "configuration and dictionary byte limits reject cap+1 while preserving exact caps" <| fun _ ->
+        let config = paddedBytes 65536 ""
+        withFile config (fun path -> Expect.isOk (Configuration.parse [|"--config"; path|]) "Exact configuration byte cap.")
+        withFile (config + "x") (fun path -> Expect.isError (Configuration.parse [|"--config"; path|]) "Configuration cap+1 rejected.")
+
+        let rules = paddedBytes 1048576 "words = ['word']"
+        withFile rules (fun path -> Expect.isOk (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Exact moderation byte cap.")
+        withFile (rules + "x") (fun path -> Expect.isError (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Moderation cap+1 rejected.")
+
+        let names = paddedBytes 65536 "names = ['Бард']"
+        withFile names (fun path ->
+            let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal dictionary.Count 1 "Exact pseudonym byte cap, including multibyte content."
+            Expect.isNone warning "Valid dictionary has no fallback warning.")
+        withFile (names + "x") (fun path ->
+            let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "Oversized optional dictionary retains fallback."
+            Expect.stringContains warning.Value "exceeds 64 KiB" "Size refusal is diagnostic.")
+
+    testCase "bounded file reads preserve ReadAllText UTF BOM decoding and include BOM in the cap" <| fun _ ->
+        let encodings: Encoding list = [
+            UTF8Encoding(true)
+            UnicodeEncoding(false, true)
+            UnicodeEncoding(true, true)
+            UTF32Encoding(false, true)
+            UTF32Encoding(true, true)
+        ]
+        for encoding in encodings do
+            withEncodedFile encoding "[Server]\nPort=9123\n" (fun path ->
+                Expect.equal (parsed path).Server.Port 9123us $"Configuration decoded as {encoding.WebName}.")
+            withEncodedFile encoding "words = ['ёж']" (fun path ->
+                match Configuration.loadModeration { Enabled = true; RulesPath = path } with
+                | Ok (rules, _) -> Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "ёж") "Decoded Unicode moderation rule."
+                | Error error -> failtest error)
+            withEncodedFile encoding "names = ['Бард']" (fun path ->
+                let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+                Expect.equal (dictionary.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "Decoded Unicode dictionary."
+                Expect.isNone warning "A supported BOM is not malformed input.")
+
+        withEncodedFile (UTF8Encoding(true)) (paddedBytes 65536 "") (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "The BOM's three bytes count toward the file cap.")
+
+    testCase "bounded source decoding preserves ReadAllText replacement for malformed UTF-8" <| fun _ ->
+        withFile "" (fun path ->
+            File.WriteAllBytes(path, [| byte '#'; 0xFFuy |])
+            let expected = File.ReadAllText path
+            Expect.equal (Configuration.readModerationSource path) (Ok expected) "The new byte bound does not invent a stricter encoding policy.")
+
+    testCase "duplicate keys are malformed TOML at all configuration boundaries" <| fun _ ->
+        withFile "[Server]\nPort=9123\nPort=9124\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Duplicate configuration key rejected.")
+        Expect.isError (Configuration.parseModeration "words=['one']\nwords=['two']\n") "Duplicate moderation key rejected."
+        Expect.isError (Configuration.parsePseudonyms "names=['Бард']\nnames=['Рыбак']\n") "Duplicate pseudonym key rejected."
 
     testCase "block and flag tiers load from sections; top-level keys stay the block tier" <| fun _ ->
         let text = String.concat "\n" [
@@ -184,10 +295,13 @@ let tests = testList "Server configuration" [
 
     testCase "exported defaults load without losing any nested settings" <| fun _ ->
         withFile "" (fun path ->
-            Configuration.writeDefaults path |> function Ok () -> () | Error error -> failwith error
+            Configuration.writeDefaults path |> function
+                | Ok () -> ()
+                | Error error -> failwith error
             match Configuration.parse [|"--config"; path|] with
             | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config Configuration.defaults "roundtrip all fields"
             | other -> failwithf "Cannot load exported defaults: %A" other)
+
     testCase "authentication requires TLS outside explicitly enabled literal loopback" <| fun _ ->
         for source in [
             "[Authentication.Listener]\nListenUrl = \"http://0.0.0.0:8779\"\n"
@@ -235,6 +349,7 @@ let tests = testList "Server configuration" [
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "invalid telemetry input configuration rejected")
+
     testCase "visibility distance loads from TOML and rejects negative radius" <| fun _ ->
         withFile "[Runtime.Presence]\nVisibilityDistance = 0\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
@@ -242,6 +357,7 @@ let tests = testList "Server configuration" [
             | other -> failwithf "%A" other)
         withFile "[Runtime.Presence]\nVisibilityDistance = -1\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid distance rejected before startup.")
+
     testCase "identity settings load from TOML with defaults and are validated" <| fun _ ->
         let defaults = Configuration.defaults.Identity
         Expect.isTrue defaults.AllowHiddenIdentity "allowed by default"
@@ -265,8 +381,12 @@ let tests = testList "Server configuration" [
         | Error error -> failtest error
         for invalid in [ "names = []\n"; "names = [' ']\n"; "version = 2\nnames = ['Бард']\n"; "names = 'Бард'\n"; "other = 1\nnames = ['Бард']\n"; "names = ['Бард'\n" ] do
             Expect.isError (Configuration.parsePseudonyms invalid) $"refused: {invalid}"
+
         let builtIn = Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn
-        let missing, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") }
+        let missing, warning =
+            Configuration.loadPseudonyms
+                { Configuration.defaults.Identity with
+                    PseudonymsPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") }
         Expect.equal missing.Names builtIn.Names "missing file uses the built-in list"
         Expect.isSome warning "with a warning"
         withFile "names = ['Бард'\n" (fun path ->
@@ -278,6 +398,12 @@ let tests = testList "Server configuration" [
             Expect.equal (loaded.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "file replaces the list"
             Expect.isNone warning "no warning")
 
+    testCase "non-normalizable pseudonym skips only its entry and preserves the valid dictionary" <| fun _ ->
+        withFile "version = 1\nnames = ['Бард', 'Name\uFFFE', 'Рыбак']\n" (fun path ->
+            let loaded, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal (loaded.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард"; "Рыбак" ] "No whole-file fallback for one rejected entry."
+            Expect.isSome warning "Skipped invalid entry remains diagnostic.")
+
     testCase "bundled pseudonym example equals the built-in list" <| fun _ ->
         let rec find (directory: DirectoryInfo) =
             let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "pseudonyms.example.toml")
@@ -288,6 +414,7 @@ let tests = testList "Server configuration" [
         match Configuration.parsePseudonyms (File.ReadAllText path) with
         | Ok (dictionary, 0) -> Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "same 24 names"
         | other -> failtestf "%A" other
+
     testCase "the admin panel section has loopback defaults and an old server.toml without it keeps them" <| fun _ ->
         let admin = Configuration.defaults.Admin
         Expect.isTrue admin.Enabled "enabled by default"
@@ -359,7 +486,11 @@ let tests = testList "Server configuration" [
     testCase "restart settings are checked and become the supervisor's policy" <| fun _ ->
         withFile "[Recovery]\nInitialDelayMs = 500\nMaxDelayMs = 4000\nMaxRestarts = 0\nWindowSeconds = 60\n" (fun path ->
             let policy = Configuration.restartPolicy (parsed path).Recovery
-            Expect.equal policy { InitialDelay = TimeSpan.FromMilliseconds 500.; MaxDelay = TimeSpan.FromSeconds 4.; MaxRestarts = 0; Window = TimeSpan.FromMinutes 1. }
+            Expect.equal policy
+                { InitialDelay = TimeSpan.FromMilliseconds 500.
+                  MaxDelay = TimeSpan.FromSeconds 4.
+                  MaxRestarts = 0
+                  Window = TimeSpan.FromMinutes 1. }
                 "0 restarts: the first failure stops the server")
         for invalid in [ "InitialDelayMs = -1"; "MaxDelayMs = 10\nInitialDelayMs = 20"; "MaxDelayMs = 3600001"
                          "MaxRestarts = -1"; "MaxRestarts = 1001"; "WindowSeconds = 0"; "WindowSeconds = 86401" ] do

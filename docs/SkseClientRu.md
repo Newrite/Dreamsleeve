@@ -12,7 +12,8 @@
 |---|---|
 | `Main.cpp` | Только экспорт `SKSEPlugin_Load`; заголовки CommonLib не включает (см. ниже) |
 | `Plugin.ixx` | `SKSE::Init`, listener сообщений SKSE, порядок инициализации |
-| `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `Host::Bubbles`, `ui.toml`; ограниченные очереди уведомлений (64) и объявлений API (32) с других потоков; снимок для страницы SKSE Menu |
+| `Runtime.ixx` | Единственный владелец `ClientApplication`, `MovementView`, `Host::Session`, `Host::Bubbles`, `ui.toml`; ограниченный inbox (64 обычные записи и lifecycle gaps) и очередь объявлений API (32) с других потоков; снимок для страницы SKSE Menu |
+| `Host/Notices.ixx` | Межпоточный приём уведомлений: FIFO/admission для действий меню, realtime saturation и ограниченные lifecycle gaps; только значения, без CommonLib |
 | `Logic.ixx` | Кадр: уведомления → Drain (события UI, свежие сообщения → облачки) → политика сессии → готовность мира → телеметрия → один HUD-кадр надписей (светлячки + метки) → focus |
 | `Hooks.ixx` | Все патчи игры: ID Address Library, смещения callsite, проверка байтов и thunks для `Main::Update`, `HUDMenu::AdvanceMovie` (имена над светлячками) и рассылки `InputEvent` (захват клавиатуры) |
 | `Events.ixx` | Sinks: меню, ввод, `TESDeathEvent` (флаг `dead` и handle убийцы, без резолва), `TESActivateEvent`; только `Runtime::Post` |
@@ -46,6 +47,15 @@ MSVC 14.51 отклоняет единицу трансляции, где тек
 единицы с теми же include в global module fragment компилируются. Поэтому весь код
 с CommonLib находится в `.ixx`, а `Main.cpp` содержит только forward-declaration
 `SKSE::LoadInterface` и вызов `Plugin::Load`. Это конкретная причина разделения, а не шаблон.
+
+Настройка файлового лога выполняется до `SKSE::Init`. Недоступный каталог SKSE,
+ошибка представления нативного имени файла в кодировке sink или отказ открытия
+лога возвращают типизированную ошибку `Logging::SetupLog`. `Plugin::Load`
+пишет причину через Windows `OutputDebugStringA` и возвращает `false`: хуки,
+listener и сетевое приложение при таком отказе не создаются. Этот путь не
+вызывает завершающий процесс `report_and_fail`. Успешный logger публикуется
+только после настройки formatter. Ошибки загрузчика проверяются отдельно в игре;
+обычная сборка DLL не подтверждает отображение этого диагностического сообщения.
 
 ## Сообщения SKSE
 
@@ -105,8 +115,25 @@ patch-site остаётся у трамплина CommonLib (`skse_patch_safety`
 | Рендер SKSE Menu Framework | вне игрового потока | читает `MenuSnapshot` под mutex, действия — `Runtime::Post` |
 | API модов (`IVDreamsleeve1`, Papyrus) | любой поток | `Runtime::RequestAnnouncement`: очередь (32) под mutex, пока сессия готова; отправка в Core — в кадре |
 
-Очередь уведомлений ограничена 64 записями; переполнение сбрасывается флагом, по
-которому кадр пересчитывает видимость из текущего набора меню.
+Inbox уведомлений сохраняет прежний бюджет 64 обычных записей. Принятые действия
+SKSE Menu (вход, отключение, настройки, запись/воспроизведение диагностики) остаются
+в FIFO; насыщение возвращает Busy до приёма. Исходная панель явно показывает отказ
+до следующего действия пользователя: автоматической повторной отправки нет.
+Realtime-уведомления меню, клавиши и телеметрии при насыщении могут быть отброшены;
+кадр пишет предупреждение и пересчитывает видимость из текущего набора меню.
+
+NewGame/PreLoadGame/PostLoadGame не теряются при заполненных обычных слотах.
+Между каждой парой принятых обычных записей хранится отдельный lifecycle gap:
+не более 65 gaps, выведенных из бюджета 64 разделителей, по три записи в каждом.
+Сворачиваются только соседние lifecycle-переходы: первый Post до начала, первый
+барьер NewGame/PreLoad и последний Post после последней попытки. Новая попытка
+снимает прежний Post; переход никогда не переносится через принятое меню,
+телеметрию, настройку или действие диагностики. В пределах gap повторная очистка
+Loading идемпотентна; Playing может начаться только после обработки всего batch
+через покадровую проверку готовности. Каждый выход из контекста сбрасывает начало
+окна готовности: новая игра/загрузка требует новых 500 мс, даже если весь переход
+завершился между кадрами. SaveGame остаётся явным no-op. Установка
+хуков/forms/view на DataLoaded остаётся синхронной до обычного игрового цикла.
 
 ## Жизненный цикл сессии
 
@@ -162,6 +189,12 @@ refresh-снимок после мгновенной настройки (име�
 (`ConnectTimeout: OpenSession timed out`) без сигнатур функций из `ToLogString()`; он
 обрезается до 512 байт по границе UTF-8, потому что `parse.ts` отвергает более длинные события.
 `saveSettings` пишет `ui.toml` атомарно (временный файл + rename) и отвечает `settingsResult`.
+Отсутствующий файл при загрузке даёт defaults; ошибка проверки пути или чтения возвращает
+отказ, а не успешные defaults. Запись эксклюзивно создаёт свой `ui.toml.tmp`: уже существующий
+путь не перезаписывается и не удаляется. Отказ записи, закрытия или rename сохраняет старый
+`ui.toml` и удаляет только временный файл текущего вызова; ошибка этого удаления добавляется
+к исходной диагностике. Оставшийся после аварии `.tmp` требует отдельной проверки/удаления,
+а следующий save сообщает отказ создания, без автоматической повторной отправки.
 
 Скрытое имя ([ModerationAndNamesRu.md](ModerationAndNamesRu.md#скрытое-имя)). `hideIdentity`
 из `ui.toml` передаётся в `ClientExchange::SetHideIdentity` при запуске и после каждого
@@ -275,7 +308,7 @@ sink), геймпад, VR, `CharEvent`, движение мыши и thumbstick 
 Сбор только при контексте Playing и `PlayerReady()`, при Ready-сессии:
 
 - `CharacterStarted{GetName()}` один раз на контекст и generation, `CharacterRenamed` при изменении имени (RaceSex).
-- Движение: `LocalMovement{PlayerLocation}` каждые `playerSampleIntervalMs` (50 мс),
+- Движение: `LocalMovement{PlayerLocation}` каждые `playerSampleIntervalMs` (100 мс / 10 Гц),
   `LocalLocation` явно при смене пространства и при скачке больше `movement.teleportDistance`.
   Пространство: интерьер → CELL, экстерьер → WRLD; `FormKey = {имя файла-источника в нижнем регистре, GetLocalFormID()}`,
   для динамических форм — `{"runtime", FormID}` (сессионная идентичность, совпадений между клиентами не будет).
@@ -741,3 +774,27 @@ host берёт положение и дату из `World::Spot()` (порт `n
 | Список своих меток | Часть 3: сервер присылает полный список (`OwnGroundMarks`) |
 | Вид меток | Плоские glow-диски без коллизии; бумажная записка отклонена без игровой проверки |
 | Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
+
+
+## Живые фантомы (protocol 22)
+
+Контракт и границы подтверждения: [PhantomsRu](PhantomsRu.md).
+Runtime владеет ClientExchange.phantoms; Core streaming/worker работают с
+отделёнными NIF bytes и позами. Игровой адаптер использует существующий ENet
+owner. Hooks вызывает кадр после Main::Update и предоставляет узкие операции
+NiStream Save/Load, alpha factory и нормализацию cloned flattened bone arrays.
+Все собственные runtime IDs/offsets/ABI adapters находятся в Hooks.
+
+Game/PhantomCapture читает третьеличное дерево даже при первом лице.
+PhantomNative подготавливает clone; PhantomScene загружает проверенный NIF и
+применяет transforms/bounds к native nodes. Один NiStream Load за frame build
+turn; сама native операция атомарна и остаётся на игровом потоке. Phantoms
+владеет lifecycle текущей/ожидающей сцены и общим бюджетом кадра. Local replay
+использует тот же Scene. CPU skinning и собственных GPU buffers нет.
+
+Host/PhantomSettings переводит ui.toml в настройки Core. Game/PlayerLabels —
+общая подпись фантома/светлячка; Session::HidesPlayerRepresentation — единая
+privacy/ignore/guild policy. Готовая модель переключается атомарно; fallback
+не дублирует сцену. Load, смена WRLD/внутренней CELL, disconnect и quit очищают
+native ресурсы. Соседняя наружная CELL одного WRLD не меняет контекст.
+Asset/poses не проходят через PrismaUI bridge. Actor/reference не создаётся.

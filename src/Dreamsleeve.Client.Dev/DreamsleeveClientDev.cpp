@@ -2,6 +2,9 @@
 #include <vector>
 #include <filesystem>
 #include <string_view>
+#include <expected>
+#include <iostream>
+#include <string>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -12,19 +15,28 @@ int RunMovementDemo();
 int RunMovementBenchmark();
 int RunNetworkConsole(int argc, char* argv[]);
 
-void InitializeLogging()
+std::expected<void, std::string> InitializeLogging()
 {
-  std::filesystem::create_directories("logs");
+  std::error_code error;
+  std::filesystem::create_directories("logs", error);
+  if (error) return std::unexpected(error.message());
 
   auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
   consoleSink->set_level(spdlog::level::info);
   consoleSink->set_pattern("[%H:%M:%S] [%^%l%$] [%n] %v");
 
-  auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-    "logs/dreamsleeve-client-dev.log",
-    1024 * 1024 * 5,  // 5 MB
-    3                 // keep 3 files
-  );
+  std::shared_ptr<spdlog::sinks::rotating_file_sink_mt> fileSink;
+  try
+  {
+    fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+      "logs/dreamsleeve-client-dev.log",
+      1024 * 1024 * 5,
+      3);  // 5 MB; keep three files.
+  }
+  catch (const spdlog::spdlog_ex& failure)
+  {
+    return std::unexpected(std::string(failure.what()));
+  }
   fileSink->set_level(spdlog::level::trace);
   fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%n] [thread %t] %v");
 
@@ -39,6 +51,7 @@ void InitializeLogging()
   spdlog::set_pattern("[%H:%M:%S] [%^%l%$] [%n] %v");
 
   spdlog::info("spdlog initialized");
+  return {};
 }
 
 void ShutdownLogger() noexcept
@@ -48,7 +61,11 @@ void ShutdownLogger() noexcept
 
 int main(int argc, char* argv[])
 {
-  InitializeLogging();
+  if (const auto logging = InitializeLogging(); !logging)
+  {
+    std::cerr << "Cannot initialize client logging: " << logging.error() << '\n';
+    return 1;
+  }
 
   if (argc == 2 && std::string_view{argv[1]} == "--movement-benchmark")
   {
@@ -70,6 +87,7 @@ int main(int argc, char* argv[])
     ShutdownLogger();
     return result;
   }
+
   if (argc > 2 || (argc == 2 && std::string_view{argv[1]} != "--state-demo"))
   {
     spdlog::error(
@@ -77,6 +95,7 @@ int main(int argc, char* argv[])
     ShutdownLogger();
     return 2;
   }
+
   const int result = RunStateConsole(argc == 2);
   ShutdownLogger();
   return result;

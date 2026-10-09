@@ -24,7 +24,7 @@ let private formKey plugin id =
     FormKey.create (PluginName.create 255 plugin |> ok) (LocalFormId.create id |> ok)
 
 let private location key name position =
-    PlayerLocation.create (Location.create key (LocationName.create 128 name |> ok)) position Rotation.zero
+    PlayerLocation.create (Location.create key (LocationName.create 128 name |> ok)) position CameraDirection.zero
 
 let private label value = ActorValueName.create 64 value |> ok
 let private reading name amount = ActorValueInfo.create (label name) (ActorValueState.resource amount 100)
@@ -83,6 +83,7 @@ let private textTests =
             for color in NameColor.palette do
                 Expect.isTrue (NameColor.readable color) $"palette color {NameColor.value color:X6} reads"
             Expect.equal (Array.distinct NameColor.palette).Length NameColor.palette.Length "palette colors differ"
+
             let source = Random 7
             for _ in 1 .. 100 do
                 Expect.contains NameColor.palette (NameColor.random source) "a random color comes from the palette"
@@ -182,18 +183,18 @@ let private textTests =
 
 let private spatialTests =
     testList "native coordinates" [
-        testCase "coordinates and unwrapped radians preserve finite native values" <| fun _ ->
+        testCase "coordinates and camera directions preserve finite native values" <| fun _ ->
             let position = Position.create -123.5f 0.0f 42.25f |> ok
-            let rotation = Rotation.create -12.0f 40.0f 0.5f |> ok
+            let cameraDirection = CameraDirection.create -12.0f 40.0f 0.5f |> ok
             WorldUnit.value position.X |> fun value -> value.Should().Be(-123.5f) |> ignore
-            Radian.value rotation.X |> fun value -> value.Should().Be(-12.0f) |> ignore
-            Radian.value rotation.Y |> fun value -> value.Should().Be(40.0f) |> ignore
+            cameraDirection.X |> fun value -> value.Should().Be(-12.0f) |> ignore
+            cameraDirection.Y |> fun value -> value.Should().Be(40.0f) |> ignore
 
-        testCase "positions and rotations reject every non-finite component" <| fun _ ->
+        testCase "positions and camera directions reject every non-finite component" <| fun _ ->
             for bad in [ Single.NaN; Single.PositiveInfinity; Single.NegativeInfinity ] do
                 for x, y, z in [ bad, 0.0f, 0.0f; 0.0f, bad, 0.0f; 0.0f, 0.0f, bad ] do
                     Expect.isError (Position.create x y z) "Reject invalid position"
-                    Expect.isError (Rotation.create x y z) "Reject invalid rotation"
+                    Expect.isError (CameraDirection.create x y z) "Reject invalid cameraDirection"
 
         testCase "distance promotes coordinates before subtraction and squaring" <| fun _ ->
             let left = Position.create Single.MaxValue 0.0f 0.0f |> ok
@@ -261,8 +262,10 @@ let private stateTests =
 
             ActorValueStorage.setMany [| key, health 10; other, health 30 |] storage
             Expect.equal (snapshot () |> Map.count) 2 "setMany invalidates the cache"
+
             ActorValueStorage.remove key storage |> ignore
             Expect.isFalse (snapshot () |> Map.containsKey key) "remove invalidates the cache"
+
             ActorValueStorage.clear storage
             Expect.isTrue (snapshot () |> Map.isEmpty) "clear publishes an empty map"
             Expect.equal changed[key] (health 25) "Intermediate snapshots also stay detached"
@@ -325,14 +328,20 @@ let private stateTests =
             let extraKey = actorKey "avg:extra"
             let original = Player.create (profile 1UL "First") |> Player.applyUpdate (PlayerUpdate.BeginCharacter name)
             let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
-            let first = original |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120; extraKey, health 5]))
+            let first =
+                original
+                |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place))
+                |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health 120; extraKey, health 5]))
 
             let before = Player.snapshot first
             let valuesOnly = first |> Player.applyUpdate (PlayerUpdate.SetActorValues Map.empty)
             Expect.equal valuesOnly.Location first.Location "Values do not touch movement."
             let movedOnly = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone))
             Expect.equal (Player.actorValuesSnapshot movedOnly) before.ActorValues "Movement does not touch values."
-            let second = first |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone)) |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5]))
+            let second =
+                first
+                |> Player.applyUpdate (PlayerUpdate.SetLocation(2UL, ValueNone))
+                |> Player.applyUpdate (PlayerUpdate.SetActorValues(Map.ofList [healthKey, health -5]))
 
             Expect.equal second.Location ValueNone "unknown position replaces a previous known location"
             Expect.equal (Player.actorValueCount second) 1 "a missing key is removed, not retained forever"
@@ -424,14 +433,18 @@ let private chatTests =
 
         testCase "bounded history evicts the oldest messages in FIFO order" <| fun _ ->
             let value = chat 2
-            for id in [ 10UL; 20UL; 40UL ] do append id value
+            for id in [ 10UL; 20UL; 40UL ] do
+                append id value
+
             let page = Chat.historyAfter ValueNone 10 value |> ok
             Expect.equal (historyIds page) [ 20UL; 40UL ] "Only the newest capacity messages remain"
             Expect.isFalse page.HasGap "A fresh read has no prior cursor to lose"
 
         testCase "pagination continues strictly after the last returned ID" <| fun _ ->
             let value = chat 4
-            for id in [ 10UL; 20UL; 40UL ] do append id value
+            for id in [ 10UL; 20UL; 40UL ] do
+                append id value
+
             let first = Chat.historyAfter ValueNone 2 value |> ok
             let second = Chat.historyAfter first.NextCursor 2 value |> ok
             Expect.equal (historyIds first) [ 10UL; 20UL ] "First page"
@@ -442,7 +455,9 @@ let private chatTests =
 
         testCase "gap detection tracks actual evictions, not gaps between global IDs" <| fun _ ->
             let value = chat 2
-            for id in [ 10UL; 20UL; 40UL ] do append id value
+            for id in [ 10UL; 20UL; 40UL ] do
+                append id value
+
             let lost = Chat.historyAfter (ValueSome (messageId 5UL)) 10 value |> ok
             let caughtUp = Chat.historyAfter (ValueSome (messageId 10UL)) 10 value |> ok
             let globalGap = Chat.historyAfter (ValueSome (messageId 15UL)) 10 value |> ok
@@ -485,6 +500,15 @@ let private chatTests =
             Expect.equal (historyIds page) [ 10UL ] "History page is detached"
             Expect.equal before.Messages page.Messages "Both keep the original message"
 
+        testCase "checked guild history capacity constructs a correctly bound chat without revalidation" <| fun _ ->
+            Expect.isError (ChatHistoryCapacity.create 0) "Zero history is refused at preflight."
+            Expect.isError (ChatHistoryCapacity.create -1) "Negative history is refused at preflight."
+            let capacity = ChatHistoryCapacity.create 2 |> ok
+            let guildId = GuildId.create 7UL |> ok
+            let guildChat = Chat.createGuild capacity guildId
+            Expect.equal guildChat.Kind ChatChannelKind.Guild "Guild kind matches its checked ID."
+            Expect.equal guildChat.ChannelId (ChatChannels.ofGuild guildId) "Guild channel derives from that same ID."
+
         testCase "history and channel limits are validated" <| fun _ ->
             Expect.isError (Chat.create ChatChannels.globalId ChatChannelKind.Global 0) "No unbounded/zero history"
             Expect.isError (Chat.historyAfter ValueNone 0 (chat 2)) "Page size must be positive"
@@ -511,12 +535,17 @@ let private movementTests = testList "Movement" [
     testCase "sample sequence is independent of zero source timestamp and cannot establish context" <| fun _ ->
         let player = Player.create (profile 1UL "First")
         let place = location (formKey "Skyrim.esm" 0x3Cu) "Tamriel" Position.zero
-        let sample = { ContextRevision = 1UL; Sequence = 1UL; Pose = MovementPose.ofLocation place }
+        let sample =
+            { ContextRevision = 1UL
+              Sequence = 1UL
+              Pose = MovementPose.ofLocation place }
         Expect.equal (Player.tryApplyMovement sample player |> ValueOption.map Player.snapshot) ValueNone "No location baseline."
+
         let located = player |> Player.applyUpdate (PlayerUpdate.SetLocation(1UL, ValueSome place))
         let moved = Player.tryApplyMovement sample located |> ValueOption.get
         Expect.equal moved.MovementSequence 1UL "Zero timestamp is still an ordered sample."
         Expect.equal (Player.tryApplyMovement sample moved |> ValueOption.map Player.snapshot) ValueNone "Duplicate sequence is ignored."
+
         let cleared = Player.clearGameState moved
         Expect.equal cleared.MovementHighWater 1UL "Character changes preserve transition highwater."
         Expect.equal cleared.MovementContext 0UL "Old samples are disabled."

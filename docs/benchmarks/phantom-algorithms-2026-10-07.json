@@ -1,0 +1,521 @@
+{
+  "protocol": 24,
+  "assetVersion": 2,
+  "poseVersion": 3,
+  "scenario": {
+    "clients": 512,
+    "maximumGroup": 25,
+    "maximumVisible": 4,
+    "sourceHz": 10,
+    "seconds": 30,
+    "workers": 8,
+    "actorValuesHz": 4,
+    "modelLoad": "prewarmed shared hash; zero model bytes during load"
+  },
+  "runs": {
+    "historicalMovingBaseline": {
+      "source": "build\\native-nif\\camera-v24\\steady512\\results.json",
+      "resultSha256": "54d61059f1e16501389a5a14792124b009aa300d51c231324bb3e429d139cb21",
+      "success": true,
+      "load": {
+        "sampleCount": 297,
+        "sampleSpanSeconds": 29.875,
+        "cpuCoreEquivalent": 1.3959205020920502,
+        "privateMedianMiB": 115.17578125,
+        "privatePeakMiB": 123.8671875,
+        "workingSetPeakMiB": 196.6015625
+      },
+      "receivedHz": 9.195182784337131,
+      "receivedPoses": 557646,
+      "sentPoses": 153441,
+      "staleViewPoses": 0,
+      "offersIncludingWarmup": 77083,
+      "poseUploadMiBps": 19.27014996210734,
+      "poseDownloadMiBps": 70.13042456309,
+      "modelUploadBytes": 0,
+      "modelDownloadBytes": 0,
+      "transport": {
+        "enetReceivedBytes": 3401019994,
+        "enetSentBytes": 642229501,
+        "udpReceivedPackets": 2882179,
+        "udpSentPackets": 1284364,
+        "allEnetMiBps": 128.53143994013467,
+        "estimatedIPv4UdpMiBps": 132.24006331761677,
+        "enetOverApplicationBytes": 149657178,
+        "ipv4UdpHeadersBytes": 116663204
+      },
+      "gc": {
+        "spanSeconds": 29.801002800000003,
+        "allocatedMiBps": 603.7166984813875,
+        "pauseMs": 2641.473,
+        "gen0": 432,
+        "gen1": 319,
+        "gen2": 55
+      },
+      "metrics": {
+        "presence.flush.duration": {
+          "count": 299,
+          "max": 20.155,
+          "p50": 3.962964617681994,
+          "p95": 13.249735395364116,
+          "p99": 18.206490396422446,
+          "sum": 1587.6483000000019
+        },
+        "runtime.tick.queue": {
+          "count": 11325,
+          "max": 63.2073,
+          "p50": 0.020100000000000007,
+          "p95": 3.448422896030057,
+          "p99": 27.595847000743838,
+          "sum": 10231.122900000084
+        },
+        "runtime.tick.duration": {
+          "count": 11325,
+          "max": 25.0288,
+          "p50": 0.020100000000000007,
+          "p95": 0.20810895044353162,
+          "p99": 12.423895332835984,
+          "sum": 4151.971199999909
+        },
+        "outgoing.queue.age": {
+          "count": 273,
+          "max": 142.8158,
+          "p50": 12.029100556862495,
+          "p95": 76.34644243163409,
+          "p99": 109.66487535304539,
+          "sum": 6259.857900000003
+        },
+        "realtime.dropped": {
+          "count": 273,
+          "max": 267,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 84.438591631827,
+          "sum": 544
+        },
+        "native.send.failures": {
+          "count": 273,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "phantom.pose.fanout": {
+          "count": 564905,
+          "max": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "sum": 564905
+        }
+      },
+      "binarySha256": {
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "644eadc0d85fd6f7d874d39a1645b979559d40e1a1903b791817abd36809a7eb",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "66df16553cebf96fcdbcceef6bcee23c8b68e7d32e4f303568f4bc281a9b1c2f",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "9bbd54dd8d0a177cd88ca89bb8b61c520ffe0a15dbd7e092200166035da256e1",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "bf32f300e85a52d9d1260285af450bf64d506633c52abf986722e9cf57f74c43",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "34d1ce10103019edfaed235822f05accecfd534ff34516ba5d0837efa46e48a2",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "835c38e3d655453937605527f436806f4dbb406131202c96ac021b1f8d095c53",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "19c8a82e0149cd83c91fceeae863932729c97792748e13d894124abc5c96329e",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "6a43ff2f5a2b737cda6645fe96288eea9f823bc86c398e0ad38447097450665d",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Web.dll": "4648a7a4065ac0192bb25ce2869ff98cf0d622aede0aede19b1b3e097940e8bb"
+      },
+      "diagnosticBinarySha256": {}
+    },
+    "staticBaseline": {
+      "source": "build\\native-nif\\algorithms-v24\\static-baseline-v2\\results.json",
+      "resultSha256": "c17b5fbd7db3993290f70dd29547f604865e5ffb6d566ea371d6c6529f288345",
+      "success": true,
+      "load": {
+        "sampleCount": 298,
+        "sampleSpanSeconds": 29.953000000095926,
+        "cpuCoreEquivalent": 1.4173246419344987,
+        "privateMedianMiB": 119.732421875,
+        "privatePeakMiB": 126.12890625,
+        "workingSetPeakMiB": 198.609375
+      },
+      "receivedHz": 7.416924244653284,
+      "receivedPoses": 455722,
+      "sentPoses": 153600,
+      "staleViewPoses": 0,
+      "offersIncludingWarmup": 4816,
+      "poseUploadMiBps": 19.290201822916668,
+      "poseDownloadMiBps": 57.29803123474121,
+      "modelUploadBytes": 0,
+      "modelDownloadBytes": 0,
+      "transport": {
+        "enetReceivedBytes": 2961141467,
+        "enetSentBytes": 640035927,
+        "udpReceivedPackets": 2387639,
+        "udpSentPackets": 959050,
+        "allEnetMiBps": 114.4783463160197,
+        "estimatedIPv4UdpMiBps": 117.45722090403238,
+        "enetOverApplicationBytes": 109539742,
+        "ipv4UdpHeadersBytes": 93707292
+      },
+      "gc": {
+        "spanSeconds": 29.8996893,
+        "allocatedMiBps": 560.7232494885211,
+        "pauseMs": 2043.676,
+        "gen0": 387,
+        "gen1": 300,
+        "gen2": 34
+      },
+      "metrics": {
+        "runtime.tick.queue": {
+          "count": 11439,
+          "max": 72.2743,
+          "p50": 0.020100000000000007,
+          "p95": 3.274846967032211,
+          "p99": 30.2748567246488,
+          "sum": 11322.839999999931
+        },
+        "phantom.pose.fanout": {
+          "count": 458246,
+          "max": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "sum": 458246
+        },
+        "runtime.tick.duration": {
+          "count": 11438,
+          "max": 25.1011,
+          "p50": 0.030301000000000133,
+          "p95": 0.12682503013196977,
+          "p99": 12.159391562431118,
+          "sum": 3968.4953999999384
+        },
+        "presence.flush.duration": {
+          "count": 300,
+          "max": 23.1506,
+          "p50": 4.704799849236168,
+          "p95": 11.520709541434973,
+          "p99": 14.126381262911318,
+          "sum": 1718.6177999999995
+        },
+        "outgoing.queue.age": {
+          "count": 274,
+          "max": 116.5341,
+          "p50": 0.8532123022052296,
+          "p95": 43.74708871292673,
+          "p99": 87.90774106083163,
+          "sum": 3036.024000000002
+        },
+        "realtime.dropped": {
+          "count": 274,
+          "max": 394,
+          "p50": 0.010000000000000009,
+          "p95": 0.010000000000000009,
+          "p99": 0.010000000000000009,
+          "sum": 412
+        },
+        "native.send.failures": {
+          "count": 274,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        }
+      },
+      "binarySha256": {
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "b23af06c98d5f3994cd408a48d5460dcb8f88919deda4bf85c2350c753b99d5d",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "09225d2bfca28a95daccad9fb5afe2e7a856dc18d1439b63d3fcc38d3b3e1c4c",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "365f5d1283cb2eec7f813de4c99697596be3099b29a277edb637415f88b54207",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "49c2116491bc4a8e0114f8d4b5bd43afa3a7dc4d7af49aace39e21d17a3f3f13",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "fb62a2766939fa22ea7c36d8da6fe0a3eb5b090d98b82661b41b0719ee75cd09",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "c624f65d8dccfd59ab3eca7cf9dde279553d446e90d723fa3700a3fdce83a4d4",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "38c52eba731528bd9e47cfaf970adb7857ca344be4d0966d5e1a4588c6d8d5ec",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "431f760bea2cc4a1747d2c91adcde941dc4ef14d46b6f9de747ee135b40aa99e",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Web.dll": "103401b6bf52037a5756df2d78b885d876627bc7b03274a87f2e456a85661ec3"
+      },
+      "diagnosticBinarySha256": {
+        "S:\\Programming\\Dreamsleeve\\build\\native-nif\\algorithms-v24\\baseline-source\\tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "7dda725fa76a1b8ada6dd17aa5ff479f5f82809dcdec36cfb2423c031bfa04da",
+        "S:\\Programming\\Dreamsleeve\\build\\native-nif\\algorithms-v24\\baseline-source\\tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\xENet.dll": "2921f17d511476ab287828c3a8e356818023adebdd9a5c3ac82b4aed46951ad8",
+        "S:\\Programming\\Dreamsleeve\\build\\native-nif\\algorithms-v24\\baseline-source\\tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "e612ad828d13a7b07f819705f512d64b86b96ed4905b4a91f78beb3988b226be"
+      }
+    },
+    "staticCurrent": {
+      "source": "build\\native-nif\\algorithms-v24\\static-current\\results.json",
+      "resultSha256": "0cdc084b59a4bf1ea6dfc15df886060d1c888004c61a1ed2d1c9fe402cea64f6",
+      "success": true,
+      "load": {
+        "sampleCount": 298,
+        "sampleSpanSeconds": 29.93799999996554,
+        "cpuCoreEquivalent": 1.5516442314133698,
+        "privateMedianMiB": 123.6953125,
+        "privatePeakMiB": 134.1171875,
+        "workingSetPeakMiB": 205.7421875
+      },
+      "receivedHz": 9.595418398071347,
+      "receivedPoses": 589554,
+      "sentPoses": 153600,
+      "staleViewPoses": 0,
+      "offersIncludingWarmup": 4867,
+      "poseUploadMiBps": 19.290201822916668,
+      "poseDownloadMiBps": 74.15022923151652,
+      "modelUploadBytes": 0,
+      "modelDownloadBytes": 0,
+      "transport": {
+        "enetReceivedBytes": 3509879256,
+        "enetSentBytes": 639973019,
+        "udpReceivedPackets": 2794025,
+        "udpSentPackets": 1167539,
+        "allEnetMiBps": 131.92025105158487,
+        "estimatedIPv4UdpMiBps": 135.4464234352112,
+        "enetOverApplicationBytes": 148311110,
+        "ipv4UdpHeadersBytes": 110923792
+      },
+      "gc": {
+        "spanSeconds": 30.000125699999977,
+        "allocatedMiBps": 574.8010548200716,
+        "pauseMs": 2256.296,
+        "gen0": 414,
+        "gen1": 284,
+        "gen2": 52
+      },
+      "metrics": {
+        "runtime.tick.duration": {
+          "count": 10972,
+          "max": 18.2178,
+          "p50": 0.030301000000000133,
+          "p95": 2.4687397954152552,
+          "p99": 9.677927314845233,
+          "sum": 4797.320799999969
+        },
+        "runtime.tick.queue": {
+          "count": 10971,
+          "max": 71.1957,
+          "p50": 0.020100000000000007,
+          "p95": 3.4043791049802543,
+          "p99": 33.892367694183584,
+          "sum": 11663.20379999999
+        },
+        "outgoing.pose.age": {
+          "count": 596686,
+          "max": 130.1474,
+          "p50": 15.21752810141631,
+          "p95": 56.3850982493318,
+          "p99": 80.2918883351285,
+          "sum": 11491207.48449983
+        },
+        "presence.flush.duration": {
+          "count": 301,
+          "max": 19.5976,
+          "p50": 4.648316682412048,
+          "p95": 10.334835011361045,
+          "p99": 16.387385201317304,
+          "sum": 1684.7791999999997
+        },
+        "outgoing.queue.age": {
+          "count": 274,
+          "max": 105.29,
+          "p50": 16.215232872591393,
+          "p95": 59.91543813588385,
+          "p99": 77.11990685595042,
+          "sum": 5407.398000000003
+        },
+        "realtime.dropped": {
+          "count": 274,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "native.send.failures": {
+          "count": 274,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "phantom.pose.fanout": {
+          "count": 606027,
+          "max": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "sum": 606027
+        }
+      },
+      "binarySha256": {
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "b23af06c98d5f3994cd408a48d5460dcb8f88919deda4bf85c2350c753b99d5d",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "09225d2bfca28a95daccad9fb5afe2e7a856dc18d1439b63d3fcc38d3b3e1c4c",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "365f5d1283cb2eec7f813de4c99697596be3099b29a277edb637415f88b54207",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "49c2116491bc4a8e0114f8d4b5bd43afa3a7dc4d7af49aace39e21d17a3f3f13",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "fb62a2766939fa22ea7c36d8da6fe0a3eb5b090d98b82661b41b0719ee75cd09",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "c624f65d8dccfd59ab3eca7cf9dde279553d446e90d723fa3700a3fdce83a4d4",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "38c52eba731528bd9e47cfaf970adb7857ca344be4d0966d5e1a4588c6d8d5ec",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "431f760bea2cc4a1747d2c91adcde941dc4ef14d46b6f9de747ee135b40aa99e",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Web.dll": "103401b6bf52037a5756df2d78b885d876627bc7b03274a87f2e456a85661ec3"
+      },
+      "diagnosticBinarySha256": {}
+    },
+    "movingCurrent": {
+      "source": "build\\native-nif\\algorithms-v24\\steady512-paced\\results.json",
+      "resultSha256": "eeddc977788512f113919d8c238ad9230016c6ee133bb7ae1a5d18e1233526f3",
+      "success": true,
+      "load": {
+        "sampleCount": 298,
+        "sampleSpanSeconds": 29.93799999996554,
+        "cpuCoreEquivalent": 1.534421137018267,
+        "privateMedianMiB": 119.623046875,
+        "privatePeakMiB": 136.78125,
+        "workingSetPeakMiB": 209.1953125
+      },
+      "receivedHz": 9.283219273297476,
+      "receivedPoses": 569089,
+      "sentPoses": 153453,
+      "staleViewPoses": 58,
+      "offersIncludingWarmup": 82840,
+      "poseUploadMiBps": 19.271676953633627,
+      "poseDownloadMiBps": 71.58644673029582,
+      "modelUploadBytes": 0,
+      "modelDownloadBytes": 0,
+      "transport": {
+        "enetReceivedBytes": 3464995858,
+        "enetSentBytes": 640598482,
+        "udpReceivedPackets": 2886537,
+        "udpSentPackets": 1306427,
+        "allEnetMiBps": 130.51332918802896,
+        "estimatedIPv4UdpMiBps": 134.2454697926839,
+        "enetOverApplicationBytes": 165229482,
+        "ipv4UdpHeadersBytes": 117402992
+      },
+      "gc": {
+        "spanSeconds": 29.89948359999998,
+        "allocatedMiBps": 615.381925317013,
+        "pauseMs": 3184.045,
+        "gen0": 458,
+        "gen1": 354,
+        "gen2": 71
+      },
+      "metrics": {
+        "runtime.tick.queue": {
+          "count": 11045,
+          "max": 74.26,
+          "p50": 0.020100000000000007,
+          "p95": 3.2325217495368426,
+          "p99": 34.949641327685036,
+          "sum": 11770.126800000002
+        },
+        "phantom.pose.fanout": {
+          "count": 606708,
+          "max": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "sum": 606708
+        },
+        "outgoing.pose.age": {
+          "count": 582629,
+          "max": 145.4693,
+          "p50": 16.215232872591393,
+          "p95": 63.662965063929306,
+          "p99": 82.75511384357125,
+          "sum": 12601329.024799917
+        },
+        "runtime.tick.duration": {
+          "count": 11045,
+          "max": 25.2138,
+          "p50": 0.030301000000000133,
+          "p95": 2.235356234264943,
+          "p99": 10.334835011361045,
+          "sum": 4948.951599999998
+        },
+        "outgoing.queue.age": {
+          "count": 273,
+          "max": 95.3393,
+          "p50": 18.59254085339054,
+          "p95": 66.28854074401474,
+          "p99": 81.92585529066463,
+          "sum": 6615.976300000002
+        },
+        "realtime.dropped": {
+          "count": 273,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "native.send.failures": {
+          "count": 273,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "sum": 0
+        },
+        "presence.flush.duration": {
+          "count": 300,
+          "max": 20.8781,
+          "p50": 4.374179516051849,
+          "p95": 14.430421526295836,
+          "p99": 18.78846626192444,
+          "sum": 1770.9766000000009
+        }
+      },
+      "binarySha256": {
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Agent.dll": "b23af06c98d5f3994cd408a48d5460dcb8f88919deda4bf85c2350c753b99d5d",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Protocol.Dotnet.dll": "09225d2bfca28a95daccad9fb5afe2e7a856dc18d1439b63d3fcc38d3b3e1c4c",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Core.dll": "365f5d1283cb2eec7f813de4c99697596be3099b29a277edb637415f88b54207",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.dll": "49c2116491bc4a8e0114f8d4b5bd43afa3a7dc4d7af49aace39e21d17a3f3f13",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Domain.dll": "fb62a2766939fa22ea7c36d8da6fe0a3eb5b090d98b82661b41b0719ee75cd09",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.dll": "c624f65d8dccfd59ab3eca7cf9dde279553d446e90d723fa3700a3fdce83a4d4",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Infrastructure.Interop.dll": "38c52eba731528bd9e47cfaf970adb7857ca344be4d0966d5e1a4588c6d8d5ec",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.NetworkBenchmarks.dll": "431f760bea2cc4a1747d2c91adcde941dc4ef14d46b6f9de747ee135b40aa99e",
+        "tests\\Dreamsleeve.Server.NetworkBenchmarks\\bin\\Release\\net10.0\\Dreamsleeve.Server.Web.dll": "103401b6bf52037a5756df2d78b885d876627bc7b03274a87f2e456a85661ec3"
+      },
+      "diagnosticBinarySha256": {}
+    }
+  },
+  "replay": {
+    "frames": 2107,
+    "recordings": 7,
+    "source": "readonly original recordings; codec roundtrip, not engine playback",
+    "metrics": {
+      "packet": {
+        "mean": 3939.064546748932,
+        "p95": 4026.0,
+        "p99": 4073.0,
+        "max": 4100.0
+      },
+      "payload": {
+        "mean": 3917.8348362600855,
+        "p95": 4005.0,
+        "p99": 4052.0,
+        "max": 4078.0
+      },
+      "encodeMs": {
+        "mean": 0.11018372093023256,
+        "p95": 0.1812,
+        "p99": 0.2042,
+        "max": 0.2445
+      },
+      "decodeMs": {
+        "mean": 0.016574940673943998,
+        "p95": 0.025,
+        "p99": 0.033,
+        "max": 0.0719
+      }
+    }
+  },
+  "artifacts": {
+    "normalClientSha256": "7342072f64f8a1e8c1d0f26bbf77024b1b00b1b34b4d474d614e804281114b16",
+    "diagnosticClientSha256": "94684f6177468fc6ce25a54a7f341af13ba120d02e80a59a9bfbdf1ad9d90781",
+    "serverCoreSha256": "dca45138d302be892c4ab2cdfaba1d5a55b6fadf45e1b658aaafe8f977cc997e",
+    "espSha256": "4d22ca009f1b01b22078efbc712d03d9e5e2d452afc7dd45384e59a0a4ab1016",
+    "deployment": {
+      "protocol": 24,
+      "client": "F:\\MO2 - Skyrim - VanillaLike\\mods\\Dreamsleeve\\SKSE\\Plugins\\Dreamsleeve.Client.dll",
+      "clientSha256": "94684f6177468fc6ce25a54a7f341af13ba120d02e80a59a9bfbdf1ad9d90781",
+      "serverCoreSha256": "dca45138d302be892c4ab2cdfaba1d5a55b6fadf45e1b658aaafe8f977cc997e",
+      "preservedConfigFiles": 11
+    }
+  }
+}

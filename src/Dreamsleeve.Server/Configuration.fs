@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Net
 open System.Globalization
+open System.Security
 open Microsoft.FSharp.Reflection
 open Tomlyn
 open Tomlyn.Model
@@ -97,6 +98,7 @@ type ApplicationConfig = {
     GroundMarks: GroundMarkOptions
     Guilds: GuildOptions
     Proxies: ProxySettings
+    Phantoms: PhantomOptions
 }
 
 [<RequireQualifiedAccess>]
@@ -107,17 +109,38 @@ type LaunchCommand =
     | Help
 
 [<RequireQualifiedAccess>]
+type internal FileReadError =
+    | Missing
+    | TooLarge
+    | Failed of exn
+
+[<RequireQualifiedAccess>]
 module Configuration =
     let defaults = {
         Server = ServerConfig.defaults
         Runtime = ServerRuntimeOptions.defaults
-        Recovery = { InitialDelayMs = 1000; MaxDelayMs = 30000; MaxRestarts = 5; WindowSeconds = 600 }
+        Recovery = {
+            InitialDelayMs = 1000
+            MaxDelayMs = 30000
+            MaxRestarts = 5
+            WindowSeconds = 600
+        }
         Database = SqliteAccountStoreConfig.defaults
         Authentication = {
-            Steam = { Enabled = false; PublicUrl = ""; ProxyUrls = [] }
+            Steam = {
+                Enabled = false
+                PublicUrl = ""
+                ProxyUrls = []
+            }
             Listener = {
-                ListenUrl = "http://127.0.0.1:8779"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
-                TrustForwardedHeaders = false; RequestsPerMinute = 120; RequestTimeoutSeconds = 15
+                ListenUrl = "http://127.0.0.1:8779"
+                AllowInsecureLoopback = true
+                AllowInsecureRemote = false
+                CertificatePath = ""
+                TrustForwardedHeaders = false
+
+                RequestsPerMinute = 120
+                RequestTimeoutSeconds = 15
             }
             Service = AuthService.defaults
         }
@@ -125,8 +148,14 @@ module Configuration =
             Enabled = true
             MaxConnections = 64
             Listener = {
-                ListenUrl = "http://127.0.0.1:8780"; AllowInsecureLoopback = true; AllowInsecureRemote = false; CertificatePath = ""
-                TrustForwardedHeaders = false; RequestsPerMinute = 600; RequestTimeoutSeconds = 15
+                ListenUrl = "http://127.0.0.1:8780"
+                AllowInsecureLoopback = true
+                AllowInsecureRemote = false
+                CertificatePath = ""
+                TrustForwardedHeaders = false
+
+                RequestsPerMinute = 600
+                RequestTimeoutSeconds = 15
             }
             Service = AdminService.defaults
         }
@@ -137,11 +166,19 @@ module Configuration =
         GroundMarks = GroundMarkOptions.defaults
         Guilds = GuildOptions.defaults
         Proxies = { Trusted = [] }
+        Phantoms = PhantomOptions.defaults
     }
 
     // Each [[table array]] entry starts from these defaults, like a section does.
     let private listItemDefaults =
-        dict [ typeof<ScheduledAnnouncement>, box { Text = ""; Kind = "Announcement"; DelaySeconds = 0; IntervalSeconds = 0 } ]
+        dict [
+            typeof<ScheduledAnnouncement>, box {
+                Text = ""
+                Kind = "Announcement"
+                DelaySeconds = 0
+                IntervalSeconds = 0
+            }
+        ]
 
     let private isList (target: Type) =
         target.IsGenericType && target.GetGenericTypeDefinition() = typedefof<list<_>>
@@ -152,45 +189,13 @@ module Configuration =
         let cons = cases |> Array.find (fun case -> case.Name = "Cons")
         List.foldBack (fun item tail -> FSharpValue.MakeUnion(cons, [| item; tail |])) items (FSharpValue.MakeUnion(empty, [||]))
 
-    // Records remain immutable domain settings. TOML overrides only supplied fields.
-    let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
-        let target = current.GetType()
-        let invalid () = Error $"Invalid TOML value or type: {path}"
-        if isList target then
-            let element = target.GetGenericArguments()[0]
-            match input, listItemDefaults.TryGetValue element with
-            // A list of strings is an inline array of strings.
-            | (:? TomlArray as values), _ when element = typeof<string> ->
-                if values |> Seq.forall (fun value -> value :? string) then Ok (makeList target (List.ofSeq values))
-                else invalid ()
-            | (:? TomlTableArray as tables), (true, template) ->
-                let items = tables |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table) |> Seq.toList
-                match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
-                | Some error -> Error error
-                | None -> Ok (makeList target (items |> List.choose (function Ok value -> Some value | Error _ -> None)))
-            // An exported empty list is written as an inline empty array.
-            | (:? TomlArray as values), (true, _) when values.Count = 0 -> Ok (makeList target [])
-            | _ -> invalid ()
-        elif FSharpType.IsRecord target then
-            match input with
-            | :? TomlTable as table ->
-                let fields = FSharpType.GetRecordFields target
-                match table.Keys |> Seq.tryFind (fun name -> fields |> Array.forall (fun field -> field.Name <> name)) with
-                | Some name -> Error $"Unknown setting: {path}{name}"
-                | None ->
-                    let values = fields |> Array.map (fun field ->
-                        let value = field.GetValue current
-                        match table.TryGetValue field.Name with
-                        | true, replacement -> overlay (path + field.Name + ".") value replacement
-                        | false, _ -> Ok value)
-                    match values |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
-                    | Some error -> Error error
-                    | None -> Ok (FSharpValue.MakeRecord(target, values |> Array.choose (function Ok value -> Some value | Error _ -> None)))
-            | _ -> invalid ()
-        elif current :? IPAddress then
+    let private overlayScalar (current: obj) (input: obj) (target: Type) invalid =
+        if current :? IPAddress then
             match input with
             | :? string as text ->
-                match IPAddress.TryParse text with true, address -> Ok (box address) | false, _ -> invalid ()
+                match IPAddress.TryParse text with
+                | true, address -> Ok (box address)
+                | false, _ -> invalid ()
             | _ -> invalid ()
         elif target = typeof<string> || target = typeof<bool> then
             if input.GetType() = target then Ok input else invalid ()
@@ -205,6 +210,50 @@ module Configuration =
                     else Ok value
                 with
                 | :? OverflowException | :? InvalidCastException -> invalid ()
+
+    // Records remain immutable domain settings. TOML overrides only supplied fields.
+    let rec private overlay path (current: obj) (input: obj) : Result<obj, string> =
+        let target = current.GetType()
+        let invalid () = Error $"Invalid TOML value or type: {path}"
+        if isList target then
+            let element = target.GetGenericArguments()[0]
+            match input, listItemDefaults.TryGetValue element with
+            // A list of strings is an inline array of strings.
+            | (:? TomlArray as values), _ when element = typeof<string> ->
+                if values |> Seq.forall (fun value -> value :? string) then Ok (makeList target (List.ofSeq values))
+                else invalid ()
+            | (:? TomlTableArray as tables), (true, template) ->
+                let items =
+                    tables
+                    |> Seq.mapi (fun index table -> overlay $"{path.TrimEnd('.')}[{index}]." template table)
+                    |> Seq.toList
+
+                match items |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
+                | Some error -> Error error
+                | None -> Ok (makeList target (items |> List.choose (function Ok value -> Some value | Error _ -> None)))
+            // An exported empty list is written as an inline empty array.
+            | (:? TomlArray as values), (true, _) when values.Count = 0 -> Ok (makeList target [])
+            | _ -> invalid ()
+        elif FSharpType.IsRecord target then
+            match input with
+            | :? TomlTable as table ->
+                let fields = FSharpType.GetRecordFields target
+                match table.Keys |> Seq.tryFind (fun name -> fields |> Array.forall (fun field -> field.Name <> name)) with
+                | Some name -> Error $"Unknown setting: {path}{name}"
+                | None ->
+                    let values =
+                        fields
+                        |> Array.map (fun field ->
+                            let value = field.GetValue current
+                            match table.TryGetValue field.Name with
+                            | true, replacement -> overlay (path + field.Name + ".") value replacement
+                            | false, _ -> Ok value)
+
+                    match values |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
+                    | Some error -> Error error
+                    | None -> Ok (FSharpValue.MakeRecord(target, values |> Array.choose (function Ok value -> Some value | Error _ -> None)))
+            | _ -> invalid ()
+        else overlayScalar current input target invalid
 
     let rec private toTableValue (value: obj) : obj =
         let valueType = value.GetType()
@@ -226,31 +275,64 @@ module Configuration =
         elif value :? IPAddress then box (string value)
         else value
 
-    let private load path =
+    [<Literal>]
+    let private MaxConfigurationBytes = 65536
+
+    // The caller owns the stream. Reading cap+1 bytes detects growth without
+    // trusting an earlier pathname or stream length observation.
+    let internal readBounded (stream: Stream) maxBytes =
+        let bytes = Array.zeroCreate<byte> (maxBytes + 1)
+        let mutable length = 0
+        let mutable ended = false
+        while not ended && length < bytes.Length do
+            let read = stream.Read(bytes, length, bytes.Length - length)
+            if read = 0 then ended <- true
+            else length <- length + read
+        if length > maxBytes then Error FileReadError.TooLarge
+        else
+            use memory = new MemoryStream(bytes, 0, length, false)
+            use reader = new StreamReader(memory, System.Text.Encoding.UTF8, true)
+            Ok (reader.ReadToEnd())
+
+    let private readText path maxBytes =
         try
-            if FileInfo(path).Length > 65536L then Error "Server configuration must not exceed 65536 bytes."
-            else
-                let source = File.ReadAllText path
-                // DOM deserialization alone does not reject duplicate TOML keys.
-                let document = Tomlyn.Parsing.SyntaxParser.Parse(source, path, true)
-                if document.HasErrors then Error $"Invalid TOML configuration: {document.Diagnostics}"
-                else
-                    let table = TomlSerializer.Deserialize<TomlTable>(source)
-                    overlay "" (box defaults) (box table) |> Result.map unbox<ApplicationConfig>
+            use stream = File.OpenRead path
+            readBounded stream maxBytes
         with
-        | :? TomlException as error -> Error $"Invalid TOML configuration: {error.Message}"
-        | :? ArgumentException as error -> Error $"Cannot read configuration: {error.Message}"
-        | :? IOException as error -> Error $"Cannot read configuration: {error.Message}"
-        | :? UnauthorizedAccessException as error -> Error $"Cannot read configuration: {error.Message}"
+        | :? FileNotFoundException | :? DirectoryNotFoundException -> Error FileReadError.Missing
+        | :? IOException as error -> Error(FileReadError.Failed error)
+        | :? UnauthorizedAccessException as error -> Error(FileReadError.Failed error)
+        | :? ArgumentException as error -> Error(FileReadError.Failed error)
+        | :? SecurityException as error -> Error(FileReadError.Failed error)
+
+    // DOM deserialization alone does not reject duplicate TOML keys. Only the
+    // dependency parser/deserializer is inside this malformed-input adapter.
+    let private parseTable description (sourceName: string) (source: string) =
+        try
+            let document = Tomlyn.Parsing.SyntaxParser.Parse(source, sourceName, true)
+            if document.HasErrors then Error $"Invalid {description}: {document.Diagnostics}"
+            else Ok (TomlSerializer.Deserialize<TomlTable>(source))
+        with :? TomlException as error -> Error $"Invalid {description}: {error.Message}"
+
+    let private load path =
+        match readText path MaxConfigurationBytes with
+        | Error FileReadError.Missing -> Error $"Cannot read configuration: File not found: {path}"
+        | Error FileReadError.TooLarge -> Error "Server configuration must not exceed 65536 bytes."
+        | Error(FileReadError.Failed error) -> Error $"Cannot read configuration: {error.Message}"
+        | Ok source ->
+            parseTable "TOML configuration" path source
+            |> Result.bind (fun table -> overlay "" (box defaults) (box table) |> Result.map unbox<ApplicationConfig>)
 
     let writeDefaults path =
+        let source = TomlSerializer.Serialize(toTableValue (box defaults))
         try
-            File.WriteAllText(path, TomlSerializer.Serialize(toTableValue (box defaults)))
+            File.WriteAllText(path, source)
             Ok ()
         with
         | :? ArgumentException as error -> Error error.Message
         | :? IOException as error -> Error error.Message
         | :? UnauthorizedAccessException as error -> Error error.Message
+        | :? SecurityException as error -> Error error.Message
 
     let private isLoopback (uri: Uri) = uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"
 
@@ -362,7 +444,10 @@ module Configuration =
                 "Moderation.RulesPath must be set when moderation is enabled."
         ]
         match errors, GameSettings.create config.Server config.Runtime config.Identity config.Announcements config.GroundMarks config.Guilds with
-        | [], Ok game -> Ok (config, GameSettings.withTrustedProxies (trustedProxies config) game)
+        | [], Ok game ->
+            GameSettings.withPhantoms config.Phantoms game
+            |> Result.map (fun game -> config, GameSettings.withTrustedProxies (trustedProxies config) game)
+            |> Result.mapError (String.concat "\n")
         | errors, Ok _ -> Error (String.concat " " errors)
         | errors, Error game -> Error (String.concat " " (errors @ game))
 
@@ -370,7 +455,7 @@ module Configuration =
     let render (config: ApplicationConfig) = TomlSerializer.Serialize(toTableValue (box config))
 
     [<Literal>]
-    let private MaxRulesBytes = 1048576L
+    let private MaxRulesBytes = 1048576
 
     let private stringList (table: TomlTable) name =
         match table.TryGetValue name with
@@ -387,7 +472,12 @@ module Configuration =
         | Some key -> Error $"Unknown moderation setting: {scope}{key}"
         | None ->
             match stringList table "words", stringList table "substrings", stringList table "exceptions" with
-            | Ok words, Ok substrings, Ok exceptions -> Ok { Words = words; Substrings = substrings; Exceptions = exceptions }
+            | Ok words, Ok substrings, Ok exceptions ->
+                Ok {
+                    Words = words
+                    Substrings = substrings
+                    Exceptions = exceptions
+                }
             | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
 
     let private section (table: TomlTable) name =
@@ -399,10 +489,9 @@ module Configuration =
     /// Parses the separate word-list file: [block] refuses, [flag] marks.
     /// Top-level words/substrings/exceptions are the block tier of older files.
     let parseModeration (source: string) =
-        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "moderation", true)
-        if document.HasErrors then Error $"Invalid moderation TOML: {document.Diagnostics}"
-        else
-            let table = TomlSerializer.Deserialize<TomlTable>(source)
+        match parseTable "moderation TOML" "moderation" source with
+        | Error error -> Error error
+        | Ok table ->
             let legacy = TomlTable()
             let mutable unknown = None
             for key in table.Keys do
@@ -414,46 +503,50 @@ module Configuration =
             | Some key -> Error $"Unknown moderation setting: {key}"
             | None ->
                 let merge (first: ModerationSource) (second: ModerationSource) =
-                    { Words = first.Words @ second.Words; Substrings = first.Substrings @ second.Substrings
-                      Exceptions = first.Exceptions @ second.Exceptions }
+                    {
+                        Words = first.Words @ second.Words
+                        Substrings = first.Substrings @ second.Substrings
+                        Exceptions = first.Exceptions @ second.Exceptions
+                    }
                 let tiers =
-                    section table "block" |> Result.bind (fun block ->
-                    section table "flag" |> Result.bind (fun flag ->
-                    tierSource legacy "" |> Result.bind (fun top ->
-                    tierSource block "block." |> Result.bind (fun blocked ->
-                    tierSource flag "flag." |> Result.map (fun flagged -> merge top blocked, flagged)))))
+                    section table "block"
+                    |> Result.bind (fun block ->
+                        section table "flag"
+                        |> Result.bind (fun flag ->
+                            tierSource legacy ""
+                            |> Result.bind (fun top ->
+                                tierSource block "block."
+                                |> Result.bind (fun blocked ->
+                                    tierSource flag "flag."
+                                    |> Result.map (fun flagged -> merge top blocked, flagged)))))
                 tiers |> Result.map (fun (block, flag) -> Moderation.create block |> Moderation.withFlags flag)
+
+    let internal readModerationSource path = readText path MaxRulesBytes
 
     /// Disabled moderation uses empty rules. A missing file is a warning: the
     /// server runs with an empty list rather than refusing to start.
     let loadModeration (settings: ModerationSettings) : Result<ModerationRules * string option, string> =
         if not settings.Enabled then Ok (Moderation.empty, None)
         else
-            try
-                let file = FileInfo settings.RulesPath
-                if not file.Exists then
-                    Ok (Moderation.empty, Some $"Moderation rules file not found: {file.FullName}; the word list is empty.")
-                elif file.Length > MaxRulesBytes then Error "Moderation rules must not exceed 1 MiB."
-                else
-                    parseModeration (File.ReadAllText file.FullName)
-                    |> Result.map (fun rules ->
-                        rules, (if rules.IsEmpty && not rules.HasFlags then Some "Moderation rules contain no words or substrings." else None))
-            with
-            | :? TomlException as error -> Error $"Invalid moderation TOML: {error.Message}"
-            | :? IOException as error -> Error $"Cannot read moderation rules: {error.Message}"
-            | :? UnauthorizedAccessException as error -> Error $"Cannot read moderation rules: {error.Message}"
-            | :? ArgumentException as error -> Error $"Cannot read moderation rules: {error.Message}"
+            match readModerationSource settings.RulesPath with
+            | Error FileReadError.Missing ->
+                Ok (Moderation.empty, Some $"Moderation rules file not found: {settings.RulesPath}; the word list is empty.")
+            | Error FileReadError.TooLarge -> Error "Moderation rules must not exceed 1 MiB."
+            | Error(FileReadError.Failed error) -> Error $"Cannot read moderation rules: {error.Message}"
+            | Ok source ->
+                parseModeration source
+                |> Result.map (fun rules ->
+                    rules, (if rules.IsEmpty && not rules.HasFlags then Some "Moderation rules contain no words or substrings." else None))
 
     [<Literal>]
-    let private MaxPseudonymsBytes = 65536L
+    let private MaxPseudonymsBytes = 65536
 
     /// The pseudonym file: version = 1 and names = [...]. Entries that break the
     /// rules of Pseudonym.create or repeat are skipped and counted.
     let parsePseudonyms (source: string) =
-        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "pseudonyms", true)
-        if document.HasErrors then Error $"Invalid pseudonym TOML: {document.Diagnostics}"
-        else
-            let table = TomlSerializer.Deserialize<TomlTable>(source)
+        match parseTable "pseudonym TOML" "pseudonyms" source with
+        | Error error -> Error error
+        | Ok table ->
             match table.Keys |> Seq.tryFind (fun key -> key <> "version" && key <> "names") with
             | Some key -> Error $"Unknown pseudonym setting: {key}"
             | None ->
@@ -461,7 +554,13 @@ module Configuration =
                 | (true, (:? int64 as version)), _ when version <> 1L -> Error "Unsupported pseudonym file version."
                 | (true, value), _ when not (value :? int64) -> Error "Pseudonym file version must be a number."
                 | _, (true, (:? TomlArray as values)) ->
-                    let names = values |> Seq.choose (function :? string as text -> Pseudonym.create text |> Result.toOption | _ -> None) |> List.ofSeq
+                    let names =
+                        values
+                        |> Seq.choose (function
+                            | :? string as text -> Pseudonym.create text |> Result.toOption
+                            | _ -> None)
+                        |> List.ofSeq
+
                     match PseudonymDictionary.create names with
                     | ValueNone -> Error "Pseudonym file has no valid names."
                     | ValueSome dictionary -> Ok (dictionary, values.Count - dictionary.Count)
@@ -472,27 +571,29 @@ module Configuration =
     /// falls back to the built-in list with a warning, like the client does.
     let loadPseudonyms (options: IdentityOptions) : PseudonymDictionary * string option =
         let fallback reason = PseudonymDictionary.builtIn, Some $"{reason}; using the {PseudonymDictionary.builtIn.Count} built-in pseudonyms."
-        try
-            let file = FileInfo options.PseudonymsPath
-            if String.IsNullOrWhiteSpace options.PseudonymsPath || not file.Exists then fallback $"Pseudonym file not found: {options.PseudonymsPath}"
-            elif file.Length > MaxPseudonymsBytes then fallback "Pseudonym file exceeds 64 KiB"
-            else
-                match parsePseudonyms (File.ReadAllText file.FullName) with
+        if String.IsNullOrWhiteSpace options.PseudonymsPath then fallback $"Pseudonym file not found: {options.PseudonymsPath}"
+        else
+            match readText options.PseudonymsPath MaxPseudonymsBytes with
+            | Error FileReadError.Missing -> fallback $"Pseudonym file not found: {options.PseudonymsPath}"
+            | Error FileReadError.TooLarge -> fallback "Pseudonym file exceeds 64 KiB"
+            | Error(FileReadError.Failed error) -> fallback $"Cannot read pseudonyms: {error.Message}"
+            | Ok source ->
+                match parsePseudonyms source with
                 | Error error -> fallback error
                 | Ok (dictionary, 0) -> dictionary, None
                 | Ok (dictionary, skipped) -> dictionary, Some $"Pseudonym file: {skipped} invalid or repeated entries skipped."
-        with
-        | :? TomlException as error -> fallback $"Invalid pseudonym TOML: {error.Message}"
-        | :? IOException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
-        | :? UnauthorizedAccessException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
-        | :? ArgumentException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
 
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with
         | [] ->
             // --port replaces the file's value before the one check.
-            match configFile with None -> Ok defaults | Some path -> load path
-            |> Result.map (fun config -> match port with None -> config | Some value -> { config with Server = { config.Server with Port = value } })
+            match configFile with
+            | None -> Ok defaults
+            | Some path -> load path
+            |> Result.map (fun config ->
+                match port with
+                | None -> config
+                | Some value -> { config with Server = { config.Server with Port = value } })
             |> Result.bind validate
             |> Result.map LaunchCommand.Run
         | "--help" :: _ | "-h" :: _ -> Ok LaunchCommand.Help

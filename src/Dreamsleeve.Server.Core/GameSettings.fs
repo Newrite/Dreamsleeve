@@ -20,6 +20,7 @@ type GameSettings =
         groundMarkRules: GroundMarkRules
         guildLimits: GuildLimits
         trustedProxies: AddressRange list
+        phantoms: PhantomOptions
     }
 
     member this.Server = this.server
@@ -36,11 +37,22 @@ type GameSettings =
     /// [Proxies]: a game connection from one of them is the player who signed in
     /// through it, and these addresses themselves are never range-banned.
     member this.TrustedProxies = this.trustedProxies
+    member this.Phantoms = this.phantoms
 
 [<RequireQualifiedAccess>]
 module GameSettings =
     /// The checked [Proxies] of the same file.
     let withTrustedProxies proxies (settings: GameSettings) = { settings with trustedProxies = proxies }
+
+    let withPhantoms options (settings: GameSettings) =
+        let errors = PhantomOptions.validate options @ [
+            if options.ChunkBytes + 512 > settings.Server.MaxPacketBytes || PhantomAssetLimits.posePacketBytes options.Limits > settings.Server.MaxPacketBytes then
+                "Server.MaxPacketBytes must allow phantom envelopes."
+        ]
+        if errors.IsEmpty then
+            Ok { settings with phantoms = options }
+        else
+            Error errors
 
     /// Sources that acknowledge the cleanup of every session: chat, system
     /// channel, presence, ground marks and guilds.
@@ -92,7 +104,9 @@ module GameSettings =
 
     let create server runtime identity announcements groundMarks (guilds: GuildOptions) : Result<GameSettings, string list> =
         let errors = [
-            match ServerConfig.validate server with Ok _ -> () | Error errors -> yield! errors
+            match ServerConfig.validate server with
+            | Ok _ -> ()
+            | Error errors -> yield! errors
             yield! runtimeErrors server runtime announcements
             yield! IdentityOptions.validate identity
             yield! GroundMarkOptions.validate groundMarks
@@ -100,15 +114,48 @@ module GameSettings =
             if guilds.HistoryCapacity > server.MaxRecentMessages then "Server.MaxRecentMessages must include the retained guild chat history."
         ]
         let schedule = AnnouncementOptions.resolve server.ChatInput announcements
-        let rules = if errors.IsEmpty then GroundMarkOptions.rules groundMarks |> Result.mapError (fun error -> [ sprintf "GroundMarks: %A" error ]) else Error []
-        let limits = if errors.IsEmpty then GuildOptions.rules guilds |> Result.mapError (fun error -> [ sprintf "Guilds: %A" error ]) else Error []
+        let rules =
+            if errors.IsEmpty then
+                GroundMarkOptions.rules groundMarks
+                |> Result.mapError (fun error -> [ sprintf "GroundMarks: %A" error ])
+            else
+                Error []
+        let limits =
+            if errors.IsEmpty then
+                GuildOptions.rules guilds
+                |> Result.mapError (fun error -> [ sprintf "Guilds: %A" error ])
+            else
+                Error []
+
         match errors, schedule, rules, limits with
         | [], Ok schedule, Ok rules, Ok limits ->
-            Ok { server = server; runtime = runtime; identity = identity; announcements = announcements; groundMarks = groundMarks
-                 guilds = guilds; codec = ProtocolCodec.create server; schedule = schedule; groundMarkRules = rules; guildLimits = limits
-                 trustedProxies = [] }
+            Ok {
+                server = server
+                runtime = runtime
+                identity = identity
+                announcements = announcements
+                groundMarks = groundMarks
+                guilds = guilds
+
+                codec = ProtocolCodec.create server
+                schedule = schedule
+                groundMarkRules = rules
+                guildLimits = limits
+                trustedProxies = []
+                phantoms = PhantomOptions.defaults
+            }
         | errors, schedule, rules, limits ->
-            let scheduleErrors = match schedule with Error errors -> errors | Ok _ -> []
-            let rulesErrors = match rules with Error errors -> errors | Ok _ -> []
-            let limitErrors = match limits with Error errors -> errors | Ok _ -> []
+            let scheduleErrors =
+                match schedule with
+                | Error errors -> errors
+                | Ok _ -> []
+            let rulesErrors =
+                match rules with
+                | Error errors -> errors
+                | Ok _ -> []
+            let limitErrors =
+                match limits with
+                | Error errors -> errors
+                | Ok _ -> []
+
             Error (errors @ scheduleErrors @ rulesErrors @ limitErrors)

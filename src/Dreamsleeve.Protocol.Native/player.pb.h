@@ -84,6 +84,10 @@ class BeginCharacter;
 struct BeginCharacterDefaultTypeInternal;
 extern BeginCharacterDefaultTypeInternal _BeginCharacter_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull BeginCharacter_class_data_;
+class CameraDirection;
+struct CameraDirectionDefaultTypeInternal;
+extern CameraDirectionDefaultTypeInternal _CameraDirection_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull CameraDirection_class_data_;
 class LeaveGame;
 struct LeaveGameDefaultTypeInternal;
 extern LeaveGameDefaultTypeInternal _LeaveGame_default_instance_;
@@ -156,10 +160,6 @@ class ResourceActorValue;
 struct ResourceActorValueDefaultTypeInternal;
 extern ResourceActorValueDefaultTypeInternal _ResourceActorValue_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull ResourceActorValue_class_data_;
-class Rotation;
-struct RotationDefaultTypeInternal;
-extern RotationDefaultTypeInternal _Rotation_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull Rotation_class_data_;
 class SetPlayerLocation;
 struct SetPlayerLocationDefaultTypeInternal;
 extern SetPlayerLocationDefaultTypeInternal _SetPlayerLocation_default_instance_;
@@ -326,220 +326,6 @@ inline bool PlayerDetailsField_Parse(
 // ===================================================================
 
 
-// -------------------------------------------------------------------
-
-class Rotation final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.Rotation) */ {
- public:
-  inline Rotation() : Rotation(nullptr) {}
-  ~Rotation() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(Rotation* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(Rotation));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR Rotation(::google::protobuf::internal::ConstantInitialized);
-
-  inline Rotation(const Rotation& from) : Rotation(nullptr, from) {}
-  inline Rotation(Rotation&& from) noexcept
-      : Rotation(nullptr, ::std::move(from)) {}
-  inline Rotation& operator=(const Rotation& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline Rotation& operator=(Rotation&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const Rotation& default_instance() {
-    return *reinterpret_cast<const Rotation*>(
-        &_Rotation_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 2;
-  friend void swap(Rotation& a, Rotation& b) { a.Swap(&b); }
-  inline void Swap(Rotation* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(Rotation* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  Rotation* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<Rotation>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const Rotation& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const Rotation& from) { Rotation::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(Rotation* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.Rotation"; }
-
-  explicit Rotation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  Rotation(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Rotation& from);
-  Rotation(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Rotation&& from) noexcept
-      : Rotation(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kXFieldNumber = 1,
-    kYFieldNumber = 2,
-    kZFieldNumber = 3,
-  };
-  // float x = 1;
-  void clear_x() ;
-  float x() const;
-  void set_x(float value);
-
-  private:
-  float _internal_x() const;
-  void _internal_set_x(float value);
-
-  public:
-  // float y = 2;
-  void clear_y() ;
-  float y() const;
-  void set_y(float value);
-
-  private:
-  float _internal_y() const;
-  void _internal_set_y(float value);
-
-  public:
-  // float z = 3;
-  void clear_z() ;
-  float z() const;
-  void set_z(float value);
-
-  private:
-  float _internal_z() const;
-  void _internal_set_z(float value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.Rotation)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   0, 0,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const Rotation& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    float x_;
-    float y_;
-    float z_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_player_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataFull Rotation_class_data_;
 // -------------------------------------------------------------------
 
 class ResourceActorValue final : public ::google::protobuf::Message
@@ -1783,6 +1569,220 @@ class LeaveGame final : public ::google::protobuf::internal::ZeroFieldsBase
 extern const ::google::protobuf::internal::ClassDataFull LeaveGame_class_data_;
 // -------------------------------------------------------------------
 
+class CameraDirection final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.CameraDirection) */ {
+ public:
+  inline CameraDirection() : CameraDirection(nullptr) {}
+  ~CameraDirection() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CameraDirection* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CameraDirection));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CameraDirection(::google::protobuf::internal::ConstantInitialized);
+
+  inline CameraDirection(const CameraDirection& from) : CameraDirection(nullptr, from) {}
+  inline CameraDirection(CameraDirection&& from) noexcept
+      : CameraDirection(nullptr, ::std::move(from)) {}
+  inline CameraDirection& operator=(const CameraDirection& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CameraDirection& operator=(CameraDirection&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const CameraDirection& default_instance() {
+    return *reinterpret_cast<const CameraDirection*>(
+        &_CameraDirection_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(CameraDirection& a, CameraDirection& b) { a.Swap(&b); }
+  inline void Swap(CameraDirection* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CameraDirection* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CameraDirection* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CameraDirection>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CameraDirection& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CameraDirection& from) { CameraDirection::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CameraDirection* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.CameraDirection"; }
+
+  explicit CameraDirection(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CameraDirection(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CameraDirection& from);
+  CameraDirection(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CameraDirection&& from) noexcept
+      : CameraDirection(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kXFieldNumber = 1,
+    kYFieldNumber = 2,
+    kZFieldNumber = 3,
+  };
+  // float x = 1;
+  void clear_x() ;
+  float x() const;
+  void set_x(float value);
+
+  private:
+  float _internal_x() const;
+  void _internal_set_x(float value);
+
+  public:
+  // float y = 2;
+  void clear_y() ;
+  float y() const;
+  void set_y(float value);
+
+  private:
+  float _internal_y() const;
+  void _internal_set_y(float value);
+
+  public:
+  // float z = 3;
+  void clear_z() ;
+  float z() const;
+  void set_z(float value);
+
+  private:
+  float _internal_z() const;
+  void _internal_set_z(float value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.CameraDirection)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CameraDirection& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    float x_;
+    float y_;
+    float z_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_player_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull CameraDirection_class_data_;
+// -------------------------------------------------------------------
+
 class BeginCharacter final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.BeginCharacter) */ {
  public:
@@ -2557,7 +2557,7 @@ class MovementPose final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kPositionFieldNumber = 1,
-    kRotationFieldNumber = 2,
+    kCameraDirectionFieldNumber = 2,
     kSampledAtUsFieldNumber = 3,
   };
   // .Dreamsleeve.Protocol.Chat.Position position = 1;
@@ -2575,19 +2575,19 @@ class MovementPose final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL _internal_mutable_position();
 
   public:
-  // .Dreamsleeve.Protocol.Chat.Rotation rotation = 2;
-  bool has_rotation() const;
-  void clear_rotation() ;
-  const ::Dreamsleeve::Protocol::Chat::Rotation& rotation() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE release_rotation();
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL mutable_rotation();
-  void set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE unsafe_arena_release_rotation();
+  // .Dreamsleeve.Protocol.Chat.CameraDirection camera_direction = 2;
+  bool has_camera_direction() const;
+  void clear_camera_direction() ;
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection& camera_direction() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE release_camera_direction();
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL mutable_camera_direction();
+  void set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE unsafe_arena_release_camera_direction();
 
   private:
-  const ::Dreamsleeve::Protocol::Chat::Rotation& _internal_rotation() const;
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL _internal_mutable_rotation();
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection& _internal_camera_direction() const;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL _internal_mutable_camera_direction();
 
   public:
   // uint64 sampled_at_us = 3;
@@ -2627,7 +2627,7 @@ class MovementPose final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE position_;
-    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE rotation_;
+    ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE camera_direction_;
     ::uint64_t sampled_at_us_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3958,7 +3958,7 @@ class PlayerLocation final : public ::google::protobuf::Message
   enum : int {
     kLocationFieldNumber = 1,
     kPositionFieldNumber = 2,
-    kRotationFieldNumber = 3,
+    kCameraDirectionFieldNumber = 3,
     kSampledAtUsFieldNumber = 4,
   };
   // .Dreamsleeve.Protocol.Chat.Location location = 1;
@@ -3991,19 +3991,19 @@ class PlayerLocation final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NONNULL _internal_mutable_position();
 
   public:
-  // .Dreamsleeve.Protocol.Chat.Rotation rotation = 3;
-  bool has_rotation() const;
-  void clear_rotation() ;
-  const ::Dreamsleeve::Protocol::Chat::Rotation& rotation() const;
-  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE release_rotation();
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL mutable_rotation();
-  void set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value);
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE unsafe_arena_release_rotation();
+  // .Dreamsleeve.Protocol.Chat.CameraDirection camera_direction = 3;
+  bool has_camera_direction() const;
+  void clear_camera_direction() ;
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection& camera_direction() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE release_camera_direction();
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL mutable_camera_direction();
+  void set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE unsafe_arena_release_camera_direction();
 
   private:
-  const ::Dreamsleeve::Protocol::Chat::Rotation& _internal_rotation() const;
-  ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL _internal_mutable_rotation();
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection& _internal_camera_direction() const;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL _internal_mutable_camera_direction();
 
   public:
   // uint64 sampled_at_us = 4;
@@ -4044,7 +4044,7 @@ class PlayerLocation final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::Dreamsleeve::Protocol::Chat::Location* PROTOBUF_NULLABLE location_;
     ::Dreamsleeve::Protocol::Chat::Position* PROTOBUF_NULLABLE position_;
-    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE rotation_;
+    ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE camera_direction_;
     ::uint64_t sampled_at_us_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6605,79 +6605,79 @@ inline void Position::_internal_set_z(float value) {
 
 // -------------------------------------------------------------------
 
-// Rotation
+// CameraDirection
 
 // float x = 1;
-inline void Rotation::clear_x() {
+inline void CameraDirection::clear_x() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.x_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline float Rotation::x() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Rotation.x)
+inline float CameraDirection::x() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.CameraDirection.x)
   return _internal_x();
 }
-inline void Rotation::set_x(float value) {
+inline void CameraDirection::set_x(float value) {
   _internal_set_x(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Rotation.x)
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.CameraDirection.x)
 }
-inline float Rotation::_internal_x() const {
+inline float CameraDirection::_internal_x() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.x_;
 }
-inline void Rotation::_internal_set_x(float value) {
+inline void CameraDirection::_internal_set_x(float value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.x_ = value;
 }
 
 // float y = 2;
-inline void Rotation::clear_y() {
+inline void CameraDirection::clear_y() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.y_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000002U);
 }
-inline float Rotation::y() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Rotation.y)
+inline float CameraDirection::y() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.CameraDirection.y)
   return _internal_y();
 }
-inline void Rotation::set_y(float value) {
+inline void CameraDirection::set_y(float value) {
   _internal_set_y(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Rotation.y)
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.CameraDirection.y)
 }
-inline float Rotation::_internal_y() const {
+inline float CameraDirection::_internal_y() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.y_;
 }
-inline void Rotation::_internal_set_y(float value) {
+inline void CameraDirection::_internal_set_y(float value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.y_ = value;
 }
 
 // float z = 3;
-inline void Rotation::clear_z() {
+inline void CameraDirection::clear_z() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.z_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000004U);
 }
-inline float Rotation::z() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Rotation.z)
+inline float CameraDirection::z() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.CameraDirection.z)
   return _internal_z();
 }
-inline void Rotation::set_z(float value) {
+inline void CameraDirection::set_z(float value) {
   _internal_set_z(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Rotation.z)
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.CameraDirection.z)
 }
-inline float Rotation::_internal_z() const {
+inline float CameraDirection::_internal_z() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.z_;
 }
-inline void Rotation::_internal_set_z(float value) {
+inline void CameraDirection::_internal_set_z(float value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.z_ = value;
 }
@@ -6884,47 +6884,47 @@ inline void PlayerLocation::set_allocated_position(::Dreamsleeve::Protocol::Chat
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.position)
 }
 
-// .Dreamsleeve.Protocol.Chat.Rotation rotation = 3;
-inline bool PlayerLocation::has_rotation() const {
+// .Dreamsleeve.Protocol.Chat.CameraDirection camera_direction = 3;
+inline bool PlayerLocation::has_camera_direction() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
-  PROTOBUF_ASSUME(!value || _impl_.rotation_ != nullptr);
+  PROTOBUF_ASSUME(!value || _impl_.camera_direction_ != nullptr);
   return value;
 }
-inline void PlayerLocation::clear_rotation() {
+inline void PlayerLocation::clear_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.rotation_ != nullptr) _impl_.rotation_->Clear();
+  if (_impl_.camera_direction_ != nullptr) _impl_.camera_direction_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000004U);
 }
-inline const ::Dreamsleeve::Protocol::Chat::Rotation& PlayerLocation::_internal_rotation() const {
+inline const ::Dreamsleeve::Protocol::Chat::CameraDirection& PlayerLocation::_internal_camera_direction() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::Dreamsleeve::Protocol::Chat::Rotation* p = _impl_.rotation_;
-  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::Rotation&>(::Dreamsleeve::Protocol::Chat::_Rotation_default_instance_);
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection* p = _impl_.camera_direction_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::CameraDirection&>(::Dreamsleeve::Protocol::Chat::_CameraDirection_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::Rotation& PlayerLocation::rotation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
-  return _internal_rotation();
+inline const ::Dreamsleeve::Protocol::Chat::CameraDirection& PlayerLocation::camera_direction() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.PlayerLocation.camera_direction)
+  return _internal_camera_direction();
 }
-inline void PlayerLocation::unsafe_arena_set_allocated_rotation(
-    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+inline void PlayerLocation::unsafe_arena_set_allocated_camera_direction(
+    ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.camera_direction_);
   }
-  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
+  _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(value);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.camera_direction)
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE PlayerLocation::release_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE PlayerLocation::release_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* released = _impl_.rotation_;
-  _impl_.rotation_ = nullptr;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* released = _impl_.camera_direction_;
+  _impl_.camera_direction_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
     auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
     released = ::google::protobuf::internal::DuplicateIfNonNull(released);
@@ -6938,35 +6938,35 @@ inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE PlayerLocation
   }
   return released;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE PlayerLocation::unsafe_arena_release_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE PlayerLocation::unsafe_arena_release_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.PlayerLocation.camera_direction)
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* temp = _impl_.rotation_;
-  _impl_.rotation_ = nullptr;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* temp = _impl_.camera_direction_;
+  _impl_.camera_direction_ = nullptr;
   return temp;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL PlayerLocation::_internal_mutable_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL PlayerLocation::_internal_mutable_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.rotation_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::Rotation>(GetArena());
-    _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(p);
+  if (_impl_.camera_direction_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::CameraDirection>(GetArena());
+    _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(p);
   }
-  return _impl_.rotation_;
+  return _impl_.camera_direction_;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL PlayerLocation::mutable_rotation()
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL PlayerLocation::mutable_camera_direction()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* _msg = _internal_mutable_rotation();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* _msg = _internal_mutable_camera_direction();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.PlayerLocation.camera_direction)
   return _msg;
 }
-inline void PlayerLocation::set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+inline void PlayerLocation::set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.camera_direction_);
   }
 
   if (value != nullptr) {
@@ -6979,8 +6979,8 @@ inline void PlayerLocation::set_allocated_rotation(::Dreamsleeve::Protocol::Chat
     ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
-  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.rotation)
+  _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.PlayerLocation.camera_direction)
 }
 
 // uint64 sampled_at_us = 4;
@@ -9523,47 +9523,47 @@ inline void MovementPose::set_allocated_position(::Dreamsleeve::Protocol::Chat::
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.position)
 }
 
-// .Dreamsleeve.Protocol.Chat.Rotation rotation = 2;
-inline bool MovementPose::has_rotation() const {
+// .Dreamsleeve.Protocol.Chat.CameraDirection camera_direction = 2;
+inline bool MovementPose::has_camera_direction() const {
   bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
-  PROTOBUF_ASSUME(!value || _impl_.rotation_ != nullptr);
+  PROTOBUF_ASSUME(!value || _impl_.camera_direction_ != nullptr);
   return value;
 }
-inline void MovementPose::clear_rotation() {
+inline void MovementPose::clear_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.rotation_ != nullptr) _impl_.rotation_->Clear();
+  if (_impl_.camera_direction_ != nullptr) _impl_.camera_direction_->Clear();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000002U);
 }
-inline const ::Dreamsleeve::Protocol::Chat::Rotation& MovementPose::_internal_rotation() const {
+inline const ::Dreamsleeve::Protocol::Chat::CameraDirection& MovementPose::_internal_camera_direction() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::Dreamsleeve::Protocol::Chat::Rotation* p = _impl_.rotation_;
-  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::Rotation&>(::Dreamsleeve::Protocol::Chat::_Rotation_default_instance_);
+  const ::Dreamsleeve::Protocol::Chat::CameraDirection* p = _impl_.camera_direction_;
+  return p != nullptr ? *p : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::CameraDirection&>(::Dreamsleeve::Protocol::Chat::_CameraDirection_default_instance_);
 }
-inline const ::Dreamsleeve::Protocol::Chat::Rotation& MovementPose::rotation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
-  return _internal_rotation();
+inline const ::Dreamsleeve::Protocol::Chat::CameraDirection& MovementPose::camera_direction() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.MovementPose.camera_direction)
+  return _internal_camera_direction();
 }
-inline void MovementPose::unsafe_arena_set_allocated_rotation(
-    ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+inline void MovementPose::unsafe_arena_set_allocated_camera_direction(
+    ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.camera_direction_);
   }
-  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
+  _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(value);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.camera_direction)
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE MovementPose::release_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE MovementPose::release_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* released = _impl_.rotation_;
-  _impl_.rotation_ = nullptr;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* released = _impl_.camera_direction_;
+  _impl_.camera_direction_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
     auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
     released = ::google::protobuf::internal::DuplicateIfNonNull(released);
@@ -9577,35 +9577,35 @@ inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE MovementPose::
   }
   return released;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE MovementPose::unsafe_arena_release_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE MovementPose::unsafe_arena_release_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.MovementPose.camera_direction)
 
   ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* temp = _impl_.rotation_;
-  _impl_.rotation_ = nullptr;
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* temp = _impl_.camera_direction_;
+  _impl_.camera_direction_ = nullptr;
   return temp;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL MovementPose::_internal_mutable_rotation() {
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL MovementPose::_internal_mutable_camera_direction() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.rotation_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::Rotation>(GetArena());
-    _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(p);
+  if (_impl_.camera_direction_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::CameraDirection>(GetArena());
+    _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(p);
   }
-  return _impl_.rotation_;
+  return _impl_.camera_direction_;
 }
-inline ::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NONNULL MovementPose::mutable_rotation()
+inline ::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NONNULL MovementPose::mutable_camera_direction()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::Dreamsleeve::Protocol::Chat::Rotation* _msg = _internal_mutable_rotation();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  ::Dreamsleeve::Protocol::Chat::CameraDirection* _msg = _internal_mutable_camera_direction();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.MovementPose.camera_direction)
   return _msg;
 }
-inline void MovementPose::set_allocated_rotation(::Dreamsleeve::Protocol::Chat::Rotation* PROTOBUF_NULLABLE value) {
+inline void MovementPose::set_allocated_camera_direction(::Dreamsleeve::Protocol::Chat::CameraDirection* PROTOBUF_NULLABLE value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.rotation_);
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.camera_direction_);
   }
 
   if (value != nullptr) {
@@ -9618,8 +9618,8 @@ inline void MovementPose::set_allocated_rotation(::Dreamsleeve::Protocol::Chat::
     ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
-  _impl_.rotation_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::Rotation*>(value);
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.rotation)
+  _impl_.camera_direction_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CameraDirection*>(value);
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.MovementPose.camera_direction)
 }
 
 // uint64 sampled_at_us = 3;

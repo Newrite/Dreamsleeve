@@ -1,4 +1,4 @@
-﻿# Dreamsleeve.Agent
+# Dreamsleeve.Agent
 
 Sequential, in-process F# agents built on `System.Threading.Channels` and `Task`. Targets **.NET 10+**; no external runtime packages.
 
@@ -43,20 +43,33 @@ let example () = task {
         { AgentOptions.create "echo" with
             Mailbox = AgentMailbox.boundedWait 64
             DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.) }
-
-    use agent =
-        Agent<Command>.Start(options, fun _ (Echo (text, reply)) -> task {
-            reply.Reply text
-        })
-
-    let! text = agent.AskAsync(fun reply -> Echo ("hello", reply))
-    printfn "%s" text
-    agent.Complete() |> ignore
-    do! agent.Completion
+    match Agent<Command>.TryStart(options, fun _ (Echo (text, reply)) -> task { reply.Reply text }) with
+    | Error error -> eprintfn "Startup rejected: %A" error
+    | Ok owner ->
+        use agent = owner
+        let! result = agent.TryAskAsync(fun reply -> Echo ("hello", reply))
+        match result with
+        | AgentAskResult.Replied text -> printfn "%s" text
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
+            eprintfn "Request not confirmed: %A; do not retry automatically" failure
+        agent.Complete() |> ignore
+        do! agent.Completion
 }
 ```
 
-`TryPost` attempts immediate admission. `PostAsync` waits for space on a bounded `Wait` mailbox and returns `AgentPostResult`. `Posted` means admitted, not processed. `TryAskAsync` returns `AgentAskResult<'Reply>`; `AskAsync` turns unsuccessful outcomes into exceptions. Both stateful variants also support command/reply and queued state projections through `TryReadAsync` / `ReadAsync`.
+`TryPost` attempts immediate admission. `PostAsync` waits for space on a bounded `Wait` mailbox and returns `AgentPostResult`. `Posted` means admitted, not processed. `TryAskAsync` returns `AgentAskResult<'Reply>`. Both stateful variants also support queued state projections through `TryReadAsync`. The throwing `AskAsync` / `ReadAsync` methods and `askAsync` / `readAsync` pipeline helpers have been removed; migrate callers to `TryAskAsync` / `TryReadAsync` (or `tryAskAsync` / `tryReadAsync`) and handle every outcome explicitly. Handler faults remain `Faulted` with their original exception; `Completion` still reports lifecycle faults.
+
+## Checked construction and reliable owners
+
+Raw construction uses `Agent.TryStart`, `StatefulAgent.TryStart`, or `MutableStatefulAgent.TryStart`, returning `Result<_, AgentStartError>`. Invalid capacities, unsupported timeout values, missing control classifiers, null required delegates and unknown mailbox modes are rejected before resources or callbacks start. The options are copied at this boundary. There is no throwing `Start` compatibility factory.
+
+`TryPrepare(options, handler)` validates once and returns a plan whose `Start()` begins processing. For owners that must check derived budgets before creating dependent workers, `Agent<'Message>.TryCheckReliable` returns a reusable checked configuration. Its `Start(localHandler)` is a trusted path for an authored handler already known nonnull; external/raw handlers use `TryStartReliable` or `TryPrepareReliable`.
+
+`TryStartReliable` rejects dropping mailboxes and supplies `ReliableAgentContext`. Its `ReliableAgent` facade delegates to one underlying owner and exposes a direct `ReliableAgentRef` through `Ref`. Background work, ownership, watching, outboxes, dispatchers, reply scopes and tickers require this capability. General dropping owners keep `AgentContext`; `TryReliable()` can optionally convert a compatible general address/context when wiring a boundary.
+
+Raw helper factories use `tryCreate`/`TryCreate`, `tryCreateHandler`, `tryStart`, or `tryStartWithTimeProvider` and preserve `AgentStartError`. Trusted helper paths consume `AgentDeliveryCapacity` or `AgentTickerInterval` checked tokens. Delivery capacity must be positive, without an arbitrary library cap. Timer intervals must truncate to 1..4294967294 milliseconds, matching `PeriodicTimer`.
+
+An invalid Ask/Read timeout, null builder or null projection returns `InvalidRequest of AgentRequestError` before a command is built or admitted. Builder/projection exceptions remain `Faulted` with the original cause. `TryReplyError` returns `Result<bool, AgentRequestError>`; a null error is rejected without settling the reply, while `Ok false` means another settlement already won. `ReplyError` returns `Result<unit, AgentRequestError>`.
 
 ## Contracts to know
 
@@ -66,9 +79,9 @@ let example () = task {
 - **Ownership:** a projection executes inside the agent, but returning a live dictionary, lazy sequence, mutable array or mutable nested object can leak shared state. Materialize independent snapshots inside the projection.
 - **Shutdown:** `Complete()` closes admission and drains queued work. `Abort()` requests cooperative cancellation and discards remaining queued work. Await `Completion` to observe actual termination.
 - **Errors:** the default handler error policy stops with `Faulted`. A failed current Ask receives `Faulted` even if the chosen policy continues. State-wrapper `OnUnhandled` overrides the base `OnError`; otherwise the base policy is used.
-- **Completion:** successful for `Completed`, canceled for `Aborted`, faulted for `Faulted`. It is published after cleanup and stop callbacks. `IDisposable.Dispose` requests abort; `IAsyncDisposable.DisposeAsync` completes gracefully and awaits termination.
+- **Completion:** joins owned work and all cleanup/stop notification attempts. With no lifecycle faults it succeeds for `Completed` and is canceled for `Aborted`; otherwise it retains the original and secondary exceptions. `StopReason` is sealed before stop notifications, so a failing stop callback faults Completion without changing the reason already delivered to observers. `IDisposable.Dispose` requests abort; `IAsyncDisposable.DisposeAsync` completes gracefully and awaits termination.
 - **Deadlocks:** do not await your own Ask/Read, your own full bounded `PostAsync`, your own completion from a lifecycle callback, or a cycle of agents that await each other.
-- **Start:** `Start` begins immediately. Register `OnStarted` in options when startup must be observed; `Started` is not replayed to late subscribers.
+- **Start:** successful `TryStart` begins immediately; preparing a plan does not. Register `OnStarted` in options when startup must be observed; `Started` is not replayed to late subscribers.
 
 The [full guide](docs/index.html) includes result tables, lifecycle and error-policy details, migration notes, and guidance for a Dreamsleeve server. This module has no automatic restarts, supervisor tree, durable delivery, keyed coalescing or distributed actor protocol.
 
@@ -90,7 +103,7 @@ Run all suites: `python Scripts/run_tests.py`. [Test organization](../../tests/R
 narrows an address to part of the receiver's protocol. Stateful wrappers expose
 command addresses too. IsNonDropping describes mailbox policy, not processing.
 
-From a base Agent handler, call `context.PipeToSelf(operation, toMessage)` to start
+From a reliable Agent handler, call `context.PipeToSelf(operation, toMessage)` to start
 tracked work and post its Result<_, exn> as a new message. Both functions run outside
 the mailbox: capture immutable inputs, never mutate actor-owned state. Use a
 non-dropping mailbox; bound outstanding work in the owning component. Abort/fault
@@ -118,9 +131,9 @@ Completion settles.
 
 ## Bounded ordered sends
 
-Construct one `AgentOutbox(capacity, destination)` per independently progressing
+Construct one `AgentOutbox.TryCreate(capacity, destination)` per independently progressing
 route. From the owner handler, call `TrySend(context, message, onFailure)`.
-False means the local limit is full: the message was not scheduled. True means
+False means the local limit is full, the owner stopped, or scheduling failed: the message was not scheduled. True means
 accepted by the outbox, not delivered or processed by the destination. The limit
 includes queued messages, the current admission, and any pending failure notification.
 Only one actual admission runs at a time; ordering is FIFO.
@@ -152,8 +165,8 @@ A finished send means admission, not processing by the destination.
 
 ## Request/reply handlers
 
-`AgentOutbox.createHandler capacity output execute` creates an ordered request/reply
-handler. `AgentReplyDispatcher.createHandler capacity replyTo execute` uses independent
+`AgentOutbox.createHandler checkedCapacity output execute` creates an ordered request/reply
+handler. `AgentReplyDispatcher.createHandler checkedCapacity replyTo execute` uses independent
 per-request destinations. Independent replies may arrive out of order: correlate them
 by operation ID. Construct each handler once per owner.
 
@@ -171,7 +184,7 @@ completion; the lifecycle owner can Abort.
 
 ### Background request execution
 
-`AgentReplyDispatcher.createAsyncHandler capacity replyTo execute` accepts
+`AgentReplyDispatcher.createAsyncHandler checkedCapacity replyTo execute` accepts
 `execute: CancellationToken -> Request -> Task<Reply>`. It reserves one slot before
 starting work through the existing tracked background worker. Even execute's
 synchronous prefix runs outside the mailbox handler; no additional Task.Run is needed
@@ -206,7 +219,7 @@ an owner message from `Result<unit, exn>` after the child's actual Completion,
 including for an already stopped child. Parent Abort/fault aborts the child and joins
 its cleanup; cooperative cleanup may delay the parent. Graceful child Stop remains
 application-specific: stop children first, then Complete the parent. Own does not
-restart children or recover their state; `AgentSupervisor` restarts.
+restart children or recover their state; `AgentSupervisor` restarts. A delivered child failure preserves all causes (singleton original, ordered AggregateException for multiple); when shutdown or failed notification prevents delivery, Own retains every original cause in the parent Completion. Only actual child cancellation caused by parent cancellation is consumed.
 
 `context.Watch(target, stopped)` observes a shared dependency without owning it.
 The `Watch(completion: Task, stopped)` overload provides the same observation when
@@ -217,12 +230,12 @@ Both APIs require a non-dropping owner mailbox.
 
 ## Forwarded reply ownership
 
-Create `AgentReplyScope.create context target capacity closedReply busyReply` once per
+Create `AgentReplyScope.create context target checkedCapacity closedReply busyReply` once per
 route. `scope.Forward(reply, send)` bounds unfinished reply channels and schedules a
 forward through the supplied synchronous send function. The function runs outside
 the library lock, must return false when refused, and can use an outbox to preserve
 ordering with other target commands. False settles closedReply; a thrown exception
-settles the request error and propagates to the owner's error policy.
+settles the request with that original error, releases the scope reservation, and faults the owner's lifetime.
 
 Scope closure is automatic on target termination or owner shutdown, including when
 the owner mailbox is busy. `scope.Close()` also closes a domain route immediately,
@@ -241,7 +254,7 @@ route identity, request semantics and graceful domain cleanup remain application
 
 `AgentMailbox.boundedWithControl ordinaryCapacity controlReserve` creates one FIFO
 with total capacity `ordinaryCapacity + controlReserve`. Pass a named pure classifier
-as `Agent.Start(options, handler, isControl = isControlMessage)`. Classification runs
+as `Agent.TryStartReliable(options, handler, isControl = isControlMessage)`. Classification runs
 on the posting caller, including Map and Ask, and must not access receiver-owned state.
 Existing mailbox variants and Start calls are unchanged.
 
@@ -265,7 +278,7 @@ created only when writers actually wait.
 
 ## Periodic ticker
 
-`AgentTicker.start interval context toMessage` creates one owned PeriodicTimer.
+`AgentTicker.start checkedInterval context toMessage` creates one owned PeriodicTimer.
 The owner calls `Acknowledge()` after handling a tick; until then further periods
 are coalesced, and missed periods are skipped rather than caught up in a burst. The
 callback only builds a message and never reads the agent's mutable state. It needs a
@@ -274,7 +287,7 @@ schedule without wall-clock sleeps. AgentTick timestamps come from the TimeProvi
 
 ## Supervisor
 
-`AgentSupervisor.start name policy start observe` keeps one child and restarts it by a
+`AgentSupervisor.tryStart name policy start observe` keeps one child and restarts it by a
 `RestartPolicy`. The supervisor is an agent itself: the child's start, its termination and the
 restart delays reach it as messages. `start` returns a `SupervisedChild`: the value consumers
 use, `Completion` (the full stop including everything the child owns) and `Stop` (the graceful
@@ -288,6 +301,13 @@ within the window and the supervisor gives up: `Completion` faults with
 the moment of use instead of keeping a reference. `StopAsync()` stops the child gracefully and
 ends supervision: a pending restart is canceled, and a child still starting is stopped as soon
 as it starts. `observe` receives the events (`Started`, `StartFailed`, `Stopped`, `Restarting`,
-`GaveUp`) on the supervisor's handler: quick work such as logging only; exceptions are ignored.
+`GaveUp`) on the supervisor's handler: quick work such as logging only; observer failures stop and fault supervision.
 The supervisor neither restores the child's state nor replays its accepted commands.
 `startWithTimeProvider` lets tests drive the failure window without waiting.
+
+
+The child-start delegate returns `Task<Result<SupervisedChild<'Child>, 'StartError>>`. `SupervisorEvent<'Child,'StartError>.StartRejected` preserves an expected construction refusal; `StartFailed` preserves an unexpected thrown exception. Both use the same existing whole-child reconstruction policy. At exhaustion, `SupervisorGaveUpException<'StartError>.Failure` retains `SupervisorFailure.StartRejected reason`, `Faulted originalException`, or `CompletedUnexpectedly`; only an actual fault supplies `InnerException`. A rejected factory must release and join partially acquired resources before returning its typed error. This reconstruction policy never retries an individual admitted operation.
+
+Lifecycle notifications and cancellation callbacks belong to the owner. Their unexpected faults close admission and stop dispatch; an error notification fault overrides a handler policy that returns Continue. State replacement commits before OnTransition; if that notification faults, the committed owner is stopped rather than passed to recovery or reused for another command. Separate event/configured notifications are attempted independently; standard event multicast stops at its first throwing subscriber. Completion retains each original failure once by reference, including cancellation/cleanup failures, after pending requests and queue reservations have been released.
+
+Supervisor observer failures stop supervision and join any acquired child; they fault Completion without reconstructing another child. Concurrent StopAsync callers join the same child Stop and actual Completion. Both are attempted independently, retaining every original fault. StopAsync consumes only a sole prior exhaustion of this supervisor; it propagates additional cleanup or observer faults. Awaiting StopAsync exposes one exception, so Completion is the authoritative full lifetime result: inspect its Exception.InnerExceptions to retain all causes. Once the current child termination result is handled by the supervisor, its outcome belongs to the established reconstruction policy. A delayed ownership waiter does not stop that child again or register its handled fault as a separate cleanup cause. Unhandled child outcomes and actual Stop or observer faults remain part of Completion; no individual operation is retried.

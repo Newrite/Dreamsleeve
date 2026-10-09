@@ -20,26 +20,34 @@ module GuildName =
     let value (name: GuildName) : string = UMX.untag name
 
     let private lettersDigitsAndSpaces (source: string) =
-        if source.EnumerateRunes() |> Seq.forall (fun rune -> Rune.IsLetterOrDigit rune || rune.Value = int ' ') then ValueNone
-        else ValueSome TextError.InvalidCharacters
+        if source.EnumerateRunes() |> Seq.forall (fun rune -> Rune.IsLetterOrDigit rune || rune.Value = int ' ') then
+            ValueNone
+        else
+            ValueSome TextError.InvalidCharacters
 
     // Runs of spaces become one, so "Два  слова" cannot sit beside "Два слова".
     let private canonical (source: string) =
         let trimmed = PrimitiveValidation.nfcTrim source
-        if trimmed.Contains "  " then RegularExpressions.Regex.Replace(trimmed, " {2,}", " ") else trimmed
+
+        if trimmed.Contains "  " then
+            RegularExpressions.Regex.Replace(trimmed, " {2,}", " ")
+        else
+            trimmed
 
     /// Letters and digits of any alphabet and single spaces between words, in
     /// NFC: no other whitespace, punctuation or controls; minLength..maxLength
     /// scalar values, spaces included. The word list and uniqueness are the
     /// owner's checks; a name never changes.
     let create minLength maxLength raw : Result<GuildName, DomainError> =
-        if minLength <= 0 || minLength > maxLength then Error(DomainError.InvalidLimit("GuildName", minLength))
+        if minLength <= 0 || minLength > maxLength then
+            Error(DomainError.InvalidLimit("GuildName", minLength))
         else
             PrimitiveValidation.text "GuildName" maxLength canonical false lettersDigitsAndSpaces raw
             |> Result.bind (fun canonical ->
                 if PrimitiveValidation.scalarCount canonical < minLength then
                     Error(DomainError.InvalidText("GuildName", TextError.TooShort minLength))
-                else Ok(UMX.tag<guildName> canonical))
+                else
+                    Ok(UMX.tag<guildName> canonical))
 
     /// Names are unique regardless of case: "Стражи" and "стражи" are one name.
     let key (name: GuildName) = (value name).ToLowerInvariant()
@@ -142,24 +150,40 @@ type GuildLimits =
 [<RequireQualifiedAccess>]
 module GuildLimits =
     let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) =
-        let positive field value = if value < 1 then Error(DomainError.InvalidLimit(field, value)) else Ok value
+        let positive field value =
+            if value < 1 then
+                Error(DomainError.InvalidLimit(field, value))
+            else
+                Ok value
+
         positive "MaxGuilds" maxGuilds
         |> Result.bind (fun _ -> positive "MaxGuildsPerPlayer" maxGuildsPerPlayer)
-        |> Result.bind (fun _ -> if maxMembers < 2 then Error(DomainError.InvalidLimit("MaxMembers", maxMembers)) else Ok maxMembers)
+        |> Result.bind (fun _ ->
+            if maxMembers < 2 then
+                Error(DomainError.InvalidLimit("MaxMembers", maxMembers))
+            else
+                Ok maxMembers)
         |> Result.bind (fun _ -> positive "MaxInvites" maxInvites)
         |> Result.bind (fun _ -> positive "NameMinLength" nameMinLength)
         |> Result.bind (fun _ ->
-            if nameMaxLength < nameMinLength then Error(DomainError.InvalidLimit("NameMaxLength", nameMaxLength)) else Ok nameMaxLength)
+            if nameMaxLength < nameMinLength then
+                Error(DomainError.InvalidLimit("NameMaxLength", nameMaxLength))
+            else
+                Ok nameMaxLength)
         |> Result.bind (fun _ ->
-            if inviteLifetime <= TimeSpan.Zero then Error(DomainError.InvalidLimit("InviteLifetime", int inviteLifetime.TotalSeconds))
-            else Ok inviteLifetime)
+            if inviteLifetime <= TimeSpan.Zero then
+                Error(DomainError.InvalidLimit("InviteLifetime", int inviteLifetime.TotalSeconds))
+            else
+                Ok inviteLifetime)
         |> Result.map (fun _ -> {
             maxGuilds = maxGuilds
             maxGuildsPerPlayer = maxGuildsPerPlayer
             maxMembers = maxMembers
             maxInvites = maxInvites
+
             nameMinLength = nameMinLength
             nameMaxLength = nameMaxLength
+
             inviteLifetime = inviteLifetime
         })
 
@@ -209,7 +233,10 @@ type Guild =
         | true, membership -> ValueSome membership
         | false, _ -> ValueNone
 
-    member this.Master = this.members.Values |> Seq.tryFind (fun membership -> membership.Role = GuildRole.Master) |> Option.toValueOption
+    member this.Master =
+        this.members.Values
+        |> Seq.tryFind (fun membership -> membership.Role = GuildRole.Master)
+        |> Option.toValueOption
 
 /// What storage restores: a guild with its members and invitations.
 type StoredGuild = {
@@ -254,7 +281,8 @@ module GuildBook =
         match table.TryGetValue player with
         | true, set ->
             set.Remove guild |> ignore
-            if set.Count = 0 then table.Remove player |> ignore
+            if set.Count = 0 then
+                table.Remove player |> ignore
         | false, _ -> ()
 
     let private indexed (table: Dictionary<PlayerId, HashSet<GuildId>>) player =
@@ -273,6 +301,7 @@ module GuildBook =
     /// The guilds storage kept, as they are: limits lowered since bind nobody.
     let restore limits (stored: StoredGuild seq) =
         let book = empty limits
+
         for guild in stored do
             let entry = {
                 id = guild.Id
@@ -281,14 +310,18 @@ module GuildBook =
                 members = Dictionary()
                 invites = Dictionary()
             }
+
             for membership in guild.Members do
                 entry.members[membership.Player] <- membership
                 index book.memberships membership.Player guild.Id
+
             for invite in guild.Invites do
                 entry.invites[invite.Player] <- invite
                 index book.invitations invite.Player guild.Id
+
             book.guilds[guild.Id] <- entry
             book.names[GuildName.key guild.Name] <- guild.Id
+
         book
 
     /// Lowered or raised limits apply to the next actions only.
@@ -309,7 +342,10 @@ module GuildBook =
     /// The guilds the player is in.
     let guildsOf player (book: GuildBook) =
         match book.memberships.TryGetValue player with
-        | true, set -> set |> Seq.choose (fun guild -> tryFind guild book |> ValueOption.toOption) |> List.ofSeq
+        | true, set ->
+            set
+            |> Seq.choose (fun guild -> tryFind guild book |> ValueOption.toOption)
+            |> List.ofSeq
         | false, _ -> []
 
     /// The player's pending invitations, expired ones included until expireInvites runs.
@@ -356,14 +392,32 @@ module GuildBook =
 
     /// A new guild with its creator as master. The ID comes from storage.
     let create id (name: GuildName) creator (now: DateTimeOffset) (book: GuildBook) =
-        if book.names.ContainsKey(GuildName.key name) then Error GuildError.NameTaken
-        elif book.guilds.Count >= book.limits.MaxGuilds then Error GuildError.ServerFull
-        elif indexed book.memberships creator >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
+        if book.names.ContainsKey(GuildName.key name) then
+            Error GuildError.NameTaken
+        elif book.guilds.Count >= book.limits.MaxGuilds then
+            Error GuildError.ServerFull
+        elif indexed book.memberships creator >= book.limits.MaxGuildsPerPlayer then
+            Error GuildError.PlayerLimit
         else
-            let entry = { id = id; name = name; createdAt = now; members = Dictionary(); invites = Dictionary() }
+            let entry = {
+                id = id
+                name = name
+                createdAt = now
+
+                members = Dictionary()
+                invites = Dictionary()
+            }
+
             book.guilds[id] <- entry
             book.names[GuildName.key name] <- id
-            let master = { Player = creator; Role = GuildRole.Master; JoinedAt = now; Mute = ValueNone }
+
+            let master = {
+                Player = creator
+                Role = GuildRole.Master
+                JoinedAt = now
+                Mute = ValueNone
+            }
+
             addMember book entry master
             Ok(entry, master)
 
@@ -372,12 +426,18 @@ module GuildBook =
     let invite actor guild player (now: DateTimeOffset) (book: GuildBook) =
         membership actor guild book
         |> Result.bind (fun (entry, own) ->
-            if not (GuildRole.mayInvite own.Role) then Error GuildError.NotPermitted
-            elif entry.members.ContainsKey player then Error GuildError.AlreadyMember
-            elif entry.invites.ContainsKey player then Error GuildError.AlreadyInvited
-            elif entry.members.Count >= book.limits.MaxMembers then Error GuildError.GuildFull
-            elif entry.invites.Count >= book.limits.MaxInvites then Error GuildError.InvitesFull
-            elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
+            if not (GuildRole.mayInvite own.Role) then
+                Error GuildError.NotPermitted
+            elif entry.members.ContainsKey player then
+                Error GuildError.AlreadyMember
+            elif entry.invites.ContainsKey player then
+                Error GuildError.AlreadyInvited
+            elif entry.members.Count >= book.limits.MaxMembers then
+                Error GuildError.GuildFull
+            elif entry.invites.Count >= book.limits.MaxInvites then
+                Error GuildError.InvitesFull
+            elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then
+                Error GuildError.PlayerLimit
             else
                 let invitation = {
                     Guild = guild
@@ -386,6 +446,7 @@ module GuildBook =
                     CreatedAt = now
                     Expires = now + book.limits.InviteLifetime
                 }
+
                 entry.invites[player] <- invitation
                 index book.invitations player guild
                 Ok invitation)
@@ -402,11 +463,20 @@ module GuildBook =
     let accept player guild (now: DateTimeOffset) (book: GuildBook) =
         invitation player guild now book
         |> Result.bind (fun (entry, invite) ->
-            if entry.members.Count >= book.limits.MaxMembers then Error GuildError.GuildFull
-            elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
+            if entry.members.Count >= book.limits.MaxMembers then
+                Error GuildError.GuildFull
+            elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then
+                Error GuildError.PlayerLimit
             else
                 dropInvite book entry player
-                let joined = { Player = player; Role = GuildRole.Member; JoinedAt = now; Mute = ValueNone }
+
+                let joined = {
+                    Player = player
+                    Role = GuildRole.Member
+                    JoinedAt = now
+                    Mute = ValueNone
+                }
+
                 addMember book entry joined
                 Ok(entry, invite, joined))
 
@@ -419,7 +489,8 @@ module GuildBook =
     let leave player guild (book: GuildBook) =
         membership player guild book
         |> Result.bind (fun (entry, own) ->
-            if own.Role = GuildRole.Master then Error GuildError.MasterStays
+            if own.Role = GuildRole.Master then
+                Error GuildError.MasterStays
             else
                 dropMember book entry player
                 Ok(entry, own))
@@ -430,7 +501,8 @@ module GuildBook =
         |> Result.bind (fun (entry, own) ->
             target player entry
             |> Result.bind (fun excluded ->
-                if not (GuildRole.outranks own.Role excluded.Role) then Error GuildError.NotPermitted
+                if not (GuildRole.outranks own.Role excluded.Role) then
+                    Error GuildError.NotPermitted
                 else
                     dropMember book entry player
                     Ok(entry, excluded)))
@@ -458,6 +530,7 @@ module GuildBook =
                     let officer = { master with Role = GuildRole.Officer }
                     entry.members[master.Player] <- officer
                     officer)
+
             let master = { next with Role = GuildRole.Master }
             entry.members[player] <- master
             struct (previous, master))
@@ -467,15 +540,20 @@ module GuildBook =
     let transfer actor guild player (book: GuildBook) =
         membership actor guild book
         |> Result.bind (fun (entry, own) ->
-            if own.Role <> GuildRole.Master || player = actor then Error GuildError.NotPermitted
-            else handOver entry player |> Result.map (fun (struct (previous, master)) -> entry, previous, master))
+            if own.Role <> GuildRole.Master || player = actor then
+                Error GuildError.NotPermitted
+            else
+                handOver entry player
+                |> Result.map (fun (struct (previous, master)) -> entry, previous, master))
 
     /// An administrator appoints a member when the master is banned or gone;
     /// a master still in the guild becomes an officer.
     let appoint guild player (book: GuildBook) =
         match tryFind guild book with
         | ValueNone -> Error GuildError.NotFound
-        | ValueSome entry -> handOver entry player |> Result.map (fun (struct (previous, master)) -> entry, previous, master)
+        | ValueSome entry ->
+            handOver entry player
+            |> Result.map (fun (struct (previous, master)) -> entry, previous, master)
 
     /// A guild mute by the master or an officer, above the target's role.
     let mute actor guild player term reason (now: DateTimeOffset) (book: GuildBook) =
@@ -483,9 +561,16 @@ module GuildBook =
         |> Result.bind (fun (entry, own) ->
             target player entry
             |> Result.bind (fun current ->
-                if not (GuildRole.outranks own.Role current.Role) then Error GuildError.NotPermitted
+                if not (GuildRole.outranks own.Role current.Role) then
+                    Error GuildError.NotPermitted
                 else
-                    let mute = { Reason = reason; IssuedBy = actor; IssuedAt = now; Expires = Sanction.expiry now term }
+                    let mute = {
+                        Reason = reason
+                        IssuedBy = actor
+                        IssuedAt = now
+                        Expires = Sanction.expiry now term
+                    }
+
                     let changed = { current with Mute = ValueSome mute }
                     entry.members[player] <- changed
                     Ok(entry, changed)))
@@ -495,26 +580,42 @@ module GuildBook =
         |> Result.bind (fun (entry, own) ->
             target player entry
             |> Result.bind (fun current ->
-                if not (GuildRole.outranks own.Role current.Role) then Error GuildError.NotPermitted
-                elif (GuildMember.mute now current).IsNone then Error GuildError.TargetNotFound
+                if not (GuildRole.outranks own.Role current.Role) then
+                    Error GuildError.NotPermitted
+                elif (GuildMember.mute now current).IsNone then
+                    Error GuildError.TargetNotFound
                 else
                     let changed = { current with Mute = ValueNone }
                     entry.members[player] <- changed
                     Ok(entry, changed)))
 
     let private remove (book: GuildBook) (entry: Guild) =
-        let disbanded = { Guild = entry.id; Name = entry.name; Members = entry.Members; Invites = entry.Invites }
-        for membership in disbanded.Members do unindex book.memberships membership.Player entry.id
-        for invite in disbanded.Invites do unindex book.invitations invite.Player entry.id
+        let disbanded = {
+            Guild = entry.id
+            Name = entry.name
+            Members = entry.Members
+            Invites = entry.Invites
+        }
+
+        for membership in disbanded.Members do
+            unindex book.memberships membership.Player entry.id
+
+        for invite in disbanded.Invites do
+            unindex book.invitations invite.Player entry.id
+
         book.guilds.Remove entry.id |> ignore
         book.names.Remove(GuildName.key entry.name) |> ignore
+
         disbanded
 
     /// The master disbands the guild; its name is free again.
     let disband actor guild (book: GuildBook) =
         membership actor guild book
         |> Result.bind (fun (entry, own) ->
-            if own.Role <> GuildRole.Master then Error GuildError.NotPermitted else Ok(remove book entry))
+            if own.Role <> GuildRole.Master then
+                Error GuildError.NotPermitted
+            else
+                Ok(remove book entry))
 
     /// An administrator disbands a guild, for one when its name breaks the rules.
     let dissolve guild (book: GuildBook) =
@@ -529,7 +630,10 @@ module GuildBook =
             |> Seq.collect (fun entry -> entry.invites.Values)
             |> Seq.filter (fun invite -> now >= invite.Expires)
             |> List.ofSeq
-        for invite in expired do dropInvite book book.guilds[invite.Guild] invite.Player
+
+        for invite in expired do
+            dropInvite book book.guilds[invite.Guild] invite.Player
+
         expired
 
     /// Clears and returns the guild mutes that ended by now, with their guilds.
@@ -564,5 +668,8 @@ module GuildBook =
                 |> ValueOption.bind entry.Member
                 |> ValueOption.map _.Role
                 |> ValueOption.defaultValue GuildRole.Member
-            if own.Role = GuildRole.Master || GuildRole.outranks own.Role authorRole then Ok entry
-            else Error GuildError.NotPermitted)
+
+            if own.Role = GuildRole.Master || GuildRole.outranks own.Role authorRole then
+                Ok entry
+            else
+                Error GuildError.NotPermitted)

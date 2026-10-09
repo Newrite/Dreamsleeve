@@ -50,6 +50,7 @@ TEST_CASE("State queue starts awaiting a snapshot")
   queue->TakeAll(batch);
   CHECK(batch.requiresSnapshot);
   CHECK(batch.updates.empty());
+
   Initialize(*queue);
   CHECK(queue->Publish(Delta(1)) == StatePublishResult::Queued);
 }
@@ -175,6 +176,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
   CHECK(messages[1].messageId == 2);
   REQUIRE(std::holds_alternative<ClientStateDelta>(batch.updates[1]));
   const auto& delta = std::get<ClientStateDelta>(batch.updates[1]);
+
   for (const auto& change : delta.chatContent)
   {
     if (const auto* removed = std::get_if<ChatMessagesEvicted>(&change))
@@ -187,6 +189,7 @@ TEST_CASE("State queue restores chat contents after overflow and delivers subseq
       messages.insert(messages.end(), added.begin(), added.end());
     }
   }
+
   CHECK(messages == model.Snapshot().chats.front().messages);
 }
 

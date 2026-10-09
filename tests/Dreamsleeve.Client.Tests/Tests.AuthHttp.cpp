@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 import std;
 import Dreamsleeve.Client.Auth;
+import Dreamsleeve.Client.Auth.Browser;
 
 namespace Auth = Dreamsleeve::Client::Auth;
 
@@ -54,6 +55,110 @@ TEST_CASE("A Steam sign-in opens only Steam's OpenID login page")
   CHECK_FALSE(Auth::SteamPage("file:///C:/Windows/System32/calc.exe"));
   CHECK_FALSE(Auth::SteamPage("https://steamcommunity.com/openid/login?" + std::string(4096, 'a')));
   CHECK_FALSE(Auth::OpenSteamPage("calc.exe"));
+}
+
+TEST_CASE("One browser opener remains owned after its consumer is abandoned")
+{
+  namespace Browser         = Auth::Browser;
+  const std::string page    = "https://steamcommunity.com/openid/login?openid.mode=checkid_setup";
+  auto              release = std::make_shared<std::promise<void>>();
+  auto              gate    = release->get_future().share();
+  auto              entered = std::make_shared<std::promise<void>>();
+  auto              entry   = entered->get_future();
+  auto              calls   = std::make_shared<std::atomic_int>();
+  auto              first   = Browser::Testing::Start(page, [entered, gate, calls](std::string_view) -> Auth::Result<std::string> {
+    ++*calls;
+    entered->set_value();
+    gate.wait();
+    return "gated browser";
+  });
+
+  struct Release
+  {
+    std::shared_ptr<std::promise<void>> release;
+    bool                                done{};
+
+    void Open()
+    {
+      if (!std::exchange(done, true)) release->set_value();
+    }
+
+    ~Release()
+    {
+      Open();
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+      while (Auth::Browser::Testing::Pending() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+  } cleanup{release};
+
+  REQUIRE(first);
+  REQUIRE(entry.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
+  CHECK_FALSE((*first)->Read());
+
+  std::weak_ptr<const Browser::Opening> abandoned = *first;
+  first->reset();
+  CHECK(abandoned.expired());
+
+  for (int attempt = 0; attempt < 4; ++attempt)
+  {
+    auto busy = Browser::Testing::Start(page, [calls](std::string_view) -> Auth::Result<std::string> {
+      ++*calls;
+      return "must not run";
+    });
+    REQUIRE_FALSE(busy);
+    CHECK(busy.error().kind == Browser::Failure::Busy);
+  }
+  CHECK(*calls == 1);
+
+  cleanup.Open();
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  while (Browser::Testing::Pending() && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  REQUIRE_FALSE(Browser::Testing::Pending());
+
+  auto next = Browser::Testing::Start(page, [calls](std::string_view) -> Auth::Result<std::string> {
+    ++*calls;
+    return std::unexpected{"OS opener refused"};
+  });
+  REQUIRE(next);
+  while (!(*next)->Read() && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  REQUIRE((*next)->Read());
+  CHECK_FALSE(*(*next)->Read());
+  CHECK((*next)->Read()->error() == "OS opener refused");
+  CHECK(*calls == 2);
+  CHECK(abandoned.expired());
+}
+
+TEST_CASE("Rejected browser thread creation releases admission without opening or resending")
+{
+  namespace Browser       = Auth::Browser;
+  const std::string page  = "https://steamcommunity.com/openid/login?openid.mode=checkid_setup";
+  auto              calls = std::make_shared<std::atomic_int>();
+  const auto        open  = [calls](std::string_view) -> Auth::Result<std::string> {
+    ++*calls;
+    return "browser";
+  };
+  CHECK_FALSE(Browser::Testing::Start("calc.exe", open));
+  CHECK(*calls == 0);
+
+  Browser::Testing::FailNextLaunch();
+  auto rejected = Browser::Testing::Start(page, open);
+  REQUIRE_FALSE(rejected);
+  CHECK(rejected.error().kind == Browser::Failure::Launch);
+  CHECK_FALSE(rejected.error().detail.empty());
+  CHECK(*calls == 0);
+
+  auto accepted = Browser::Testing::Start(page, open);
+  REQUIRE(accepted);
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  while (!(*accepted)->Read() && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  REQUIRE((*accepted)->Read());
+  REQUIRE(*(*accepted)->Read());
+  CHECK(**(*accepted)->Read() == "browser");
+  CHECK(*calls == 1);
 }
 
 TEST_SUITE_END();

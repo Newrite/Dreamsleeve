@@ -1,0 +1,161 @@
+{
+  "protocol": 24,
+  "compressedModelBytes": 13287784,
+  "runs": {
+    "baseline-bounded": {
+      "network": {
+        "datagrams": 24968,
+        "dropped": 6879,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 0,
+        "linkMiBps": 4.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 6879,
+        "relayErrors": []
+      },
+      "passed": false,
+      "clientLogSha256": "3cc67f77c8680dc7a21753c2a0424d4b3ea5836a124f5443cdfbf224488d82fc"
+    },
+    "paced-bounded": {
+      "network": {
+        "datagrams": 26620,
+        "dropped": 29,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 0,
+        "linkMiBps": 4.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 29,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "ae418cc4af6fc03fc8cc0b14a09b44132337064dc05126ed10244b9c4b8eb4fa",
+      "uploadMs": 6856.54,
+      "downloadMs": 6327.68,
+      "chatMs": 122.753,
+      "coldMs": 13497.0
+    },
+    "paced-slow": {
+      "network": {
+        "datagrams": 29425,
+        "dropped": 7310,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 0,
+        "linkMiBps": 1.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 7310,
+        "relayErrors": []
+      },
+      "passed": false,
+      "clientLogSha256": "87b94e963f481f9f019a500cece1f7aad6b7532f25b955c637d82436581fc148"
+    },
+    "flow-fast": {
+      "network": {
+        "datagrams": 27165,
+        "dropped": 0,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 0,
+        "linkMiBps": 4.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 0,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "3c81888d4cacb5bf07ddf2ec9dae78bd7db758f2341b522af4c07076e91cd3a3",
+      "uploadMs": 7951.27,
+      "downloadMs": 7158.6,
+      "chatMs": 140.236,
+      "coldMs": 15417.0
+    },
+    "flow-clean": {
+      "network": {
+        "datagrams": 27211,
+        "dropped": 0,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 0,
+        "linkMiBps": 0,
+        "queueKiB": 64,
+        "overflowDrops": 0,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "8acb28198fce8c43948d50402e1631c9f385d0703746dd4eb73dfc4a39caa6d6",
+      "uploadMs": 7938.81,
+      "downloadMs": 7155.94,
+      "chatMs": 123.016,
+      "coldMs": 15407.7
+    },
+    "flow-jitter2": {
+      "network": {
+        "datagrams": 45051,
+        "dropped": 358,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 10.0,
+        "linkMiBps": 1.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 133,
+        "relayErrors": []
+      },
+      "passed": false,
+      "clientLogSha256": "dbf4be32bb215c51f315e03a5ded9bd8065ef2f5b0a5d6db4fdedc0f7453995c"
+    },
+    "flow-jitter3": {
+      "network": {
+        "datagrams": 50040,
+        "dropped": 474,
+        "icmpResets": 2,
+        "rttMs": 100.0,
+        "jitterMs": 10.0,
+        "linkMiBps": 1.0,
+        "queueKiB": 64.0,
+        "overflowDrops": 224,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "9848b1f59648b7ea09a523bbb16add5fe9dd7bc832813f2b49b3eb66427bc181",
+      "uploadMs": 56617.0,
+      "downloadMs": 45656.4,
+      "chatMs": 124.571,
+      "coldMs": 102618.0
+    },
+    "flow-lifecycle": {
+      "network": {
+        "datagrams": 2804,
+        "dropped": 14,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 10.0,
+        "linkMiBps": 0,
+        "queueKiB": 64,
+        "overflowDrops": 0,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "c6b2d41534633b4bc4a36d9206f7fb4da08425705a11e304f70b31406ee9a0dd",
+      "uploadMs": 3133.81,
+      "downloadMs": 1203.8,
+      "chatMs": 109.655,
+      "coldMs": 4605.55
+    },
+    "normal-lifecycle": {
+      "network": {
+        "datagrams": 2616,
+        "dropped": 13,
+        "icmpResets": 0,
+        "rttMs": 100.0,
+        "jitterMs": 10.0,
+        "linkMiBps": 0,
+        "queueKiB": 64,
+        "overflowDrops": 0,
+        "relayErrors": []
+      },
+      "passed": true,
+      "clientLogSha256": "37888c8875ebdef3668bd6632f6b253e17408d52cbfd29470b3391b94d8a3d5a"
+    }
+  }
+}
