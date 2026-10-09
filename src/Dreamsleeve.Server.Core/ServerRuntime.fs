@@ -739,7 +739,13 @@ module ServerRuntime =
             RuntimeMetrics.runtimeTimerLateness.Record(Stopwatch.GetElapsedTime(notification.DueTimestamp, notification.QueuedTimestamp).TotalMilliseconds)
             RuntimeMetrics.runtimeQueueDelay.Record(Stopwatch.GetElapsedTime(notification.QueuedTimestamp).TotalMilliseconds)
             tick options authenticator state context
-            state.Phantoms |> Option.iter (fun phantoms -> PhantomAgent.tick phantoms (now()))
+            match state.Phantoms with
+            | Some phantoms ->
+                PhantomAgent.tick phantoms (now())
+                match PhantomAgent.failure phantoms with
+                | Some error -> fail state context $"Phantom owner failed: {error}"
+                | None -> ()
+            | None -> ()
             RuntimeMetrics.runtimeTick.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds)
             state.Ticker |> Option.iter _.Acknowledge()
         | ServerRuntimeMessage.Host command -> host options state context command

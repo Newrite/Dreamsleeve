@@ -259,6 +259,40 @@ let private empty fixture = task {
 
 [<Tests>]
 let tests = testList "ServerRuntime" [
+    testTask "unexpected Phantom storage owner fault stops runtime with original diagnostic" {
+        let ownerFailure = TaskCompletionSource<exn>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let expected = InvalidOperationException "unexpected storage owner failure"
+        let success value = Task.FromResult(Ok value)
+        let storage: PhantomStoragePort = {
+            StartUpload = fun _ -> success true
+            WriteChunk = fun _ -> success false
+            StartDownload = fun _ -> success None
+            ReadChunk = fun (_, _, destination) -> success destination.Length
+            Cancel = fun _ -> Task.FromResult ()
+            Dispose = fun () -> Task.FromResult ()
+            OwnerFailure = ownerFailure.Task
+        }
+        do! withRuntimeConfiguredAndPhantoms (Some (PhantomOptions.defaults, storage)) ServerRuntimeOptions.defaults IdentityOptions.defaults
+                Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn [] createAuthentication (fun fixture -> task {
+            let alice = connect fixture "alice"
+            do! post fixture.Runtime (tick())
+            let! _ = welcome fixture alice
+            let! policyId, _ = receive fixture.Phantoms
+            equal alice policyId
+            ownerFailure.SetResult expected
+            do! post fixture.Runtime (tick())
+            let! failure = terminal fixture.Runtime.Completion
+            check failure.IsSome "The existing supervisor must observe owner termination."
+            check fixture.Runtime.Completion.IsCanceled "The fail boundary must abort this runtime generation."
+            equal (Some AgentStopReason.Aborted) fixture.Runtime.StopReason
+            check (fixture.Errors |> Seq.exists (fun text -> text.Contains(expected.ToString(), StringComparison.Ordinal)))
+                "The original exception type and diagnostic were lost."
+            equal AgentPostResult.Closed (fixture.Runtime.TryPost(tick()))
+            check (not fixture.Authentication.Completion.IsCompleted) "Shared authentication is not owned by the failed runtime."
+        })
+    }
+
+
     testTask "disabled phantom runtime still bootstraps authenticated policy and cleans membership" {
         let mutable started = 0
         let success value = Task.FromResult(Ok value)
