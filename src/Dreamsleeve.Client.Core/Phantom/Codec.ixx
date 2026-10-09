@@ -11,9 +11,11 @@ export namespace Dreamsleeve::Client::Phantom
 
   struct AssetDelta
   {
-    Digest        baseHash, hash;
+    Digest        baseHash;
+    Digest        hash;
     std::uint32_t compressedBytes{};
-    bool          operator==(const AssetDelta&) const = default;
+
+    bool operator==(const AssetDelta&) const = default;
   };
 
   struct PreparedDelta
@@ -37,10 +39,12 @@ export namespace Dreamsleeve::Client::Phantom
   Result<ValidatedAsset> ReadAsset(std::span<const std::uint8_t> compressed, std::uint32_t rawBytes, const Limits& limits = {});
   Result<Bytes>          WriteSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits = {});
   Result<Snapshot>       ReadSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits = {});
+
 #ifdef DREAMSLEEVE_DIAGNOSTICS
   // Offline archives may carry the earlier pose layout. The network decoder
   // accepts only PoseVersion; both readers share validation and quantization.
   Result<Snapshot> ReadRecordedSnapshot(std::span<const std::uint8_t> compressed, const ValidatedAsset& asset, const Limits& limits = {});
+
   // The production encoder's input to Zstd; no second quantization implementation.
   Result<Bytes> SnapshotBytes(const Snapshot& snapshot, const ValidatedAsset& asset, const Limits& limits = {});
 #endif

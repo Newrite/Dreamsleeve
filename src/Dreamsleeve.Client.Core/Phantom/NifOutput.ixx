@@ -21,7 +21,8 @@ public:
 private:
 
     std::vector<std::uint8_t> bytes;
-    std::uint32_t             position{}, maximum;
+    std::uint32_t             position{};
+    std::uint32_t             maximum;
     Error                     failure{Error::None};
 
 public:
@@ -81,8 +82,10 @@ public:
         return 0;
       }
       if (data.empty()) return 0;
+
       const auto end = std::size_t(position) + data.size();
       if (end > bytes.capacity()) bytes.reserve(std::min<std::size_t>(maximum, std::max({end, bytes.capacity() * 2, std::size_t{1024}})));
+
       // Only gaps need zero initialization. Appended data is constructed directly
       // from the source; resize + memcpy would write every large block twice.
       if (position > bytes.size()) bytes.resize(position);

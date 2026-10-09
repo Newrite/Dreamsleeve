@@ -9,6 +9,7 @@ namespace Dreamsleeve::Client::Phantom
   {
     auto layout = Nif::Inspect(asset.nif, limits);
     if (!layout) return std::unexpected(layout.error());
+
     const auto memory = sizeof(Asset) + asset.nif.capacity() + sizeof(NativeLayout) + layout->nodes.capacity() * sizeof(NativeNode) +
                         (layout->bounds.capacity() + layout->requiredChannels.capacity()) * sizeof(std::uint32_t);
     return ValidatedAsset(std::move(asset), std::move(*layout), memory);

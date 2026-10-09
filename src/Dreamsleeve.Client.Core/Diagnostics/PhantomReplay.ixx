@@ -13,9 +13,14 @@ export namespace Dreamsleeve::Client::Diagnostics
 
   struct ReplayLoadStatus
   {
-    bool          busy{}, complete{};
-    std::string   directory, error;
-    std::uint64_t frames{}, models{};
+    bool busy{};
+    bool complete{};
+
+    std::string directory;
+    std::string error;
+
+    std::uint64_t frames{};
+    std::uint64_t models{};
     double        decodeMs{};
   };
 
@@ -27,6 +32,7 @@ public:
 
     ReplayReader();
     ~ReplayReader();
+
     bool                       Start(std::filesystem::path root, std::uint32_t scenario, std::filesystem::path fallback = {});
     void                       Stop();
     void                       Shutdown();

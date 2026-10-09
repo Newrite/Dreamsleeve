@@ -29,6 +29,7 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     DeltaApply,
     Count
   };
+
   enum class TraceFailure
   {
     InvalidConfiguration,
@@ -43,16 +44,19 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     TraceFailure kind;
     std::string  detail;
   };
+
   enum class StopOutcome
   {
     Stopped,
     CleanupPending
   };
+
   // The runtime lifecycle owner stops producers before Stop. Start/Stop serialize
   // one session, including its pending cleanup; a new session cannot bypass it.
   std::expected<void, TraceError>        Start(const std::filesystem::path& directory, std::size_t partBytes = 64ULL * 1024 * 1024);
   std::expected<StopOutcome, TraceError> Stop();
   bool                                   Enabled() noexcept;
+
   void                                   Event(std::string_view kind, std::string fields = {});
   // Detached compressed bytes only; caller is the model worker, never the game thread.
   void Asset(std::string_view hash, std::span<const std::uint8_t> bytes);

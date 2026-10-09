@@ -15,8 +15,12 @@ export namespace Dreamsleeve::Client::Phantom::Wire
   {
     Digest        hash;
     Generation    generation;
-    std::uint32_t format{AssetVersion}, compressedBytes{}, rawBytes{}, channels{};
-    bool          operator==(const Descriptor&) const = default;
+    std::uint32_t format{AssetVersion};
+    std::uint32_t compressedBytes{};
+    std::uint32_t rawBytes{};
+    std::uint32_t channels{};
+
+    bool operator==(const Descriptor&) const = default;
 
     bool SameContent(const Descriptor& other) const
     {
@@ -28,7 +32,8 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Preferences
   {
-    bool          publish{}, receive{};
+    bool          publish{};
+    bool          receive{};
     std::uint32_t maximum{};
     float         distance{};
   };
@@ -59,7 +64,8 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Displayed
   {
-    std::uint64_t player{}, view{};
+    std::uint64_t player{};
+    std::uint64_t view{};
     Generation    generation;
   };
 
@@ -67,7 +73,8 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Offer
   {
-    std::uint64_t player{}, view{};
+    std::uint64_t player{};
+    std::uint64_t view{};
     Descriptor    asset;
   };
 
@@ -101,14 +108,19 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Remove
   {
-    std::uint64_t player{}, view{};
+    std::uint64_t player{};
+    std::uint64_t view{};
   };
 
   struct Policy
   {
     bool          enabled{};
     Limits        limits;
-    std::uint32_t sampleRate{}, maximumVisible{}, concurrentTransfers{}, modelBytesPerSecond{}, poseBytesPerSecond{};
+    std::uint32_t sampleRate{};
+    std::uint32_t maximumVisible{};
+    std::uint32_t concurrentTransfers{};
+    std::uint32_t modelBytesPerSecond{};
+    std::uint32_t poseBytesPerSecond{};
     float         distance{};
   };
 
@@ -138,7 +150,8 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct RemotePose
   {
-    std::uint64_t player{}, view{};
+    std::uint64_t player{};
+    std::uint64_t view{};
     Pose          sample;
   };
 
