@@ -14,14 +14,24 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failtestf "Unexpected result: %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Unexpected result: %A" error
+
 let private token = CancellationToken.None
 let private reason text = SanctionReason.create text |> ok
 let private now = DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L
 let private password = "password-with-spaces  "
 
 let private order target kind term issuer : SanctionOrder =
-    { Target = target; Kind = kind; Term = term; Reason = reason "Флуд"; IssuedBy = issuer; Devices = false }
+    {
+        Target = target
+        Kind = kind
+        Term = term
+        Reason = reason "Флуд"
+        IssuedBy = issuer
+        Devices = false
+    }
 
 let private register (database: SqliteAccountStoreTests.Database) name =
     SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok
@@ -237,7 +247,11 @@ let private access (service: ReliableAgent<AuthMessage>) command =
 let private consume service ticket = task {
     let completion = gate<SessionAuthenticationReply>()
     use receiver = TestAgent.Start(AgentOptions.create "sanction-test-reply", fun _ reply -> task { completion.TrySetResult reply |> ignore })
-    let! admitted = (AuthService.authenticator service).Requests.PostAsync { OperationId = Guid.NewGuid(); Ticket = ticket; ReplyTo = receiver.Ref.TryReliable().Value }
+    let! admitted = (AuthService.authenticator service).Requests.PostAsync {
+        OperationId = Guid.NewGuid()
+        Ticket = ticket
+        ReplyTo = receiver.Ref.TryReliable().Value
+    }
     equal AgentDeliveryResult.Posted admitted
     let! response = awaitResult completion.Task
     return response.Result
@@ -257,13 +271,19 @@ let private withService run = task {
     use service = AuthService.start { AuthService.defaults with MaxTickets = 16 } database.Config NullLogger.Instance TimeProvider.System |> ok
     let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.TryReliable().Value))
     equal AgentPostResult.Posted targeted
+
     // A runtime first learns the IP range bans in force: none here.
     let settled = Environment.TickCount64 + 5000L
     while changes.IsEmpty && Environment.TickCount64 < settled do
         do! Task.Delay 10
     equal (true, AccountChange.AddressBans []) (changes.TryDequeue())
+
     let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password, SignInOrigin.none))
-    let profile = match registered with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
+    let profile =
+        match registered with
+        | Ok (AccountAccessResult.Registered profile) -> profile
+        | other -> failtestf "%A" other
+
     // The runtime takes them asynchronously, after the reply.
     let received count = task {
         let deadline = Environment.TickCount64 + 5000L
@@ -271,7 +291,9 @@ let private withService run = task {
             do! Task.Delay 10
         return changes.ToArray() |> List.ofArray
     }
+
     do! run database service profile received
+
     let! stopped = service.PostAsync AuthMessage.Stop
     equal AgentPostResult.Posted stopped
     do! awaitUnit service.Completion
@@ -286,7 +308,11 @@ let private serviceTests = testList "Account service sanctions" [
             let saved = grant remembered
             let issuer = SanctionIssuer.Admin(admin database)
             let! banned = access service (AccountAccessCommand.Sanction(order profile.PlayerId SanctionKind.Ban (SanctionTerm.For(TimeSpan.FromDays 1.)) issuer))
-            let ban = match banned with Ok (AccountAccessResult.Sanctioned ban) -> ban | other -> failtestf "%A" other
+            let ban =
+                match banned with
+                | Ok (AccountAccessResult.Sanctioned ban) -> ban
+                | other -> failtestf "%A" other
+
             let! outstanding = consume service saved.SessionTicket
             equal (Error SessionAuthenticationError.InvalidTicket) outstanding
             let! refused = login service
@@ -295,6 +321,7 @@ let private serviceTests = testList "Account service sanctions" [
             equal (Error (AccountAccessError.Banned ban)) resumed
             let! told = changes 1
             equal [ AccountChange.Banned ban ] told
+
             let! lifted = access service (AccountAccessCommand.LiftSanction(profile.PlayerId, SanctionKind.Ban, issuer))
             equal (Ok (AccountAccessResult.SanctionLifted ban)) lifted
             // The saved login was kept: it works again.
@@ -314,17 +341,26 @@ let private serviceTests = testList "Account service sanctions" [
         let! targeted = service.PostAsync(AuthMessage.SetChangeTarget(stopped.Ref.TryReliable().Value))
         equal AgentPostResult.Posted targeted
         let! registered = access service (AccountAccessCommand.Register(Username.create 32 "player" |> ok, DisplayName.create 64 "Player" |> ok, password, SignInOrigin.none))
-        let profile = match registered with Ok (AccountAccessResult.Registered profile) -> profile | other -> failtestf "%A" other
+        let profile =
+            match registered with
+            | Ok (AccountAccessResult.Registered profile) -> profile
+            | other -> failtestf "%A" other
+
         stopped.Complete() |> ignore
         do! awaitUnit stopped.Completion
         let issuer = SanctionIssuer.Admin(admin database)
         let! muted = access service (AccountAccessCommand.Sanction(order profile.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted issuer))
-        let mute = match muted with Ok (AccountAccessResult.Sanctioned mute) -> mute | other -> failtestf "%A" other
+        let mute =
+            match muted with
+            | Ok (AccountAccessResult.Sanctioned mute) -> mute
+            | other -> failtestf "%A" other
+
         // The failed delivery comes back asynchronously; the service keeps answering.
         do! Task.Delay 100
         let! signedIn = login service
         grant signedIn |> ignore
         check (not service.Completion.IsCompleted) "the account service survives a stopped runtime"
+
         let! retargeted = service.PostAsync(AuthMessage.SetChangeTarget(restarted.Ref.TryReliable().Value))
         equal AgentPostResult.Posted retargeted
         let! lifted = access service (AccountAccessCommand.LiftSanction(profile.PlayerId, SanctionKind.Mute, issuer))
@@ -340,12 +376,17 @@ let private serviceTests = testList "Account service sanctions" [
             let! before = login service
             let issuer = SanctionIssuer.Admin(admin database)
             let! muted = access service (AccountAccessCommand.Sanction(order profile.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted issuer))
-            let mute = match muted with Ok (AccountAccessResult.Sanctioned mute) -> mute | other -> failtestf "%A" other
+            let mute =
+                match muted with
+                | Ok (AccountAccessResult.Sanctioned mute) -> mute
+                | other -> failtestf "%A" other
+
             let! outstanding = consume service (grant before).SessionTicket
             equal (ValueSome mute) (outstanding |> ok).Mute
             let! after = login service
             let! fresh = consume service (grant after).SessionTicket
             equal (ValueSome mute) (fresh |> ok).Mute
+
             let! lifted = access service (AccountAccessCommand.LiftSanction(profile.PlayerId, SanctionKind.Mute, issuer))
             equal (Ok (AccountAccessResult.SanctionLifted mute)) lifted
             let! cleared = login service
@@ -362,19 +403,29 @@ let private moderationTests = testList "Account service moderation" [
     case "a moderator's kick, list and audit line go through the account service; a kick reaches the runtime" (fun () ->
         withService (fun database service profile changes -> task {
             let! registered = access service (AccountAccessCommand.Register(Username.create 32 "moderator" |> ok, DisplayName.create 64 "Mod" |> ok, password, SignInOrigin.none))
-            let mod' = match registered with Ok (AccountAccessResult.Registered mod') -> mod' | other -> failtestf "%A" other
+            let mod' =
+                match registered with
+                | Ok (AccountAccessResult.Registered mod') -> mod'
+                | other -> failtestf "%A" other
+
             database.Execute $"INSERT INTO player_roles(player_id, role, granted_at) VALUES ({PlayerId.value mod'.PlayerId}, 1, 0)"
             let replies = Channel.CreateUnbounded<ModerationReply>()
             use receiver = TestAgent.Start(AgentOptions.create "moderation-reply", fun _ (reply: ModerationReply) -> task { replies.Writer.TryWrite reply |> ignore })
             let moderation = (AuthService.authenticator service).Moderation
+
             let ask command = task {
-                let request: ModerationRequest = { OperationId = Guid.NewGuid(); Command = command; ReplyTo = receiver.Ref.TryReliable().Value }
+                let request: ModerationRequest = {
+                    OperationId = Guid.NewGuid()
+                    Command = command
+                    ReplyTo = receiver.Ref.TryReliable().Value
+                }
                 let! admitted = moderation.PostAsync request
                 equal AgentDeliveryResult.Posted admitted
                 let! reply = replies.Reader.ReadAsync().AsTask().WaitAsync guard
                 equal request.OperationId reply.OperationId
                 return reply.Result
             }
+
             let! refused = ask (ModerationCommand.Kick(mod'.PlayerId, reason "Сам", mod'.PlayerId))
             equal (Error(ModerationError.Refused SanctionError.NotAllowed)) refused
             let! kicked = ask (ModerationCommand.Kick(profile.PlayerId, reason "Остынь", mod'.PlayerId))
@@ -382,7 +433,11 @@ let private moderationTests = testList "Account service moderation" [
             let! told = changes 1
             equal [ AccountChange.Kicked(profile.PlayerId, reason "Остынь") ] told
             let! muted = ask (ModerationCommand.Sanction(order profile.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted (SanctionIssuer.Moderator mod'.PlayerId)))
-            let mute = match muted with Ok (ModerationResult.Sanctioned mute) -> mute | other -> failtestf "%A" other
+            let mute =
+                match muted with
+                | Ok (ModerationResult.Sanctioned mute) -> mute
+                | other -> failtestf "%A" other
+
             let! listed = ask ModerationCommand.ListSanctions
             equal (Ok(ModerationResult.Sanctions [ mute ])) listed
             let! lifted = ask (ModerationCommand.Lift(profile.PlayerId, SanctionKind.Mute, mod'.PlayerId))
