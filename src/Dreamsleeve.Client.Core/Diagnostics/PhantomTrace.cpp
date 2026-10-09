@@ -164,8 +164,10 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
         if (pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return StopOutcome::CleanupPending;
         pending = {};
       }
+
       auto writer = current.load();
       if (!writer) return StopOutcome::Stopped;
+
       // Allocate every handoff resource before detaching the published owner.
       auto               done       = std::make_shared<std::promise<void>>();
       auto               completion = done->get_future().share();
@@ -174,6 +176,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       current.store({});
       auto*      context = job.release();
       const bool refuse  = std::exchange(failNextCleanupLaunch, false);
+
       // _beginthread returns -1 on failure and automatically closes its handle
       // when Cleanup returns. Never use/wait/close the returned handle.
       // https://learn.microsoft.com/cpp/c-runtime-library/reference/beginthread-beginthreadex
@@ -185,6 +188,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
         current.store(std::move(writer));
         return std::unexpected(TraceError{TraceFailure::CleanupLaunch, error.message()});
       }
+
       pending = std::move(completion);
       writer.reset();
       accepted.set_value();
