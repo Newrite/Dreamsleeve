@@ -2,6 +2,8 @@ module Dreamsleeve.Server.Tests.EnetTransportTests
 
 open System
 open System.Diagnostics
+open System.Diagnostics.Metrics
+open System.IO
 open System.Net
 open System.Net.Sockets
 #nowarn "9"
@@ -9,6 +11,7 @@ open Microsoft.FSharp.NativeInterop
 open System.Threading
 open Enet
 open Expecto
+open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Logging.Abstractions
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
@@ -98,6 +101,18 @@ let private withAdapter settings run =
         run config transport client peer connection events packets pump
     finally
         transport.Dispose()
+
+let private logger observe =
+    { new ILogger with
+        member _.BeginScope<'T>(_: 'T) = Unchecked.defaultof<IDisposable>
+        member _.IsEnabled _ = true
+        member _.Log<'T>(level, _, state: 'T, error, formatter: Func<'T, exn, string>) = observe level error }
+
+let private expectClosed (socket: Socket) =
+    let mutable closed = false
+    try socket.ReceiveBufferSize |> ignore
+    with :? SocketException -> closed <- true
+    Expect.isTrue closed "The allocated native socket was closed before startup returned."
 
 let tests = testSequenced <| testList "ENet transport" [
     testCase "internal lanes map to schema channels and reject every unknown channel" <| fun _ ->
@@ -277,10 +292,123 @@ let tests = testSequenced <| testList "ENet transport" [
             transport.Dispose()
             Expect.equal (transport.MaxUnfragmentedPayloadBytes connection) 0 "Disposed host is not accessed.")
 
+    testCase "buffer read rejection releases the host and preserves its diagnostic cause" <| fun _ ->
+        let failure = SocketException(int SocketError.AccessDenied)
+        let errors = ResizeArray<exn>()
+        let mutable borrowed: Socket = null
+        let read (host: EnetHost) =
+            borrowed <- new Socket(new SafeSocketHandle(host.Socket.Handle, false))
+            Error failure
+        try
+            let result = EnetTransport.allocateWith read PhantomOptions.defaults { ServerConfig.defaults with Port = 0us }
+                            (logger (fun _ error -> errors.Add error))
+            Expect.isError result "Expected read failure rejects startup."
+            Expect.equal errors.Count 1 "One original diagnostic."
+            Expect.isTrue (obj.ReferenceEquals(errors[0], failure)) "Original dependency failure retained."
+            Expect.isNotNull borrowed "Host reached the read boundary."
+            expectClosed borrowed
+        finally
+            if not (isNull borrowed) then borrowed.Dispose()
+
+    testCase "unexpected startup logger fault escapes after releasing the allocated host" <| fun _ ->
+        let failure = ArgumentException("logger fault is not host configuration rejection")
+        let mutable borrowed: Socket = null
+        let mutable observed: exn = null
+        let read (host: EnetHost) =
+            borrowed <- new Socket(new SafeSocketHandle(host.Socket.Handle, false))
+            EnetTransport.readBuffers host
+        try
+            try
+                EnetTransport.allocateWith read PhantomOptions.defaults { ServerConfig.defaults with Port = 0us }
+                    (logger (fun _ _ -> raise failure)) |> ignore
+            with error -> observed <- error
+            Expect.isTrue (obj.ReferenceEquals(observed, failure)) "Original unexpected failure, not Error."
+            Expect.isNotNull borrowed "Host reached the read boundary."
+            expectClosed borrowed
+        finally
+            if not (isNull borrowed) then borrowed.Dispose()
+
+    testCase "failed optional trace disables only its probe and leaves transport usable" <| fun _ ->
+        let directory = Path.Combine(Path.GetTempPath(), "dreamsleeve-enet-trace-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let previous = Environment.GetEnvironmentVariable "DREAMSLEEVE_ENET_TRACE_DIRECTORY"
+        try
+            let blocked = Path.Combine(directory, "blocked")
+            File.WriteAllText(blocked, "A file cannot be the trace directory.")
+            Environment.SetEnvironmentVariable("DREAMSLEEVE_ENET_TRACE_DIRECTORY", blocked)
+            withPeers (fun host peer pump ->
+                let errors = ResizeArray<exn>()
+                use listener = new MeterListener()
+                let mutable samples = 0
+                listener.InstrumentPublished <- fun instrument listener ->
+                    if instrument.Meter.Name = "Dreamsleeve.Transport" then listener.EnableMeasurementEvents instrument
+                listener.SetMeasurementEventCallback<double>(fun instrument _ _ _ ->
+                    if instrument.Name = "transport.pending.bytes" then samples <- samples + 1)
+                listener.Start()
+                let diagnostics = TransportDiagnostics(fun error -> errors.Add error)
+                let budget = PacketBudget(2, 1024L)
+                let peerBudget = PacketBudget(2, 1024L)
+                until (fun () -> samples >= 2) (fun () ->
+                    diagnostics.EndPoll(diagnostics.BeginPoll(), 0, host, budget)
+                    pump())
+                Expect.equal errors.Count 1 "Failed trace creation reports once despite subsequent samples."
+                Expect.isTrue (errors[0] :? IOException || errors[0] :? UnauthorizedAccessException) "Expected original filesystem error."
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), budget, peerBudget)) PacketSendResult.Sent "Traffic continues."
+                until (fun () -> budget.Packets = 0) pump)
+        finally
+            Environment.SetEnvironmentVariable("DREAMSLEEVE_ENET_TRACE_DIRECTORY", previous)
+            Directory.Delete(directory, true)
+
+    testCase "trace append failure reports once after creation and does not stop packet ownership" <| fun _ ->
+        let directory = Path.Combine(Path.GetTempPath(), "dreamsleeve-enet-trace-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let previous = Environment.GetEnvironmentVariable "DREAMSLEEVE_ENET_TRACE_DIRECTORY"
+        try
+            Environment.SetEnvironmentVariable("DREAMSLEEVE_ENET_TRACE_DIRECTORY", directory)
+            withPeers (fun host peer pump ->
+                let errors = ResizeArray<exn>()
+                use listener = new MeterListener()
+                let mutable samples = 0
+                listener.InstrumentPublished <- fun instrument listener ->
+                    if instrument.Meter.Name = "Dreamsleeve.Transport" then listener.EnableMeasurementEvents instrument
+                listener.SetMeasurementEventCallback<double>(fun instrument _ _ _ ->
+                    if instrument.Name = "transport.pending.bytes" then samples <- samples + 1)
+                listener.Start()
+                let diagnostics = TransportDiagnostics(fun error -> errors.Add error)
+                let budget = PacketBudget(2, 1024L)
+                let sample () = diagnostics.EndPoll(diagnostics.BeginPoll(), 0, host, budget)
+                sample()
+                let files = Directory.GetFiles(directory, "*.jsonl")
+                Expect.equal files.Length 1 "Host trace created."
+                Expect.equal errors.Count 0 "Creation succeeds."
+                Expect.stringContains (File.ReadAllText files[0]) "\"kind\":\"host\"" "Real serialized header."
+                File.Delete files[0]
+                Directory.CreateDirectory files[0] |> ignore
+                let mutable native = NativePtr.read (peer.GetInner())
+                let previousTimeout = native.earliestTimeout
+                native.earliestTimeout <- host.ServiceTime - 251u
+                NativePtr.write (peer.GetInner()) native
+                try
+                    until (fun () -> errors.Count = 1) sample
+                    let afterFailure = samples
+                    until (fun () -> samples >= afterFailure + 2) sample
+                    Expect.equal errors.Count 1 "No retry of the failed optional probe."
+                    Expect.isTrue (errors[0] :? IOException || errors[0] :? UnauthorizedAccessException) "Original append failure."
+                finally
+                    let mutable current = NativePtr.read (peer.GetInner())
+                    current.earliestTimeout <- previousTimeout
+                    NativePtr.write (peer.GetInner()) current
+                let peerBudget = PacketBudget(2, 1024L)
+                Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), budget, peerBudget)) PacketSendResult.Sent "Packet remains independently owned."
+                until (fun () -> budget.Packets = 0) pump)
+        finally
+            Environment.SetEnvironmentVariable("DREAMSLEEVE_ENET_TRACE_DIRECTORY", previous)
+            Directory.Delete(directory, true)
+
     testCase "socket buffer readback borrows the handle and leaves the host usable" <| fun _ ->
         withPeers (fun host peer pump ->
             Expect.isTrue (TransportDiagnostics.ConfigureBuffers(host, 1024 * 1024, 1024 * 1024)) "socket options applied"
-            let struct (receive, send) = TransportDiagnostics.ReadBuffers host
+            let struct (receive, send) = EnetTransport.readBuffers host |> ok
             Expect.isGreaterThanOrEqual receive (1024 * 1024) "receive buffer granted"
             Expect.isGreaterThanOrEqual send (1024 * 1024) "send buffer granted"
             let budget = PacketBudget(2, 1024L)

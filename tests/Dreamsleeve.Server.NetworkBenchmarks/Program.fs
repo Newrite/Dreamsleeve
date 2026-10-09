@@ -673,7 +673,7 @@ let private run (options: Options) =
         let state = {
             EventBudgetPerHost = max 1 (4096 / totalHosts)
             Group = group; AllPlayerIds = allPlayerIds; GlobalOffset = globalOffset
-            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics()); Movement = None; Phantom = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
+            Diagnostics = Array.init options.Hosts (fun _ -> TransportDiagnostics(fun error -> eprintfn "Optional ENet diagnostic probe disabled: %O" error)); Movement = None; Phantom = None; Options = options; Hosts = hosts.ToArray(); Authentication = authentication
             RegistrationMs = registration.Elapsed.TotalMilliseconds; LoginMs = 0.
             Clock = Stopwatch.StartNew(); Prefix = prefix
             SentApplicationBytes = Array.zeroCreate 5; ReceivedApplicationBytes = Array.zeroCreate 5; LoadTraffic = None
