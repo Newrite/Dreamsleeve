@@ -2,6 +2,7 @@ namespace Dreamsleeve.Server.Web
 
 open System
 open System.Net
+open System.IO
 open System.Threading
 open System.Threading.Tasks
 open System.Threading.RateLimiting
@@ -137,6 +138,24 @@ module WebHost =
     type BodyError =
         | UnsupportedType
         | TooLarge
+        | BadRequest
+        | CallerCanceled
+        | Deadline
+        | Io of IOException
+
+    // Only the request-stream dependency is adapted. Unknown exceptions leave
+    // the request lifetime and remain Kestrel failures.
+    let private readChunk (context: HttpContext) (buffer: Memory<byte>) (token: CancellationToken) = task {
+        try
+            let! received = context.Request.Body.ReadAsync(buffer, token)
+            return Ok received
+        with
+        | :? OperationCanceledException when context.RequestAborted.IsCancellationRequested -> return Error BodyError.CallerCanceled
+        | :? OperationCanceledException when token.IsCancellationRequested -> return Error BodyError.Deadline
+        | :? Microsoft.AspNetCore.Http.BadHttpRequestException as error ->
+            return Error (if error.StatusCode = 413 then BodyError.TooLarge else BodyError.BadRequest)
+        | :? IOException as error -> return Error (BodyError.Io error)
+    }
 
     /// Reads at most maxBytes; a larger declared or chunked body is refused.
     let readBody (context: HttpContext) maxBytes (token: CancellationToken) = task {
@@ -147,12 +166,16 @@ module WebHost =
             let bytes = Array.zeroCreate<byte> (maxBytes + 1)
             let mutable count = 0
             let mutable ended = false
-            while not ended && count < bytes.Length do
-                let! received = context.Request.Body.ReadAsync(bytes.AsMemory(count), token)
-                if received = 0 then ended <- true
-                else count <- count + received
-            if count > maxBytes then return Error BodyError.TooLarge
-            else return Ok (ReadOnlyMemory<byte>(bytes, 0, count))
+            let mutable failure = None
+            while not ended && failure.IsNone && count < bytes.Length do
+                match! readChunk context (bytes.AsMemory(count)) token with
+                | Error error -> failure <- Some error
+                | Ok 0 -> ended <- true
+                | Ok received -> count <- count + received
+            match failure with
+            | Some error -> return Error error
+            | None when count > maxBytes -> return Error BodyError.TooLarge
+            | None -> return Ok (ReadOnlyMemory<byte>(bytes, 0, count))
     }
 
     /// Browsers get no inline script or style, no framing and no referrer; the

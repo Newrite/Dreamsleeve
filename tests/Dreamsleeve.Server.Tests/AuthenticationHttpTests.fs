@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.AuthenticationHttpTests
+module Dreamsleeve.Server.Tests.AuthenticationHttpTests
 
 open System
 open System.Collections.Concurrent
@@ -15,6 +15,8 @@ open Dreamsleeve.Server
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 open Dreamsleeve.Server.Web.Authentication
+open Dreamsleeve.Server.Web
+open Microsoft.AspNetCore.Http
 open Expecto
 open AgentTests
 open BackgroundTests
@@ -29,7 +31,7 @@ let private signedIn = Ok (AccountAccessResult.SignedIn { Profile = profile; Ses
 let private moderation = Moderation.create { Words = ["badword"]; Substrings = []; Exceptions = [] }
 
 // steam replaces the Steam ports of the composition root.
-let private withHostUsing (steam: SteamPorts option) customize execute run = task {
+let private withHostUsingPorts (alter: AuthPorts -> AuthPorts) (logs: ConcurrentQueue<Serilog.Events.LogEvent>) (steam: SteamPorts option) customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
     let handle (_: AgentContext<AuthMessage>) message = task {
         match message with
@@ -41,7 +43,8 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
         | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
     }
     use auth = Agent.Start(AgentOptions.create "http-test-auth", handle)
-    use logger = Serilog.LoggerConfiguration().MinimumLevel.Fatal().CreateLogger()
+    let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
+    use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let initial = {
         Configuration.defaults with
             Authentication = { Configuration.defaults.Authentication with
@@ -50,7 +53,7 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
     let settings = customize initial
     // The host exactly as Program builds it: the same settings mapping and ports.
     let ports = WebPorts.auth settings auth
-    let ports = match steam with Some steam -> { ports with Steam = steam } | None -> ports
+    let ports = (match steam with Some steam -> { ports with Steam = steam } | None -> ports) |> alter
     let app = AuthRoutes.buildWithPhantoms (fun () -> None) 128 (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation ports logger
     let! outcome = task {
         try
@@ -67,6 +70,7 @@ let private withHostUsing (steam: SteamPorts option) customize execute run = tas
     match outcome with Ok () -> () | Error failure -> return raise failure
 }
 
+let private withHostUsing steam customize execute run = withHostUsingPorts id (ConcurrentQueue()) steam customize execute run
 let private withHost customize execute run = withHostUsing None customize execute run
 
 let private reply result _ (response: ReplyChannel<_>) = response.Reply result
@@ -79,7 +83,91 @@ let private code (response: HttpResponseMessage) = task {
     return body.RootElement.GetProperty("code").GetString()
 }
 
+type private FailedBody(error: exn) =
+    inherit MemoryStream()
+    override _.ReadAsync(_: Memory<byte>, _: CancellationToken) = ValueTask<int>(Task.FromException<int> error)
+
 let tests = testSequenced (testList "Authentication HTTP" [
+    case "body dependency adapters retain I/O faults and only classify cancellation with an owning token" (fun () -> task {
+        let original = IOException("request-stream-failure")
+        let context = DefaultHttpContext()
+        use body = new FailedBody(original)
+        context.Request.Body <- body
+        let! io = WebHost.readBody context 4096 CancellationToken.None
+        match io with
+        | Error (WebHost.BodyError.Io actual) -> check (obj.ReferenceEquals(original, actual)) "Original stream I/O error is retained."
+        | other -> failtestf "Expected I/O failure, received %A" other
+        for statusCode, expected in [ 413, WebHost.BodyError.TooLarge; 400, WebHost.BodyError.BadRequest ] do
+            use bad = new FailedBody(BadHttpRequestException("bad framing", statusCode))
+            context.Request.Body <- bad
+            let! framing = WebHost.readBody context 4096 CancellationToken.None
+            match framing with Error actual -> equal expected actual | Ok _ -> failtest "Invalid framing was accepted."
+        use canceled = new CancellationTokenSource()
+        canceled.Cancel()
+        use cancelBody = new FailedBody(OperationCanceledException())
+        context.Request.Body <- cancelBody
+        let! deadline = WebHost.readBody context 4096 canceled.Token
+        match deadline with Error WebHost.BodyError.Deadline -> () | other -> failtestf "%A" other
+        context.RequestAborted <- canceled.Token
+        let! caller = WebHost.readBody context 4096 canceled.Token
+        match caller with Error WebHost.BodyError.CallerCanceled -> () | other -> failtestf "%A" other
+        context.RequestAborted <- CancellationToken.None
+        let unexplained = OperationCanceledException("unowned cancellation")
+        use unexpectedBody = new FailedBody(unexplained)
+        context.Request.Body <- unexpectedBody
+        let work = WebHost.readBody context 4096 CancellationToken.None
+        let! fault = terminal work
+        check (fault |> Option.exists (fun actual -> obj.ReferenceEquals(unexplained, actual))) "Unowned cancellation remains a lifetime fault."
+    })
+
+    case "deferred JSON Unicode decoding is validated before authentication admission" (fun () ->
+        withHost id (reply signedIn) (fun http received -> task {
+            for json in [
+                """{"username":"pl\uD800ayer","password":"Boundary-Password-2026!"}"""
+                """{"username":"player","password":"Boundary-\uD800Password-2026!"}"""
+                """{"username":"player","password":"Boundary-Password-2026!","device":"\uD800"}"""
+                """{"us\uD800ername":"player","password":"Boundary-Password-2026!"}"""
+                """{"username":"player","password":"Boundary-Password-2026!","extra":{"\uD800":["value"]}}"""
+                """{"username":"player","password":"Boundary-Password-2026!","extra":["\uDC00"]}"""
+            ] do
+                // Parse accepts these escapes; decoding names/string values is deferred.
+                use parsed = JsonDocument.Parse json
+                equal JsonValueKind.Object parsed.RootElement.ValueKind
+                use content = new StringContent(json, Encoding.UTF8, "application/json")
+                use! response = http.PostAsync("auth/login", content)
+                status 400 response
+                let! actual = code response
+                equal "invalid_request" actual
+                equal 0 received.Count
+            use valid = new StringContent("""{"username":"player","password":"Boundary-\uD83D\uDE00-Password-2026!","extra":{"\uD83D\uDE00":["\uD83D\uDE00"]}}""", Encoding.UTF8, "application/json")
+            use! accepted = http.PostAsync("auth/login", valid)
+            status 200 accepted
+            equal 1 received.Count
+        }))
+
+    case "typed owner failure returns unavailable but unexpected port exceptions remain Kestrel failures" (fun () -> task {
+        for original in [ InvalidOperationException("unexpected-account-port") :> exn; JsonException("unexpected-business-json") :> exn ] do
+            let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+            let alter ports = { ports with Access = fun _ _ _ -> Task.FromException<_> original }
+            do! withHostUsingPorts alter logs None id (reply signedIn) (fun http received -> task {
+                use! response = post http "auth/login" credentials
+                status 500 response
+                equal 0 received.Count
+                check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Kestrel retains the original unexpected fault."
+            })
+        let original = InvalidOperationException("typed-account-owner-fault")
+        let logs = ConcurrentQueue<Serilog.Events.LogEvent>()
+        let alter ports = { ports with Access = fun _ _ _ -> Task.FromResult(AgentAskResult.Faulted original) }
+        do! withHostUsingPorts alter logs None id (reply signedIn) (fun http received -> task {
+            use! response = post http "auth/login" credentials
+            status 503 response
+            let! actual = code response
+            equal "unavailable" actual
+            equal 0 received.Count
+            check (logs.ToArray() |> Array.exists (fun entry -> obj.ReferenceEquals(original, entry.Exception))) "Typed owner failure preserves the original diagnostic."
+        })
+    })
+
     case "remember resume logout and reset map to dedicated public commands" (fun () ->
         let execute command (response: ReplyChannel<_>) =
             match command with

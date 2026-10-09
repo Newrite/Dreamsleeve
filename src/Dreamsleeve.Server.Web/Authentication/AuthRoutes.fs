@@ -128,18 +128,54 @@ module AuthRoutes =
         | Error _ -> Error (invalid ())
         | Ok origin -> request settings moderation origin operation body
 
-    let private read settings moderation operation (context: HttpContext) token = task {
+    let private parseBody (bytes: ReadOnlyMemory<byte>) =
+        try Ok (JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8)))
+        with :? JsonException as error -> Error error
+
+    [<RequireQualifiedAccess>]
+    type private JsonRepresentationError = InvalidUnicode | InvalidKind
+
+    let private validateRepresentation (root: JsonElement) =
+        // Parse bounds the immutable tree to 4096 bytes/depth 8 but defers Unicode
+        // unescaping. Decode names and strings once before trusted command code.
+        let rec decode (element: JsonElement) =
+            match element.ValueKind with
+            | JsonValueKind.String -> element.GetString() |> ignore; true
+            | JsonValueKind.Object ->
+                element.EnumerateObject()
+                |> Seq.forall (fun property -> property.Name |> ignore; decode property.Value)
+            | JsonValueKind.Array -> element.EnumerateArray() |> Seq.forall decode
+            | JsonValueKind.Number | JsonValueKind.True | JsonValueKind.False | JsonValueKind.Null -> true
+            | JsonValueKind.Undefined | _ -> false
+        try
+            if decode root then Ok () else Error JsonRepresentationError.InvalidKind
+        with :? InvalidOperationException -> Error JsonRepresentationError.InvalidUnicode
+
+    let private read settings moderation operation (logger: ILogger) (context: HttpContext) token = task {
         if not (context.Request.HasJsonContentType()) then
             return Error (WebHost.error 415 "unsupported_content_type" "Use application/json.")
         else
             match! WebHost.readBody context MaxBodyBytes token with
-            | Error WebHost.BodyError.TooLarge | Error WebHost.BodyError.UnsupportedType -> return Error (tooLarge ())
+            | Error WebHost.BodyError.TooLarge -> return Error (tooLarge ())
+            | Error WebHost.BodyError.UnsupportedType -> return Error (WebHost.error 415 "unsupported_content_type" "Use application/json.")
+            | Error WebHost.BodyError.BadRequest -> return Error (invalid ())
+            | Error WebHost.BodyError.CallerCanceled -> return Error (Results.StatusCode 499)
+            | Error WebHost.BodyError.Deadline -> return Error (unavailable ())
+            | Error (WebHost.BodyError.Io error) ->
+                logger.Error(error, "Authentication request body could not be read")
+                return Error (unavailable ())
             | Ok bytes ->
-                use body = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8))
-                // After the forwarding middleware: a trusted proxy's client and the proxy.
-                let forwarded = WebHost.forwarded context
-                let origin = { SignInOrigin.none with Address = forwarded.Client; Proxy = forwarded.Proxy }
-                return command settings moderation origin operation body.RootElement
+                match parseBody bytes with
+                | Error _ -> return Error (invalid ())
+                | Ok parsed ->
+                    use body = parsed
+                    match validateRepresentation body.RootElement with
+                    | Error _ -> return Error (invalid ())
+                    | Ok () ->
+                        // Trusted shape/domain construction runs outside the JSON adapters.
+                        let forwarded = WebHost.forwarded context
+                        let origin = { SignInOrigin.none with Address = forwarded.Client; Proxy = forwarded.Proxy }
+                        return command settings moderation origin operation body.RootElement
     }
 
     /// The public origin of the host the client asked through: a proxy's when the
@@ -199,32 +235,21 @@ module AuthRoutes =
         use deadline = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
         deadline.CancelAfter timeout
         let! result = task {
-            try
-                let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrls.IsEmpty
-                match! (if steamOff then Task.FromResult(Error (WebHost.error 404 "steam_disabled" "Steam sign-in is not enabled on this server."))
-                        else read settings moderation operation context deadline.Token) with
-                | Error failure -> return failure
-                | Ok command ->
-                    match! ports.Access command timeout deadline.Token with
-                    | AgentAskResult.Replied value -> return response settings context value
-                    | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
-                    | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
-                    | AgentAskResult.Canceled ->
-                        if context.RequestAborted.IsCancellationRequested then return Results.StatusCode 499
-                        else return unavailable ()
-                    | AgentAskResult.Faulted failure ->
-                        logger.Error(failure, "Authentication request failed")
-                        return unavailable ()
-            with
-            | :? OperationCanceledException when context.RequestAborted.IsCancellationRequested -> return Results.StatusCode 499
-            | :? OperationCanceledException when deadline.IsCancellationRequested -> return unavailable ()
-            | :? BadHttpRequestException as failure ->
-                if failure.StatusCode = 413 then return tooLarge ()
-                else return invalid ()
-            | :? JsonException -> return invalid ()
-            | failure ->
-                logger.Error(failure, "Authentication HTTP operation failed")
-                return unavailable ()
+            let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrls.IsEmpty
+            match! (if steamOff then Task.FromResult(Error (WebHost.error 404 "steam_disabled" "Steam sign-in is not enabled on this server."))
+                    else read settings moderation operation logger context deadline.Token) with
+            | Error failure -> return failure
+            | Ok command ->
+                match! ports.Access command timeout deadline.Token with
+                | AgentAskResult.Replied value -> return response settings context value
+                | AgentAskResult.Full | AgentAskResult.Dropped -> return busy ()
+                | AgentAskResult.Closed | AgentAskResult.TimedOut -> return unavailable ()
+                | AgentAskResult.Canceled ->
+                    if context.RequestAborted.IsCancellationRequested then return Results.StatusCode 499
+                    else return unavailable ()
+                | AgentAskResult.Faulted failure ->
+                    logger.Error(failure, "Authentication request failed")
+                    return unavailable ()
         }
         do! WebHost.write context result
     }
