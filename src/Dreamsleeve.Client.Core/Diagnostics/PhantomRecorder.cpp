@@ -98,6 +98,31 @@ namespace Dreamsleeve::Client::Diagnostics
       std::variant<SampleJob, RecordJob> value;
     };
 
+    void WriteSampleRecord(
+      Writer&          writer,
+      const SampleJob& sample,
+      const P::Bytes&  original,
+      const P::Bytes&  raw,
+      const P::Bytes&  encoded)
+    {
+      writer.Put(sample.captureMs);
+      writer.Put<std::uint8_t>(sample.firstPerson);
+      writer.Move(sample.actor);
+      writer.Put(static_cast<std::uint32_t>(original.size()));
+      writer.Put(static_cast<std::uint32_t>(raw.size()));
+      writer.Put(static_cast<std::uint32_t>(encoded.size()));
+      writer.Data(original);
+      writer.Data(raw);
+      writer.Data(encoded);
+    }
+
+    double Percentile(std::vector<double>& values, double fraction)
+    {
+      if (values.empty()) return 0.0;
+      std::ranges::sort(values);
+      return values[static_cast<std::size_t>((values.size() - 1) * fraction)];
+    }
+
     std::uint64_t Micros()
     {
       return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count();
@@ -140,9 +165,16 @@ namespace Dreamsleeve::Client::Diagnostics
     // written. Charge that storage once, even across wrapper/generation copies.
     std::unordered_map<const P::Asset*, RetainedAsset> retainedAssets;
     std::filesystem::path                              root;
-    std::uint32_t                                      scenario{}, seconds{}, rate{};
-    Clock::time_point                                  requestedAt{}, firstAt{}, lastAt{};
-    bool                                               requested{}, shuttingDown{};
+    std::uint32_t                                      scenario{};
+    std::uint32_t                                      seconds{};
+    std::uint32_t                                      rate{};
+
+    Clock::time_point requestedAt{};
+    Clock::time_point firstAt{};
+    Clock::time_point lastAt{};
+
+    bool requested{};
+    bool shuttingDown{};
     std::jthread                                       thread;
 
     explicit State(Budget value) : budget(value), thread([this] { Run(); }) {}
@@ -231,6 +263,7 @@ namespace Dreamsleeve::Client::Diagnostics
       auto space = HasSpace(20);
       if (!space) return std::unexpected(space.error());
       if (!*space) return std::unexpected(P::Error{P::Failure::Storage, "disk-space-low"});
+
       const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       std::filesystem::path directory;
       for (std::uint32_t i = 0; i < 32; ++i)
@@ -240,12 +273,14 @@ namespace Dreamsleeve::Client::Diagnostics
         if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
         if (i == 31) return std::unexpected(P::Error{P::Failure::Storage, "directory-collision"});
       }
+
       auto display = Files::DisplayPath(directory);
       if (!display) return std::unexpected(display.error());
       {
         std::lock_guard lock(mutex);
         status.directory = std::move(*display);
       }
+
       const auto    partial = directory / "capture.phdiag.partial";
       std::ofstream output(partial, std::ios::binary);
 
@@ -257,9 +292,11 @@ namespace Dreamsleeve::Client::Diagnostics
       std::uint64_t written = header.bytes.size();
       output.write(reinterpret_cast<const char*>(header.bytes.data()), header.bytes.size());
       if (!output) return std::unexpected(P::Error{P::Failure::Storage, "archive.header-write"});
+
       std::uint32_t                     records = 0;
       std::unordered_set<std::uint64_t> models;
-      std::vector<double>               captures, encodes;
+      std::vector<double>               captures;
+      std::vector<double>               encodes;
       std::optional<std::uint64_t>      firstSampleUs;
       auto                              write = [&](Kind kind, const P::Bytes& bytes) {
         auto space = HasSpace(bytes.size() + 8);
@@ -280,6 +317,7 @@ namespace Dreamsleeve::Client::Diagnostics
         ++records;
         return true;
       };
+
       for (;;)
       {
         std::optional<Job> job;
@@ -295,6 +333,7 @@ namespace Dreamsleeve::Client::Diagnostics
           job = std::move(queue.front());
           queue.pop_front();
         }
+
         bool saved = true;
         if (auto* sample = std::get_if<SampleJob>(&job->value))
         {
@@ -321,15 +360,7 @@ namespace Dreamsleeve::Client::Diagnostics
             Writer original;
             original.Pose(*sample->pose);
             Writer w;
-            w.Put(sample->captureMs);
-            w.Put<std::uint8_t>(sample->firstPerson);
-            w.Move(sample->actor);
-            w.Put(static_cast<std::uint32_t>(original.bytes.size()));
-            w.Put(static_cast<std::uint32_t>(raw->size()));
-            w.Put(static_cast<std::uint32_t>(encoded->size()));
-            w.Data(original.bytes);
-            w.Data(*raw);
-            w.Data(*encoded);
+            WriteSampleRecord(w, *sample, original.bytes, *raw, *encoded);
             saved = write(Kind::Sample, w.bytes);
             if (saved)
             {
@@ -388,13 +419,10 @@ namespace Dreamsleeve::Client::Diagnostics
       output.flush();
       output.close();
       if (!output) return std::unexpected(P::Error{P::Failure::Storage, "archive.write"});
+
       std::filesystem::rename(partial, directory / "capture.phdiag", error);
       if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
-      auto percentile = [](std::vector<double>& values, double fraction) {
-        if (values.empty()) return 0.0;
-        std::ranges::sort(values);
-        return values[static_cast<std::size_t>((values.size() - 1) * fraction)];
-      };
+
       Status result;
       {
         std::lock_guard lock(mutex);
@@ -425,10 +453,10 @@ namespace Dreamsleeve::Client::Diagnostics
         result.hiddenGeometry,
         result.partialSamples,
         Quoted(result.partialDetail),
-        percentile(captures, .5),
-        percentile(captures, .95),
-        percentile(encodes, .5),
-        percentile(encodes, .95));
+        Percentile(captures, .5),
+        Percentile(captures, .95),
+        Percentile(encodes, .5),
+        Percentile(encodes, .95));
       summary.flush();
       summary.close();
       if (!summary) return std::unexpected(P::Error{P::Failure::Storage, "archive.summary-write"});

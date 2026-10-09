@@ -74,7 +74,8 @@ namespace Dreamsleeve::Client::Diagnostics
 
     struct Record
     {
-      std::uint32_t kind{}, bytes{};
+      std::uint32_t kind{};
+      std::uint32_t bytes{};
     };
 
     P::Result<std::optional<Record>> Next(std::ifstream& input)
@@ -99,9 +100,11 @@ namespace Dreamsleeve::Client::Diagnostics
       auto exact = Files::IsRegularFile(root);
       if (!exact) return std::unexpected(exact.error());
       if (*exact) return std::optional{root};
+
       auto captured = Files::IsRegularFile(root / "capture.phdiag");
       if (!captured) return std::unexpected(captured.error());
       if (*captured) return std::optional{root / "capture.phdiag"};
+
       std::error_code error;
       if (!std::filesystem::exists(root, error))
       {
@@ -131,6 +134,7 @@ namespace Dreamsleeve::Client::Diagnostics
         if (error) return std::unexpected(P::Error{P::Failure::Storage, error.message()});
       }
       std::ranges::sort(files, std::greater{});
+
       for (const auto& file : files)
       {
         std::ifstream input(file, std::ios::binary);
@@ -157,9 +161,13 @@ namespace Dreamsleeve::Client::Diagnostics
     std::condition_variable wake;
     ReplayLoadStatus        status;
     std::deque<ReplayFrame> queue;
-    std::filesystem::path   root, fallback;
+    std::filesystem::path   root;
+    std::filesystem::path   fallback;
     std::uint32_t           scenario{};
-    bool                    requested{}, cancelled{}, shutdown{};
+
+    bool requested{};
+    bool cancelled{};
+    bool shutdown{};
     std::jthread            thread;
 
     State() : thread([this] { Run(); }) {}
@@ -177,18 +185,23 @@ namespace Dreamsleeve::Client::Diagnostics
       if (!*file && !fallback.empty()) file = SelectArchive(fallback, scenario);
       if (!file) return std::unexpected(file.error());
       if (!*file) return std::unexpected(P::Error{P::Failure::InvalidFormat, "Нет завершённой записи с позами для выбранного сценария"});
+
       auto display = Files::DisplayPath((*file)->parent_path());
       if (!display) return std::unexpected(display.error());
       {
         std::lock_guard lock(mutex);
         status.directory = std::move(*display);
       }
+
       std::ifstream input(**file, std::ios::binary);
       if (!input) return std::unexpected(P::Error{P::Failure::Storage, "archive.open"});
       if (auto header = Header(input); !header) return std::unexpected(header.error());
+
       std::shared_ptr<const P::ValidatedAsset> asset;
       P::Generation                            generation;
-      std::uint64_t                            lastTime = 0, frames = 0;
+      std::uint64_t                            lastTime = 0;
+      std::uint64_t                            frames   = 0;
+
       while (!Cancelled())
       {
         auto next = Next(input);
@@ -200,6 +213,7 @@ namespace Dreamsleeve::Client::Diagnostics
           if (auto skipped = SkipBytes(input, record->bytes); !skipped) return std::unexpected(skipped.error());
           continue;
         }
+
         const auto bytes = ReadBytes(input, record->bytes);
         if (!bytes) return std::unexpected(bytes.error());
         Cursor     r{*bytes};
@@ -235,6 +249,7 @@ namespace Dreamsleeve::Client::Diagnostics
           lastTime                  = decoded->sampledAtUs;
           auto             pose     = std::make_shared<const P::Snapshot>(std::move(*decoded));
           const auto       decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+
           std::unique_lock lock(mutex);
           wake.wait(lock, [&] { return cancelled || shutdown || queue.size() < 4; });
           if (cancelled || shutdown) return {};
@@ -258,6 +273,7 @@ namespace Dreamsleeve::Client::Diagnostics
           if (shutdown) return;
           requested = false;
         }
+
         const auto      loaded = Load();
         std::string     error  = loaded ? std::string{} : loaded.error().field;
         std::lock_guard lock(mutex);
@@ -279,6 +295,7 @@ namespace Dreamsleeve::Client::Diagnostics
   {
     std::lock_guard lock(state_->mutex);
     if (state_->shutdown || state_->status.busy || root.empty() || scenario >= Scenarios.size()) return false;
+
     state_->queue.clear();
     state_->status      = {};
     state_->status.busy = true;
