@@ -117,7 +117,9 @@ export namespace Dreamsleeve::Host
     };
 
     std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return fallback("Alias dictionary not found; using built-in names");
+    const bool      exists = std::filesystem::exists(path, probe);
+    if (probe) return fallback("Cannot inspect alias dictionary: " + probe.message() + "; using built-in names");
+    if (!exists) return fallback("Alias dictionary not found; using built-in names");
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return fallback("Cannot open alias dictionary; using built-in names");
     const auto length = input.tellg();
