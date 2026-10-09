@@ -56,10 +56,19 @@ let tests = testList "Server service lifetime" [
         use auth = authentication ()
         let refusal = AgentStartError.InvalidCapacity("capacity", 0)
         let calls = ResizeArray<string>()
-        let! result = ServiceLifetime.run auth (fun () -> Task.FromResult(Error refusal))
-                          (fun _ -> calls.Add "serve"; Task.FromResult 0)
-                          (fun admin -> task { Expect.isNone admin "No refused owner."; calls.Add "stop-admin" })
-                          (fun owner -> task { calls.Add "stop-auth"; do! stop owner })
+        let! result =
+            ServiceLifetime.run auth (fun () -> Task.FromResult(Error refusal))
+                (fun _ ->
+                    calls.Add "serve"
+                    Task.FromResult 0)
+                (fun admin -> task {
+                    Expect.isNone admin "No refused owner."
+                    calls.Add "stop-admin"
+                })
+                (fun owner -> task {
+                    calls.Add "stop-auth"
+                    do! stop owner
+                })
         match result with
         | Error [{ Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.StartRejected actual }] -> equal refusal actual
         | other -> failtestf "Unexpected lifetime result: %A" other
@@ -73,7 +82,9 @@ let tests = testList "Server service lifetime" [
         let calls = ResizeArray<string>()
         let! result =
             ServiceLifetime.run auth
-                (fun () -> calls.Add "start"; Task.FromResult(Ok(Some admin)))
+                (fun () ->
+                    calls.Add "start"
+                    Task.FromResult(Ok(Some admin)))
                 (fun owned -> task {
                     check (owned |> Option.exists (fun value -> Object.ReferenceEquals(value, admin))) "Wrong admin ownership."
                     calls.Add "serve"
@@ -99,7 +110,10 @@ let tests = testList "Server service lifetime" [
         use auth = authentication ()
         let! result =
             ServiceLifetime.run auth (fun () -> Task.FromResult(Ok None))
-                (fun admin -> task { Expect.isNone admin "Admin disabled."; return 0 })
+                (fun admin -> task {
+                    Expect.isNone admin "Admin disabled."
+                    return 0
+                })
                 (fun admin -> task { Expect.isNone admin "No hidden admin resource." })
                 stop
         equal (Ok 0) result
@@ -112,12 +126,17 @@ let tests = testList "Server service lifetime" [
         let calls = ResizeArray<string>()
         let! result =
             ServiceLifetime.run auth (fun () -> raise failure)
-                (fun _ -> calls.Add "serve"; Task.FromResult 0)
+                (fun _ ->
+                    calls.Add "serve"
+                    Task.FromResult 0)
                 (fun admin -> task {
                     Expect.isNone admin "Failed construction returned no resource."
                     calls.Add "stop-admin"
                 })
-                (fun service -> task { calls.Add "stop-auth"; do! stop service })
+                (fun service -> task {
+                    calls.Add "stop-auth"
+                    do! stop service
+                })
         expectFailures [ ServiceFailureStage.StartOrServe, failure ] result
         equal [ "stop-admin"; "stop-auth" ] (List.ofSeq calls)
         check auth.Completion.IsCompletedSuccessfully "Authentication leaked after admin startup fault."

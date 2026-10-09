@@ -29,11 +29,22 @@ let tests = testList "Owned cleanup" [
         let entered = gate<unit>()
         let release = gate<unit>()
         let calls = ResizeArray<string>()
-        let! reports = OwnedCleanup.capture(fun () -> calls.Add "report"; Task.FromException reporting)
+        let! reports = OwnedCleanup.capture(fun () ->
+            calls.Add "report"
+            Task.FromException reporting)
         let disposing = OwnedCleanup.release [
-            (fun () -> calls.Add "first"; Task.FromException cleanup)
-            (fun () -> task { calls.Add "second"; entered.TrySetResult() |> ignore; do! release.Task } :> Task)
-            (fun () -> calls.Add "third"; Task.CompletedTask)
+            (fun () ->
+                calls.Add "first"
+                Task.FromException cleanup)
+            (fun () ->
+                task {
+                    calls.Add "second"
+                    entered.TrySetResult() |> ignore
+                    do! release.Task
+                } :> Task)
+            (fun () ->
+                calls.Add "third"
+                Task.CompletedTask)
         ]
         do! awaitResult entered.Task
         check (not disposing.IsCompleted) "Cleanup did not wait for its actual owner."
@@ -48,7 +59,9 @@ let tests = testList "Owned cleanup" [
         let mutable cleaned = false
         let! (errors: exn list) = OwnedCleanup.release [
             (fun () -> raise original)
-            (fun () -> cleaned <- true; Task.CompletedTask)
+            (fun () ->
+                cleaned <- true
+                Task.CompletedTask)
         ]
         same [original] errors
         check cleaned "A synchronous fault skipped the next cleanup."

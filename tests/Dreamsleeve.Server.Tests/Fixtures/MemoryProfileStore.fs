@@ -61,7 +61,10 @@ module MemoryProfileStore =
         if config.MailboxCapacity < 1 || config.MaxPendingReplies < 1 then
             Error "Profile mailbox and pending reply capacities must be positive."
         else
-            let state = { Profiles = Dictionary<Username, PlayerData>(); NextId = 1UL }
+            let state = {
+                Profiles = Dictionary<Username, PlayerData>()
+                NextId = 1UL
+            }
             let options = {
                 AgentOptions.create "profiles" with
                     Mailbox = AgentMailbox.boundedWait config.MailboxCapacity

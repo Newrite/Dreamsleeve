@@ -48,7 +48,10 @@ let tests = testList "Agent construction" [
 
     testTask "prepared construction starts only at the trusted start boundary" {
         let ready = gate<unit>()
-        let options = { AgentOptions.create "prepared" with OnStarted = Some(fun _ -> ready.TrySetResult() |> ignore) }
+        let options = {
+            AgentOptions.create "prepared" with
+                OnStarted = Some(fun _ -> ready.TrySetResult() |> ignore)
+        }
         let prepared = Agent.TryPrepare(options, handle) |> expectStarted
         check (not ready.Task.IsCompleted) "Preparing configuration started the owner."
         use agent = prepared.Start()
@@ -68,6 +71,7 @@ let tests = testList "Agent construction" [
         let builder = Unchecked.defaultof<ReplyChannel<int> -> int>
         let projection = Unchecked.defaultof<int -> int>
         let mutableProjection = Unchecked.defaultof<ResizeArray<int> -> int>
+
         let! stateAsk = state.TryAskAsync builder
         let! mutableAsk = mutableState.TryAskAsync builder
         let! stateRead = state.TryReadAsync projection
@@ -76,6 +80,7 @@ let tests = testList "Agent construction" [
         equal (AgentAskResult.InvalidRequest(AgentRequestError.NullArgument "buildMessage")) mutableAsk
         equal (AgentAskResult.InvalidRequest(AgentRequestError.NullArgument "projection")) stateRead
         equal (AgentAskResult.InvalidRequest(AgentRequestError.NullArgument "projection")) mutableRead
+
         let! current = state.TryReadAsync id
         let! count = mutableState.TryReadAsync(fun values -> values.Count)
         expectReply 0 current

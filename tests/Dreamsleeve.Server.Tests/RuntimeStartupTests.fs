@@ -27,20 +27,39 @@ let private exercise failAcquisition = task {
     use moderation = TestAgent.Start(AgentOptions.create "startup-moderation", fun _ (_: ModerationRequest) -> Task.FromResult())
     use marks = TestAgent.Start(AgentOptions.create "startup-marks", fun _ (_: GroundMarkWrite) -> Task.FromResult())
     use guilds = TestAgent.Start(AgentOptions.create "startup-guilds", fun _ (_: GuildWrite) -> Task.FromResult())
-    let authentication = { Requests = requests.Ref.TryReliable().Value; Profiles = profiles.Ref.TryReliable().Value
-                           Moderation = moderation.Ref.TryReliable().Value; Completion = requests.Completion }
+    let authentication = {
+        Requests = requests.Ref.TryReliable().Value
+        Profiles = profiles.Ref.TryReliable().Value
+        Moderation = moderation.Ref.TryReliable().Value
+        Completion = requests.Completion
+    }
     let transport = {
         MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
         SetReadyHandler = ignore
         Poll = fun () -> Ok []
         Send = fun _ -> Ok ()
-        Close = ignore; Reset = ignore; Dispose = ignore
+        Close = ignore
+        Reset = ignore
+        Dispose = ignore
     }
     let settings = Settings.game ServerConfig.defaults ServerRuntimeOptions.defaults IdentityOptions.defaults AnnouncementOptions.defaults GroundMarkOptions.defaults
-    use runtime = ServerRuntime.startObservedSources observer settings Moderation.empty PseudonymDictionary.builtIn
-                      { Loaded = []; NextId = 1UL; Writer = marks.Ref.TryReliable().Value }
-                      { Loaded = []; Profiles = []; NextId = 1UL; Writer = guilds.Ref.TryReliable().Value; WriterStopped = guilds.Completion }
-                      authentication transport logger |> expectStarted
+    use runtime =
+        ServerRuntime.startObservedSources observer settings Moderation.empty PseudonymDictionary.builtIn
+            {
+                Loaded = []
+                NextId = 1UL
+                Writer = marks.Ref.TryReliable().Value
+            }
+            {
+                Loaded = []
+                Profiles = []
+                NextId = 1UL
+                Writer = guilds.Ref.TryReliable().Value
+                WriterStopped = guilds.Completion
+            }
+            authentication transport logger
+        |> expectStarted
+
     let! stopped = terminal runtime.Completion
     match stopped with
     | Some error -> check (obj.ReferenceEquals(error, original)) "Runtime replaced its original construction fault."
