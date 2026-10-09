@@ -79,9 +79,13 @@ let tests = testList "Server configuration" [
             | other -> failtestf "%A" other)
         withFile "[Moderation]\nRulesPath = ''\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "enabled moderation needs a path")
-        match Configuration.loadModeration { Enabled = true; RulesPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") } with
+
+        match Configuration.loadModeration
+            { Enabled = true
+              RulesPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") } with
         | Ok (rules, Some _) -> Expect.isTrue rules.IsEmpty "missing file warns and runs with an empty list"
         | other -> failtestf "%A" other
+
         withFile "words = ['badword']\nsubstrings = ['cunt']\nexceptions = ['Scunthorpe']\n" (fun path ->
             match Configuration.loadModeration { Enabled = true; RulesPath = path } with
             | Ok (rules, None) ->
@@ -112,6 +116,7 @@ let tests = testList "Server configuration" [
         Expect.equal (Configuration.readBounded growing 64) (Error FileReadError.TooLarge) "A misleading length cannot bypass the byte cap."
         Expect.equal growing.Position 65L "Only cap+1 bytes were consumed."
         Expect.isTrue growing.CanRead "The caller still owns the rejected stream."
+
         use exact = new MisreportedLengthStream(Array.create 64 (byte 'x'))
         Expect.equal (Configuration.readBounded exact 64) (Ok (String('x', 64))) "The exact limit remains readable through partial reads."
         Expect.isTrue exact.CanRead "Successful read also leaves ownership with the caller."
@@ -120,9 +125,11 @@ let tests = testList "Server configuration" [
         let config = paddedBytes 65536 ""
         withFile config (fun path -> Expect.isOk (Configuration.parse [|"--config"; path|]) "Exact configuration byte cap.")
         withFile (config + "x") (fun path -> Expect.isError (Configuration.parse [|"--config"; path|]) "Configuration cap+1 rejected.")
+
         let rules = paddedBytes 1048576 "words = ['word']"
         withFile rules (fun path -> Expect.isOk (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Exact moderation byte cap.")
         withFile (rules + "x") (fun path -> Expect.isError (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Moderation cap+1 rejected.")
+
         let names = paddedBytes 65536 "names = ['Бард']"
         withFile names (fun path ->
             let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
@@ -135,8 +142,11 @@ let tests = testList "Server configuration" [
 
     testCase "bounded file reads preserve ReadAllText UTF BOM decoding and include BOM in the cap" <| fun _ ->
         let encodings: Encoding list = [
-            UTF8Encoding(true); UnicodeEncoding(false, true); UnicodeEncoding(true, true)
-            UTF32Encoding(false, true); UTF32Encoding(true, true)
+            UTF8Encoding(true)
+            UnicodeEncoding(false, true)
+            UnicodeEncoding(true, true)
+            UTF32Encoding(false, true)
+            UTF32Encoding(true, true)
         ]
         for encoding in encodings do
             withEncodedFile encoding "[Server]\nPort=9123\n" (fun path ->
@@ -149,6 +159,7 @@ let tests = testList "Server configuration" [
                 let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
                 Expect.equal (dictionary.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "Decoded Unicode dictionary."
                 Expect.isNone warning "A supported BOM is not malformed input.")
+
         withEncodedFile (UTF8Encoding(true)) (paddedBytes 65536 "") (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "The BOM's three bytes count toward the file cap.")
 
@@ -284,10 +295,13 @@ let tests = testList "Server configuration" [
 
     testCase "exported defaults load without losing any nested settings" <| fun _ ->
         withFile "" (fun path ->
-            Configuration.writeDefaults path |> function Ok () -> () | Error error -> failwith error
+            Configuration.writeDefaults path |> function
+                | Ok () -> ()
+                | Error error -> failwith error
             match Configuration.parse [|"--config"; path|] with
             | Ok (LaunchCommand.Run(config, _)) -> Expect.equal config Configuration.defaults "roundtrip all fields"
             | other -> failwithf "Cannot load exported defaults: %A" other)
+
     testCase "authentication requires TLS outside explicitly enabled literal loopback" <| fun _ ->
         for source in [
             "[Authentication.Listener]\nListenUrl = \"http://0.0.0.0:8779\"\n"
@@ -335,6 +349,7 @@ let tests = testList "Server configuration" [
         ] do
             withFile source (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) "invalid telemetry input configuration rejected")
+
     testCase "visibility distance loads from TOML and rejects negative radius" <| fun _ ->
         withFile "[Runtime.Presence]\nVisibilityDistance = 0\n" (fun path ->
             match Configuration.parse [|"--config"; path|] with
@@ -342,6 +357,7 @@ let tests = testList "Server configuration" [
             | other -> failwithf "%A" other)
         withFile "[Runtime.Presence]\nVisibilityDistance = -1\n" (fun path ->
             Expect.isError (Configuration.parse [|"--config"; path|]) "Invalid distance rejected before startup.")
+
     testCase "identity settings load from TOML with defaults and are validated" <| fun _ ->
         let defaults = Configuration.defaults.Identity
         Expect.isTrue defaults.AllowHiddenIdentity "allowed by default"
@@ -365,8 +381,12 @@ let tests = testList "Server configuration" [
         | Error error -> failtest error
         for invalid in [ "names = []\n"; "names = [' ']\n"; "version = 2\nnames = ['Бард']\n"; "names = 'Бард'\n"; "other = 1\nnames = ['Бард']\n"; "names = ['Бард'\n" ] do
             Expect.isError (Configuration.parsePseudonyms invalid) $"refused: {invalid}"
+
         let builtIn = Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn
-        let missing, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") }
+        let missing, warning =
+            Configuration.loadPseudonyms
+                { Configuration.defaults.Identity with
+                    PseudonymsPath = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid()}.toml") }
         Expect.equal missing.Names builtIn.Names "missing file uses the built-in list"
         Expect.isSome warning "with a warning"
         withFile "names = ['Бард'\n" (fun path ->
@@ -394,6 +414,7 @@ let tests = testList "Server configuration" [
         match Configuration.parsePseudonyms (File.ReadAllText path) with
         | Ok (dictionary, 0) -> Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "same 24 names"
         | other -> failtestf "%A" other
+
     testCase "the admin panel section has loopback defaults and an old server.toml without it keeps them" <| fun _ ->
         let admin = Configuration.defaults.Admin
         Expect.isTrue admin.Enabled "enabled by default"
@@ -465,7 +486,11 @@ let tests = testList "Server configuration" [
     testCase "restart settings are checked and become the supervisor's policy" <| fun _ ->
         withFile "[Recovery]\nInitialDelayMs = 500\nMaxDelayMs = 4000\nMaxRestarts = 0\nWindowSeconds = 60\n" (fun path ->
             let policy = Configuration.restartPolicy (parsed path).Recovery
-            Expect.equal policy { InitialDelay = TimeSpan.FromMilliseconds 500.; MaxDelay = TimeSpan.FromSeconds 4.; MaxRestarts = 0; Window = TimeSpan.FromMinutes 1. }
+            Expect.equal policy
+                { InitialDelay = TimeSpan.FromMilliseconds 500.
+                  MaxDelay = TimeSpan.FromSeconds 4.
+                  MaxRestarts = 0
+                  Window = TimeSpan.FromMinutes 1. }
                 "0 restarts: the first failure stops the server")
         for invalid in [ "InitialDelayMs = -1"; "MaxDelayMs = 10\nInitialDelayMs = 20"; "MaxDelayMs = 3600001"
                          "MaxRestarts = -1"; "MaxRestarts = 1001"; "WindowSeconds = 0"; "WindowSeconds = 86401" ] do
