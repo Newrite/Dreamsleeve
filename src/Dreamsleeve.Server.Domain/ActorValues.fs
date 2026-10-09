@@ -47,7 +47,10 @@ type ActorValueInfo = private {
 [<RequireQualifiedAccess>]
 module ActorValueInfo =
     let create displayName state : ActorValueInfo =
-        { displayName = displayName; state = state }
+        {
+            displayName = displayName
+            state = state
+        }
 
     let withState state (info: ActorValueInfo) = { info with state = state }
 
@@ -68,13 +71,21 @@ module ActorValuesPatch =
                 | Some next when next.DisplayName = info.DisplayName -> ()
                 | Some _ | None -> struct (key, info.DisplayName)
         ]
+
         let set = [
             for KeyValue(key, info) in latest do
                 match Map.tryFind key previous with
                 | Some old when old = info -> ()
                 | Some _ | None -> key, info
         ]
-        if removed.IsEmpty && set.IsEmpty then ValueNone else ValueSome { Removed = removed; Set = set }
+
+        if removed.IsEmpty && set.IsEmpty then
+            ValueNone
+        else
+            ValueSome {
+                Removed = removed
+                Set = set
+            }
 
 /// Mutable state owned by one agent. Never share this storage between agents.
 /// Use snapshot or immutable individual readings to publish data.
@@ -87,14 +98,22 @@ type ActorValueStorage = private {
 [<RequireQualifiedAccess>]
 module ActorValueStorage =
     let create () : ActorValueStorage =
-        { values = Dictionary(); projection = ValueSome Map.empty }
+        {
+            values = Dictionary()
+            projection = ValueSome Map.empty
+        }
 
     /// Retain the immutable input projection while making storage independently mutable.
     let ofSnapshot (entries: Map<ActorValueKey, ActorValueInfo>) : ActorValueStorage =
         let values = Dictionary<ActorValueKey, ActorValueInfo>(entries.Count)
-        for KeyValue(key, info) in entries do values.Add(key, info)
 
-        { values = values; projection = ValueSome entries }
+        for KeyValue(key, info) in entries do
+            values.Add(key, info)
+
+        {
+            values = values
+            projection = ValueSome entries
+        }
 
     let count (storage: ActorValueStorage) = storage.values.Count
 
@@ -116,7 +135,10 @@ module ActorValueStorage =
 
     let remove key (storage: ActorValueStorage) =
         let removed = storage.values.Remove key
-        if removed then storage.projection <- ValueNone
+
+        if removed then
+            storage.projection <- ValueNone
+
         removed
 
     let clear (storage: ActorValueStorage) =
@@ -128,6 +150,10 @@ module ActorValueStorage =
         match storage.projection with
         | ValueSome projection -> projection
         | ValueNone ->
-            let projection = storage.values |> Seq.map (fun entry -> entry.Key, entry.Value) |> Map.ofSeq
+            let projection =
+                storage.values
+                |> Seq.map (fun entry -> entry.Key, entry.Value)
+                |> Map.ofSeq
+
             storage.projection <- ValueSome projection
             projection

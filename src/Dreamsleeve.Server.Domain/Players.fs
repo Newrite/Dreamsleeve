@@ -9,6 +9,7 @@ type PlayerData =
         displayName: DisplayName
         nameColor: NameColor
     }
+
     member this.PlayerId = this.playerId
     member this.Username = this.username
     member this.DisplayName = this.displayName
@@ -19,7 +20,12 @@ type PlayerData =
 module PlayerData =
     /// Combine values already accepted by their primitive factories.
     let create playerId username displayName nameColor : PlayerData =
-        { playerId = playerId; username = username; displayName = displayName; nameColor = nameColor }
+        {
+            playerId = playerId
+            username = username
+            displayName = displayName
+            nameColor = nameColor
+        }
 
     let withDisplayName displayName (profile: PlayerData) =
         { profile with displayName = displayName }
@@ -122,6 +128,7 @@ type Player =
         movementHighWater: uint64
         actorValues: ActorValueStorage
     }
+
     member this.Data = this.data
     member this.CharacterGeneration = this.characterGeneration
     member this.CharacterName = this.characterName
@@ -134,15 +141,19 @@ type Player =
 [<RequireQualifiedAccess>]
 module Player =
     let create data : Player =
-        { data = data
-          characterGeneration = 0UL
-          characterName = ValueNone
-          details = PlayerDetails.empty
-          location = ValueNone
-          movementContext = 0UL
-          movementSequence = 0UL
-          movementHighWater = 0UL
-          actorValues = ActorValueStorage.create () }
+        {
+            data = data
+            characterGeneration = 0UL
+            characterName = ValueNone
+            details = PlayerDetails.empty
+            location = ValueNone
+
+            movementContext = 0UL
+            movementSequence = 0UL
+            movementHighWater = 0UL
+
+            actorValues = ActorValueStorage.create ()
+        }
 
     /// Changing a profile never changes the identity of an existing player.
     let withProfile (profile: PlayerData) (player: Player) =
@@ -173,9 +184,12 @@ module Player =
             characterName = ValueNone
             details = PlayerDetails.empty
             location = ValueNone
+
             movementContext = 0UL
             movementSequence = 0UL
-            actorValues = ActorValueStorage.create () }
+
+            actorValues = ActorValueStorage.create ()
+        }
 
     /// Explicitly start a new character, even when its name matches the old one.
     let beginCharacter characterName player =
@@ -195,7 +209,8 @@ module Player =
                 location = location
                 movementContext = if location.IsSome then context else 0UL
                 movementSequence = 0UL
-                movementHighWater = context }
+                movementHighWater = context
+            }
         | PlayerUpdate.SetActorValues values -> replaceActorValues values player
         | PlayerUpdate.SetDetails details -> { player with details = details }
         | PlayerUpdate.LeaveGame -> clearGameState player
@@ -208,8 +223,9 @@ module Player =
                                   && sample.ContextRevision = player.movementContext
                                   && sample.Sequence > player.movementSequence ->
             ValueSome { player with
-                            location = ValueSome (MovementPose.apply sample.Pose location)
-                            movementSequence = sample.Sequence }
+                location = ValueSome (MovementPose.apply sample.Pose location)
+                movementSequence = sample.Sequence
+            }
         | ValueSome _ | ValueNone -> ValueNone
 
     let setActorValue key info (player: Player) =
@@ -236,16 +252,20 @@ module Player =
     /// Evaluate inside the owning agent. The resulting map shares no live
     /// dictionary and its values are immutable.
     let snapshot (player: Player) : PlayerSnapshot =
-        { Identity = PublicIdentity.Profile player.data
-          CharacterGeneration = player.characterGeneration
-          CharacterName = player.characterName
-          CharacterNameWithheld = false
-          Details = player.details
-          Location = player.location
-          MovementContext = player.movementContext
-          MovementSequence = player.movementSequence
-          ViewRevision = 0UL
-          ActorValues = actorValuesSnapshot player }
+        {
+            Identity = PublicIdentity.Profile player.data
+            CharacterGeneration = player.characterGeneration
+            CharacterName = player.characterName
+            CharacterNameWithheld = false
+            Details = player.details
+            Location = player.location
+
+            MovementContext = player.movementContext
+            MovementSequence = player.movementSequence
+            ViewRevision = 0UL
+
+            ActorValues = actorValuesSnapshot player
+        }
 
 [<RequireQualifiedAccess>]
 module PlayerSnapshot =
@@ -255,4 +275,5 @@ module PlayerSnapshot =
     let withPseudonym pseudonym (snapshot: PlayerSnapshot) =
         { snapshot with
             Identity = PublicIdentity.Pseudonymous(snapshot.Identity.PlayerId, pseudonym)
-            CharacterName = ValueNone }
+            CharacterName = ValueNone
+        }

@@ -11,10 +11,12 @@ open FSharp.UMX
 module AdminUMX =
     [<Measure>]
     type adminId
+
     [<Measure>]
     type apiTokenLabel
 
 type AdminId = int64<adminId>
+
 type ApiTokenLabel = string<apiTokenLabel>
 
 [<RequireQualifiedAccess>]
@@ -23,7 +25,10 @@ module AdminId =
 
     /// Storage issues positive IDs, like account IDs.
     let create raw : Result<AdminId, DomainError> =
-        if raw <= 0L then Error(DomainError.InvalidId "AdminId") else Ok(UMX.tag<adminId> raw)
+        if raw <= 0L then
+            Error(DomainError.InvalidId "AdminId")
+        else
+            Ok(UMX.tag<adminId> raw)
 
 /// A signed-in administrator; the login reuses the player Username rules.
 type AdminAccount = {
@@ -83,7 +88,11 @@ module PlayerRole =
     /// A role belongs to a registered player: the stored profile must exist.
     let assign (profile: PlayerData voption) role =
         match profile with
-        | ValueSome profile -> Ok { PlayerId = profile.PlayerId; Role = role }
+        | ValueSome profile ->
+            Ok {
+                PlayerId = profile.PlayerId
+                Role = role
+            }
         | ValueNone -> Error AdminError.PlayerNotFound
 
 /// Who may create player accounts (docs/AuthenticationRu.md, «Режим регистрации»):
@@ -149,13 +158,27 @@ type AdminAction =
 [<RequireQualifiedAccess>]
 module AdminAction =
     let all = [
-        AdminAction.SetRole; AdminAction.RenamePlayer; AdminAction.ResetPlayerPassword; AdminAction.RevokePlayerAccess
-        AdminAction.Announced; AdminAction.CreatedApiToken; AdminAction.RevokedApiToken
-        AdminAction.ResetAdminPassword; AdminAction.CreatedAdmin
-        AdminAction.SanctionedPlayer; AdminAction.LiftedSanction; AdminAction.KickedPlayer
-        AdminAction.SetRegistrationMode; AdminAction.CreatedPlayer; AdminAction.BannedAddresses; AdminAction.LiftedAddressBan
-        AdminAction.RemovedGroundMark; AdminAction.ClearedGroundMarks; AdminAction.DeletedChatMessage
-        AdminAction.AppointedGuildMaster; AdminAction.DissolvedGuild
+        AdminAction.SetRole
+        AdminAction.RenamePlayer
+        AdminAction.ResetPlayerPassword
+        AdminAction.RevokePlayerAccess
+        AdminAction.Announced
+        AdminAction.CreatedApiToken
+        AdminAction.RevokedApiToken
+        AdminAction.ResetAdminPassword
+        AdminAction.CreatedAdmin
+        AdminAction.SanctionedPlayer
+        AdminAction.LiftedSanction
+        AdminAction.KickedPlayer
+        AdminAction.SetRegistrationMode
+        AdminAction.CreatedPlayer
+        AdminAction.BannedAddresses
+        AdminAction.LiftedAddressBan
+        AdminAction.RemovedGroundMark
+        AdminAction.ClearedGroundMarks
+        AdminAction.DeletedChatMessage
+        AdminAction.AppointedGuildMaster
+        AdminAction.DissolvedGuild
     ]
 
     let key action =
@@ -241,7 +264,12 @@ module AuditRecord =
     let create action target (details: string) =
         let text = if isNull details then "" else details
         let text = if text.Length > MaxDetails then text.Substring(0, MaxDetails) else text
-        { Action = action; Target = target; Details = text }
+
+        {
+            Action = action
+            Target = target
+            Details = text
+        }
 
 /// What a one-time code opens: the first setup, or a new password for one administrator.
 [<RequireQualifiedAccess>]
@@ -271,9 +299,13 @@ module AdminCodes =
         | None -> Error AdminError.CodeInvalid, codes
         | Some purpose ->
             let remaining = { codes = codes.codes |> Map.remove purpose }
+
             let struct (_, expires) = codes.codes[purpose]
-            if now < expires then Ok purpose, remaining
-            else Error AdminError.CodeExpired, remaining
+
+            if now < expires then
+                Ok purpose, remaining
+            else
+                Error AdminError.CodeExpired, remaining
 
 /// A signed-in browser of the panel. The cookie carries a random token; storage
 /// keeps only its hash, like saved logins of players.
@@ -287,7 +319,12 @@ type PanelSession = {
 [<RequireQualifiedAccess>]
 module PanelSession =
     let create tokenHash admin (now: DateTimeOffset) (lifetime: TimeSpan) =
-        { TokenHash = tokenHash; Admin = admin; CreatedAt = now; ExpiresAt = now + lifetime }
+        {
+            TokenHash = tokenHash
+            Admin = admin
+            CreatedAt = now
+            ExpiresAt = now + lifetime
+        }
 
     let isActive (now: DateTimeOffset) (session: PanelSession) = now < session.ExpiresAt
 
@@ -303,7 +340,8 @@ module ApiTokenLabel =
 
     /// One line of 1..64 characters without control characters, trimmed.
     let create raw : Result<ApiTokenLabel, DomainError> =
-        PrimitiveValidation.text "ApiTokenLabel" MaxLength PrimitiveValidation.nfcTrim false PrimitiveValidation.unrestricted raw
+        PrimitiveValidation.text "ApiTokenLabel" MaxLength PrimitiveValidation.nfcTrim
+            false PrimitiveValidation.unrestricted raw
         |> Result.map UMX.tag
 
 [<RequireQualifiedAccess>]
@@ -357,15 +395,19 @@ type AdminPlayerView = {
 module AdminPlayerView =
     /// account is the stored profile; player carries the game state of the session.
     let create (account: PlayerData) (player: Player) characterWithheld (pseudonym: Pseudonym voption) hiding role phase openedAt =
-        { PlayerId = account.PlayerId
-          Username = account.Username
-          DisplayName = account.DisplayName
-          CharacterName = player.CharacterName
-          CharacterWithheld = characterWithheld
-          Hiding = if pseudonym.IsSome then hiding else HiddenIdentity.Shown
-          Pseudonym = pseudonym
-          Role = role
-          Location = player.Location
-          Details = player.Details
-          Phase = phase
-          OpenedAt = openedAt }
+        {
+            PlayerId = account.PlayerId
+            Username = account.Username
+            DisplayName = account.DisplayName
+            CharacterName = player.CharacterName
+            CharacterWithheld = characterWithheld
+
+            Hiding = if pseudonym.IsSome then hiding else HiddenIdentity.Shown
+            Pseudonym = pseudonym
+            Role = role
+
+            Location = player.Location
+            Details = player.Details
+            Phase = phase
+            OpenedAt = openedAt
+        }
