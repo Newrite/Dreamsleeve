@@ -45,20 +45,46 @@ module SqliteSanctionStore =
     let private optional (reader: DbDataReader) index =
         if reader.IsDBNull index then ValueNone else ValueSome(reader.GetInt64 index)
 
+    // SQLite stores signed identifiers; converting a corrupt negative value to
+    // uint64 would make it look like a valid domain identifier.
+    let private storedPlayer value =
+        if value <= 0L then Error()
+        else PlayerId.create (uint64 value) |> Result.mapError (fun _ -> ())
+
+    let private storedInt32 (value: int64) =
+        if value < int64 Int32.MinValue || value > int64 Int32.MaxValue then ValueNone
+        else ValueSome(int value)
+
+    let private time value =
+        try Ok(DateTimeOffset.FromUnixTimeMilliseconds value)
+        with :? ArgumentOutOfRangeException -> Error()
+
+    let private optionalTime (reader: DbDataReader) index =
+        match optional reader index with
+        | ValueNone -> Ok ValueNone
+        | ValueSome value -> time value |> Result.map ValueSome
+
     let private issuer (reader: DbDataReader) =
         match optional reader 4, optional reader 5 with
-        | ValueSome admin, _ -> AdminId.create admin |> Result.map (SanctionIssuer.Admin >> ValueSome)
-        | ValueNone, ValueSome moderator -> PlayerId.create (uint64 moderator) |> Result.map (SanctionIssuer.Moderator >> ValueSome)
+        | ValueSome admin, ValueNone ->
+            AdminId.create admin |> Result.map (SanctionIssuer.Admin >> ValueSome) |> Result.mapError (fun _ -> ())
+        | ValueNone, ValueSome moderator -> storedPlayer moderator |> Result.map (SanctionIssuer.Moderator >> ValueSome)
         | ValueNone, ValueNone -> Ok ValueNone
+        | ValueSome _, ValueSome _ -> Error()
 
-    // The columns of Columns, in their order.
+    // The columns of Columns, in their order. Only an actual SQLite integer
+    // can name a kind; its full stored width is checked before the domain lookup.
     let private read (reader: DbDataReader) =
-        match SanctionId.create (reader.GetInt64 0), PlayerId.create (uint64 (reader.GetInt64 1)), SanctionKind.ofInt (int (reader.GetInt64 2)),
-              SanctionReason.create (reader.GetString 3), issuer reader with
-        | Ok id, Ok target, ValueSome kind, Ok reason, Ok issuedBy ->
+        let kind =
+            match reader.GetValue 2 with
+            | :? int64 as value -> storedInt32 value |> ValueOption.bind SanctionKind.ofInt
+            | _ -> ValueNone
+        match SanctionId.create (reader.GetInt64 0), storedPlayer (reader.GetInt64 1), kind,
+              SanctionReason.create (reader.GetString 3), issuer reader,
+              time (reader.GetInt64 6), optionalTime reader 7 with
+        | Ok id, Ok target, ValueSome kind, Ok reason, Ok issuedBy, Ok issuedAt, Ok expires ->
             Ok { Id = id; Target = target; Kind = kind; Scope = SanctionScope.Server; Reason = reason; IssuedBy = issuedBy
-                 IssuedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 6)
-                 Expires = optional reader 7 |> ValueOption.map DateTimeOffset.FromUnixTimeMilliseconds }
+                 IssuedAt = issuedAt; Expires = expires }
         | _ -> invalidData ()
 
     let private readAll (reader: DbDataReader) row =
@@ -85,10 +111,11 @@ module SqliteSanctionStore =
         match scalar context "SELECT COALESCE(r.role, 0) FROM profiles p LEFT JOIN player_roles r ON r.player_id=p.player_id WHERE p.player_id=@player"
                   [ "@player", player id ] with
         | :? int64 as value ->
-            match PlayerRole.ofInt (int value) with
+            match storedInt32 value |> ValueOption.bind PlayerRole.ofInt with
             | ValueSome role -> Ok(ValueSome role)
             | ValueNone -> invalidData ()
-        | _ -> Ok ValueNone
+        | null -> Ok ValueNone
+        | _ -> invalidData ()
 
     // An administrator acts on any registered player, a moderator only on one it outranks.
     let private authorize context issuer target =

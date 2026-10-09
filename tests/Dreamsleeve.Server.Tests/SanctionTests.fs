@@ -70,6 +70,67 @@ let private domainTests = testList "Sanction rules" [
 ]
 
 let private storeTests = testList "SQLite sanctions" [
+    testCase "corrupt full-width role cannot authorize or disappear as a missing player" (fun () ->
+        for role in [ "4294967297"; "-4294967295"; "'broken'" ] do
+            use database = new SqliteAccountStoreTests.Database()
+            SqliteAccountStore.initialize database.Config |> ok
+            let alice = register database "alice"
+            let bob = register database "bob"
+            database.Execute $"PRAGMA ignore_check_constraints=ON; INSERT INTO player_roles(player_id,role,granted_at) VALUES({PlayerId.value alice.PlayerId},{role},0)"
+            let assertInvalid result =
+                match result with
+                | Error(AccountStoreError.Failed (:? IO.InvalidDataException)) -> ()
+                | other -> failtestf "Corrupt role must be invalid stored data, got %A" other
+            SqliteSanctionStore.issue database.Config
+                (order bob.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted (SanctionIssuer.Moderator alice.PlayerId)) now token
+            |> assertInvalid
+            SqliteSanctionStore.issue database.Config
+                (order alice.PlayerId SanctionKind.Mute SanctionTerm.UntilLifted (SanctionIssuer.Admin(admin database))) now token
+            |> assertInvalid
+            equal 0L (database.Scalar "SELECT count(*) FROM sanctions")
+            equal 0L (database.Scalar "SELECT count(*) FROM admin_audit"))
+
+    testCase "corrupt sanction kind cannot alias a known kind" (fun () ->
+        for kind in [ "4294967296"; "4294967297"; "-4294967295"; "'broken'" ] do
+            use database = new SqliteAccountStoreTests.Database()
+            SqliteAccountStore.initialize database.Config |> ok
+            let alice = register database "alice"
+            database.Execute $"PRAGMA ignore_check_constraints=ON; INSERT INTO sanctions(player_id,kind,reason,issued_at) VALUES({PlayerId.value alice.PlayerId},{kind},'reason',0)"
+            match SqliteSanctionStore.active database.Config alice.PlayerId now token with
+            | Error(AccountStoreError.Failed (:? IO.InvalidDataException)) -> ()
+            | other -> failtestf "Corrupt kind must be rejected before publication: %A" other)
+
+    testCase "corrupt sanction issuer cannot wrap a signed identifier or select one of two issuers" (fun () ->
+        for adminId, moderatorId in [ "NULL", "-1"; "1", "1" ] do
+            use database = new SqliteAccountStoreTests.Database()
+            SqliteAccountStore.initialize database.Config |> ok
+            let alice = register database "alice"
+            database.Execute $"PRAGMA foreign_keys=OFF; PRAGMA ignore_check_constraints=ON; INSERT INTO sanctions(player_id,kind,reason,issued_by_admin,issued_by_player,issued_at) VALUES({PlayerId.value alice.PlayerId},0,'reason',{adminId},{moderatorId},0)"
+            match SqliteSanctionStore.active database.Config alice.PlayerId now token with
+            | Error(AccountStoreError.Failed (:? IO.InvalidDataException)) -> ()
+            | other -> failtestf "Corrupt issuer must be rejected before publication: %A" other)
+
+    testCase "a corrupt signed target is not published as a large unsigned player" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        database.Execute "PRAGMA foreign_keys=OFF; INSERT INTO sanctions(player_id,kind,reason,issued_at) VALUES(-1,0,'reason',0)"
+        let target = PlayerId.create UInt64.MaxValue |> ok
+        match SqliteSanctionStore.active database.Config target now token with
+        | Error(AccountStoreError.Failed (:? IO.InvalidDataException)) -> ()
+        | other -> failtestf "Stored target must retain the signed storage invariant: %A" other)
+
+    testCase "corrupt sanction timestamp reports stored data failure while deleted issuer stays absent" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = register database "alice"
+        database.Execute $"INSERT INTO sanctions(player_id,kind,reason,issued_at) VALUES({PlayerId.value alice.PlayerId},0,'reason',0)"
+        let restored = SqliteSanctionStore.active database.Config alice.PlayerId now token |> ok
+        equal ValueNone restored.Head.IssuedBy
+        database.Execute "UPDATE sanctions SET issued_at=9223372036854775807"
+        match SqliteSanctionStore.active database.Config alice.PlayerId now token with
+        | Error(AccountStoreError.Failed (:? IO.InvalidDataException)) -> ()
+        | other -> failtestf "Corrupt timestamp must be classified at stored decoding: %A" other)
+
     testCase "a new sanction replaces the one of its kind in force and a lift ends it" (fun () ->
         use database = new SqliteAccountStoreTests.Database()
         SqliteAccountStore.initialize database.Config |> ok
