@@ -22,12 +22,15 @@ let private handle (outbox: AgentOutbox<int>) (failures: Channel<AgentSendFailur
     | Enqueue(values, reply) ->
         let accepted = values |> List.map (fun value -> outbox.TrySend(context, value, Failed))
         reply.SetResult(accepted, outbox.Count)
-    | Inspect reply -> reply.SetResult outbox.Count
+    | Inspect reply ->
+        reply.SetResult outbox.Count
     | Hold(entered, release) ->
         entered.SetResult()
         do! release.Task.WaitAsync context.CancellationToken
-    | Failed failure -> check (failures.Writer.TryWrite failure) "Failure observer is closed."
-    | StopAfterOutput -> outbox.AbortAfterDrain context
+    | Failed failure ->
+        check (failures.Writer.TryWrite failure) "Failure observer is closed."
+    | StopAfterOutput ->
+        outbox.AbortAfterDrain context
 }
 
 let private start capacity (destination: Agent<AgentTests.Message>) failures =
@@ -63,8 +66,15 @@ let tests = testList "Outbox" [
         let policy (_, error) =
             policyCalled.SetResult error
             AgentErrorAction.Continue
-        let options = { AgentOptions.create "business-owner" with OnError = Some policy }
-        let execute value = if value = 1 then raise original else AgentTests.Message.Record value
+        let options = {
+            AgentOptions.create "business-owner" with
+                OnError = Some policy
+        }
+        let execute value =
+            if value = 1 then
+                raise original
+            else
+                AgentTests.Message.Record value
         let handle = TestReplyDispatcher.createHandler 1 (fun _ -> destination.Ref.TryReliable().Value) execute
         use owner = TestAgent.StartReliable(options, handle)
         owner.TryPost 1 |> ignore
@@ -83,8 +93,15 @@ let tests = testList "Outbox" [
         let address = destination.Ref.TryReliable().Value.Map(fun (_: int) -> raise original)
         let outbox = TestOutbox<int>.Create(1, address)
         let mutable policies = 0
-        let options = { AgentOptions.create "mapping-owner" with OnError = Some(fun _ -> policies <- policies + 1; AgentErrorAction.Continue) }
-        let handle context value = task { outbox.TrySend(context, value, fun _ -> raise mapper) |> ignore }
+        let options = {
+            AgentOptions.create "mapping-owner" with
+                OnError = Some(fun _ ->
+                    policies <- policies + 1
+                    AgentErrorAction.Continue)
+        }
+        let handle context value = task {
+            outbox.TrySend(context, value, fun _ -> raise mapper) |> ignore
+        }
         use owner = TestAgent.StartReliable(options, handle)
         owner.TryPost 1 |> ignore
         let! _ = terminal owner.Completion
@@ -111,6 +128,7 @@ let tests = testList "Outbox" [
         let! accepted = enqueue owner [1; 2; 3; 4]
         equal ([true; true; true; false], 2) accepted
         equal [|1; 2|] (mapped.ToArray())
+
         release.SetResult()
         do! eventually (fun () -> outbox.IsEmpty && seen.Count = 3)
         let! direct = enqueue owner [4]
@@ -126,7 +144,9 @@ let tests = testList "Outbox" [
         let seen = ConcurrentQueue<int>()
         use destination = TestAgent.Start(AgentOptions.create "destination", ordinaryHandler seen)
         let outbox = TestOutbox<AgentTests.Message>.Create(1, destination.Ref.TryReliable().Value)
-        let send context value = task { outbox.TrySend(context, AgentTests.Message.Record value) |> ignore }
+        let send context value = task {
+            outbox.TrySend(context, AgentTests.Message.Record value) |> ignore
+        }
         match Agent.TryStartReliable(options "dropping-owner" (AgentMailbox.bounded 1 BoundedChannelFullMode.DropWrite), send) with
         | Error AgentStartError.DroppingMailbox -> ()
         | result -> failtestf "Expected reliable construction rejection, got %A" result
@@ -169,6 +189,7 @@ let tests = testList "Outbox" [
         do! awaitResult entered.Task
         let next = gate<bool list * int>()
         equal AgentPostResult.Posted (owner.TryPost(Enqueue([2], next)))
+
         releaseDestination.SetResult()
         do! eventually (fun () -> outbox.IsEmpty)
         releaseOwner.SetResult()
@@ -268,6 +289,7 @@ let tests = testList "Outbox" [
         equal AgentPostResult.Posted (owner.TryPost 4)
         equal AgentPostResult.Full (owner.TryPost 5)
         equal [|1; 2|] (executed.ToArray())
+
         owner.Complete() |> ignore
         check (not owner.Completion.IsCompleted) "Completion abandoned pending output."
         release.SetResult()
@@ -294,6 +316,7 @@ let tests = testList "Outbox" [
         do! eventually (fun () -> owner.QueueLength = 0)
         equal AgentPostResult.Posted (owner.TryPost 3)
         equal AgentPostResult.Full (owner.TryPost 4)
+
         owner.Abort()
         let! _ = terminal owner.Completion
         check owner.Completion.IsCanceled "Abort did not retain its outcome."
@@ -318,7 +341,8 @@ let tests = testList "Outbox" [
         let! _ = owner.PostAsync 2
         let! _ = terminal owner.Completion
         match owner.StopReason with
-        | Some (AgentStopReason.Faulted error) -> check (obj.ReferenceEquals(failure, error)) "Delivery exception was replaced."
+        | Some (AgentStopReason.Faulted error) ->
+            check (obj.ReferenceEquals(failure, error)) "Delivery exception was replaced."
         | other -> failwithf "Delivery failure was hidden: %A" other
         release.SetResult()
         do! complete destination

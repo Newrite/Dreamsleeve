@@ -34,11 +34,14 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
         use meter = new Meter("Dreamsleeve.Test.Diagnostics")
         let stage = meter.CreateHistogram<double>("test.stage", "ms")
         let lifecycle = meter.CreateCounter<int64>("phantom.lifecycle")
-        let collector = start (fun line -> lines.Enqueue line; DiagnosticOperationResult.Success) None None
+        let collector = start (fun line ->
+            lines.Enqueue line
+            DiagnosticOperationResult.Success) None None
         stage.Record 2.5
         stage.Record 7.5
         let mutable tags = Diagnostics.TagList()
-        tags.Add("event", "context"); tags.Add("context", 123UL)
+        tags.Add("event", "context")
+        tags.Add("context", 123UL)
         lifecycle.Add(1L, &tags)
         collector.Dispose()
         let records = lines.ToArray() |> Array.map JsonDocument.Parse
@@ -51,16 +54,23 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
             Expect.equal (found.GetProperty("sum").GetDouble()) 10.0 "sum"
             let transition = records |> Array.find (fun x -> x.RootElement.GetProperty("kind").GetString() = "phantom" && x.RootElement.GetProperty("fields").GetProperty("event").GetString() = "context")
             Expect.equal (transition.RootElement.GetProperty("fields").GetProperty("context").GetUInt64()) 123UL "numeric context"
-        finally for record in records do record.Dispose()
+        finally
+            for record in records do
+                record.Dispose()
+
     testCase "HTTP events retain transfer correlation and phases without aggregation" <| fun _ ->
         let lines = ConcurrentQueue<string>()
         use meter = new Meter("Dreamsleeve.Test.Http")
         let events = meter.CreateCounter<int64>("phantom.http")
-        let collector = start (fun line -> lines.Enqueue line; DiagnosticOperationResult.Success) None None
+        let collector = start (fun line ->
+            lines.Enqueue line
+            DiagnosticOperationResult.Success) None None
         for phase in ["claimed"; "first_body"; "body_complete"] do
             let mutable tags = Diagnostics.TagList()
-            tags.Add("event", "http"); tags.Add("phase", phase)
-            tags.Add("transfer", 791UL); tags.Add("body_ms", 123.5)
+            tags.Add("event", "http")
+            tags.Add("phase", phase)
+            tags.Add("transfer", 791UL)
+            tags.Add("body_ms", 123.5)
             events.Add(1L, &tags)
         collector.Dispose()
         let phases = ResizeArray<string>()
@@ -74,12 +84,14 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
                     Expect.equal (fields.GetProperty("body_ms").GetDouble()) 123.5 "Timing preserved"
                     phases.Add(fields.GetProperty("phase").GetString())
         Expect.sequenceEqual phases ["claimed"; "first_body"; "body_complete"] "Every phase persisted"
+
     testCase "expected optional sink I/O failure cannot fault shutdown or producer" <| fun _ ->
         use collector = start (fun _ -> DiagnosticOperationResult.IoFailure(IOException("disk unavailable"))) None None
         use meter = new Meter("Dreamsleeve.Test.Failure")
         meter.CreateHistogram<double>("test.value").Record 1.0
         collector.Dispose()
         Expect.isEmpty (faults collector) "Expected disk failure remains optional."
+
     testCase "real file sink reports disk failures and preserves every segmented JSON line" <| fun _ ->
         let root = IO.Path.Combine(IO.Path.GetTempPath(), "dreamsleeve-trace-" + Guid.NewGuid().ToString("N"))
         IO.Directory.CreateDirectory root |> ignore
@@ -102,13 +114,23 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
             collector.Dispose()
             Expect.isGreaterThan failures.Count 0 "production sink failures reach reporter"
             Expect.isEmpty (faults collector) "Expected blocked path is optional."
-        finally IO.Directory.Delete(root,true)
+        finally
+            IO.Directory.Delete(root,true)
+
     testCase "blocked sink does not indefinitely block shutdown" <| fun _ ->
         use release = new Threading.ManualResetEventSlim(false)
         use started = new Threading.ManualResetEventSlim(false)
         use finished = new Threading.ManualResetEventSlim(false)
-        let collector = start (fun _ -> started.Set(); release.Wait(); DiagnosticOperationResult.Success)
-                              (Some (fun () -> finished.Set(); DiagnosticOperationResult.Success)) None
+        let collector =
+            start
+                (fun _ ->
+                    started.Set()
+                    release.Wait()
+                    DiagnosticOperationResult.Success)
+                (Some (fun () ->
+                    finished.Set()
+                    DiagnosticOperationResult.Success))
+                None
         try
             Expect.isTrue (started.Wait(5000)) "writer started"
             let time = Diagnostics.Stopwatch.StartNew()
@@ -121,6 +143,7 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
             Expect.isTrue (finished.Wait(5000)) "writer owns and closes sink after release"
             Expect.isEmpty (faults collector) "Actual completion is observed after release."
             collector.Dispose()
+
     testCase "checked diagnostic construction rejects raw invalid options" <| fun _ ->
         let invalidLimit = DiagnosticFile.TryCreate("diagnostics/server.jsonl", 512L)
         invalidLimit.Match((fun _ -> failtest "Invalid limit started a sink."), (fun error ->
@@ -138,9 +161,15 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
         let original = InvalidOperationException("startup diagnostic callback")
         let mutable writes, closes = 0, 0
         let reported = ConcurrentQueue<Exception>()
-        let collector = start (fun _ -> Threading.Interlocked.Increment(&writes) |> ignore; raise original)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; DiagnosticOperationResult.Success))
-                              (Some reported.Enqueue)
+        let collector =
+            start
+                (fun _ ->
+                    Threading.Interlocked.Increment(&writes) |> ignore
+                    raise original)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    DiagnosticOperationResult.Success))
+                (Some reported.Enqueue)
         let causes = faults collector
         collector.Dispose()
         collector.Dispose()
@@ -154,11 +183,19 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
         let reporting = InvalidOperationException("report callback")
         let cleanup = InvalidOperationException("close callback")
         let mutable writes, reports, closes = 0, 0, 0
-        let collector = start (fun _ ->
-                                  if Threading.Interlocked.Increment(&writes) = 1 then DiagnosticOperationResult.Success
-                                  else raise original)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; raise cleanup))
-                              (Some (fun _ -> Threading.Interlocked.Increment(&reports) |> ignore; raise reporting))
+        let collector =
+            start
+                (fun _ ->
+                    if Threading.Interlocked.Increment(&writes) = 1 then
+                        DiagnosticOperationResult.Success
+                    else
+                        raise original)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    raise cleanup))
+                (Some (fun _ ->
+                    Threading.Interlocked.Increment(&reports) |> ignore
+                    raise reporting))
         collector.Dispose()
         let causes = faults collector
         Expect.equal (writes, reports, closes) (2, 1, 1) "No failed callback retry; cleanup remains independent."
@@ -169,10 +206,17 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
     testCase "callback cancellation remains a fault even while owner shutdown is canceled" <| fun _ ->
         let original = OperationCanceledException("unexpected sink callback cancellation")
         let mutable writes, closes = 0, 0
-        let collector = start (fun _ ->
-                                  if Threading.Interlocked.Increment(&writes) = 1 then DiagnosticOperationResult.Success
-                                  else raise original)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; DiagnosticOperationResult.Success)) None
+        let collector =
+            start
+                (fun _ ->
+                    if Threading.Interlocked.Increment(&writes) = 1 then
+                        DiagnosticOperationResult.Success
+                    else
+                        raise original)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    DiagnosticOperationResult.Success))
+                None
         collector.Dispose()
         Expect.isTrue (obj.ReferenceEquals(original, List.exactlyOne (faults collector))) "Only timer cancellation is normal shutdown."
         Expect.equal closes 1 "Unexpected cancellation still closes owned sink."
@@ -182,9 +226,15 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
         let reporting = InvalidOperationException("reporter fault")
         let cleanup = IOException("expected close I/O")
         let mutable writes, closes = 0, 0
-        let collector = start (fun _ -> Threading.Interlocked.Increment(&writes) |> ignore; DiagnosticOperationResult.IoFailure disk)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; DiagnosticOperationResult.IoFailure cleanup))
-                              (Some (fun _ -> raise reporting))
+        let collector =
+            start
+                (fun _ ->
+                    Threading.Interlocked.Increment(&writes) |> ignore
+                    DiagnosticOperationResult.IoFailure disk)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    DiagnosticOperationResult.IoFailure cleanup))
+                (Some (fun _ -> raise reporting))
         let causes = faults collector
         collector.Dispose()
         Expect.equal (writes, closes) (1, 1) "Reporter fault stops writing but still closes sink."
@@ -196,8 +246,15 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
         let lines = ConcurrentQueue<string>()
         use meter = new Meter("Dreamsleeve.Test.Serialization")
         let events = meter.CreateCounter<int64>("phantom.lifecycle")
-        let collector = start (fun line -> lines.Enqueue line; DiagnosticOperationResult.Success)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; DiagnosticOperationResult.Success)) None
+        let collector =
+            start
+                (fun line ->
+                    lines.Enqueue line
+                    DiagnosticOperationResult.Success)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    DiagnosticOperationResult.Success))
+                None
         let mutable tags = Diagnostics.TagList()
         tags.Add("unsupported", typeof<string>)
         events.Add(1L, &tags)
@@ -209,8 +266,13 @@ let tests = testSequenced <| testList "Continuous diagnostics" [
 
     testCase "concurrent shutdown retains one owner and safe token lifetime" <| fun _ ->
         let mutable closes = 0
-        let collector = start (fun _ -> DiagnosticOperationResult.Success)
-                              (Some (fun () -> Threading.Interlocked.Increment(&closes) |> ignore; DiagnosticOperationResult.Success)) None
+        let collector =
+            start
+                (fun _ -> DiagnosticOperationResult.Success)
+                (Some (fun () ->
+                    Threading.Interlocked.Increment(&closes) |> ignore
+                    DiagnosticOperationResult.Success))
+                None
         Task.WhenAll(Array.init 32 (fun _ -> Task.Run(Action collector.Dispose))).WaitAsync(AgentTests.guard).GetAwaiter().GetResult()
         Expect.isEmpty (faults collector) "Concurrent Dispose does not cancel an already-disposed source."
         Expect.equal closes 1 "Exactly one owned close."
