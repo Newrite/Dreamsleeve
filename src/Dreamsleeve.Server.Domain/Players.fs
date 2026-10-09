@@ -222,10 +222,11 @@ module Player =
         | ValueSome location when sample.ContextRevision <> 0UL
                                   && sample.ContextRevision = player.movementContext
                                   && sample.Sequence > player.movementSequence ->
-            ValueSome { player with
-                location = ValueSome (MovementPose.apply sample.Pose location)
-                movementSequence = sample.Sequence
-            }
+            ValueSome
+                { player with
+                    location = ValueSome (MovementPose.apply sample.Pose location)
+                    movementSequence = sample.Sequence
+                }
         | ValueSome _ | ValueNone -> ValueNone
 
     let setActorValue key info (player: Player) =
