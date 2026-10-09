@@ -12,7 +12,10 @@ open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private guard (work: Task<'a>) = work.WaitAsync(TimeSpan.FromSeconds 30.)
 let private guardUnit (work: Task) = work.WaitAsync(TimeSpan.FromSeconds 30.)
 let private globalId = ChatChannelId.create 1UL |> ok
@@ -24,7 +27,10 @@ let private profile index =
         (DisplayName.create 64 (sprintf "Bench %d" index) |> ok) NameColor.unknown
 // The same text again and again, as fast as admitted: anti-spam would refuse it,
 // and the measurement is routing, not admission.
-let private unlimited = { Burst = Int32.MaxValue; RefillMs = 1; DuplicateWindowMs = 0 }
+let private unlimited =
+    { Burst = Int32.MaxValue
+      RefillMs = 1
+      DuplicateWindowMs = 0 }
 #endif
 
 type private Probe() =
@@ -88,7 +94,10 @@ let private abortAndJoin (owners: ((unit -> unit) * Task) list) = task {
 
 let private start count (probe: Probe) = task {
     let ids = Array.init count (fun _ -> Guid.NewGuid())
-    let settings = { ServerConfig.defaults with PeerLimit = max 32 count; MaxRecentMessages = 64 }
+    let settings =
+        { ServerConfig.defaults with
+            PeerLimit = max 32 count
+            MaxRecentMessages = 64 }
 #if BASELINE
     let profiles = MemoryProfileStore.start { MailboxCapacity = 128; MaxPendingReplies = 128 } |> ok
     let codec = ChatCodec.create settings |> ok
@@ -101,9 +110,13 @@ let private start count (probe: Probe) = task {
     }
     let receiver = Agent.Start({ AgentOptions.create "benchmark-output" with Mailbox = AgentMailbox.boundedWait 65536 }, handleOutput)
     let registryConfig = {
-        MailboxCapacity = 1024; MaxSessions = count; PlayerMailboxCapacity = 1024
-        MaxPendingPerPlayer = 16; MaxPendingChannelRequests = 2 * count + 8
-        MaxPendingChatRequests = 256; MaxPendingOutput = 65536
+        MailboxCapacity = 1024
+        MaxSessions = count
+        PlayerMailboxCapacity = 1024
+        MaxPendingPerPlayer = 16
+        MaxPendingChannelRequests = 2 * count + 8
+        MaxPendingChatRequests = 256
+        MaxPendingOutput = 65536
     }
     let registry = SessionRegistry.start registryConfig globalId (profiles.Ref.TryReliable().Value) (receiver.Ref.TryReliable().Value) |> ok
     let chat = ChatAgent.start { MailboxCapacity = 256; HistoryCapacity = 64; MaxPendingReplies = 256 }
@@ -112,7 +125,8 @@ let private start count (probe: Probe) = task {
     for index in 0 .. count - 1 do
         let welcome = probe.Expect(ids[index], 1UL)
         do! post registry (SessionRegistryMessage.Open {
-            ConnectionId = ids[index]; RequestId = 1UL
+            ConnectionId = ids[index]
+            RequestId = 1UL
             Username = Username.create 32 (sprintf "bench%d" index) |> ok
             DisplayName = DisplayName.create 64 (sprintf "Bench %d" index) |> ok
         })
@@ -120,7 +134,10 @@ let private start count (probe: Probe) = task {
         ()
 
     let send index requestId : Task = post registry (SessionRegistryMessage.SendChat {
-        ConnectionId = ids[index]; RequestId = requestId; ChannelId = globalId; Text = text })
+        ConnectionId = ids[index]
+        RequestId = requestId
+        ChannelId = globalId
+        Text = text })
     let disconnect index : Task = post registry (SessionRegistryMessage.Disconnect ids[index])
     let stop () : Task = task {
         do! post registry SessionRegistryMessage.Stop
@@ -151,38 +168,62 @@ let private start count (probe: Probe) = task {
     | Ok authenticationConfiguration, Ok namesConfiguration, Ok moderationConfiguration, Ok writerConfiguration, Ok guildWriterConfiguration, Ok readerConfiguration, Ok replies ->
         let tickets = Array.init count (fun index -> (sprintf "bench%d" index).PadRight(43, '_'))
         let identities = tickets |> Array.mapi (fun index ticket -> ticket, profile index) |> Map.ofArray
-        let authenticate (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
-            OperationId = request.OperationId
-            Result = match Map.tryFind request.Ticket identities with
-                     | Some profile -> Ok { Profile = profile; Role = PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone }
-                     | None -> Error SessionAuthenticationError.InvalidTicket
-        }
+        let authenticate (request: SessionAuthenticationRequest) : SessionAuthenticationReply =
+            { OperationId = request.OperationId
+              Result =
+                match Map.tryFind request.Ticket identities with
+                | Some profile ->
+                    Ok { Profile = profile
+                         Role = PlayerRole.Player
+                         Mute = ValueNone
+                         SignedInFrom = ValueNone }
+                | None -> Error SessionAuthenticationError.InvalidTicket }
         let authentication = authenticationConfiguration.Start(
                                  AgentReplyDispatcher.createHandler replies (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) authenticate)
         // The workload never renames or moderates; these owners answer like an unavailable service.
         let names = namesConfiguration.Start( fun _ (request: ProfileChangeRequest) -> task {
-            request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ProfileChangeError.Unavailable } |> ignore })
+            request.ReplyTo.TryPost
+                { OperationId = request.OperationId
+                  Result = Error ProfileChangeError.Unavailable }
+            |> ignore })
         let moderation = moderationConfiguration.Start( fun _ (request: ModerationRequest) -> task {
-            request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore })
+            request.ReplyTo.TryPost
+                { OperationId = request.OperationId
+                  Result = Error ModerationError.Unavailable }
+            |> ignore })
         let authenticator = {
-            Requests = authentication.Ref; Profiles = names.Ref
-            Moderation = moderation.Ref; Completion = authentication.Completion
+            Requests = authentication.Ref
+            Profiles = names.Ref
+            Moderation = moderation.Ref
+            Completion = authentication.Completion
         }
         // Nothing is placed on the ground; writes would only be discarded.
         let writer = writerConfiguration.Start( fun _ (_: GroundMarkWrite) -> task { () })
-        let marks = { Loaded = []; NextId = 1UL; Writer = writer.Ref }
+        let marks =
+            { Loaded = []
+              NextId = 1UL
+              Writer = writer.Ref }
         let guildWriter = guildWriterConfiguration.Start( fun _ (_: GuildWrite) -> task { () })
-        let guilds = { Loaded = []; Profiles = []; NextId = 1UL; Writer = guildWriter.Ref; WriterStopped = guildWriter.Completion }
+        let guilds =
+            { Loaded = []
+              Profiles = []
+              NextId = 1UL
+              Writer = guildWriter.Ref
+              WriterStopped = guildWriter.Completion }
+
         let incoming = ConcurrentQueue<ServerTransportEvent>()
         let mutable ready = fun () -> false
         let deliver event =
             incoming.Enqueue event
             ready () |> ignore
+
         let poll () =
             let events = ResizeArray<ServerTransportEvent>()
             let mutable event = Unchecked.defaultof<ServerTransportEvent>
-            while events.Count < 64 && incoming.TryDequeue(&event) do events.Add event
+            while events.Count < 64 && incoming.TryDequeue(&event) do
+                events.Add event
             Ok (List.ofSeq events)
+
         let transport = {
             MaxUnfragmentedPayloadBytes = fun _ -> Int32.MaxValue
             SetReadyHandler = fun handler -> ready <- handler
@@ -197,10 +238,21 @@ let private start count (probe: Probe) = task {
         }
         let options = {
             ServerRuntimeOptions.defaults with
-                MaxSessions = count; MailboxCapacity = 65536; ControlReserve = GameSettings.CleanupSources * count + GameSettings.CleanupSources
-                OpenTimeoutMs = 30000; ShutdownTimeoutMs = 5000
-                Player = { ServerRuntimeOptions.defaults.Player with MailboxCapacity = 1024; MaxPendingOutput = 1024; MaxPendingUpdates = 1024 }
-                Chat = { ServerRuntimeOptions.defaults.Chat with MailboxCapacity = 256; HistoryCapacity = 64; Rate = unlimited }
+                MaxSessions = count
+                MailboxCapacity = 65536
+                ControlReserve = GameSettings.CleanupSources * count + GameSettings.CleanupSources
+                OpenTimeoutMs = 30000
+                ShutdownTimeoutMs = 5000
+                Player =
+                    { ServerRuntimeOptions.defaults.Player with
+                        MailboxCapacity = 1024
+                        MaxPendingOutput = 1024
+                        MaxPendingUpdates = 1024 }
+                Chat =
+                    { ServerRuntimeOptions.defaults.Chat with
+                        MailboxCapacity = 256
+                        HistoryCapacity = 64
+                        Rate = unlimited }
         }
         let announcements = { AnnouncementOptions.defaults with HistoryCapacity = 64 }
         let game = GameSettings.create settings options IdentityOptions.defaults announcements GroundMarkOptions.defaults GuildOptions.defaults |> ok
@@ -253,7 +305,10 @@ let private start count (probe: Probe) = task {
 #endif
 #if BASELINE
     return ids, {
-        Send = send; Disconnect = disconnect; Stop = stop; UpdateRead = None
+        Send = send
+        Disconnect = disconnect
+        Stop = stop
+        UpdateRead = None
         ObserveQueues = (fun () -> registry.QueueLength + receiver.QueueLength)
         ObservedQueues = "sum: registry + output receiver (private player/channel child queues excluded)"
     }
@@ -283,12 +338,17 @@ let private start count (probe: Probe) = task {
                 if snapshot.CharacterName <> ValueSome name then failwith "Player update was not visible in its subsequent read."
             }
             let stopWithReaders () : Task = task {
-                for reader in readers do reader.Complete() |> ignore
-                for reader in readers do do! guardUnit reader.Completion
+                for reader in readers do
+                    reader.Complete() |> ignore
+                for reader in readers do
+                    do! guardUnit reader.Completion
                 do! stop ()
             }
             return Ok(ids, {
-                Send = send; Disconnect = disconnect; Stop = stopWithReaders; UpdateRead = Some updateRead
+                Send = send
+                Disconnect = disconnect
+                Stop = stopWithReaders
+                UpdateRead = Some updateRead
                 ObserveQueues = (fun () -> runtime.QueueLength + Array.sumBy (fun (reader: ReliableAgent<_>) -> reader.QueueLength) readers)
                 ObservedQueues = "sum: runtime + benchmark reply drivers (private player/chat/presence queues excluded)"
             })
@@ -302,7 +362,8 @@ let private startRooms roomCount count (probe: Probe) = task {
     let ready = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
     let mutable joined = 0
     let receive index response =
-        for bytes in ProtocolCodec.encode codec Int32.MaxValue response |> ok do probe.Receive(ids[index], bytes)
+        for bytes in ProtocolCodec.encode codec Int32.MaxValue response |> ok do
+            probe.Receive(ids[index], bytes)
     let handleRoom index _ event = task {
         match event with
         | ChatRoomEvent.Joined _ ->
@@ -324,7 +385,12 @@ let private startRooms roomCount count (probe: Probe) = task {
         let host = hostConfiguration.Start(handleControl)
         // Every room is a global channel of its own owner; their equal channel IDs never meet.
         let roomResults = Array.init roomCount (fun _ ->
-            ChatRoomAgent.start { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 64; MaxControlDeliveries = 128; Rate = unlimited }
+            ChatRoomAgent.start
+                { MailboxCapacity = 1024
+                  ControlReserve = 64
+                  HistoryCapacity = 64
+                  MaxControlDeliveries = 128
+                  Rate = unlimited }
                 ChatChannelKind.Global (host.Ref))
         let rooms = roomResults |> Array.choose (function Ok room -> Some room | Error _ -> None)
         match roomResults |> Array.tryPick (function Error error -> Some error | Ok _ -> None) with
@@ -338,25 +404,40 @@ let private startRooms roomCount count (probe: Probe) = task {
             for room in rooms do
                 for index in 0 .. count - 1 do
                     do! post room (ChatRoomCommand.Join {
-                        ConnectionId = ids[index]; Profile = profile index; Events = receivers[index].Ref })
+                        ConnectionId = ids[index]
+                        Profile = profile index
+                        Events = receivers[index].Ref })
             do! guard ready.Task
             let fingerprint = Moderation.normalize (ChatMessageText.value text)
             let send index requestId : Task =
                 let room = rooms[(index + int requestId) % roomCount]
                 post room (ChatRoomCommand.Publish {
-                    ConnectionId = ids[index]; RequestId = requestId; Author = PublicIdentity.Profile(profile index); Text = text
-                    CharacterName = ValueNone; Fingerprint = fingerprint; Flagged = []; Announcement = ValueNone
+                    ConnectionId = ids[index]
+                    RequestId = requestId
+                    Author = PublicIdentity.Profile(profile index)
+                    Text = text
+                    CharacterName = ValueNone
+                    Fingerprint = fingerprint
+                    Flagged = []
+                    Announcement = ValueNone
                     ReplyTo = receivers[index].Ref })
             let stop () : Task = task {
-                for room in rooms do room.Complete() |> ignore
-                for room in rooms do do! guardUnit room.Completion
-                for receiver in receivers do receiver.Complete() |> ignore
-                for receiver in receivers do do! guardUnit receiver.Completion
+                for room in rooms do
+                    room.Complete() |> ignore
+                for room in rooms do
+                    do! guardUnit room.Completion
+                for receiver in receivers do
+                    receiver.Complete() |> ignore
+                for receiver in receivers do
+                    do! guardUnit receiver.Completion
                 host.Complete() |> ignore
                 do! guardUnit host.Completion
             }
             return Ok(ids, {
-                Send = send; Disconnect = (fun _ -> Task.CompletedTask); Stop = stop; UpdateRead = None
+                Send = send
+                Disconnect = (fun _ -> Task.CompletedTask)
+                Stop = stop
+                UpdateRead = None
                 ObserveQueues = (fun () ->
                     Array.sumBy (fun (room: ReliableAgent<_>) -> room.QueueLength) rooms +
                     Array.sumBy (fun (receiver: ReliableAgent<_>) -> receiver.QueueLength) receivers)
@@ -367,7 +448,8 @@ let private startRooms roomCount count (probe: Probe) = task {
 
 let private waitFor condition = task {
     let limit = Stopwatch.StartNew()
-    while not (condition ()) && limit.Elapsed.TotalSeconds < 30. do do! Task.Delay 1
+    while not (condition ()) && limit.Elapsed.TotalSeconds < 30. do
+        do! Task.Delay 1
     if not (condition ()) then failwith "Benchmark fanout/cleanup did not complete."
 }
 
@@ -445,6 +527,7 @@ let private measure name count requests isPlayerOnly hasPresence startBackend = 
         try
             let runWork count first = if isPlayerOnly then playerWorkload ids backend count else workload probe ids backend count first
             let! _ = runWork 1024 2UL
+
             GC.Collect()
             GC.WaitForPendingFinalizers()
             GC.Collect()
@@ -463,15 +546,18 @@ let private measure name count requests isPlayerOnly hasPresence startBackend = 
                     try do! Task.Delay(10, sampling.Token) with :? OperationCanceledException -> ()
             }
             let sampler = sampleThreadPool ()
+
             let watch = Stopwatch.StartNew()
             let! latencies, admissions = runWork requests 10000UL
             watch.Stop()
             sampling.Cancel()
             do! sampler
+
             let allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore
             let collections = [| for generation in 0 .. 2 -> GC.CollectionCount generation - generations[generation] |]
             currentProcess.Refresh()
             let privateAfter = currentProcess.PrivateMemorySize64
+
             Array.sortInPlace latencies
             Array.sortInPlace admissions
             let percentile (samples: int64 array) fraction =
@@ -490,6 +576,7 @@ let private measure name count requests isPlayerOnly hasPresence startBackend = 
                     do! waitFor (fun () -> probe.Departures >= before + int64 count - 1L)
                     return clock.Elapsed.TotalMilliseconds
             }
+
             let shutdown = Stopwatch.StartNew()
             do! backend.Stop()
             shutdown.Stop()
@@ -498,14 +585,29 @@ let private measure name count requests isPlayerOnly hasPresence startBackend = 
 #else
             return Ok {
 #endif
-                Backend = name; Players = count; Requests = latencies.Length; PublishedPackets = (if isPlayerOnly then 0L else int64 latencies.Length * int64 count)
-                Seconds = watch.Elapsed.TotalSeconds; RequestsPerSecond = float latencies.Length / watch.Elapsed.TotalSeconds
-                P50Ms = percentile latencies 0.50; P95Ms = percentile latencies 0.95; P99Ms = percentile latencies 0.99
-                AdmissionP50Ms = admissionPercentile 0.50; AdmissionP95Ms = admissionPercentile 0.95; AdmissionP99Ms = admissionPercentile 0.99
-                AllocatedBytes = allocated; Gen0 = collections[0]; Gen1 = collections[1]; Gen2 = collections[2]
-                PrivateBytesBefore = privateBefore; PrivateBytesAfter = privateAfter; PeakThreadPoolQueue = peakQueue
-                PeakObservedQueueLength = peakActorQueues; ObservedQueues = backend.ObservedQueues
-                DisconnectFanoutMs = disconnectMs; ShutdownMs = shutdown.Elapsed.TotalMilliseconds
+                Backend = name
+                Players = count
+                Requests = latencies.Length
+                PublishedPackets = (if isPlayerOnly then 0L else int64 latencies.Length * int64 count)
+                Seconds = watch.Elapsed.TotalSeconds
+                RequestsPerSecond = float latencies.Length / watch.Elapsed.TotalSeconds
+                P50Ms = percentile latencies 0.50
+                P95Ms = percentile latencies 0.95
+                P99Ms = percentile latencies 0.99
+                AdmissionP50Ms = admissionPercentile 0.50
+                AdmissionP95Ms = admissionPercentile 0.95
+                AdmissionP99Ms = admissionPercentile 0.99
+                AllocatedBytes = allocated
+                Gen0 = collections[0]
+                Gen1 = collections[1]
+                Gen2 = collections[2]
+                PrivateBytesBefore = privateBefore
+                PrivateBytesAfter = privateAfter
+                PeakThreadPoolQueue = peakQueue
+                PeakObservedQueueLength = peakActorQueues
+                ObservedQueues = backend.ObservedQueues
+                DisconnectFanoutMs = disconnectMs
+                ShutdownMs = shutdown.Elapsed.TotalMilliseconds
             }
         with error ->
             try do! backend.Stop() with _ -> ()
@@ -526,7 +628,9 @@ let main args =
         let result = work.GetAwaiter().GetResult()
 #if !BASELINE
         match result with
-        | Error error -> startupFailed <- true; eprintfn "Startup rejected: %A" error
+        | Error error ->
+            startupFailed <- true
+            eprintfn "Startup rejected: %A" error
         | Ok result ->
 #endif
             measurements.Add result
