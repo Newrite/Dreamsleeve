@@ -14,7 +14,10 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failtestf "Unexpected result: %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Unexpected result: %A" error
+
 let private token = CancellationToken.None
 let private now = DateTimeOffset.FromUnixTimeMilliseconds 1_800_000_000_000L
 let private invalid = function
@@ -24,7 +27,9 @@ let private initialize (database: SqliteAccountStoreTests.Database) = SqliteAcco
 let private register (database: SqliteAccountStoreTests.Database) =
     SqliteAccountStore.create database.Config (Username.create 32 "player" |> ok) (DisplayName.create 64 "Player" |> ok) "hash" token |> ok
 let private thrown action =
-    try action () |> ignore; None
+    try
+        action () |> ignore
+        None
     with error -> Some error
 
 // Auth bootstrap calls once before the worker; admin preparation calls once
@@ -201,6 +206,7 @@ let tests = testList "SQLite boundaries" [
         match SqliteAccountStore.create database.Config (Username.create 32 "blocked" |> ok) (DisplayName.create 64 "Blocked" |> ok) "hash" token with
         | Error(AccountStoreError.Failed (:? SqliteException as error)) -> Expect.equal error.SqliteErrorCode 5 "Busy provider failure is preserved."
         | other -> failtestf "Expected SQLite busy, received %A" other
+
         let missing = { database.Config with DatabasePath = Path.Combine(Path.GetDirectoryName database.Config.DatabasePath, "missing.db") }
         match SqliteAccountStore.find missing (Username.create 32 "none" |> ok) token with
         | Error(AccountStoreError.Failed (:? SqliteException as error)) -> Expect.equal error.SqliteErrorCode 14 "ReadWrite open does not fabricate an empty database."
@@ -219,7 +225,11 @@ let tests = testList "SQLite boundaries" [
                 SqliteStatements.transaction context (fun () ->
                     SqliteStatements.execute context "INSERT INTO accounts(username) VALUES('rolledback')" [] |> ignore
                     raise original))
-        let actual = match thrown action with Some error -> error | None -> failtest "Unexpected work fault was converted into a storage result."
+
+        let actual =
+            match thrown action with
+            | Some error -> error
+            | None -> failtest "Unexpected work fault was converted into a storage result."
         Expect.isTrue (obj.ReferenceEquals(original, actual)) "Original application fault crosses the provider adapter."
         Expect.equal attempts 1 "No automatic retry."
         Expect.equal owned.Value.State ConnectionState.Closed "The unit's connection was released."
@@ -236,8 +246,13 @@ let tests = testList "SQLite boundaries" [
         let unowned = OperationCanceledException("unowned")
         Expect.isTrue (thrown (fun () -> SqliteAccountStore.withContext database.Config token (fun _ -> raise unowned)) |> Option.exists (fun actual -> obj.ReferenceEquals(unowned, actual))) "Unowned cancellation remains a lifetime fault."
         use cancellation = new CancellationTokenSource()
-        let result = SqliteAccountStore.withContext database.Config cancellation.Token (fun _ -> cancellation.Cancel(); raise (OperationCanceledException(cancellation.Token)))
-        match result with Error AccountStoreError.Canceled -> () | other -> failtestf "%A" other)
+        let result =
+            SqliteAccountStore.withContext database.Config cancellation.Token (fun _ ->
+                cancellation.Cancel()
+                raise (OperationCanceledException(cancellation.Token)))
+        match result with
+        | Error AccountStoreError.Canceled -> ()
+        | other -> failtestf "%A" other)
 
     case "auth and admin request supervisors preserve original faults and admit a fresh independent request" (fun () -> task {
         use database = new SqliteAccountStoreTests.Database()
@@ -251,8 +266,10 @@ let tests = testList "SQLite boundaries" [
         Expect.equal clock.Calls 2 "Failed work was not retried."
         Expect.equal errors.Count 1 "The failure has one original diagnostic."
         Expect.isTrue (obj.ReferenceEquals(errors.ToArray()[0], original)) "Auth keeps the original fault."
+
         let! fresh = auth.TryAskAsync(fun reply -> AuthMessage.Access(AccountAccessCommand.ReadRegistration, reply)) |> awaitReply
         Expect.equal fresh (Ok(AccountAccessResult.Registration RegistrationMode.initial)) "A fresh unit reads actual storage."
+
         let! _ = auth.PostAsync AuthMessage.Stop
         do! awaitUnit auth.Completion
 
@@ -265,8 +282,10 @@ let tests = testList "SQLite boundaries" [
         Expect.equal clock.Calls 2 "Failed admin work was not retried."
         Expect.equal errors.Count 1 "Admin logs one original fault."
         Expect.isTrue (obj.ReferenceEquals(errors.ToArray()[0], original)) "Admin keeps the original fault."
+
         let! fresh = admin.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply)) |> awaitReply
         Expect.equal fresh (Ok(AdminReply.Configured false)) "Fresh work reads the actual empty admin table."
+
         let! _ = admin.PostAsync AdminMessage.Stop
         do! awaitUnit admin.Completion
     })
@@ -277,6 +296,7 @@ let tests = testList "SQLite boundaries" [
         match SqliteDatabase.migrate (fun () -> raise known) with
         | Error message -> Expect.stringContains message "source" "Migration source diagnostic is retained."
         | Ok () -> failtest "Malformed migration was accepted."
+
         let mixed = AggregateException("mixed", [malformed; InvalidOperationException("unexpected") :> exn])
         Expect.isTrue (thrown (fun () -> SqliteDatabase.migrate (fun () -> raise mixed)) |> Option.exists (fun actual -> obj.ReferenceEquals(mixed, actual))) "Mixed aggregate retains the original unexpected fault.")
 

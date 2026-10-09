@@ -11,16 +11,26 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let ok = function Ok value -> value | Error error -> failwithf "%A" error
+let ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let username value = Username.create 32 value |> ok
 let display = DisplayName.create 64 "Player" |> ok
-let start capacity = MemoryProfileStore.start { MailboxCapacity = capacity; MaxPendingReplies = 4 } |> ok
+let start capacity =
+    MemoryProfileStore.start
+        { MailboxCapacity = capacity
+          MaxPendingReplies = 4 }
+    |> ok
+
 let request command (reply: AgentRef<ProfileReply>) : ProfileRequest =
     let reliable =
         reply.TryReliable()
         |> Option.defaultWith (fun () -> failwith "Test reply mailbox must be non-dropping.")
 
-    { OperationId = Guid.NewGuid(); Command = command; ReplyTo = reliable }
+    { OperationId = Guid.NewGuid()
+      Command = command
+      ReplyTo = reliable }
 
 let collect (output: Channel<ProfileReply>) (_: AgentContext<ProfileReply>) reply = task {
     check (output.Writer.TryWrite reply) "Test reply channel closed."
@@ -143,11 +153,15 @@ let tests = testList "Profiles" [
 
         equal (requests |> Array.map _.OperationId |> Set.ofArray) (replies |> Seq.map _.OperationId |> Set.ofSeq)
         let created = replies |> Seq.choose (fun reply ->
-            match reply.Result with Ok (ProfileOutcome.Created player) -> Some player | _ -> None) |> Seq.toList
+            match reply.Result with
+            | Ok (ProfileOutcome.Created player) -> Some player
+            | _ -> None) |> Seq.toList
         equal 1 created.Length
         equal (username "user") created.Head.Username
         equal 31 (replies |> Seq.filter (fun reply ->
-            match reply.Result with Error ProfileStoreError.UsernameTaken -> true | _ -> false) |> Seq.length)
+            match reply.Result with
+            | Error ProfileStoreError.UsernameTaken -> true
+            | _ -> false) |> Seq.length)
 
         do! stop receiver
     })
@@ -240,22 +254,31 @@ let tests = testList "Profiles" [
         slow.TryPost Filler |> ignore
         let replies = Channel.CreateUnbounded<ProfileReply>()
         use fast = TestAgent.Start(AgentOptions.create "fast", collect replies)
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 2; MaxPendingReplies = 2 } |> ok
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 2
+                  MaxPendingReplies = 2 }
+            |> ok
         let create = request (ProfileCommand.Create(username "stored", display)) (slow.Ref.Map Reply)
         let lookup = request (ProfileCommand.FindByUsername(username "stored")) fast.Ref
+
         do! send profiles create
         do! send profiles lookup
         let! found = receive replies
+
         equal lookup.OperationId found.OperationId
         match found.Result with
         | Ok (ProfileOutcome.Found(Some profile)) -> equal (username "stored") profile.Username
         | other -> failwithf "The later query did not observe the write: %A" other
+
         profiles.Complete() |> ignore
         check (not profiles.Completion.IsCompleted) "Completion skipped the slow reply."
+
         release.SetResult()
         do! awaitUnit profiles.Completion
         let! saved = awaitResult received.Task
         equal create.OperationId saved.OperationId
+
         do! stop slow
         do! stop fast
     })
@@ -266,7 +289,11 @@ let tests = testList "Profiles" [
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         equal AgentPostResult.Posted (receiver.TryPost Filler)
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 1
+                  MaxPendingReplies = 1 }
+            |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
@@ -297,7 +324,11 @@ let tests = testList "Profiles" [
         receiver.TryPost(Hold(entered, release)) |> ignore
         do! awaitResult entered.Task
         receiver.TryPost Filler |> ignore
-        use profiles = MemoryProfileStore.start { MailboxCapacity = 1; MaxPendingReplies = 1 } |> ok
+        use profiles =
+            MemoryProfileStore.start
+                { MailboxCapacity = 1
+                  MaxPendingReplies = 1 }
+            |> ok
         let query = request (ProfileCommand.FindByUsername(username "missing")) (receiver.Ref.Map Reply)
         do! send profiles query
         do! eventually (fun () -> profiles.QueueLength = 0)
