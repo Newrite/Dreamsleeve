@@ -10,13 +10,13 @@ open Expecto
 open AgentTests
 open BackgroundTests
 
-let private authentication () : Agent<AuthMessage> =
-    TestAgent.Start(AgentOptions.create "lifetime-auth", fun _ _ -> Task.FromResult())
+let private authentication () : ReliableAgent<AuthMessage> =
+    Agent.TryStartReliable(AgentOptions.create "lifetime-auth", fun _ _ -> Task.FromResult()) |> expectStarted
 
-let private administrator () : Agent<AdminMessage> =
-    TestAgent.Start(AgentOptions.create "lifetime-admin", fun _ _ -> Task.FromResult())
+let private administrator () : ReliableAgent<AdminMessage> =
+    Agent.TryStartReliable(AgentOptions.create "lifetime-admin", fun _ _ -> Task.FromResult()) |> expectStarted
 
-let private stop (agent: Agent<'Message>) = task {
+let private stop (agent: ReliableAgent<'Message>) = task {
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
 }
@@ -27,16 +27,33 @@ let private expectFailures expected result =
     | Error actual ->
         equal (List.map fst expected) (actual |> List.map (fun failure -> failure.Stage))
         List.iter2 (fun (_, error) failure ->
-            check (Object.ReferenceEquals(error, failure.Error)) "The original lifecycle fault was replaced.") expected actual
+            match failure.Reason with
+            | ServiceFailureReason.Faulted actual -> check (Object.ReferenceEquals(error, actual)) "The original lifecycle fault was replaced."
+            | ServiceFailureReason.StartRejected actual -> failtestf "Unexpected startup refusal: %A" actual) expected actual
 
 let tests = testList "Server service lifetime" [
+    case "typed admin startup refusal skips serving and joins authentication" (fun () -> task {
+        use auth = authentication ()
+        let refusal = AgentStartError.InvalidCapacity("capacity", 0)
+        let calls = ResizeArray<string>()
+        let! result = ServiceLifetime.run auth (fun () -> Task.FromResult(Error refusal))
+                          (fun _ -> calls.Add "serve"; Task.FromResult 0)
+                          (fun admin -> task { Expect.isNone admin "No refused owner."; calls.Add "stop-admin" })
+                          (fun owner -> task { calls.Add "stop-auth"; do! stop owner })
+        match result with
+        | Error [{ Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.StartRejected actual }] -> equal refusal actual
+        | other -> failtestf "Unexpected lifetime result: %A" other
+        equal ["stop-admin"; "stop-auth"] (List.ofSeq calls)
+        check auth.Completion.IsCompletedSuccessfully "Authentication cleanup did not finish."
+    })
+
     case "normal shutdown stops admin before authentication and preserves the serve exit code" (fun () -> task {
         use auth = authentication ()
         use admin = administrator ()
         let calls = ResizeArray<string>()
         let! result =
             ServiceLifetime.run auth
-                (fun () -> calls.Add "start"; Some admin)
+                (fun () -> calls.Add "start"; Task.FromResult(Ok(Some admin)))
                 (fun owned -> task {
                     check (owned |> Option.exists (fun value -> Object.ReferenceEquals(value, admin))) "Wrong admin ownership."
                     calls.Add "serve"
@@ -61,7 +78,7 @@ let tests = testList "Server service lifetime" [
     case "disabled admin remains legitimate absence and authentication still stops" (fun () -> task {
         use auth = authentication ()
         let! result =
-            ServiceLifetime.run auth (fun () -> None)
+            ServiceLifetime.run auth (fun () -> Task.FromResult(Ok None))
                 (fun admin -> task { Expect.isNone admin "Admin disabled."; return 0 })
                 (fun admin -> task { Expect.isNone admin "No hidden admin resource." })
                 stop
@@ -94,7 +111,7 @@ let tests = testList "Server service lifetime" [
         let authFailure = InvalidOperationException "auth cleanup" :> exn
         let calls = ResizeArray<string>()
         let! result =
-            ServiceLifetime.run auth (fun () -> Some admin)
+            ServiceLifetime.run auth (fun () -> Task.FromResult(Ok(Some admin)))
                 (fun _ -> Task.FromException<int> initial)
                 (fun owned -> task {
                     calls.Add "stop-admin"

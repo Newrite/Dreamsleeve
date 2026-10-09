@@ -231,7 +231,7 @@ let private storeTests = testList "SQLite sanctions" [
         equal (AdminAction.DeletedChatMessage, "spam", now) (line.Action, line.Details, line.At))
 ]
 
-let private access (service: Agent<AuthMessage>) command =
+let private access (service: ReliableAgent<AuthMessage>) command =
     service.TryAskAsync(fun reply -> AuthMessage.Access(command, reply)) |> awaitReply
 
 let private consume service ticket = task {

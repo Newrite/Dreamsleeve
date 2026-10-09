@@ -247,6 +247,9 @@ module AuthRoutes =
                 | AgentAskResult.Canceled ->
                     if context.RequestAborted.IsCancellationRequested then return Results.StatusCode 499
                     else return unavailable ()
+                | AgentAskResult.InvalidRequest error ->
+                    logger.Error("Authentication request was rejected before admission: {Error}", error)
+                    return unavailable ()
                 | AgentAskResult.Faulted failure ->
                     logger.Error(failure, "Authentication request failed")
                     return unavailable ()
@@ -348,6 +351,9 @@ module AuthRoutes =
                             | AgentAskResult.Full | AgentAskResult.Dropped -> return steamOutcome (Error AccountAccessError.Busy)
                             | AgentAskResult.Closed | AgentAskResult.TimedOut -> return steamOutcome (Error AccountAccessError.Unavailable)
                             | AgentAskResult.Canceled -> return steamCanceled context
+                            | AgentAskResult.InvalidRequest error ->
+                                logger.Error("Steam sign-in request was rejected before admission: {Error}", error)
+                                return steamOutcome (Error AccountAccessError.Unavailable)
                             | AgentAskResult.Faulted failure ->
                                 logger.Error(failure, "Steam sign-in failed")
                                 return steamOutcome (Error AccountAccessError.Unavailable)
@@ -364,6 +370,9 @@ module AuthRoutes =
             match result with
             | AgentAskResult.Replied (Ok (AccountAccessResult.Registration mode)) ->
                 WebHost.json 200 {| registration = RegistrationMode.key mode; steam = not settings.SteamPublicUrls.IsEmpty |}
+            | AgentAskResult.InvalidRequest error ->
+                logger.Error("Authentication methods request was rejected before admission: {Error}", error)
+                unavailable ()
             | AgentAskResult.Faulted failure ->
                 logger.Error(failure, "Authentication methods request failed")
                 unavailable ()

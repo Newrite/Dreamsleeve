@@ -1158,8 +1158,8 @@ let private describeUntil fixture describer id (accept: Dreamsleeve.Server.Domai
 
 let adminTests = testList "ServerRuntime admin panel" [
     testTask "description relay distinguishes unopened profile from closed session and preserves relay fault" {
-        use describer = SessionDescriber.start 4
-        use session = Agent.Start(AgentOptions.create "description-unopened", fun _ message -> task {
+        use describer = SessionDescriber.start 4 |> expectStarted
+        use session = TestAgent.Start(AgentOptions.create "description-unopened", fun _ message -> task {
             match message with
             | PlayerSessionMessage.Describe reply -> reply.Reply(Ok None)
             | _ -> ()
@@ -1171,7 +1171,7 @@ let adminTests = testList "ServerRuntime admin panel" [
         let! closed = SessionDescriber.describe describer guard session.Ref
         equal (Error SessionDescribeError.Closed) closed
         let original = InvalidOperationException("description-relay-fault")
-        use failed = Agent.Start(AgentOptions.create "description-failed-relay", fun _ (_: DescribeRequest) -> Task.FromException<unit> original)
+        use failed = TestAgent.Start(AgentOptions.create "description-failed-relay", fun _ (_: DescribeRequest) -> Task.FromException<unit> original)
         let! failure = SessionDescriber.describe failed guard session.Ref
         match failure with
         | Error (SessionDescribeError.Faulted actual) -> check (obj.ReferenceEquals(original, actual)) "Original relay lifetime fault is preserved."
@@ -1185,8 +1185,8 @@ let adminTests = testList "ServerRuntime admin panel" [
         let release = gate<unit>()
         let completed = gate<unit>()
         let mutable calls = 0
-        use describer = SessionDescriber.start 4
-        use slow = Agent.Start(AgentOptions.create "description-slow", fun _ message -> task {
+        use describer = SessionDescriber.start 4 |> expectStarted
+        use slow = TestAgent.Start(AgentOptions.create "description-slow", fun _ message -> task {
             match message with
             | PlayerSessionMessage.Describe reply ->
                 calls <- calls + 1
@@ -1196,7 +1196,7 @@ let adminTests = testList "ServerRuntime admin panel" [
                 completed.TrySetResult() |> ignore
             | _ -> ()
         })
-        use available = Agent.Start(AgentOptions.create "description-independent", fun _ message -> task {
+        use available = TestAgent.Start(AgentOptions.create "description-independent", fun _ message -> task {
             match message with
             | PlayerSessionMessage.Describe reply -> reply.Reply(Ok None)
             | _ -> ()
@@ -1220,8 +1220,8 @@ let adminTests = testList "ServerRuntime admin panel" [
     testTask "known full session admission returns full without fabricated profile absence" {
         let entered = gate<unit>()
         let release = gate<unit>()
-        use describer = SessionDescriber.start 4
-        use full = Agent.Start({ AgentOptions.create "description-full" with Mailbox = AgentMailbox.boundedWait 1 }, fun _ message -> task {
+        use describer = SessionDescriber.start 4 |> expectStarted
+        use full = TestAgent.Start({ AgentOptions.create "description-full" with Mailbox = AgentMailbox.boundedWait 1 }, fun _ message -> task {
             match message with
             | PlayerSessionMessage.Begin ->
                 entered.TrySetResult() |> ignore

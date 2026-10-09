@@ -95,6 +95,9 @@ module AdminRoutes =
         match! routes.Ports.Admin command (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied result -> return result
         | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.InvalidRequest error ->
+            routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
+            return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Admin request failed")
             return Error AdminServiceError.Unavailable
@@ -105,6 +108,9 @@ module AdminRoutes =
         match! routes.Ports.Account command (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied result -> return result
         | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AccountAccessError.Busy
+        | AgentAskResult.InvalidRequest error ->
+            routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
+            return Error AccountAccessError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Account request from the panel failed")
             return Error AccountAccessError.Unavailable
@@ -116,6 +122,9 @@ module AdminRoutes =
         match! routes.Ports.Guilds command (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied result -> return Ok result
         | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.InvalidRequest error ->
+            routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
+            return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Guild request from the panel failed")
             return Error AdminServiceError.Unavailable
@@ -126,6 +135,9 @@ module AdminRoutes =
         match! routes.Ports.Snapshot (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied value -> return Ok (AdminModels.status value)
         | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.InvalidRequest error ->
+            routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
+            return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted error ->
             routes.Logger.Error(error, "Runtime snapshot request from the panel failed")
             return Error AdminServiceError.Unavailable
@@ -136,6 +148,9 @@ module AdminRoutes =
         match! routes.Ports.Sessions (timeout routes) context.RequestAborted with
         | AgentAskResult.Replied rows -> return Ok rows
         | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.InvalidRequest error ->
+            routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
+            return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted error ->
             routes.Logger.Error(error, "Runtime sessions request from the panel failed")
             return Error AdminServiceError.Unavailable
@@ -149,6 +164,8 @@ module AdminRoutes =
         let! views = rows |> List.map (routes.Ports.Describe wait) |> Task.WhenAll
         for row, view in List.zip rows (List.ofArray views) do
             match view with
+            | Error (SessionDescribeError.InvalidRequest error) ->
+                routes.Logger.Error("Session description was rejected before admission for {ConnectionId}: {Error}", row.ConnectionId, error)
             | Error (SessionDescribeError.Faulted error) ->
                 routes.Logger.Error(error, "Session description from the panel failed for {ConnectionId}", row.ConnectionId)
             | Ok _ | Error SessionDescribeError.Full | Error SessionDescribeError.Closed | Error SessionDescribeError.Canceled

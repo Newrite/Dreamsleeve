@@ -259,7 +259,7 @@ let tests = testList "SQLite boundaries" [
         let original = InvalidOperationException("unexpected-admin-request")
         let errors = ConcurrentQueue<exn>()
         let clock = FaultOnSecondClock(original)
-        use admin = AdminService.start AdminService.defaults database.Config (recordingLogger errors) clock
+        use admin = AdminService.start AdminService.defaults database.Config (recordingLogger errors) clock |> expectStarted
         let! failed = admin.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply)) |> awaitReply
         Expect.equal failed (Error AdminServiceError.Unavailable) "Admin isolates only this detached work."
         Expect.equal clock.Calls 2 "Failed admin work was not retried."

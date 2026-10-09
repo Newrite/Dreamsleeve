@@ -579,10 +579,11 @@ let private configurationView (settings: ApplicationConfig) (pseudonyms: Dreamsl
     let moderation =
         if not settings.Moderation.Enabled then "(словарь выключен: [Moderation] Enabled = false)"
         else
-            try
-                let file = IO.FileInfo settings.Moderation.RulesPath
-                if not file.Exists then $"(файл не найден: {file.FullName})" else IO.File.ReadAllText file.FullName
-            with error -> $"(не прочитан: {error.Message})"
+            match Configuration.readModerationSource settings.Moderation.RulesPath with
+            | Ok text -> text
+            | Error FileReadError.Missing -> $"(файл не найден: {settings.Moderation.RulesPath})"
+            | Error FileReadError.TooLarge -> "(не прочитан: файл превышает 1 МиБ)"
+            | Error (FileReadError.Failed error) -> $"(не прочитан: {error.Message})"
     let sections = [
         { Title = "server.toml — действующие значения"; Text = Configuration.render settings }
         { Title = $"moderation.toml — {settings.Moderation.RulesPath}"; Text = moderation }
@@ -626,9 +627,12 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
                 logger.LogError("Authentication startup failed while reading IP range bans: {Failure}", error)
                 return 1
             | Ok authentication ->
-                let startAdmin () =
-                    if settings.Admin.Enabled then AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System |> Result.map Some
-                    else Ok None
+                let startAdmin () = task {
+                    if settings.Admin.Enabled then
+                        let! started = Task.Run(fun () -> AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
+                        return started |> Result.map Some
+                    else return Ok None
+                }
                 let! result =
                     ServiceLifetime.run authentication startAdmin
                         (fun admin -> serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log)
@@ -639,7 +643,9 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
                     return exitCode
                 | Error failures ->
                     for failure in failures do
-                        logger.LogError(failure.Error, "Server service lifecycle failed during {Stage}", failure.Stage)
+                        match failure.Reason with
+                        | ServiceFailureReason.StartRejected error -> logger.LogError("Server service startup refused during {Stage}: {Failure}", failure.Stage, error)
+                        | ServiceFailureReason.Faulted error -> logger.LogError(error, "Server service lifecycle failed during {Stage}", failure.Stage)
                     return 1
     with error ->
         logger.LogError(error, "Server failed")

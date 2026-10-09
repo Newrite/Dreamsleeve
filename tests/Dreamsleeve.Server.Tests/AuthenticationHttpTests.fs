@@ -33,7 +33,7 @@ let private moderation = Moderation.create { Words = ["badword"]; Substrings = [
 // steam replaces the Steam ports of the composition root.
 let private withHostUsingPorts (alter: AuthPorts -> AuthPorts) (logs: ConcurrentQueue<Serilog.Events.LogEvent>) (steam: SteamPorts option) customize execute run = task {
     let received = ConcurrentQueue<AccountAccessCommand>()
-    let handle (_: AgentContext<AuthMessage>) message = task {
+    let handle (_: ReliableAgentContext<AuthMessage>) message = task {
         match message with
         | AuthMessage.Access(command, reply) ->
             received.Enqueue command
@@ -42,7 +42,7 @@ let private withHostUsingPorts (alter: AuthPorts -> AuthPorts) (logs: Concurrent
         | AuthMessage.WorkersStopped _ | AuthMessage.SetChangeTarget _ | AuthMessage.ChangeFailed _ | AuthMessage.Stop
         | AuthMessage.ChangeProfile _ | AuthMessage.Moderate _ -> failwith "Unexpected test authentication control."
     }
-    use auth = TestAgent.Start(AgentOptions.create "http-test-auth", handle)
+    use auth = Agent.TryStartReliable(AgentOptions.create "http-test-auth", handle) |> expectStarted
     let sink = { new Serilog.Core.ILogEventSink with member _.Emit entry = logs.Enqueue entry }
     use logger = Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger()
     let initial = {
