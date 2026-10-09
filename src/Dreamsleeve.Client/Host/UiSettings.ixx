@@ -371,7 +371,9 @@ export namespace Dreamsleeve::Host
   std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path)
   {
     std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return UiFile{};
+    const bool      exists = std::filesystem::exists(path, probe);
+    if (probe) return std::unexpected{"Cannot inspect UI settings: " + probe.message()};
+    if (!exists) return UiFile{};
 
     std::ifstream input{path, std::ios::binary | std::ios::ate};
     if (!input) return std::unexpected{"Cannot open UI settings"};
@@ -396,6 +398,8 @@ export namespace Dreamsleeve::Host
   }
 
   // Temporary file plus rename: a crash mid-write never leaves a truncated file.
+  // This call owns only a file it exclusively creates; a preexisting .tmp is
+  // refused without truncating or removing somebody else's path.
   std::expected<void, std::string> SaveUiFile(const std::filesystem::path& path, const UiFile& file)
   {
     auto text = glz::write_toml(file);
@@ -407,19 +411,46 @@ export namespace Dreamsleeve::Host
 
     auto temporary  = path;
     temporary      += ".tmp";
+
+    struct Partial
     {
-      std::ofstream output{temporary, std::ios::binary | std::ios::trunc};
-      if (!output) return std::unexpected{"Cannot write UI settings"};
-      output << *text << '\n';
-      if (!output.flush()) return std::unexpected{"Cannot flush UI settings"};
+      const std::filesystem::path& path;
+      bool                         owned{};
+
+      ~Partial()
+      {
+        // Unexpected escaping failures still release the resource after the
+        // stream closes. Expected paths use Reject and report cleanup failure.
+        if (owned)
+        {
+          std::error_code error;
+          std::filesystem::remove(path, error);
+        }
+      }
+
+      std::unexpected<std::string> Reject(std::string reason)
+      {
+        std::error_code cleanup;
+        std::filesystem::remove(path, cleanup);
+        owned = false;
+        if (cleanup) reason += "; cannot remove temporary UI settings: " + cleanup.message();
+        return std::unexpected{std::move(reason)};
+      }
+    } partial{temporary};
+
+    {
+      std::ofstream output{temporary, std::ios::binary | std::ios::noreplace};
+      if (!output) return std::unexpected{"Cannot create temporary UI settings file"};
+      partial.owned      = true;
+      const bool written = static_cast<bool>(output << *text << '\n');
+      output.close();
+      if (!written) return partial.Reject("Cannot write UI settings");
+      if (!output) return partial.Reject("Cannot finish UI settings write");
     }
 
     std::filesystem::rename(temporary, path, error);
-    if (error)
-    {
-      std::filesystem::remove(temporary, error);
-      return std::unexpected{"Cannot replace UI settings file"};
-    }
+    if (error) return partial.Reject("Cannot replace UI settings file: " + error.message());
+    partial.owned = false;
     return {};
   }
 
