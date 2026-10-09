@@ -161,8 +161,10 @@ let tests = testList "Background" [
             with :? OperationCanceledException ->
                 canceled.SetResult()
                 do! cleanup.Task
+
             return 0
         }
+
         let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch -> context.PipeToSelf(operation, Finished)
@@ -196,6 +198,7 @@ let tests = testList "Background" [
         | result -> failtestf "Expected reliable construction rejection, got %A" result
         check (not launched) "Invalid mailbox must be rejected before starting work."
     })
+
     case "mapper failure faults the agent and cancels sibling work" (fun () -> task {
         let started, canceled = gate<unit>(), gate<unit>()
         let expected = InvalidOperationException("bad completion mapping")
@@ -205,13 +208,17 @@ let tests = testList "Background" [
                 do! Task.Delay(Timeout.Infinite, token)
             with :? OperationCanceledException ->
                 canceled.SetResult()
+
             return 0
         }
+
         let trigger (_: CancellationToken) = task {
             do! started.Task
             return 1
         }
+
         let broken (_: Result<int, exn>) : Message = raise expected
+
         let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch ->
@@ -251,18 +258,22 @@ let tests = testList "Background" [
     case "mapper failure during graceful join is not hidden" (fun () -> task {
         let started, release, siblingStarted, canceled = gate<unit>(), gate<int>(), gate<unit>(), gate<unit>()
         let expected = InvalidOperationException("late mapping failure")
+
         let operation (token: CancellationToken) = task {
             started.SetResult()
             return! release.Task.WaitAsync token
         }
+
         let sibling (token: CancellationToken) = task {
             siblingStarted.SetResult()
             try
                 do! Task.Delay(Timeout.Infinite, token)
-            with :? OperationCanceledException -> canceled.SetResult()
+            with :? OperationCanceledException ->
+                canceled.SetResult()
             return 0
         }
         let broken (_: Result<int, exn>) : Message = raise expected
+
         let handle (context: ReliableAgentContext<Message>) message = task {
             match message with
             | Launch ->

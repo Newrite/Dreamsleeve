@@ -23,7 +23,10 @@ let private start capacity execute =
     TestAgent.StartReliable(options "async-dispatcher" (AgentMailbox.boundedWait 1), handler)
 
 let private post (owner: Agent<Request>) (destination: Agent<AgentTests.Message>) value = task {
-    let! result = owner.PostAsync { Value = value; ReplyTo = destination.Ref.TryReliable().Value }
+    let! result = owner.PostAsync {
+        Value = value
+        ReplyTo = destination.Ref.TryReliable().Value
+    }
     equal AgentPostResult.Posted result
 }
 
@@ -79,7 +82,10 @@ let tests = testList "AsyncDispatcher" [
         use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler seen)
         use owner = TestAgent.StartReliable(AgentOptions.create "owner", handle)
         try
-            let! admitted = owner.PostAsync(Dispatch { Value = 7; ReplyTo = destination.Ref.TryReliable().Value })
+            let! admitted = owner.PostAsync(Dispatch {
+                Value = 7
+                ReplyTo = destination.Ref.TryReliable().Value
+            })
             equal AgentPostResult.Posted admitted
             do! awaitResult started.Task
             let! pinged = owner.PostAsync(Ping dispatched)
@@ -106,7 +112,10 @@ let tests = testList "AsyncDispatcher" [
             | Ping reply -> reply.SetResult()
         }
         use owner = TestAgent.StartReliable(AgentOptions.create "owner", handle)
-        let! admitted = owner.PostAsync(Dispatch { Value = 42; ReplyTo = destination.Ref.TryReliable().Value })
+        let! admitted = owner.PostAsync(Dispatch {
+            Value = 42
+            ReplyTo = destination.Ref.TryReliable().Value
+        })
         equal AgentPostResult.Posted admitted
         let pinged = gate<unit>()
         let! _ = owner.PostAsync(Ping pinged)
@@ -139,6 +148,7 @@ let tests = testList "AsyncDispatcher" [
             do! eventually (fun () -> owner.QueueLength = 0)
             do! post owner destination 3
             equal [|1|] (executed.ToArray())
+
             releaseWork.SetResult()
             do! awaitResult executedFirst.Task
             equal [|1|] (executed.ToArray())
@@ -193,8 +203,10 @@ let tests = testList "AsyncDispatcher" [
             executed.Enqueue request.Value
             if request.Value = 1 then
                 started.SetResult()
-                try do! Task.Delay(Timeout.Infinite, token)
-                finally cleaned.SetResult()
+                try
+                    do! Task.Delay(Timeout.Infinite, token)
+                finally
+                    cleaned.SetResult()
 
             return AgentTests.Message.Record request.Value
         }
@@ -210,6 +222,7 @@ let tests = testList "AsyncDispatcher" [
             do! post owner destination 3
             do! eventually (fun () -> owner.QueueLength = 0)
             do! post owner destination 4
+
             owner.Abort()
             let! _ = terminal owner.Completion
             check owner.Completion.IsCanceled "Abort changed into a fault or success."
@@ -233,10 +246,14 @@ let tests = testList "AsyncDispatcher" [
             do! release.Task.WaitAsync token
             return AgentTests.Message.Record request.Value
         }
+
         use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler (ConcurrentQueue<int>()))
         let broken = destination.Ref.TryReliable().Value.Map(fun (_: AgentTests.Message) -> raise failure)
         use owner = start 1 execute
-        let! admitted = owner.PostAsync { Value = 1; ReplyTo = broken }
+        let! admitted = owner.PostAsync {
+            Value = 1
+            ReplyTo = broken
+        }
         equal AgentPostResult.Posted admitted
         do! awaitResult started.Task
         owner.Complete() |> ignore
