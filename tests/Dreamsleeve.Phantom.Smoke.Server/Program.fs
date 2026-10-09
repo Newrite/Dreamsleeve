@@ -25,7 +25,7 @@ type private SmokeStartError =
     | Transport of string
 
 type private SmokeStartupCleanupException(rejection: SmokeStartError, failures: exn list) =
-    inherit AggregateException("Smoke startup was refused and its lifetime reported failures.", failures)
+    inherit AggregateException($"Smoke startup was refused ({rejection}) and its lifetime reported failures.", failures)
     member _.Rejection = rejection
 
 // Abort is admission closure, not completion. Even a failed Abort cannot skip
