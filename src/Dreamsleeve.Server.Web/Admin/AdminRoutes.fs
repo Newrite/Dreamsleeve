@@ -79,11 +79,20 @@ module AdminRoutes =
     let private accountFailure admin error : HttpHandler =
         match error with
         | AccountAccessError.Busy -> errorPage 503 "Сервис аккаунтов занят (выполняется другая операция), повторите." admin
-        | AccountAccessError.InvalidCredentials | AccountAccessError.SanctionRefused SanctionError.PlayerNotFound -> errorPage 404 "Игрок не найден." admin
-        | AccountAccessError.SanctionRefused SanctionError.NotActive -> errorPage 409 "У игрока нет такого действующего наказания." admin
-        | AccountAccessError.SanctionRefused SanctionError.NotAllowed -> errorPage 403 "Это наказание нельзя выдать или снять." admin
-        | AccountAccessError.UsernameTaken | AccountAccessError.Unavailable | AccountAccessError.TooSoon _ | AccountAccessError.Banned _
-        | AccountAccessError.RegistrationClosed _ | AccountAccessError.AddressBanned _ | AccountAccessError.DeviceBanned _
+        | AccountAccessError.InvalidCredentials
+        | AccountAccessError.SanctionRefused SanctionError.PlayerNotFound ->
+            errorPage 404 "Игрок не найден." admin
+        | AccountAccessError.SanctionRefused SanctionError.NotActive ->
+            errorPage 409 "У игрока нет такого действующего наказания." admin
+        | AccountAccessError.SanctionRefused SanctionError.NotAllowed ->
+            errorPage 403 "Это наказание нельзя выдать или снять." admin
+        | AccountAccessError.UsernameTaken
+        | AccountAccessError.Unavailable
+        | AccountAccessError.TooSoon _
+        | AccountAccessError.Banned _
+        | AccountAccessError.RegistrationClosed _
+        | AccountAccessError.AddressBanned _
+        | AccountAccessError.DeviceBanned _
         | AccountAccessError.FlowUnknown ->
             errorPage 503 "Сервис аккаунтов недоступен." admin
 
@@ -93,68 +102,98 @@ module AdminRoutes =
 
     let private ask routes (context: HttpContext) command = task {
         match! routes.Ports.Admin command (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied result -> return result
-        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Replied result ->
+            return result
+        | AgentAskResult.Full
+        | AgentAskResult.Dropped ->
+            return Error AdminServiceError.Busy
         | AgentAskResult.InvalidRequest error ->
             routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
             return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Admin request failed")
             return Error AdminServiceError.Unavailable
-        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed
+        | AgentAskResult.TimedOut
+        | AgentAskResult.Canceled ->
+            return Error AdminServiceError.Unavailable
     }
 
     let private account routes (context: HttpContext) command = task {
         match! routes.Ports.Account command (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied result -> return result
-        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AccountAccessError.Busy
+        | AgentAskResult.Replied result ->
+            return result
+        | AgentAskResult.Full
+        | AgentAskResult.Dropped ->
+            return Error AccountAccessError.Busy
         | AgentAskResult.InvalidRequest error ->
             routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
             return Error AccountAccessError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Account request from the panel failed")
             return Error AccountAccessError.Unavailable
-        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AccountAccessError.Unavailable
+        | AgentAskResult.Closed
+        | AgentAskResult.TimedOut
+        | AgentAskResult.Canceled ->
+            return Error AccountAccessError.Unavailable
     }
 
     /// The guild owner answers through the runtime; while it restarts the panel reports it unavailable.
     let private guilds routes (context: HttpContext) command = task {
         match! routes.Ports.Guilds command (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied result -> return Ok result
-        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Replied result ->
+            return Ok result
+        | AgentAskResult.Full
+        | AgentAskResult.Dropped ->
+            return Error AdminServiceError.Busy
         | AgentAskResult.InvalidRequest error ->
             routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
             return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted failure ->
             routes.Logger.Error(failure, "Guild request from the panel failed")
             return Error AdminServiceError.Unavailable
-        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed
+        | AgentAskResult.TimedOut
+        | AgentAskResult.Canceled ->
+            return Error AdminServiceError.Unavailable
     }
 
     let private snapshot routes (context: HttpContext) = task {
         match! routes.Ports.Snapshot (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied value -> return Ok (AdminModels.status value)
-        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Replied value ->
+            return Ok (AdminModels.status value)
+        | AgentAskResult.Full
+        | AgentAskResult.Dropped ->
+            return Error AdminServiceError.Busy
         | AgentAskResult.InvalidRequest error ->
             routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
             return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted error ->
             routes.Logger.Error(error, "Runtime snapshot request from the panel failed")
             return Error AdminServiceError.Unavailable
-        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed
+        | AgentAskResult.TimedOut
+        | AgentAskResult.Canceled ->
+            return Error AdminServiceError.Unavailable
     }
 
     let private sessions routes (context: HttpContext) = task {
         match! routes.Ports.Sessions (timeout routes) context.RequestAborted with
-        | AgentAskResult.Replied rows -> return Ok rows
-        | AgentAskResult.Full | AgentAskResult.Dropped -> return Error AdminServiceError.Busy
+        | AgentAskResult.Replied rows ->
+            return Ok rows
+        | AgentAskResult.Full
+        | AgentAskResult.Dropped ->
+            return Error AdminServiceError.Busy
         | AgentAskResult.InvalidRequest error ->
             routes.Logger.Error("Panel request was rejected before admission: {Error}", error)
             return Error AdminServiceError.Unavailable
         | AgentAskResult.Faulted error ->
             routes.Logger.Error(error, "Runtime sessions request from the panel failed")
             return Error AdminServiceError.Unavailable
-        | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled -> return Error AdminServiceError.Unavailable
+        | AgentAskResult.Closed
+        | AgentAskResult.TimedOut
+        | AgentAskResult.Canceled ->
+            return Error AdminServiceError.Unavailable
     }
 
     /// Parallel bounded asks preserve each row. A legitimate missing profile and
@@ -162,14 +201,21 @@ module AdminRoutes =
     let private describe routes (rows: RuntimeSessionRow list) = task {
         let wait = TimeSpan.FromMilliseconds(float routes.Settings.DescribeTimeoutMs)
         let! views = rows |> List.map (routes.Ports.Describe wait) |> Task.WhenAll
+
         for row, view in List.zip rows (List.ofArray views) do
             match view with
             | Error (SessionDescribeError.InvalidRequest error) ->
                 routes.Logger.Error("Session description was rejected before admission for {ConnectionId}: {Error}", row.ConnectionId, error)
             | Error (SessionDescribeError.Faulted error) ->
                 routes.Logger.Error(error, "Session description from the panel failed for {ConnectionId}", row.ConnectionId)
-            | Ok _ | Error SessionDescribeError.Full | Error SessionDescribeError.Closed | Error SessionDescribeError.Canceled
-            | Error SessionDescribeError.Dropped | Error SessionDescribeError.TimedOut -> ()
+            | Ok _
+            | Error SessionDescribeError.Full
+            | Error SessionDescribeError.Closed
+            | Error SessionDescribeError.Canceled
+            | Error SessionDescribeError.Dropped
+            | Error SessionDescribeError.TimedOut ->
+                ()
+
         return
             List.map2 AdminModels.online rows (List.ofArray views)
             |> List.sortBy (fun row -> (if row.PlayerId.HasValue then row.PlayerId.Value else UInt64.MaxValue), row.ConnectedAt)
@@ -186,7 +232,12 @@ module AdminRoutes =
     // --- Sign-in state ---------------------------------------------------
 
     let private cookieOptions (context: HttpContext) =
-        CookieOptions(HttpOnly = true, SameSite = SameSiteMode.Strict, Secure = context.Request.IsHttps, Path = "/", IsEssential = true)
+        CookieOptions(
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+            Secure = context.Request.IsHttps,
+            Path = "/",
+            IsEssential = true)
 
     let private setCookie (context: HttpContext) (token: string) (expires: DateTimeOffset) =
         let options = cookieOptions context
@@ -219,7 +270,8 @@ module AdminRoutes =
             if context.Request.Headers.ContainsKey "HX-Request" then
                 context.Response.Headers["HX-Redirect"] <- "/login"
                 return! errorPage 401 "Требуется вход." None context
-            else return! redirect "/login" context
+            else
+                return! redirect "/login" context
         | Error error -> return! serviceFailure None error context
     }
 
@@ -237,7 +289,8 @@ module AdminRoutes =
             String.Equals(origin, $"{context.Request.Scheme}://{context.Request.Host.Value}", StringComparison.OrdinalIgnoreCase)
 
     let private readForm (context: HttpContext) = task {
-        if not context.Request.HasFormContentType then return Error 415
+        if not context.Request.HasFormContentType then
+            return Error 415
         else
             try
                 let! form = context.Request.ReadFormAsync(context.RequestAborted)
@@ -288,6 +341,7 @@ module AdminRoutes =
         withForm None (fun form context -> task {
             let name = value form "username"
             let refused = html 401 (AdminViews.login (Some "Неверное имя или пароль.") name)
+
             match Username.create routes.Settings.Input.Username name with
             | Error _ -> return! refused context
             | Ok username ->
@@ -308,6 +362,7 @@ module AdminRoutes =
                 let! _ = ask routes context (AdminCommand.Logout token)
                 ()
             | None -> ()
+
             clearCookie context
             return! redirect "/login" context
         })
@@ -323,9 +378,12 @@ module AdminRoutes =
     /// password itself belongs to the admin service (the player rule).
     let private newPassword (form: IFormCollection) =
         let password = value form "password"
-        if password <> value form "password2" then Error "Пароли не совпадают."
-        elif not (Secrets.validPassword password) then Error "Пароль должен занимать 12–128 байт UTF-8."
-        else Ok password
+        if password <> value form "password2" then
+            Error "Пароли не совпадают."
+        elif not (Secrets.validPassword password) then
+            Error "Пароль должен занимать 12–128 байт UTF-8."
+        else
+            Ok password
 
     let private signInAfter context (reply: Result<AdminReply, AdminServiceError>) (refused: string -> HttpHandler) : Task =
         match reply with
@@ -427,21 +485,36 @@ module AdminRoutes =
         | Ok rows ->
             let own = rows |> List.filter (fun row -> row.PlayerId = Some record.Profile.PlayerId)
             let! described = describe routes own
+
             let! names = ask routes context (AdminCommand.NameHistory record.Profile.PlayerId)
             let! sanctions = ask routes context (AdminCommand.PlayerSanctions record.Profile.PlayerId)
             let! addresses = account routes context (AccountAccessCommand.AddressHistory record.Profile.PlayerId)
             let! devices = account routes context (AccountAccessCommand.DeviceHistory record.Profile.PlayerId)
             let! memberships = guilds routes context (GuildAdminCommand.PlayerGuilds record.Profile.PlayerId)
+
             match names, sanctions, addresses, devices, memberships with
             | Ok (AdminReply.Names names), Ok (AdminReply.Sanctions sanctions), Ok (AccountAccessResult.Addresses addresses),
               Ok (AccountAccessResult.Devices devices), Ok (GuildAdminResult.PlayerGuilds memberships) ->
-                return Ok { Player = AdminModels.player (onlineIds rows) record; Sessions = described
-                            Names = names |> List.map AdminModels.nameChange; Sanctions = sanctions |> List.map AdminModels.sanction
-                            Addresses = addresses |> List.map AdminModels.signInAddress; Devices = devices |> List.map AdminModels.signInDevice
-                            Guilds = memberships |> List.map AdminModels.playerGuild }
-            | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, _, _, Error error -> return Error error
-            | _, _, Error AccountAccessError.Busy, _, _ | _, _, _, Error AccountAccessError.Busy, _ -> return Error AdminServiceError.Busy
-            | _, _, Error _, _, _ | _, _, _, Error _, _ -> return Error AdminServiceError.Unavailable
+                return Ok {
+                    Player = AdminModels.player (onlineIds rows) record
+                    Sessions = described
+
+                    Names = names |> List.map AdminModels.nameChange
+                    Sanctions = sanctions |> List.map AdminModels.sanction
+                    Addresses = addresses |> List.map AdminModels.signInAddress
+                    Devices = devices |> List.map AdminModels.signInDevice
+                    Guilds = memberships |> List.map AdminModels.playerGuild
+                }
+            | Error error, _, _, _, _
+            | _, Error error, _, _, _
+            | _, _, _, _, Error error ->
+                return Error error
+            | _, _, Error AccountAccessError.Busy, _, _
+            | _, _, _, Error AccountAccessError.Busy, _ ->
+                return Error AdminServiceError.Busy
+            | _, _, Error _, _, _
+            | _, _, _, Error _, _ ->
+                return Error AdminServiceError.Unavailable
             | Ok _, Ok _, Ok _, Ok _, Ok _ ->
                 routes.Logger.Warning("Player card received an unexpected reply for {PlayerId}", PlayerId.value record.Profile.PlayerId)
                 return Error AdminServiceError.Unavailable
@@ -525,6 +598,7 @@ module AdminRoutes =
                     | Ok (AccountAccessResult.ProfileChanged profile) ->
                         if not (routes.Ports.ApplyProfile profile) then
                             routes.Logger.Warning("Runtime did not take the new name of player {PlayerId}", PlayerId.value playerId)
+
                         let details = $"{DisplayName.value before.Profile.DisplayName} -> {DisplayName.value profile.DisplayName}"
                         let! audited = record routes context admin AdminAction.RenamePlayer (AuditTarget.Player playerId) details
                         if audited then return! redirect $"/players/{PlayerId.value playerId}?done=renamed" context
@@ -579,8 +653,16 @@ module AdminRoutes =
             | _, Error _, _ -> return! refuse $"Срок: от 1 до {SanctionTerm.MaxMinutes} минут или бессрочно."
             | _, _, Error _ -> return! refuse reasonHint
             | Some kind, Ok term, Ok reason ->
-                let order = { Target = playerId; Kind = kind; Term = term; Reason = reason; IssuedBy = SanctionIssuer.Admin admin.Id
-                              Devices = value form "devices" = "yes" }
+                let order = {
+                    Target = playerId
+                    Kind = kind
+                    Term = term
+                    Reason = reason
+
+                    IssuedBy = SanctionIssuer.Admin admin.Id
+                    Devices = value form "devices" = "yes"
+                }
+
                 match! account routes context (AccountAccessCommand.Sanction order) with
                 | Ok (AccountAccessResult.Sanctioned _) -> return! redirect $"/players/{PlayerId.value playerId}?done=sanctioned" context
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
@@ -674,8 +756,15 @@ module AdminRoutes =
         match error with
         | GuildError.NotFound -> errorPage 404 "Гильдия не найдена." (Some admin)
         | GuildError.TargetNotFound -> showGuild routes admin 409 (Some "Этот игрок не состоит в гильдии.") guild
-        | GuildError.NameTaken | GuildError.ServerFull | GuildError.PlayerLimit | GuildError.GuildFull | GuildError.InvitesFull
-        | GuildError.AlreadyMember | GuildError.AlreadyInvited | GuildError.NotPermitted | GuildError.MasterStays ->
+        | GuildError.NameTaken
+        | GuildError.ServerFull
+        | GuildError.PlayerLimit
+        | GuildError.GuildFull
+        | GuildError.InvitesFull
+        | GuildError.AlreadyMember
+        | GuildError.AlreadyInvited
+        | GuildError.NotPermitted
+        | GuildError.MasterStays ->
             showGuild routes admin 409 (Some "Владелец гильдий отказал в действии.") guild
 
     /// The guild owner hands the role over and tells the members; the panel audits it.
@@ -769,7 +858,12 @@ module AdminRoutes =
                 | Ok (AccountAccessResult.AccountCreated(profile, code)) ->
                     let! audited = record routes context admin AdminAction.CreatedPlayer (AuditTarget.Player profile.PlayerId) (Username.value profile.Username)
                     let failure = if audited then None else Some "Игрок создан, но строка аудита не записана; см. лог сервера."
-                    let created = { PlayerId = PlayerId.value profile.PlayerId; Username = Username.value profile.Username; SetupCode = code }
+                    let created = {
+                        PlayerId = PlayerId.value profile.PlayerId
+                        Username = Username.value profile.Username
+
+                        SetupCode = code
+                    }
                     return! showRegistration routes admin 200 failure (Some created) context
                 | Error AccountAccessError.UsernameTaken -> return! refuse 409 "Это имя пользователя уже занято."
                 | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
@@ -820,8 +914,13 @@ module AdminRoutes =
                     match! account routes context (AccountAccessCommand.PlayersInRange range) with
                     | Ok (AccountAccessResult.PlayersAt players) ->
                         let check = {
-                            Range = AddressRange.key range; Reason = value form "reason"; Term = value form "term"; Minutes = value form "minutes"
-                            Online = online; Players = players |> List.map AdminModels.addressMatch
+                            Range = AddressRange.key range
+                            Reason = value form "reason"
+                            Term = value form "term"
+                            Minutes = value form "minutes"
+
+                            Online = online
+                            Players = players |> List.map AdminModels.addressMatch
                         }
                         return! showAddressBans routes admin 200 None (AddressRange.key range) (Some check) context
                     | Ok _ -> return! accountFailure (Some admin) AccountAccessError.Unavailable context
@@ -1097,8 +1196,15 @@ module AdminRoutes =
     let private rule (settings: AdminRouteSettings) (context: HttpContext) =
         let path = context.Request.Path.Value
         if HttpMethods.IsPost context.Request.Method && (path = "/login" || path = "/setup" || path = "/reset") then
-            { Bucket = "admin-login"; PermitsPerMinute = settings.LoginAttemptsPerMinute }
-        else { Bucket = "admin"; PermitsPerMinute = settings.RequestsPerMinute }
+            {
+                Bucket = "admin-login"
+                PermitsPerMinute = settings.LoginAttemptsPerMinute
+            }
+        else
+            {
+                Bucket = "admin"
+                PermitsPerMinute = settings.RequestsPerMinute
+            }
 
     let private rejected (context: HttpContext) : IResult =
         if isApi context then WebHost.error 429 "rate_limited" "Too many requests. Try again later."
@@ -1110,8 +1216,17 @@ module AdminRoutes =
 
     /// The caller starts and stops this host and owns every agent behind the ports.
     let build listener (settings: AdminRouteSettings) ports (logger: ILogger) =
-        let routes = { Settings = settings; Ports = ports; Logger = logger }
-        let limits = { MaxBodyBytes = MaxBodyBytes; MaxConnections = settings.MaxConnections; RequestTimeoutSeconds = settings.RequestTimeoutSeconds }
+        let routes = {
+            Settings = settings
+            Ports = ports
+            Logger = logger
+        }
+        let limits = {
+            MaxBodyBytes = MaxBodyBytes
+            MaxConnections = settings.MaxConnections
+            RequestTimeoutSeconds = settings.RequestTimeoutSeconds
+        }
+
         let app = WebHost.create listener limits (rule settings) rejected logger
         app.UseFalco(endpoints routes).UseFalcoNotFound(notFound) |> ignore
         app
