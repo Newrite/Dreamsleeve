@@ -205,7 +205,9 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             let barrier = bob.Models |> Seq.pick (fun packet -> if not (isNull packet.Transfer) && packet.Transfer.RequestId = 203UL then Some packet.Transfer else None)
             asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 26u, Cancel = Dreamsleeve.Protocol.Phantom.Cancel(TransferId = barrier.TransferId)))
             wait "Display barrier transfer canceled and acknowledged." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 203UL && packet.Complete.TransferId = barrier.TransferId && not packet.Complete.Accepted))
+            // Bob's response does not order delivery to Alice's separate peer.
             // Check notification existence separately; it is not the fresh-view barrier.
+            wait "Alice receives the initial generation settlement notification." (fun () -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Settled) && packet.Settled.Generation = 1UL))
             Expect.isTrue (alice.Models |> Seq.exists (fun packet -> not (isNull packet.Settled) && packet.Settled.Generation = 1UL)) "Initial generation has a settlement notification."
             alice.Models.Clear()
             let warm = descriptor.Clone()
