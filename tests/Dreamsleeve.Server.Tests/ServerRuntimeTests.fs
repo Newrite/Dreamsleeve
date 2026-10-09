@@ -14,9 +14,15 @@ open AgentTests
 
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
-    ServerRuntimeMessage.Tick { DueTimestamp = now; QueuedTimestamp = now }
+    ServerRuntimeMessage.Tick {
+        DueTimestamp = now
+        QueuedTimestamp = now
+    }
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private receive (channel: Channel<'T>) = channel.Reader.ReadAsync().AsTask().WaitAsync guard
 
 let private packet requestId payload =
@@ -48,7 +54,12 @@ let private createAuthentication () =
             | Some profile ->
                 // Each player signed in from an address of its own.
                 let address = Net.IPAddress.Parse $"198.51.100.{Dreamsleeve.Server.Domain.PlayerId.value profile.PlayerId}"
-                Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueSome address }
+                Ok {
+                    Profile = profile
+                    Role = Dreamsleeve.Server.Domain.PlayerRole.Player
+                    Mute = ValueNone
+                    SignedInFrom = ValueSome address
+                }
             | None -> Error SessionAuthenticationError.InvalidTicket
     }
     TestAgent.StartReliable(AgentOptions.create "fixture-authentication",
@@ -63,13 +74,19 @@ let private names =
             match request.Change with
             | ProfileChange.DisplayName(name, _) -> create name Dreamsleeve.Server.Domain.NameColor.unknown
             | ProfileChange.NameColor color -> create (Dreamsleeve.Server.Domain.DisplayName.create 64 username |> ok) color
-        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok profile } |> ignore
+        request.ReplyTo.TryPost {
+            OperationId = request.OperationId
+            Result = Ok profile
+        } |> ignore
     }))
 
 // Moderation is the account service's; runtime tests route it, not decide it.
 let private moderation =
     lazy (TestAgent.Start(AgentOptions.create "fixture-moderation", fun _ (request: ModerationRequest) -> task {
-        request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Error ModerationError.Unavailable } |> ignore
+        request.ReplyTo.TryPost {
+            OperationId = request.OperationId
+            Result = Error ModerationError.Unavailable
+        } |> ignore
     }))
 
 let private authentication (agent: Agent<SessionAuthenticationRequest>) : SessionAuthenticator = {
@@ -80,12 +97,24 @@ let private authentication (agent: Agent<SessionAuthenticationRequest>) : Sessio
 }
 
 // Storage is a controlled dependency here: writes are collected, nothing is loaded.
-let private persistence (writer: Agent<GroundMarkWrite>) : GroundMarkPersistence =
-    { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
+let private persistence (writer: Agent<GroundMarkWrite>) : GroundMarkPersistence = {
+    Loaded = []
+    NextId = 1UL
+    Writer = writer.Ref.TryReliable().Value
+}
+
 let private discard (_: AgentContext<GroundMarkWrite>) (_: GroundMarkWrite) = task { () }
-let private guildStorage (writer: Agent<GuildWrite>) : GuildPersistence =
-    { Loaded = []; Profiles = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+
+let private guildStorage (writer: Agent<GuildWrite>) : GuildPersistence = {
+    Loaded = []
+    Profiles = []
+    NextId = 1UL
+    Writer = writer.Ref.TryReliable().Value
+    WriterStopped = writer.Completion
+}
+
 let private discardGuilds (_: AgentContext<GuildWrite>) (_: GuildWrite) = task { () }
+
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 
 let private beginCharacter requestId name =
@@ -107,9 +136,10 @@ let private healthReading requestId current maximum =
 
 /// The player of a presence change that republishes this player's identity.
 let private updatedPlayer (value: ServerPacket) playerId =
-    if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then None
-    else value.PresenceChanged.Updated |> Seq.tryFind (fun player -> player.Profile.PlayerId = playerId)
-
+    if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then
+        None
+    else
+        value.PresenceChanged.Updated |> Seq.tryFind (fun player -> player.Profile.PlayerId = playerId)
 
 type private Fixture = {
     Runtime: Agent<ServerRuntimeMessage>
@@ -143,15 +173,20 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
     let failures = ConcurrentDictionary<DeliveryLane, TransportSendError>()
     let budgets = ConcurrentDictionary<Guid, int>()
     let errors = ConcurrentQueue<string>()
+
     let logger =
         { new ILogger with
             member _.BeginScope<'T>(_: 'T) = Unchecked.defaultof<IDisposable>
             member _.IsEnabled _ = true
             member _.Log<'T>(level, _, state: 'T, error, formatter: Func<'T, exn, string>) =
-                if level >= LogLevel.Error then errors.Enqueue(formatter.Invoke(state, error)) }
+                if level >= LogLevel.Error then
+                    errors.Enqueue(formatter.Invoke(state, error))
+        }
+
     let closed = Channel.CreateUnbounded<Guid>()
     let reset = Channel.CreateUnbounded<Guid>()
     let ignoreClose = ConcurrentDictionary<Guid, unit>()
+
     let poll () =
         let events = ResizeArray()
         let mutable value = Unchecked.defaultof<ServerTransportEvent>
@@ -161,8 +196,12 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
             | ServerTransportEvent.Connected _ | ServerTransportEvent.Received _ | ServerTransportEvent.Failed _ -> ()
             events.Add value
         Ok (List.ofSeq events)
+
     let transport = {
-        MaxUnfragmentedPayloadBytes = fun id -> match budgets.TryGetValue id with true, size -> size | _ -> Int32.MaxValue
+        MaxUnfragmentedPayloadBytes = fun id ->
+            match budgets.TryGetValue id with
+            | true, size -> size
+            | _ -> Int32.MaxValue
         SetReadyHandler = fun handler -> ready <- handler
         Poll = poll
         Send = fun (id, packet) ->
@@ -174,23 +213,51 @@ let private withRuntimeConfiguredAndPhantoms phantomStorage options identity pse
                     movement.Writer.TryWrite(id, ServerMovementPacket.Parser.ParseFrom packet.Bytes) |> ignore
                 elif packet.Lane = DeliveryLane.Models then
                     phantomOutput.Writer.TryWrite(id, Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes) |> ignore
-                elif packet.Lane = DeliveryLane.Poses then ()
-                else output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom packet.Bytes) |> ignore
+                elif packet.Lane = DeliveryLane.Poses then
+                    ()
+                else
+                    output.Writer.TryWrite(id, ServerPacket.Parser.ParseFrom packet.Bytes) |> ignore
                 Ok ()
-        Close = fun id -> if not (ignoreClose.ContainsKey id) then input.Enqueue(ServerTransportEvent.Disconnected id)
+        Close = fun id ->
+            if not (ignoreClose.ContainsKey id) then
+                input.Enqueue(ServerTransportEvent.Disconnected id)
         Reset = fun id -> reset.Writer.TryWrite id |> ignore
         Dispose = ignore
     }
+
     use authenticator = createAuthentication ()
     use writer = TestAgent.Start(AgentOptions.create "writer", discard)
     use guildWriter = TestAgent.Start(AgentOptions.create "guild-writer", discardGuilds)
     let game =
         Settings.game ServerConfig.defaults options identity AnnouncementOptions.defaults GroundMarkOptions.defaults
         |> GameSettings.withTrustedProxies proxies
-    let game = match phantomStorage with Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok | None -> game
-    let start = match phantomStorage with Some (options, storage) -> ServerRuntime.startWithPhantoms storage (Dreamsleeve.Server.Infrastructure.PhantomHttp.create options storage) | None -> ServerRuntime.start
+    let game =
+        match phantomStorage with
+        | Some (phantoms, _) -> GameSettings.withPhantoms phantoms game |> ok
+        | None -> game
+    let start =
+        match phantomStorage with
+        | Some (options, storage) ->
+            ServerRuntime.startWithPhantoms storage (Dreamsleeve.Server.Infrastructure.PhantomHttp.create options storage)
+        | None -> ServerRuntime.start
     use runtime = start game Dreamsleeve.Server.Domain.Moderation.empty pseudonyms (persistence writer) (guildStorage guildWriter) (authentication authenticator) transport logger |> expectStarted |> fun owner -> owner.Owner
-    let fixture = { Runtime = runtime; Notify = (fun () -> ready ()); Input = input; Output = output; Movement = movement; Phantoms = phantomOutput; Sent = sent; SendFailures = failures; PayloadBudgets = budgets; Errors = errors; Closed = closed; Authentication = authenticator; IgnoreClose = ignoreClose; Reset = reset }
+    let fixture = {
+        Runtime = runtime
+        Notify = (fun () -> ready ())
+        Input = input
+        Output = output
+        Movement = movement
+        Phantoms = phantomOutput
+        Sent = sent
+        SendFailures = failures
+        PayloadBudgets = budgets
+        Errors = errors
+        Closed = closed
+        Authentication = authenticator
+        IgnoreClose = ignoreClose
+        Reset = reset
+    }
+
     try
         do! run fixture
         if not runtime.Completion.IsCompleted then
@@ -215,8 +282,10 @@ let private withRuntime options run =
 let private incoming (id, bytes) =
     let lane =
         try
-            if (ClientPacket.Parser.ParseFrom(bytes: byte array)).PayloadCase = ClientPacket.PayloadOneofCase.SendChat then DeliveryLane.Chat
-            else DeliveryLane.Control
+            if (ClientPacket.Parser.ParseFrom(bytes: byte array)).PayloadCase = ClientPacket.PayloadOneofCase.SendChat then
+                DeliveryLane.Chat
+            else
+                DeliveryLane.Control
         with :? InvalidProtocolBufferException -> DeliveryLane.Control
     ServerTransportEvent.Received(id, lane, bytes)
 
@@ -230,7 +299,8 @@ let private nextWhere fixture predicate = task {
     let mutable found = None
     while found.IsNone do
         let! id, value = receive fixture.Output
-        if predicate id value then found <- Some (id, value)
+        if predicate id value then
+            found <- Some (id, value)
     return found.Value
 }
 
@@ -254,7 +324,8 @@ let private empty fixture = task {
         let! value = stats fixture
         doneWaiting <- value.Connections = 0 && value.Reservations = 0
         check (Environment.TickCount64 < deadline) "Routes or identities leaked after disconnect."
-        if not doneWaiting then do! Task.Yield()
+        if not doneWaiting then
+            do! Task.Yield()
 }
 
 [<Tests>]
@@ -297,10 +368,14 @@ let tests = testList "ServerRuntime" [
         let mutable started = 0
         let success value = Task.FromResult(Ok value)
         let storage: PhantomStoragePort = {
-            StartUpload = fun _ -> started <- started + 1; success true
+            StartUpload = fun _ ->
+                started <- started + 1
+                success true
             WriteChunk = fun _ -> success false
             StartDownload = fun _ -> success None
-            ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
+            ReadChunk = fun (_, _, destination) ->
+                destination.Span.Clear()
+                success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
             OwnerFailure = TaskCompletionSource<exn>().Task
@@ -332,10 +407,14 @@ let tests = testList "ServerRuntime" [
         let mutable uploads = 0
         let success value = Task.FromResult(Ok value)
         let storage: PhantomStoragePort = {
-            StartUpload = fun _ -> uploads <- uploads + 1; success true
+            StartUpload = fun _ ->
+                uploads <- uploads + 1
+                success true
             WriteChunk = fun _ -> success false
             StartDownload = fun _ -> success None
-            ReadChunk = fun (_, _, destination) -> destination.Span.Clear(); success destination.Length
+            ReadChunk = fun (_, _, destination) ->
+                destination.Span.Clear()
+                success destination.Length
             Cancel = fun _ -> Task.FromResult ()
             Dispose = fun () -> Task.FromResult ()
             OwnerFailure = TaskCompletionSource<exn>().Task
@@ -371,7 +450,8 @@ let tests = testList "ServerRuntime" [
             let mutable offered = false
             while not completed || not offered do
                 let! id, packet = receive fixture.Phantoms
-                if id = alice && not (isNull packet.Transfer) then equal 1UL packet.Transfer.PlayerId
+                if id = alice && not (isNull packet.Transfer) then
+                    equal 1UL packet.Transfer.PlayerId
                 if id = alice && not (isNull packet.Complete) then
                     check packet.Complete.Accepted "Own upload becomes ready."
                     completed <- true
@@ -387,12 +467,15 @@ let tests = testList "ServerRuntime" [
             let mutable settled = false
             while not removed || not settled do
                 let! id, packet = receive fixture.Phantoms
-                if id = bob && not (isNull packet.Remove) then removed <- true
+                if id = bob && not (isNull packet.Remove) then
+                    removed <- true
                 elif id = alice && not (isNull packet.Settled) then
                     equal 1UL packet.Settled.Generation
                     settled <- true
-                elif not (isNull packet.PoseDemand) then equal 10UL packet.PoseDemand.ContextRevision
-                else failwith "Unexpected phantom transition response."
+                elif not (isNull packet.PoseDemand) then
+                    equal 10UL packet.PoseDemand.ContextRevision
+                else
+                    failwith "Unexpected phantom transition response."
             check removed "Receive off removes the subscription and releases the publisher's display barrier."
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected alice)
             fixture.Input.Enqueue(ServerTransportEvent.Disconnected bob)
@@ -432,9 +515,12 @@ let tests = testList "ServerRuntime" [
             equal (set [ "127.0.0.1"; "203.0.113.9" ]) (rows |> List.map (fun row -> Dreamsleeve.Server.Domain.ClientAddress.text row.Address) |> set)
             let now = DateTimeOffset.UtcNow
             let ban : Dreamsleeve.Server.Domain.AddressBan = {
-                Id = 1L; Range = Dreamsleeve.Server.Domain.AddressRange.parse "203.0.113.0/24" |> ok
-                Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
-                IssuedAt = now; Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds((now.AddHours 1.).ToUnixTimeMilliseconds()))
+                Id = 1L
+                Range = Dreamsleeve.Server.Domain.AddressRange.parse "203.0.113.0/24" |> ok
+                Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok
+                IssuedBy = ValueNone
+                IssuedAt = now
+                Expires = ValueSome (DateTimeOffset.FromUnixTimeMilliseconds((now.AddHours 1.).ToUnixTimeMilliseconds()))
             }
             do! post fixture.Runtime (ServerRuntimeMessage.AccountChanged(AccountChange.AddressBans [ ban ]))
             let! _, ended = nextWhere fixture (fun id packet -> id = bob && packet.PayloadCase = ServerPacket.PayloadOneofCase.SessionEnded)
@@ -455,7 +541,8 @@ let tests = testList "ServerRuntime" [
                     let! state = stats fixture
                     equal 1 state.Ready
                     pending <- state.Connections <> 1
-                    if pending then do! Task.Yield()
+                    if pending then
+                        do! Task.Yield()
             }
             do! cleanup.WaitAsync guard
         })
@@ -465,9 +552,12 @@ let tests = testList "ServerRuntime" [
         let proxy = Net.IPAddress.Parse "203.0.113.200"
         let proxies = [ Dreamsleeve.Server.Domain.AddressRange.parse "203.0.113.200" |> ok ]
         let ban (range: string) : Dreamsleeve.Server.Domain.AddressBan = {
-            Id = 1L; Range = Dreamsleeve.Server.Domain.AddressRange.parse range |> ok
-            Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok; IssuedBy = ValueNone
-            IssuedAt = DateTimeOffset.UtcNow; Expires = ValueNone
+            Id = 1L
+            Range = Dreamsleeve.Server.Domain.AddressRange.parse range |> ok
+            Reason = Dreamsleeve.Server.Domain.SanctionReason.create "Рейд" |> ok
+            IssuedBy = ValueNone
+            IssuedAt = DateTimeOffset.UtcNow
+            Expires = ValueNone
         }
         let connections fixture count = task {
             let deadline = Environment.TickCount64 + 5000L
@@ -476,7 +566,8 @@ let tests = testList "ServerRuntime" [
                 let! value = stats fixture
                 current <- value.Connections
                 check (Environment.TickCount64 < deadline) $"Expected {count} connections, found {current}."
-                if current <> count then do! Task.Yield()
+                if current <> count then
+                    do! Task.Yield()
         }
         do! withRuntimeConfigured ServerRuntimeOptions.defaults IdentityOptions.defaults Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn
                 proxies createAuthentication (fun fixture -> task {
@@ -520,9 +611,14 @@ let tests = testList "ServerRuntime" [
             let pid value = Dreamsleeve.Server.Domain.PlayerId.create value |> ok
             let reason text = Dreamsleeve.Server.Domain.SanctionReason.create text |> ok
             let issue target kind term text =
-                let order : Dreamsleeve.Server.Domain.SanctionOrder =
-                    { Target = pid target; Kind = kind; Term = term; Reason = reason text
-                      IssuedBy = Dreamsleeve.Server.Domain.SanctionIssuer.Moderator(pid 9UL); Devices = false }
+                let order : Dreamsleeve.Server.Domain.SanctionOrder = {
+                    Target = pid target
+                    Kind = kind
+                    Term = term
+                    Reason = reason text
+                    IssuedBy = Dreamsleeve.Server.Domain.SanctionIssuer.Moderator(pid 9UL)
+                    Devices = false
+                }
                 Dreamsleeve.Server.Domain.Sanction.issue (Dreamsleeve.Server.Domain.SanctionId.create 1L |> ok) DateTimeOffset.UtcNow order
             let alice = connect fixture "alice"
             let! _ = welcome fixture alice
@@ -562,7 +658,12 @@ let tests = testList "ServerRuntime" [
     }
 
     testTask "transport notification admits input independently of deadline timer" {
-        let settings = { ServerRuntimeOptions.defaults with PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
+        let settings = {
+            ServerRuntimeOptions.defaults with
+                PollIntervalMs = 1000000
+                OpenTimeoutMs = 2000000
+                ShutdownTimeoutMs = 2000000
+        }
         do! withRuntime settings (fun fixture -> task {
             let! _ = stats fixture // Start registered the wakeup before this read.
             let alice = connect fixture "alice"
@@ -576,7 +677,12 @@ let tests = testList "ServerRuntime" [
         })
     }
     testTask "ready movement is sent on realtime without waiting for runtime tick or settlement" {
-        let settings = { ServerRuntimeOptions.defaults with PollIntervalMs = 1000000; OpenTimeoutMs = 2000000; ShutdownTimeoutMs = 2000000 }
+        let settings = {
+            ServerRuntimeOptions.defaults with
+                PollIntervalMs = 1000000
+                OpenTimeoutMs = 2000000
+                ShutdownTimeoutMs = 2000000
+        }
         do! withRuntime settings (fun fixture -> task {
             let alice = connect fixture "alice"
             do! post fixture.Runtime (tick ())
@@ -593,8 +699,14 @@ let tests = testList "ServerRuntime" [
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
             let point = Dreamsleeve.Server.Domain.Position.create 2.f 0.f 0.f |> ok
             let change: Dreamsleeve.Server.Domain.MovementChange = {
-                PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
-                Pose = { Position = point; CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 1UL }
+                PlayerId = pid
+                ViewRevision = 1UL
+                Sequence = 1UL
+                Pose = {
+                    Position = point
+                    CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero
+                    SampledAtUs = 1UL
+                }
             }
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(alice, ServerResponse.PlayersMoved [|change|])))
             let! target, value = receive fixture.Movement
@@ -758,7 +870,9 @@ let tests = testList "ServerRuntime" [
     }
     testTask "late authentication reply after disconnect cannot revive or reserve the old route" {
         let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
-        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
+        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task {
+            requests.Writer.TryWrite request |> ignore
+        }
         let createAuthentication () = TestAgent.Start(AgentOptions.create "controlled-authenticator", collect)
         do! withRuntimeUsing ServerRuntimeOptions.defaults createAuthentication (fun fixture -> task {
             let abandoned = connect fixture "race"
@@ -775,7 +889,15 @@ let tests = testList "ServerRuntime" [
                     (Dreamsleeve.Server.Domain.Username.create 32 "race" |> ok)
                     (Dreamsleeve.Server.Domain.DisplayName.create 64 "Race" |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
             let respond (request: SessionAuthenticationRequest) =
-                request.ReplyTo.TryPost { OperationId = request.OperationId; Result = Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } }
+                request.ReplyTo.TryPost {
+                    OperationId = request.OperationId
+                    Result = Ok {
+                        Profile = profile
+                        Role = Dreamsleeve.Server.Domain.PlayerRole.Player
+                        Mute = ValueNone
+                        SignedInFrom = ValueNone
+                    }
+                }
             equal AgentTryDeliveryResult.Closed (respond oldRequest)
             equal AgentTryDeliveryResult.Posted (respond newRequest)
             let! snapshot = welcome fixture replacement
@@ -787,7 +909,9 @@ let tests = testList "ServerRuntime" [
     }
     testTask "one application deadline covers a live authenticator that never replies" {
         let requests = Channel.CreateUnbounded<SessionAuthenticationRequest>()
-        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task { requests.Writer.TryWrite request |> ignore }
+        let collect (_: AgentContext<SessionAuthenticationRequest>) request = task {
+            requests.Writer.TryWrite request |> ignore
+        }
         let options = { ServerRuntimeOptions.defaults with OpenTimeoutMs = 100 }
         do! withRuntimeUsing options (fun () -> TestAgent.Start(AgentOptions.create "silent-authenticator", collect)) (fun fixture -> task {
             let connection = connect fixture "silent"
@@ -859,9 +983,13 @@ let tests = testList "ServerRuntime" [
             fixture.PayloadBudgets[id] <- 0
             let change: Dreamsleeve.Server.Domain.MovementChange = {
                 PlayerId = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
-                ViewRevision = 1UL; Sequence = 1UL
-                Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
-                         CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 0UL }
+                ViewRevision = 1UL
+                Sequence = 1UL
+                Pose = {
+                    Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
+                    CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero
+                    SampledAtUs = 0UL
+                }
             }
             let response = ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|]))
             do! post fixture.Runtime response
@@ -885,9 +1013,14 @@ let tests = testList "ServerRuntime" [
             let! _ = welcome fixture id
             let pid = Dreamsleeve.Server.Domain.PlayerId.create 1UL |> ok
             let change: Dreamsleeve.Server.Domain.MovementChange = {
-                PlayerId = pid; ViewRevision = 1UL; Sequence = 1UL
-                Pose = { Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
-                         CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero; SampledAtUs = 0UL }
+                PlayerId = pid
+                ViewRevision = 1UL
+                Sequence = 1UL
+                Pose = {
+                    Position = Dreamsleeve.Server.Domain.Position.create 0.f 0.f 0.f |> ok
+                    CameraDirection = Dreamsleeve.Server.Domain.CameraDirection.zero
+                    SampledAtUs = 0UL
+                }
             }
             fixture.SendFailures[DeliveryLane.Realtime] <- TransportSendError.BudgetExceeded "Outgoing budget full"
             do! post fixture.Runtime (ServerRuntimeMessage.Host(SessionHostCommand.Send(id, ServerResponse.PlayersMoved [|change|])))
@@ -947,8 +1080,12 @@ let tests = testList "ServerRuntime" [
                 target = bob && updatedPlayer value a.SelfPlayerId |> Option.exists (fun player -> player.CharacterGeneration > 0UL))
             fixture.Input.Enqueue(incoming(alice, healthReading 3UL -12 100))
             let readings (value: ServerPacket) =
-                if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then Seq.empty
-                else value.PresenceChanged.Metadata |> Seq.filter (fun patch -> patch.PlayerId = a.SelfPlayerId) |> Seq.collect _.ActorValues
+                if value.PayloadCase <> ServerPacket.PayloadOneofCase.PresenceChanged then
+                    Seq.empty
+                else
+                    value.PresenceChanged.Metadata
+                    |> Seq.filter (fun patch -> patch.PlayerId = a.SelfPlayerId)
+                    |> Seq.collect _.ActorValues
             let! _, changed = nextWhere fixture (fun target value -> target = bob && not (Seq.isEmpty (readings value)))
             let kind = changed.PresenceChanged.ActorValueKinds |> Seq.exactlyOne
             let reading = readings changed |> Seq.exactlyOne
@@ -977,7 +1114,16 @@ let private namedAuthentication (accounts: (string * string * string) list) () =
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some profile -> Ok { Profile = profile; Role = Dreamsleeve.Server.Domain.PlayerRole.Player; Mute = ValueNone; SignedInFrom = ValueNone } | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result =
+            match Map.tryFind request.Ticket identities with
+            | Some profile ->
+                Ok {
+                    Profile = profile
+                    Role = Dreamsleeve.Server.Domain.PlayerRole.Player
+                    Mute = ValueNone
+                    SignedInFrom = ValueNone
+                }
+            | None -> Error SessionAuthenticationError.InvalidTicket
     }
     TestAgent.StartReliable(AgentOptions.create "named-authentication",
         TestReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -1120,16 +1266,23 @@ let private roleAuthentication (accounts: (string * string * string * Dreamsleev
         accounts
         |> List.mapi (fun index (name, username, display, role) ->
             ticket name,
-            ({ Profile =
-                 Dreamsleeve.Server.Domain.PlayerData.create
-                     (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
-                     (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
-                     (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
-               Role = role; Mute = ValueNone; SignedInFrom = ValueNone } : AuthenticatedPlayer))
+            ({
+                Profile =
+                    Dreamsleeve.Server.Domain.PlayerData.create
+                        (Dreamsleeve.Server.Domain.PlayerId.create (uint64 index + 1UL) |> ok)
+                        (Dreamsleeve.Server.Domain.Username.create 32 username |> ok)
+                        (Dreamsleeve.Server.Domain.DisplayName.create 64 display |> ok) Dreamsleeve.Server.Domain.NameColor.unknown
+                Role = role
+                Mute = ValueNone
+                SignedInFrom = ValueNone
+            } : AuthenticatedPlayer))
         |> Map.ofList
     let execute (request: SessionAuthenticationRequest) : SessionAuthenticationReply = {
         OperationId = request.OperationId
-        Result = (match Map.tryFind request.Ticket identities with Some player -> Ok player | None -> Error SessionAuthenticationError.InvalidTicket)
+        Result =
+            match Map.tryFind request.Ticket identities with
+            | Some player -> Ok player
+            | None -> Error SessionAuthenticationError.InvalidTicket
     }
     TestAgent.StartReliable(AgentOptions.create "role-authentication",
         TestReplyDispatcher.createHandler 64 (fun (request: SessionAuthenticationRequest) -> request.ReplyTo) execute)
@@ -1174,7 +1327,8 @@ let adminTests = testList "ServerRuntime admin panel" [
         use failed = TestAgent.Start(AgentOptions.create "description-failed-relay", fun _ (_: DescribeRequest) -> Task.FromException<unit> original)
         let! failure = SessionDescriber.describe failed guard session.Ref
         match failure with
-        | Error (SessionDescribeError.Faulted actual) -> check (obj.ReferenceEquals(original, actual)) "Original relay lifetime fault is preserved."
+        | Error (SessionDescribeError.Faulted actual) ->
+            check (obj.ReferenceEquals(original, actual)) "Original relay lifetime fault is preserved."
         | result -> failtestf "Expected original fault, received %A" result
         let! _ = terminal failed.Completion
         ()
