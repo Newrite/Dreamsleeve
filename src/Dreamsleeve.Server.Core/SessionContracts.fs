@@ -222,6 +222,8 @@ type PresenceSubscription = {
 [<RequireQualifiedAccess>]
 type GroundMarkWrite =
     | Insert of GroundMark
+    /// Eviction and its replacement form one admitted unit of work.
+    | Replace of evicted: GroundMarkId * replacement: GroundMark
     | Delete of GroundMarkId list
 
 [<RequireQualifiedAccess>]
@@ -553,6 +555,10 @@ type GuildWrite =
     | RemoveMember of GuildId * PlayerId
     | PutInvite of GuildInvite
     | RemoveInvite of GuildId * PlayerId
+    /// Consumes the invitation and stores its new member atomically.
+    | AcceptInvite of GuildId * GuildMember
+    /// Both roles change in the same admitted unit of work.
+    | TransferMaster of GuildId * previous: GuildMember voption * master: GuildMember
 
 /// Stored guilds, the profiles their members and invited players have now,
 /// the storage high-water mark and the writer; supplied at runtime start.

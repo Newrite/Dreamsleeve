@@ -153,6 +153,18 @@ module SqliteGuildStore =
             execute context "DELETE FROM guild_invites WHERE guild_id=@guild AND player_id=@player" [ "@guild", guild id; "@player", player playerId ] |> ignore
             Ok()
 
+        | GuildWrite.AcceptInvite(id, membership) ->
+            transaction context (fun () ->
+                execute context "DELETE FROM guild_invites WHERE guild_id=@guild AND player_id=@player"
+                    [ "@guild", guild id; "@player", player membership.Player ] |> ignore
+                putMember context id membership
+                Ok())
+        | GuildWrite.TransferMaster(id, previous, master) ->
+            transaction context (fun () ->
+                previous |> ValueOption.iter (putMember context id)
+                putMember context id master
+                Ok())
+
     /// One change, in its own unit of work.
     let write config (change: GuildWrite) token = SqliteAccountStore.withContext config token (fun context -> apply context change)
 

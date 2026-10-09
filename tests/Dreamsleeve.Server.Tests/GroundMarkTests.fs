@@ -156,7 +156,57 @@ let private stored id author kind x (createdAt: DateTimeOffset) : StoredGroundMa
         | GroundMarkKind.Death -> death "wolf"
     { Mark = GroundMark.create (markId id) (pid author) body (placement whiterun x) createdAt; Author = profile author }
 
+let private rejectsSaturatedWrite operation = task {
+    let entered, release = gate<unit>(), gate<unit>()
+    use writer = Agent.Start({ AgentOptions.create "blocked-marks-writer" with Mailbox = AgentMailbox.boundedWait 1 },
+        fun _ _ -> task { entered.TrySetResult() |> ignore; do! release.Task })
+    use host = Agent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
+    let events = Channel.CreateUnbounded<GroundMarkEvent>()
+    use receiver = Agent.Start(AgentOptions.create "mark-events", collect events)
+    let settings = { options with MaxPendingWrites = 1 }
+    let initial = stored 1UL 1UL GroundMarkKind.Note 0.0f DateTimeOffset.UtcNow
+    use marks = GroundMarksAgent.start settings (GroundMarkOptions.rules settings |> ok) [initial] 2UL
+                    (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    let subscription = { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = receiver.Ref.TryReliable().Value }
+    let submit requestId = GroundMarkCommand.Place {
+        ConnectionId = subscription.ConnectionId; RequestId = requestId; Body = note $"new {requestId}"
+        Placement = placement whiterun 0.0f; GameDate = gameDate; CharacterName = ValueNone
+        Pseudonym = ValueNone; Fingerprint = $"new {requestId}"; Flagged = [] }
+    try
+        equal AgentPostResult.Posted (writer.TryPost(GroundMarkWrite.Delete []))
+        do! awaitUnit entered.Task
+        equal AgentPostResult.Posted (writer.TryPost(GroundMarkWrite.Delete []))
+        do! post marks (GroundMarkCommand.Join subscription)
+        let! _ = receive events
+        do! post marks (submit 1UL)
+        let! accepted = receive events
+        let _, evicted = placed 1UL accepted
+        equal ValueNone evicted
+        let! ownEvent = receive events
+        equal [1UL; 2UL] (ids (own ownEvent))
+        let failed =
+            match operation with
+            | 0 -> GroundMarkCommand.Remove(subscription.ConnectionId, 2UL, markId 1UL, false)
+            | 1 -> GroundMarkCommand.ClearOf(subscription.ConnectionId, 2UL, pid 1UL, [GroundMarkKind.Note])
+            | _ -> submit 2UL
+        do! post marks failed
+        let! ended = Task.WhenAny(marks.Completion, Task.Delay guard)
+        check (Object.ReferenceEquals(ended, marks.Completion)) "Owner did not expose its stop to supervision."
+        check marks.Completion.IsCanceled "Rejected write admission must stop the owner."
+        equal (Some AgentStopReason.Aborted) marks.StopReason
+        equal AgentPostResult.Closed (marks.TryPost(GroundMarkCommand.Join subscription))
+        do! stop receiver
+        check (not (events.Reader.TryPeek() |> fst)) "Known failed write published a confirmation or observer change."
+    finally
+        release.TrySetResult() |> ignore
+    do! stop writer
+}
+
 let private agentTests = testList "GroundMarksAgent" [
+    case "known full write admission cannot confirm removal" (fun () -> rejectsSaturatedWrite 0)
+    case "known full write admission cannot confirm clearing" (fun () -> rejectsSaturatedWrite 1)
+    case "known full write admission cannot confirm an eviction replacement" (fun () -> rejectsSaturatedWrite 2)
+
     case "the own list is sent on join and again after placing, evicting, removing and expiring" (fun () ->
         let settings = { options with MaxNotesPerPlayer = 1 }
         // The death mark outlives the first expiry pass by two seconds.
@@ -351,12 +401,12 @@ let private agentTests = testList "GroundMarksAgent" [
             let! seen = next fixture.Bob
             equal [4UL] (ids (changed seen).Added)
             equal [1UL] (removedIds (changed seen))
-            let! first = receive fixture.Writes
-            let! second = receive fixture.Writes
-            equal (GroundMarkWrite.Delete [markId 1UL]) first
-            match second with
-            | GroundMarkWrite.Insert mark -> equal (markId 4UL) mark.Id
-            | other -> failwithf "Expected insert: %A" other
+            let! write = receive fixture.Writes
+            match write with
+            | GroundMarkWrite.Replace(evicted, mark) ->
+                equal (markId 1UL) evicted
+                equal (markId 4UL) mark.Id
+            | other -> failtestf "Expected one admitted replacement: %A" other
             // The author without a position of their own sees no delta.
             let! count = settled fixture fixture.Alice
             equal 0 count
@@ -659,6 +709,23 @@ let private register (database: Database) name =
     SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok
 
 let private storeTests = testList "SQLite ground marks" [
+    testCase "replacement insert failure restores evicted row and successful reload contains the replacement" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = SqliteAccountStore.create database.Config (Username.create 32 "alice" |> ok) (DisplayName.create 64 "Alice" |> ok) "hash" token |> ok
+        let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UtcNow
+        SqliteGroundMarkStore.insert database.Config (mark 1UL) token |> ok
+        database.Execute "CREATE TRIGGER fail_replacement BEFORE INSERT ON ground_marks WHEN NEW.id=2 BEGIN SELECT RAISE(FAIL,'test replacement'); END"
+        match SqliteGroundMarkStore.replace database.Config (markId 1UL) (mark 2UL) token with
+        | Error(AccountStoreError.Failed _) -> ()
+        | other -> failtestf "Expected failed replacement: %A" other
+        let rejected = SqliteGroundMarkStore.loadAll database.Config token |> ok
+        equal [1UL] (rejected.Marks |> List.map (fun row -> GroundMarkId.value row.Mark.Id))
+        database.Execute "DROP TRIGGER fail_replacement"
+        SqliteGroundMarkStore.replace database.Config (markId 1UL) (mark 2UL) token |> ok
+        let restored = SqliteGroundMarkStore.loadAll database.Config token |> ok
+        equal [2UL] (restored.Marks |> List.map (fun row -> GroundMarkId.value row.Mark.Id)))
+
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok

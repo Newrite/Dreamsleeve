@@ -49,9 +49,11 @@ module GroundMarksAgent =
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
     let private persist state (context: AgentContext<GroundMarkCommand>) write =
-        if not (state.Writer.TrySend(context, write)) then
+        if state.Writer.TrySend(context, write) then true
+        else
             state.Logger.LogError("Ground mark persistence queue is full; stopping the owner")
             context.Abort()
+            false
 
     let private remove state connectionId =
         match state.Observers.TryGetValue connectionId with
@@ -198,14 +200,22 @@ module GroundMarksAgent =
 
     /// Forgets the marks, stores the removal and tells whoever saw them and
     /// their authors; one pass for expiry, a removal and a moderator's clearing.
-    let private drop state context (marks: GroundMark list) =
-        if not marks.IsEmpty then
+    let private forgetPersisted state context (marks: GroundMark list) =
+        if marks.IsEmpty then true
+        elif persist state context (GroundMarkWrite.Delete(marks |> List.map _.Id)) then
             for mark in marks do forget state mark
+            true
+        else false
+
+    let private announceDropped state context (marks: GroundMark list) =
+        if not marks.IsEmpty then
             let ids = marks |> List.map _.Id
-            persist state context (GroundMarkWrite.Delete ids)
             for author in marks |> List.map _.Author |> List.distinct do
                 announceOwn state context author
             announceRemoved state context ids
+
+    let private drop state context marks =
+        if forgetPersisted state context marks then announceDropped state context marks
 
     let private place state context (submission: GroundMarkSubmission) =
         match state.Observers.TryGetValue submission.ConnectionId with
@@ -240,29 +250,31 @@ module GroundMarksAgent =
                     | Ok evicted ->
                         state.NextId <- if state.NextId = UInt64.MaxValue then 0UL else state.NextId + 1UL
                         state.Authors[author] <- observer.Profile
-                        evicted |> ValueOption.iter (fun old ->
-                            SpatialIndex.remove old.Id state.Index
-                            persist state context (GroundMarkWrite.Delete [old.Id]))
-                        SpatialIndex.setCell mark.Id (ValueSome cell) state.Index
-                        persist state context (GroundMarkWrite.Insert mark)
-                        let evictedId = evicted |> ValueOption.map _.Id
-                        deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
-                        state.Logger.LogInformation("Ground mark {MarkId} ({Kind}) placed by player {PlayerId} in {Location}{Evicted}",
-                                                    GroundMarkId.value mark.Id, mark.Kind, PlayerId.value author,
-                                                    PluginName.value mark.Placement.LocationId.PluginName + ":" + (LocalFormId.value mark.Placement.LocationId.LocalFormId).ToString("X6"),
-                                                    (match evictedId with ValueSome id -> $", evicting {GroundMarkId.value id}" | ValueNone -> ""))
-                        announceOwn state context author
-                        // The author learns about the visible set through the same delta as everyone.
-                        let observers = state.Observers.Values |> Seq.toArray
-                        for recipient in observers do
-                            if state.Observers.ContainsKey recipient.ConnectionId then
-                                let gone = evictedId |> ValueOption.filter recipient.Visible.Remove |> ValueOption.toList
-                                let added =
-                                    if GroundMark.isVisibleFrom state.Rules.VisibilityDistance recipient.Location mark then
-                                        recipient.Visible.Add mark.Id |> ignore
-                                        [mark]
-                                    else []
-                                changed state context recipient added gone false
+                        let write =
+                            match evicted with
+                            | ValueSome old -> GroundMarkWrite.Replace(old.Id, mark)
+                            | ValueNone -> GroundMarkWrite.Insert mark
+                        if persist state context write then
+                            evicted |> ValueOption.iter (fun old -> SpatialIndex.remove old.Id state.Index)
+                            SpatialIndex.setCell mark.Id (ValueSome cell) state.Index
+                            let evictedId = evicted |> ValueOption.map _.Id
+                            deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
+                            state.Logger.LogInformation("Ground mark {MarkId} ({Kind}) placed by player {PlayerId} in {Location}{Evicted}",
+                                                        GroundMarkId.value mark.Id, mark.Kind, PlayerId.value author,
+                                                        PluginName.value mark.Placement.LocationId.PluginName + ":" + (LocalFormId.value mark.Placement.LocationId.LocalFormId).ToString("X6"),
+                                                        (match evictedId with ValueSome id -> $", evicting {GroundMarkId.value id}" | ValueNone -> ""))
+                            announceOwn state context author
+                            // The author learns about the visible set through the same delta as everyone.
+                            let observers = state.Observers.Values |> Seq.toArray
+                            for recipient in observers do
+                                if state.Observers.ContainsKey recipient.ConnectionId then
+                                    let gone = evictedId |> ValueOption.filter recipient.Visible.Remove |> ValueOption.toList
+                                    let added =
+                                        if GroundMark.isVisibleFrom state.Rules.VisibilityDistance recipient.Location mark then
+                                            recipient.Visible.Add mark.Id |> ignore
+                                            [mark]
+                                        else []
+                                    changed state context recipient added gone false
 
     let private removeMark state context connectionId requestId id anyAuthor =
         match state.Observers.TryGetValue connectionId with
@@ -270,10 +282,11 @@ module GroundMarksAgent =
         | true, observer ->
             match GroundMarkStorage.tryFind id state.Marks with
             | ValueSome mark when anyAuthor || mark.Author = observer.Profile.PlayerId ->
-                deliver state context observer (GroundMarkEvent.Removed(requestId, id, mark.Author))
-                state.Logger.LogInformation("Ground mark {MarkId} of player {PlayerId} removed by player {Remover}",
-                                            GroundMarkId.value id, PlayerId.value mark.Author, PlayerId.value observer.Profile.PlayerId)
-                drop state context [ mark ]
+                if forgetPersisted state context [ mark ] then
+                    deliver state context observer (GroundMarkEvent.Removed(requestId, id, mark.Author))
+                    state.Logger.LogInformation("Ground mark {MarkId} of player {PlayerId} removed by player {Remover}",
+                                                GroundMarkId.value id, PlayerId.value mark.Author, PlayerId.value observer.Profile.PlayerId)
+                    announceDropped state context [ mark ]
             | ValueSome _ | ValueNone ->
                 reject state context observer requestId RequestRejectionCode.GroundMarkNotFound "No such mark of yours." "mark_id"
 
@@ -290,10 +303,11 @@ module GroundMarksAgent =
         | false, _ -> ()
         | true, observer ->
             let marks = GroundMarkStorage.ofAuthor author state.Marks |> List.filter (fun mark -> List.contains mark.Kind kinds)
-            deliver state context observer (GroundMarkEvent.Cleared(requestId, author, marks |> List.map _.Id))
-            state.Logger.LogInformation("{Count} ground marks of player {PlayerId} removed by player {Remover}",
-                                        marks.Length, PlayerId.value author, PlayerId.value observer.Profile.PlayerId)
-            drop state context marks
+            if forgetPersisted state context marks then
+                deliver state context observer (GroundMarkEvent.Cleared(requestId, author, marks |> List.map _.Id))
+                state.Logger.LogInformation("{Count} ground marks of player {PlayerId} removed by player {Remover}",
+                                            marks.Length, PlayerId.value author, PlayerId.value observer.Profile.PlayerId)
+                announceDropped state context marks
 
     let private expire state context =
         let expired = GroundMarkStorage.expired state.Rules DateTimeOffset.UtcNow state.Marks

@@ -116,42 +116,44 @@ module SqliteGroundMarkStore =
                 if highest < 0L || highest = Int64.MaxValue then invalidData "The ground mark ID sequence is exhausted."
                 else Ok { Marks = List.rev reversed; NextId = uint64 highest + 1UL })
 
-    let insert config (mark: GroundMark) token =
+    let private insertInto (context: QueryContext) (mark: GroundMark) =
         let id = GroundMarkId.value mark.Id
         let author = PlayerId.value mark.Author
         if id > uint64 Int64.MaxValue || author > uint64 Int64.MaxValue then
             invalidData "Ground mark identifiers must fit the positive Int64 range of SQLite."
         else
             let date (part: GameDate -> int) = mark.GameDate |> ValueOption.map (part >> int64) |> ValueOption.toOption
-            SqliteAccountStore.withContext config token (fun context ->
-                let row: main.ground_marks = {
-                    id = int64 id
-                    author_id = int64 author
-                    character_name = mark.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.toOption
-                    kind = kindNumber mark.Kind
-                    text = mark.Text
-                    plugin_name = PluginName.value mark.Placement.LocationId.PluginName
-                    local_form_id = int64 (LocalFormId.value mark.Placement.LocationId.LocalFormId)
-                    x = float (WorldUnit.value mark.Placement.Position.X)
-                    y = float (WorldUnit.value mark.Placement.Position.Y)
-                    z = float (WorldUnit.value mark.Placement.Position.Z)
-                    heading = float (Radian.value mark.Placement.Heading)
-                    created_at = Core.toUnixMilliseconds mark.CreatedAt
-                    author_pseudonym = mark.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.toOption
-                    game_era = date (fun value -> value.Era)
-                    game_year = date (fun value -> value.Year)
-                    game_month = date (fun value -> value.Month)
-                    game_day = date (fun value -> value.Day)
-                    game_day_of_week = date (fun value -> value.DayOfWeek)
-                    game_hour = date (fun value -> value.Hour)
-                    game_minute = date (fun value -> value.Minute)
-                }
-                let query = insert {
-                    for stored in main.ground_marks do
-                    entity row
-                }
-                context.Insert query |> ignore
-                Ok ())
+            let row: main.ground_marks = {
+                id = int64 id
+                author_id = int64 author
+                character_name = mark.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.toOption
+                kind = kindNumber mark.Kind
+                text = mark.Text
+                plugin_name = PluginName.value mark.Placement.LocationId.PluginName
+                local_form_id = int64 (LocalFormId.value mark.Placement.LocationId.LocalFormId)
+                x = float (WorldUnit.value mark.Placement.Position.X)
+                y = float (WorldUnit.value mark.Placement.Position.Y)
+                z = float (WorldUnit.value mark.Placement.Position.Z)
+                heading = float (Radian.value mark.Placement.Heading)
+                created_at = Core.toUnixMilliseconds mark.CreatedAt
+                author_pseudonym = mark.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.toOption
+                game_era = date (fun value -> value.Era)
+                game_year = date (fun value -> value.Year)
+                game_month = date (fun value -> value.Month)
+                game_day = date (fun value -> value.Day)
+                game_day_of_week = date (fun value -> value.DayOfWeek)
+                game_hour = date (fun value -> value.Hour)
+                game_minute = date (fun value -> value.Minute)
+            }
+            let query = insert {
+                for stored in main.ground_marks do
+                entity row
+            }
+            context.Insert query |> ignore
+            Ok ()
+
+    let insert config mark token =
+        SqliteAccountStore.withContext config token (fun context -> insertInto context mark)
 
     let delete config (ids: GroundMarkId list) token =
         if ids.IsEmpty then Ok ()
@@ -165,10 +167,19 @@ module SqliteGroundMarkStore =
                 context.Delete query |> ignore
                 Ok ())
 
+    /// A replacement is one admitted write; a failed insert rolls back the eviction.
+    let replace config evicted mark token =
+        SqliteAccountStore.withContext config token (fun context ->
+            SqliteStatements.transaction context (fun () ->
+                SqliteStatements.execute context "DELETE FROM ground_marks WHERE id=@id"
+                    [ "@id", box (int64 (GroundMarkId.value evicted)) ] |> ignore
+                insertInto context mark))
+
     let private write config (logger: ILogger) (context: AgentContext<GroundMarkWrite>) (request: GroundMarkWrite) = task {
         let result =
             match request with
             | GroundMarkWrite.Insert mark -> insert config mark context.CancellationToken
+            | GroundMarkWrite.Replace(evicted, mark) -> replace config evicted mark context.CancellationToken
             | GroundMarkWrite.Delete ids -> delete config ids context.CancellationToken
         match result with
         | Ok () -> ()

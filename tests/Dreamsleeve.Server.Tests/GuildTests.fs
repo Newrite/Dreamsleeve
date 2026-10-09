@@ -2,6 +2,7 @@ module Dreamsleeve.Server.Tests.GuildTests
 
 open System
 open System.Threading
+open System.Threading.Tasks
 open System.Threading.Channels
 open Expecto
 open Google.Protobuf
@@ -166,7 +167,60 @@ let private submission (who: Member) requestId body : ChatSubmission =
     { ConnectionId = who.Subscription.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile who.Subscription.Profile
       Text = text body; CharacterName = ValueNone; Fingerprint = body; Flagged = []; Announcement = ValueNone; ReplyTo = who.ChatReplies }
 
+// The writer processes one held command and has one queued command, so a
+// first owner write must keep its outbox reservation until the next operation.
+let private rejectsSaturatedWrite administrative = task {
+    let entered, release = gate<unit>(), gate<unit>()
+    use writer = Agent.Start({ AgentOptions.create "blocked-guild-writer" with Mailbox = AgentMailbox.boundedWait 1 },
+        fun _ _ -> task { entered.TrySetResult() |> ignore; do! release.Task })
+    use host = Agent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
+    let events = Channel.CreateUnbounded<GuildEvent>()
+    use receiver = Agent.Start(AgentOptions.create "guild-events", collect events)
+    let master = { Player = pid 1UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UtcNow; Mute = ValueNone }
+    let memberOfGuild = { master with Player = pid 2UL; Role = GuildRole.Member }
+    let loaded = { Id = gid 1UL; Name = GuildName.create 3 24 "Стражи" |> ok; CreatedAt = DateTimeOffset.UtcNow
+                   Members = [master; memberOfGuild]; Invites = [] }
+    let settings = { options with MaxPendingWrites = 1 }
+    use guilds = GuildsAgent.start settings (GuildOptions.rules settings |> ok) rules chatRate
+                    { Loaded = [loaded]; Profiles = [profile 1UL; profile 2UL]; NextId = 2UL
+                      Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+                    (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    let subscription = { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = receiver.Ref.TryReliable().Value }
+    try
+        equal AgentPostResult.Posted (writer.TryPost(GuildWrite.Delete(gid 99UL)))
+        do! awaitUnit entered.Task
+        equal AgentPostResult.Posted (writer.TryPost(GuildWrite.Delete(gid 99UL)))
+        do! post guilds (GuildCommand.Join subscription)
+        let! initial = receive events
+        check (match initial with GuildEvent.Snapshot _ -> true | _ -> false) "Expected initial snapshot."
+        do! post guilds (GuildCommand.Act { ConnectionId = subscription.ConnectionId; RequestId = 1UL;
+                                          Action = GuildAction.SetRole(gid 1UL, pid 2UL, GuildRole.Officer) })
+        let! changed = receive events
+        check (match changed with GuildEvent.Changed _ -> true | _ -> false) "First admitted write publishes its change."
+        let! doneEvent = receive events
+        equal (GuildEvent.Done(1UL, gid 1UL)) doneEvent
+        if administrative then
+            let! outcome = guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Appoint(gid 1UL, pid 2UL), reply))
+            equal AgentAskResult.Canceled outcome
+        else
+            do! post guilds (GuildCommand.Act { ConnectionId = subscription.ConnectionId; RequestId = 2UL;
+                                              Action = GuildAction.Create "Вороны" })
+        let! ended = Task.WhenAny(guilds.Completion, Task.Delay guard)
+        check (Object.ReferenceEquals(ended, guilds.Completion)) "Owner did not expose its stop to supervision."
+        check guilds.Completion.IsCanceled "Rejected admission must stop the owner."
+        equal (Some AgentStopReason.Aborted) guilds.StopReason
+        equal AgentPostResult.Closed (guilds.TryPost(GuildCommand.Join subscription))
+        do! stop receiver
+        check (not (events.Reader.TryPeek() |> fst)) "Known failed write published success or a change."
+    finally
+        release.TrySetResult() |> ignore
+    do! stop writer
+}
+
 let private agentTests = testSequenced <| testList "Guild owner" [
+    case "known full write admission publishes no guild creation and stops the owner" (fun () -> rejectsSaturatedWrite false)
+    case "known full write admission cannot reply successful admin handover" (fun () -> rejectsSaturatedWrite true)
+
     case "creating, inviting and joining reach exactly who should hear, and every change is written" (fun () ->
         withGuilds (fun fixture -> task {
             let! guild = founded fixture
@@ -179,10 +233,9 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             | other -> failtestf "Expected the creation, got %A" other
             let! invite = receive fixture.Writes
             check (match invite with GuildWrite.PutInvite value -> value.Player = pid 2UL | _ -> false) "the invitation is written"
-            let! removed = receive fixture.Writes
-            equal (GuildWrite.RemoveInvite(guild, pid 2UL)) removed
             let! joined = receive fixture.Writes
-            check (match joined with GuildWrite.PutMember(id, membership) -> id = guild && membership.Player = pid 2UL | _ -> false) "Bob is written"
+            check (match joined with GuildWrite.AcceptInvite(id, membership) -> id = guild && membership.Player = pid 2UL | _ -> false)
+                "Invitation consumption and Bob's membership share one admission."
             // Carol's own snapshot shows nothing of a guild she is not in.
             let! carol = join fixture fixture.Carol
             check carol.Guilds.IsEmpty "a stranger sees no guilds"
@@ -384,6 +437,42 @@ let private agentTests = testSequenced <| testList "Guild owner" [
 ]
 
 let private storeTests = testSequenced <| testList "SQLite guilds" [
+    testCase "joined membership and master transfer roll back as complete units" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let register name = SqliteAccountStore.create database.Config (Username.create 32 name |> ok)
+                                (DisplayName.create 64 name |> ok) "hash" token |> ok
+        let alice, bob = register "alice", register "bob"
+        let at = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
+        let master = { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone }
+        let joined = { master with Player = bob.PlayerId; Role = GuildRole.Member }
+        let write change = SqliteGuildStore.write database.Config change token |> ok
+        write (GuildWrite.Create(gid 1UL, GuildName.create 3 24 "Стражи" |> ok, at, master))
+        write (GuildWrite.PutInvite { Guild = gid 1UL; Player = bob.PlayerId; InvitedBy = alice.PlayerId; CreatedAt = at; Expires = at.AddDays 1. })
+        database.Execute "CREATE TRIGGER fail_join BEFORE INSERT ON guild_members WHEN NEW.player_id<>1 BEGIN SELECT RAISE(FAIL,'test join'); END"
+        match SqliteGuildStore.write database.Config (GuildWrite.AcceptInvite(gid 1UL, joined)) token with
+        | Error(AccountStoreError.Failed _) -> ()
+        | other -> failtestf "Expected failed grouped join: %A" other
+        let rejected = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [bob.PlayerId] (rejected.Guilds.Head.Invites |> List.map _.Player)
+        equal [master] rejected.Guilds.Head.Members
+        database.Execute "DROP TRIGGER fail_join"
+        write (GuildWrite.AcceptInvite(gid 1UL, joined))
+        let officer = { master with Role = GuildRole.Officer }
+        let successor = { joined with Role = GuildRole.Master }
+        database.Execute "CREATE TRIGGER fail_master BEFORE UPDATE ON guild_members WHEN NEW.role=2 BEGIN SELECT RAISE(FAIL,'test master'); END"
+        match SqliteGuildStore.write database.Config (GuildWrite.TransferMaster(gid 1UL, ValueSome officer, successor)) token with
+        | Error(AccountStoreError.Failed _) -> ()
+        | other -> failtestf "Expected failed grouped transfer: %A" other
+        let rejected = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [master; joined] (rejected.Guilds.Head.Members |> List.sortBy _.Player)
+        check rejected.Guilds.Head.Invites.IsEmpty "Accepted invitation must be consumed."
+        database.Execute "DROP TRIGGER fail_master"
+        write (GuildWrite.TransferMaster(gid 1UL, ValueSome officer, successor))
+        let restored = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [officer; successor] (restored.Guilds.Head.Members |> List.sortBy _.Player)
+        equal 1 (restored.Guilds.Head.Members |> List.filter (fun memberOfGuild -> memberOfGuild.Role = GuildRole.Master) |> List.length))
+
     testCase "every change lands and loads back; disbanding takes members and invitations; IDs never return" (fun () ->
         use database = new SqliteAccountStoreTests.Database()
         SqliteAccountStore.initialize database.Config |> ok
