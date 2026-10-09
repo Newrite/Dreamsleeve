@@ -14,7 +14,9 @@ open Dreamsleeve.Server.Infrastructure
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failtestf "Expected success, got %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Expected success, got %A" error
 let private pid raw = PlayerId.create raw |> ok
 let private gid raw = GuildId.create raw |> ok
 let private profile number =
@@ -36,9 +38,23 @@ let private stop (agent: Agent<'T>) = task {
     do! awaitUnit agent.Completion
 }
 
-let private rules = Moderation.create { Words = [ "badword" ]; Substrings = []; Exceptions = [] }
-let private options = { GuildOptions.defaults with MaxMembers = 3; InviteCheckIntervalMs = 3600000; HistoryCapacity = 5 }
-let private chatRate = { Burst = 100; RefillMs = 1000; DuplicateWindowMs = 0 }
+let private rules = Moderation.create {
+    Words = [ "badword" ]
+    Substrings = []
+    Exceptions = []
+}
+let private options = {
+    GuildOptions.defaults with
+        MaxMembers = 3
+        InviteCheckIntervalMs = 3600000
+        HistoryCapacity = 5
+}
+
+let private chatRate = {
+    Burst = 100
+    RefillMs = 1000
+    DuplicateWindowMs = 0
+}
 
 type private Member = {
     Subscription: Subscription<GuildEvent>
@@ -66,27 +82,50 @@ let private withGuildsUsing (persistence: Agent<GuildWrite> -> GuildPersistence)
     let limits = GuildOptions.rules options |> ok
     use guilds = GuildsAgent.start options limits rules chatRate (persistence writer) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let mutable agents = []
+
     let participant number =
         let events, chat = Channel.CreateUnbounded<GuildEvent>(), Channel.CreateUnbounded<ChatRoomEvent>()
         let eventAgent = TestAgent.Start(AgentOptions.create $"member-{number}", collect events)
         let chatAgent = TestAgent.Start(AgentOptions.create $"chat-{number}", collect chat)
         agents <- (eventAgent :> IDisposable) :: (chatAgent :> IDisposable) :: agents
-        { Subscription = { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = eventAgent.Ref.TryReliable().Value }
-          Events = events; Chat = chat; ChatReplies = chatAgent.Ref.TryReliable().Value }
+        {
+            Subscription = {
+                ConnectionId = Guid.NewGuid()
+                Profile = profile number
+                Events = eventAgent.Ref.TryReliable().Value
+            }
+            Events = events
+            Chat = chat
+            ChatReplies = chatAgent.Ref.TryReliable().Value
+        }
+
     let fixture = {
-        Guilds = guilds; Writes = writes; Alice = participant 1UL; Bob = participant 2UL; Carol = participant 3UL
-        Acknowledgments = acknowledgments; Cleanup = cleanup.Ref.TryReliable().Value
+        Guilds = guilds
+        Writes = writes
+        Alice = participant 1UL
+        Bob = participant 2UL
+        Carol = participant 3UL
+        Acknowledgments = acknowledgments
+        Cleanup = cleanup.Ref.TryReliable().Value
     }
+
     try
         do! run fixture
         do! stop guilds
         do! stop writer
     finally
-        for agent in agents do agent.Dispose()
+        for agent in agents do
+            agent.Dispose()
 }
 
 let private empty (writer: Agent<GuildWrite>) =
-    { Loaded = []; Profiles = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+    {
+        Loaded = []
+        Profiles = []
+        NextId = 1UL
+        Writer = writer.Ref.TryReliable().Value
+        WriterStopped = writer.Completion
+    }
 
 let private withGuilds run = withGuildsUsing empty run
 
@@ -99,7 +138,11 @@ let private join fixture (who: Member) = task {
 }
 
 let private act fixture (who: Member) requestId action =
-    post fixture.Guilds (GuildCommand.Act { ConnectionId = who.Subscription.ConnectionId; RequestId = requestId; Action = action })
+    post fixture.Guilds (GuildCommand.Act {
+        ConnectionId = who.Subscription.ConnectionId
+        RequestId = requestId
+        Action = action
+    })
 
 let private expectDone (who: Member) requestId = task {
     let! event = receive who.Events
@@ -164,28 +207,63 @@ let private founded fixture = task {
 }
 
 let private submission (who: Member) requestId body : ChatSubmission =
-    { ConnectionId = who.Subscription.ConnectionId; RequestId = requestId; Author = PublicIdentity.Profile who.Subscription.Profile
-      Text = text body; CharacterName = ValueNone; Fingerprint = body; Flagged = []; Announcement = ValueNone; ReplyTo = who.ChatReplies }
+    {
+        ConnectionId = who.Subscription.ConnectionId
+        RequestId = requestId
+        Author = PublicIdentity.Profile who.Subscription.Profile
+        Text = text body
+        CharacterName = ValueNone
+        Fingerprint = body
+        Flagged = []
+        Announcement = ValueNone
+        ReplyTo = who.ChatReplies
+    }
 
 // The writer processes one held command and has one queued command, so a
 // first owner write must keep its outbox reservation until the next operation.
 let private rejectsSaturatedWrite administrative = task {
     let entered, release = gate<unit>(), gate<unit>()
     use writer = TestAgent.Start({ AgentOptions.create "blocked-guild-writer" with Mailbox = AgentMailbox.boundedWait 1 },
-        fun _ _ -> task { entered.TrySetResult() |> ignore; do! release.Task })
+        fun _ _ -> task {
+            entered.TrySetResult() |> ignore
+            do! release.Task
+        })
     use host = TestAgent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
     let events = Channel.CreateUnbounded<GuildEvent>()
     use receiver = TestAgent.Start(AgentOptions.create "guild-events", collect events)
-    let master = { Player = pid 1UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UtcNow; Mute = ValueNone }
-    let memberOfGuild = { master with Player = pid 2UL; Role = GuildRole.Member }
-    let loaded = { Id = gid 1UL; Name = GuildName.create 3 24 "Стражи" |> ok; CreatedAt = DateTimeOffset.UtcNow
-                   Members = [master; memberOfGuild]; Invites = [] }
+    let master = {
+        Player = pid 1UL
+        Role = GuildRole.Master
+        JoinedAt = DateTimeOffset.UtcNow
+        Mute = ValueNone
+    }
+    let memberOfGuild = {
+        master with
+            Player = pid 2UL
+            Role = GuildRole.Member
+    }
+    let loaded = {
+        Id = gid 1UL
+        Name = GuildName.create 3 24 "Стражи" |> ok
+        CreatedAt = DateTimeOffset.UtcNow
+        Members = [master; memberOfGuild]
+        Invites = []
+    }
     let settings = { options with MaxPendingWrites = 1 }
     use guilds = GuildsAgent.start settings (GuildOptions.rules settings |> ok) rules chatRate
-                    { Loaded = [loaded]; Profiles = [profile 1UL; profile 2UL]; NextId = 2UL
-                      Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+                    {
+                        Loaded = [loaded]
+                        Profiles = [profile 1UL; profile 2UL]
+                        NextId = 2UL
+                        Writer = writer.Ref.TryReliable().Value
+                        WriterStopped = writer.Completion
+                    }
                     (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
-    let subscription = { ConnectionId = Guid.NewGuid(); Profile = profile 1UL; Events = receiver.Ref.TryReliable().Value }
+    let subscription = {
+        ConnectionId = Guid.NewGuid()
+        Profile = profile 1UL
+        Events = receiver.Ref.TryReliable().Value
+    }
     try
         equal AgentPostResult.Posted (writer.TryPost(GuildWrite.Delete(gid 99UL)))
         do! awaitUnit entered.Task
@@ -193,8 +271,11 @@ let private rejectsSaturatedWrite administrative = task {
         do! post guilds (GuildCommand.Join subscription)
         let! initial = receive events
         check (match initial with GuildEvent.Snapshot _ -> true | _ -> false) "Expected initial snapshot."
-        do! post guilds (GuildCommand.Act { ConnectionId = subscription.ConnectionId; RequestId = 1UL;
-                                          Action = GuildAction.SetRole(gid 1UL, pid 2UL, GuildRole.Officer) })
+        do! post guilds (GuildCommand.Act {
+            ConnectionId = subscription.ConnectionId
+            RequestId = 1UL
+            Action = GuildAction.SetRole(gid 1UL, pid 2UL, GuildRole.Officer)
+        })
         let! changed = receive events
         check (match changed with GuildEvent.Changed _ -> true | _ -> false) "First admitted write publishes its change."
         let! doneEvent = receive events
@@ -203,8 +284,11 @@ let private rejectsSaturatedWrite administrative = task {
             let! outcome = guilds.TryAskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Appoint(gid 1UL, pid 2UL), reply))
             equal AgentAskResult.Canceled outcome
         else
-            do! post guilds (GuildCommand.Act { ConnectionId = subscription.ConnectionId; RequestId = 2UL;
-                                              Action = GuildAction.Create "Вороны" })
+            do! post guilds (GuildCommand.Act {
+                ConnectionId = subscription.ConnectionId
+                RequestId = 2UL
+                Action = GuildAction.Create "Вороны"
+            })
         let! ended = Task.WhenAny(guilds.Completion, Task.Delay guard)
         check (Object.ReferenceEquals(ended, guilds.Completion)) "Owner did not expose its stop to supervision."
         check guilds.Completion.IsCanceled "Rejected admission must stop the owner."
@@ -312,14 +396,25 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             let! guild = founded fixture
             do! post fixture.Guilds (GuildCommand.Publish(guild, submission fixture.Bob 40UL "Спам"))
             let! accepted = receive fixture.Bob.Chat
-            let bobMessage = match accepted with ChatRoomEvent.Accepted(_, message) -> message | other -> failtestf "%A" other
+            let bobMessage =
+                match accepted with
+                | ChatRoomEvent.Accepted(_, message) -> message
+                | other -> failtestf "%A" other
             let! _ = receive fixture.Alice.Events
             do! post fixture.Guilds (GuildCommand.Publish(guild, submission fixture.Alice 41UL "Правила"))
             let! accepted = receive fixture.Alice.Chat
-            let aliceMessage = match accepted with ChatRoomEvent.Accepted(_, message) -> message | other -> failtestf "%A" other
+            let aliceMessage =
+                match accepted with
+                | ChatRoomEvent.Accepted(_, message) -> message
+                | other -> failtestf "%A" other
             let! _ = receive fixture.Bob.Events
             let removal (who: Member) requestId (message: ChatMessage) : ChatRemoval =
-                { ConnectionId = who.Subscription.ConnectionId; RequestId = requestId; MessageId = message.MessageId; ReplyTo = who.ChatReplies }
+                {
+                    ConnectionId = who.Subscription.ConnectionId
+                    RequestId = requestId
+                    MessageId = message.MessageId
+                    ReplyTo = who.ChatReplies
+                }
             do! post fixture.Guilds (GuildCommand.Remove(guild, removal fixture.Bob 42UL aliceMessage))
             let! denied = receive fixture.Bob.Chat
             check (match denied with ChatRoomEvent.Rejected(42UL, rejection) -> rejection.Code = RequestRejectionCode.NotPermitted | _ -> false) "a member removes nothing"
@@ -333,7 +428,10 @@ let private agentTests = testSequenced <| testList "Guild owner" [
     case "guildmates see a member go offline; leaving, exclusion and disbanding reach the right players" (fun () ->
         withGuilds (fun fixture -> task {
             let! guild = founded fixture
-            do! post fixture.Guilds (GuildCommand.Detach { ConnectionId = fixture.Bob.Subscription.ConnectionId; ReplyTo = fixture.Cleanup })
+            do! post fixture.Guilds (GuildCommand.Detach {
+                ConnectionId = fixture.Bob.Subscription.ConnectionId
+                ReplyTo = fixture.Cleanup
+            })
             let! acknowledged = receive fixture.Acknowledgments
             equal fixture.Bob.Subscription.ConnectionId acknowledged
             let! offline = expectChange fixture.Alice
@@ -415,11 +513,24 @@ let private agentTests = testSequenced <| testList "Guild owner" [
 
     case "stored guilds come back with their members, profiles and the next ID" (fun () ->
         let stored = {
-            Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
-            Members = [ { Player = pid 2UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueNone } ]
+            Id = gid 4UL
+            Name = GuildName.create 1 64 "Вороны" |> ok
+            CreatedAt = DateTimeOffset.UnixEpoch
+            Invites = []
+            Members = [ {
+                Player = pid 2UL
+                Role = GuildRole.Master
+                JoinedAt = DateTimeOffset.UnixEpoch
+                Mute = ValueNone
+            } ]
         }
         let loaded (writer: Agent<GuildWrite>) =
-            { empty writer with Loaded = [ stored ]; Profiles = [ profile 2UL ]; NextId = 9UL }
+            {
+                empty writer with
+                    Loaded = [ stored ]
+                    Profiles = [ profile 2UL ]
+                    NextId = 9UL
+            }
         withGuildsUsing loaded (fun fixture -> task {
             let! alice = join fixture fixture.Alice
             check alice.Guilds.IsEmpty "not hers"
@@ -444,11 +555,26 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
                                 (DisplayName.create 64 name |> ok) "hash" token |> ok
         let alice, bob = register "alice", register "bob"
         let at = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
-        let master = { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone }
-        let joined = { master with Player = bob.PlayerId; Role = GuildRole.Member }
+        let master = {
+            Player = alice.PlayerId
+            Role = GuildRole.Master
+            JoinedAt = at
+            Mute = ValueNone
+        }
+        let joined = {
+            master with
+                Player = bob.PlayerId
+                Role = GuildRole.Member
+        }
         let write change = SqliteGuildStore.write database.Config change token |> ok
         write (GuildWrite.Create(gid 1UL, GuildName.create 3 24 "Стражи" |> ok, at, master))
-        write (GuildWrite.PutInvite { Guild = gid 1UL; Player = bob.PlayerId; InvitedBy = alice.PlayerId; CreatedAt = at; Expires = at.AddDays 1. })
+        write (GuildWrite.PutInvite {
+            Guild = gid 1UL
+            Player = bob.PlayerId
+            InvitedBy = alice.PlayerId
+            CreatedAt = at
+            Expires = at.AddDays 1.
+        })
         database.Execute "CREATE TRIGGER fail_join BEFORE INSERT ON guild_members WHEN NEW.player_id<>1 BEGIN SELECT RAISE(FAIL,'test join'); END"
         match SqliteGuildStore.write database.Config (GuildWrite.AcceptInvite(gid 1UL, joined)) token with
         | Error(AccountStoreError.Failed _) -> ()
@@ -481,12 +607,32 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         let alice, bob, carol = register "alice", register "bob", register "carol"
         let at = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
         let write change = SqliteGuildStore.write database.Config change token |> ok
-        let master = { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone }
+        let master = {
+            Player = alice.PlayerId
+            Role = GuildRole.Master
+            JoinedAt = at
+            Mute = ValueNone
+        }
         write (GuildWrite.Create(gid 1UL, GuildName.create 3 24 "Стражи" |> ok, at, master))
-        let muted = { Player = bob.PlayerId; Role = GuildRole.Officer; JoinedAt = at
-                      Mute = ValueSome { Reason = reason; IssuedBy = alice.PlayerId; IssuedAt = at; Expires = ValueSome(at.AddMinutes 5.0) } }
+        let muted = {
+            Player = bob.PlayerId
+            Role = GuildRole.Officer
+            JoinedAt = at
+            Mute = ValueSome {
+                Reason = reason
+                IssuedBy = alice.PlayerId
+                IssuedAt = at
+                Expires = ValueSome(at.AddMinutes 5.0)
+            }
+        }
         write (GuildWrite.PutMember(gid 1UL, muted))
-        write (GuildWrite.PutInvite { Guild = gid 1UL; Player = carol.PlayerId; InvitedBy = alice.PlayerId; CreatedAt = at; Expires = at.AddDays 7.0 })
+        write (GuildWrite.PutInvite {
+            Guild = gid 1UL
+            Player = carol.PlayerId
+            InvitedBy = alice.PlayerId
+            CreatedAt = at
+            Expires = at.AddDays 7.0
+        })
         let loaded = SqliteGuildStore.loadAll database.Config token |> ok
         match loaded.Guilds with
         | [ guild ] ->
@@ -497,7 +643,11 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         equal 3 loaded.Profiles.Length
         equal 2UL loaded.NextId
         Expect.throws (fun () -> database.Execute "INSERT INTO guilds(name, name_key, created_at) VALUES ('СТРАЖИ', 'стражи', 0)") "names are unique in any case"
-        write (GuildWrite.PutMember(gid 1UL, { muted with Mute = ValueNone; Role = GuildRole.Member }))
+        write (GuildWrite.PutMember(gid 1UL, {
+            muted with
+                Mute = ValueNone
+                Role = GuildRole.Member
+        }))
         write (GuildWrite.RemoveInvite(gid 1UL, carol.PlayerId))
         let changed = SqliteGuildStore.loadAll database.Config token |> ok
         equal [ ValueNone ] (changed.Guilds.Head.Members |> List.filter (fun item -> item.Player = bob.PlayerId) |> List.map _.Mute)
@@ -538,14 +688,35 @@ let private codecTests = testList "Guild codec" [
     testCase "a guild snapshot carries real names, roles, the guild mute and the channel" <| fun _ ->
         let codec = (Settings.defaults).Codec
         let limits = GuildOptions.rules GuildOptions.defaults |> ok
-        let mute = { Reason = reason; IssuedBy = pid 1UL; IssuedAt = DateTimeOffset.UnixEpoch; Expires = ValueNone }
+        let mute = {
+            Reason = reason
+            IssuedBy = pid 1UL
+            IssuedAt = DateTimeOffset.UnixEpoch
+            Expires = ValueNone
+        }
         let view = {
-            Guild = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; ChannelId = ChatChannels.ofGuild (gid 4UL); CreatedAt = DateTimeOffset.UnixEpoch
-            Members = [ { Membership = { Player = pid 2UL; Role = GuildRole.Officer; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueSome mute }
-                          Profile = profile 2UL; Online = true } ]
+            Guild = gid 4UL
+            Name = GuildName.create 1 64 "Вороны" |> ok
+            ChannelId = ChatChannels.ofGuild (gid 4UL)
+            CreatedAt = DateTimeOffset.UnixEpoch
+            Members = [ {
+                Membership = {
+                    Player = pid 2UL
+                    Role = GuildRole.Officer
+                    JoinedAt = DateTimeOffset.UnixEpoch
+                    Mute = ValueSome mute
+                }
+                Profile = profile 2UL
+                Online = true
+            } ]
             Messages = []
         }
-        let encoded = ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ view ]; Invites = []; Limits = limits }) |> ok
+        let encoded =
+            ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot {
+                Guilds = [ view ]
+                Invites = []
+                Limits = limits
+            }) |> ok
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(List.exactlyOne encoded)
         let guild = packet.GuildsSnapshot.Guilds[0]
         equal (ChatChannelId.value (ChatChannels.ofGuild (gid 4UL))) guild.ChannelId
@@ -556,7 +727,11 @@ let private codecTests = testList "Guild codec" [
         equal 3u packet.GuildsSnapshot.Limits.MaxGuildsPerPlayer
         equal 64u packet.GuildsSnapshot.Limits.MaxMembers
         let wrong = { view with ChannelId = ChatChannels.globalId }
-        check (ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ wrong ]; Invites = []; Limits = limits }) |> Result.isError)
+        check (ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot {
+            Guilds = [ wrong ]
+            Invites = []
+            Limits = limits
+        }) |> Result.isError)
             "a guild's history belongs to its own channel"
 
     testCase "a guild's chat travels with its guild changes on the control lane; the global chat keeps its own" <| fun _ ->
