@@ -30,6 +30,10 @@ dotnet run --project tests/Dreamsleeve.Phantom.Smoke.Server/Dreamsleeve.Phantom.
 
 The normal host accepts a line containing stop on stdin. --self-check starts and drains the production owners without connecting clients.
 
+The host registers each acquired resource immediately. On startup failure or shutdown it closes HTTP admission, aborts and joins the actual runtime completion before releasing ENet, then independently releases the remaining owners, including all five fixture agents. The 20-second graceful-stop deadline does not stand for cleanup completion: after it expires, cleanup still aborts and joins the runtime. Unexpected work and cleanup failures remain observable; an ordinary typed startup refusal remains a refusal, with any additional lifetime failures retained alongside it.
+
+A winning stdin task is observed for failures. A pending Console.In read is process-scoped because cancellation is not guaranteed; the runner owns stdin and process exit. Optional continuous diagnostics retain their existing failure and shutdown policy.
+
 ## WAN delay, loss and real local assets
 
 Build the Release smoke server, then run the relay (Python standard library only):
