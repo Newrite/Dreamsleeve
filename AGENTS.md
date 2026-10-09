@@ -158,14 +158,41 @@ Keep domain decisions independent of protobuf, SQLite, HTTP, ENet, UI, and game-
 - Name meaningful limits, units, intervals, flags, and policy values. Keep constants with the owning
   feature; use a dedicated module/resource for a coherent shared set. Avoid a global constants dumping
   ground and pointless names for self-evident local values such as a loop's zero index.
-- Follow `.clang-format`, `Scripts/format_code.py`, UI formatting configuration, and neighboring F# style.
-  Format the changed area; do not include unrelated repository-wide formatting or renaming.
+- Preserve the established C++ syntax style from `.clang-format` and subsequent manual edits.
+  A completed formatting pass does not reduce the need for source review or structural improvement.
+  Do not repeat repository-wide clang-format runs during a manual readability pass.
+- Edit F# manually. Do not install or run Fantomas or another F# formatter, including through scripts,
+  hooks, format-on-save, or automatic build/format stages. Read the actual source and choose each edit;
+  do not substitute blanket whitespace scripts, regex spacing passes, or generic reflow operations.
+  Normal editing and patch tools are appropriate. Follow the existing UI formatting configuration.
 - Choose architecture and patterns to solve the present problem. Useful generic abstractions and local
   refactoring are welcome; speculative frameworks, extension points, and compatibility layers are not.
   Preserve user changes and unrelated behavior.
 - Fix nearby violations when that directly supports the task and remains reviewable. Report significant
   findings outside that scope. If a broad redesign or product decision is necessary, present the concrete
   problem, proposed boundary changes, tradeoffs, and incremental plan before expanding the work.
+
+### Acceptance for manual readability and structural refactoring
+
+- Apply the same criteria to handwritten C++ and F#: semantic blank lines, declaration separation,
+  comprehensible branches, cohesive helper boundaries, and function/type/file organization. Review
+  source files, headers, module units, tests, benchmarks, and examples. Tool success alone cannot
+  justify leaving a file unchanged; actual source review may show that no material improvement is needed.
+- Maintain a finite source inventory and record each file's review, confirmed findings, disposition,
+  accountable owner, review evidence, and relevant verification. Exclude generated/vendor files only
+  with ownership evidence. Resolve confirmed in-scope findings; a small selected batch does not establish
+  repository-wide completion. Pending work must remain explicit in an incomplete checkpoint.
+- Before delegating edits, produce and internally review representative manual improvements in both
+  languages. Each assignment states exact files and ownership, concrete problems, an approved example,
+  allowed edits, forbidden semantic changes, verification, and required return evidence. Use one writer
+  per file and one integration owner; serialize builds and other operations sharing mutable outputs.
+- Review every function edited by a delegated low-autonomy worker in its complete final form, not just
+  its diff. Substantial structural changes require a different qualified reviewer. Preserve F# scopes,
+  evaluation and effect order, actor ownership, allocation constraints, and C++ resource lifetimes.
+  Ambiguous control-flow, ownership, or decomposition decisions return to the accountable design owner.
+- Final acceptance includes reviewed coverage, real before/after examples from both languages,
+  structural decisions, actual checks, and remaining exceptions. Confirm that no F# formatter was used.
+  Formatting-only edits need no artificial tests; structural changes need checks for their actual risks.
 
 ## Keep contracts and generated code synchronized
 
