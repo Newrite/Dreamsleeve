@@ -816,4 +816,26 @@ TEST_CASE("continuous trace preserves expected storage failures and failed-open 
     }
   CHECK(content.find("\"write_errors_total\":1") != std::string::npos);
 }
+
+TEST_CASE("continuous trace rejects invalid replacement before stopping the active writer")
+{
+  namespace T = Dreamsleeve::Client::Diagnostics::Trace;
+  Fixture f;
+  REQUIRE(T::Start(f.root));
+  const auto invalid = T::Start(f.root, 1023);
+  REQUIRE_FALSE(invalid);
+  CHECK(invalid.error().kind == T::TraceFailure::InvalidConfiguration);
+  CHECK(T::Enabled());
+  T::Event("after-invalid-replacement");
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
+  CHECK(std::distance(std::filesystem::directory_iterator(f.root), std::filesystem::directory_iterator{}) == 1);
+  std::string content;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(f.root))
+    if (entry.path().extension() == ".jsonl")
+    {
+      const auto bytes = File(entry.path());
+      content.append(bytes.begin(), bytes.end());
+    }
+  CHECK(content.find("after-invalid-replacement") != std::string::npos);
+}
 #endif

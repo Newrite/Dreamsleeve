@@ -202,12 +202,13 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
 
   std::expected<void, TraceError> Start(const std::filesystem::path& directory, std::size_t partBytes)
   {
+    if (partBytes < 1024) return std::unexpected(TraceError{TraceFailure::InvalidConfiguration, "trace part must be at least 1024 bytes"});
     std::lock_guard owner(lifecycle);
     const auto      stopped = StopOwned();
     if (!stopped) return std::unexpected(stopped.error());
     if (*stopped == StopOutcome::CleanupPending)
       return std::unexpected(TraceError{TraceFailure::CleanupPending, "previous trace cleanup is still pending"});
-    if (partBytes < 1024) return std::unexpected(TraceError{TraceFailure::InvalidConfiguration, "trace part must be at least 1024 bytes"});
+
     {
       std::lock_guard lock(measurementsMutex);
       measurements = {};
