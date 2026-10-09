@@ -18,10 +18,13 @@ let private lifecycle (child: Agent<'T>) (ended: TaskCompletionSource<Result<uni
                       (context: ReliableAgentContext<LifecycleMessage>) message = task {
     match message with
     | Attach(own, ready) ->
-        if own then context.Own(child, Ended)
-        else context.Watch(child, Ended)
+        if own then
+            context.Own(child, Ended)
+        else
+            context.Watch(child, Ended)
         ready.SetResult()
-    | Ended result -> ended.SetResult result
+    | Ended result ->
+        ended.SetResult result
 }
 
 let private attach own (agent: Agent<LifecycleMessage>) = task {
@@ -36,7 +39,8 @@ let private taskLifecycle (completion: Task) (ended: TaskCompletionSource<Result
     | Attach(_, ready) ->
         context.Watch(completion, Ended)
         ready.SetResult()
-    | Ended result -> ended.SetResult result
+    | Ended result ->
+        ended.SetResult result
 }
 
 let private finish (agent: Agent<'T>) = task {
@@ -50,8 +54,10 @@ type private TargetMessage =
 
 let private targetHandler (captured: Channel<ReplyChannel<int>>) (_: AgentContext<TargetMessage>) message = task {
     match message with
-    | Capture reply -> check (captured.Writer.TryWrite reply) "Capture channel closed."
-    | Crash error -> return raise error
+    | Capture reply ->
+        check (captured.Writer.TryWrite reply) "Capture channel closed."
+    | Crash error ->
+        return raise error
 }
 
 type private RouteMessage =
@@ -69,10 +75,14 @@ let private startRouterWithOptions agentOptions capacity target =
         | Initialize ready ->
             scope <- Some (TestReplyScope.create context target capacity -1 -2)
             ready.SetResult()
-        | Forward reply -> scope.Value.Forward(reply, fun forwarded -> target.TryPost(Capture forwarded) = AgentPostResult.Posted)
-        | Refuse reply -> scope.Value.Forward(reply, fun _ -> false)
-        | Throw(error, reply) -> scope.Value.Forward(reply, fun _ -> raise error)
-        | Close -> scope.Value.Close()
+        | Forward reply ->
+            scope.Value.Forward(reply, fun forwarded -> target.TryPost(Capture forwarded) = AgentPostResult.Posted)
+        | Refuse reply ->
+            scope.Value.Forward(reply, fun _ -> false)
+        | Throw(error, reply) ->
+            scope.Value.Forward(reply, fun _ -> raise error)
+        | Close ->
+            scope.Value.Close()
         | HoldRoute(entered, release) ->
             entered.SetResult()
             do! release.Task.WaitAsync context.CancellationToken
@@ -95,7 +105,8 @@ let tests = testList "Lifetimes" [
         let entered, cleaning, release = gate<unit>(), gate<unit>(), gate<unit>()
         let childHandler (context: ReliableAgentContext<unit>) () = task {
             entered.SetResult()
-            try do! Task.Delay(Timeout.Infinite, context.CancellationToken)
+            try
+                do! Task.Delay(Timeout.Infinite, context.CancellationToken)
             with :? OperationCanceledException -> ()
             cleaning.SetResult()
             do! release.Task
@@ -137,7 +148,10 @@ let tests = testList "Lifetimes" [
             let ended = gate<Result<unit, exn>>()
             use owner = TestAgent.StartReliable(AgentOptions.create "observer", lifecycle child ended)
             do! attach false owner
-            if abort then owner.Abort() else owner.Complete() |> ignore
+            if abort then
+                owner.Abort()
+            else
+                owner.Complete() |> ignore
             let! _ = terminal owner.Completion
             check child.IsAcceptingMessages "Observation took ownership of the dependency."
             let! reply = child.TryAskAsync(fun reply -> AgentTests.Message.Request(42, reply)) |> awaitResult
@@ -164,7 +178,10 @@ let tests = testList "Lifetimes" [
             let ended = gate<Result<unit, exn>>()
             use owner = TestAgent.StartReliable(AgentOptions.create "observer", taskLifecycle pending.Task ended)
             do! attach false owner
-            if abort then owner.Abort() else owner.Complete() |> ignore
+            if abort then
+                owner.Abort()
+            else
+                owner.Complete() |> ignore
             let! _ = terminal owner.Completion
             check (not pending.Task.IsCompleted) "Watching changed the dependency lifetime."
             pending.SetResult()
@@ -229,7 +246,10 @@ let tests = testList "Lifetimes" [
             use caller = TestAgent.StartReliable(AgentOptions.create "caller", forward)
             let waiting = caller.TryAskAsync id
             let! _ = capture captured
-            if abort then router.Abort() else router.Complete() |> ignore
+            if abort then
+                router.Abort()
+            else
+                router.Complete() |> ignore
             let! result = awaitResult waiting
             expectReply -1 result
             let! _ = terminal router.Completion
@@ -279,8 +299,12 @@ let tests = testList "Lifetimes" [
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
         use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
         let mutable policies = 0
-        let routerOptions = { options "router" (AgentMailbox.boundedWait 2) with
-                                OnError = Some(fun _ -> policies <- policies + 1; AgentErrorAction.Continue) }
+        let routerOptions = {
+            options "router" (AgentMailbox.boundedWait 2) with
+                OnError = Some(fun _ ->
+                    policies <- policies + 1
+                    AgentErrorAction.Continue)
+        }
         use router = startRouterWithOptions routerOptions 1 target
         do! initialize router
         let failure = InvalidOperationException("cannot schedule")
@@ -307,7 +331,9 @@ let tests = testList "Lifetimes" [
         use child = TestAgent.Start(childOptions, fun _ (_: int) -> Task.FromException<unit>(original))
         let handle (context: ReliableAgentContext<Result<unit, exn> option>) message = task {
             match message with
-            | None -> context.Own(child, Some); owned.SetResult()
+            | None ->
+                context.Own(child, Some)
+                owned.SetResult()
             | Some outcome -> delivered.SetResult outcome
         }
         use parent = TestAgent.StartReliable(AgentOptions.create "recovering-parent", handle)
@@ -359,11 +385,13 @@ let tests = testList "Lifetimes" [
         let entered, release = gate<unit>(), gate<unit>()
         let original = InvalidOperationException("startup notification")
         let seen = ConcurrentQueue<int>()
-        let options = { AgentOptions.create "startup-fault" with
-                            OnStarted = Some(fun _ ->
-                                entered.TrySetResult() |> ignore
-                                release.Task.GetAwaiter().GetResult()
-                                raise original) }
+        let options = {
+            AgentOptions.create "startup-fault" with
+                OnStarted = Some(fun _ ->
+                    entered.TrySetResult() |> ignore
+                    release.Task.GetAwaiter().GetResult()
+                    raise original)
+        }
         use agent = TestAgent.Start(options, fun _ reply -> task { seen.Enqueue reply })
         try
             do! awaitUnit entered.Task
@@ -378,7 +406,8 @@ let tests = testList "Lifetimes" [
             equal AgentPostResult.Closed (agent.TryPost 3)
             equal 0 seen.Count
             equal 0 agent.QueueLength
-        finally release.TrySetResult() |> ignore
+        finally
+            release.TrySetResult() |> ignore
     })
 
     case "committed transition callback fault cannot enter recovery or process the next command" (fun () -> task {
@@ -386,9 +415,15 @@ let tests = testList "Lifetimes" [
         let original = InvalidOperationException("transition notification")
         let committed = ConcurrentQueue<int * int>()
         let mutable calls, recoveries = 0, 0
-        let options = { StatefulAgentOptions.create "transition-fault" with
-                            OnUnhandled = Some(fun _ -> recoveries <- recoveries + 1; StatefulErrorAction.KeepStateAndContinue)
-                            OnTransition = Some(fun states -> committed.Enqueue states; raise original) }
+        let options = {
+            StatefulAgentOptions.create "transition-fault" with
+                OnUnhandled = Some(fun _ ->
+                    recoveries <- recoveries + 1
+                    StatefulErrorAction.KeepStateAndContinue)
+                OnTransition = Some(fun states ->
+                    committed.Enqueue states
+                    raise original)
+        }
         use agent = TestStatefulAgent.Start(options, 0, fun _ state command -> task {
             calls <- calls + 1
             entered.TrySetResult() |> ignore
@@ -407,16 +442,23 @@ let tests = testList "Lifetimes" [
             equal 0 recoveries
             equal AgentPostResult.Closed (agent.TryPost 20)
             equal 0 agent.QueueLength
-        finally release.TrySetResult() |> ignore
+        finally
+            release.TrySetResult() |> ignore
     })
 
     case "clean completion stop notifications share sealed reason and retain each failure" (fun () -> task {
         let configured = InvalidOperationException("configured stop")
         let observed = InvalidOperationException("stop event")
         let reasons = ConcurrentQueue<AgentStopReason>()
-        use agent = TestAgent.Start({ AgentOptions.create "stop-notifications" with
-                                        OnStopped = Some(fun (_, reason) -> reasons.Enqueue reason; raise configured) }, fun _ (_: int) -> task { () })
-        agent.Stopped.Add(fun (_, reason) -> reasons.Enqueue reason; raise observed)
+        use agent = TestAgent.Start({
+            AgentOptions.create "stop-notifications" with
+                OnStopped = Some(fun (_, reason) ->
+                    reasons.Enqueue reason
+                    raise configured)
+        }, fun _ (_: int) -> task { () })
+        agent.Stopped.Add(fun (_, reason) ->
+            reasons.Enqueue reason
+            raise observed)
         agent.Complete() |> ignore
         let! _ = terminal agent.Completion
         equal (Some AgentStopReason.Completed) agent.StopReason
@@ -434,7 +476,9 @@ let tests = testList "Lifetimes" [
         let mutable joined = false
         let handle (context: ReliableAgentContext<int>) _ = task {
             context.PipeToSelf((fun token -> task {
-                use registration = token.Register(fun () -> canceled.TrySetResult() |> ignore; raise cancel)
+                use registration = token.Register(fun () ->
+                    canceled.TrySetResult() |> ignore
+                    raise cancel)
                 working.TrySetResult() |> ignore
                 do! release.Task
                 joined <- true
@@ -456,7 +500,8 @@ let tests = testList "Lifetimes" [
             let errors = agent.Completion.Exception.Flatten().InnerExceptions
             for expected in [primary; cancel; stopped] do
                 equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
-        finally release.TrySetResult() |> ignore
+        finally
+            release.TrySetResult() |> ignore
     })
 
     case "mutable recovery callback fault retains handler cause and never reuses changed state" (fun () -> task {
@@ -483,7 +528,8 @@ let tests = testList "Lifetimes" [
             let errors = agent.Completion.Exception.Flatten().InnerExceptions
             for expected in [primary; policy] do
                 check (errors |> Seq.exists (fun actual -> Object.ReferenceEquals(expected, actual))) "Original handler/policy cause is retained."
-        finally release.TrySetResult() |> ignore
+        finally
+            release.TrySetResult() |> ignore
     })
 
 
@@ -519,7 +565,8 @@ let tests = testList "Lifetimes" [
             let errors = agent.Completion.Exception.Flatten().InnerExceptions
             for expected in [primary; observer] do
                 equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
-        finally release.TrySetResult() |> ignore
+        finally
+            release.TrySetResult() |> ignore
     })
 
 
