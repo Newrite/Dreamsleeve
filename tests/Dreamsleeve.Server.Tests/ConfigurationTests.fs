@@ -2,6 +2,7 @@ module Dreamsleeve.Server.Tests.ConfigurationTests
 
 open System
 open System.IO
+open System.Text
 open Expecto
 open Dreamsleeve.Agent
 open Dreamsleeve.Server
@@ -13,6 +14,24 @@ let private withFile (text: string) action =
         action path
     finally
         File.Delete path
+
+// A stream can grow after a length check or decline to report its length.
+// Small chunks also exercise the bounded loop rather than a one-read shortcut.
+type private MisreportedLengthStream(bytes: byte[]) =
+    inherit MemoryStream(bytes, false)
+    override _.Length = 0L
+    override _.Read(buffer, offset, count) = base.Read(buffer, offset, min count 3)
+
+let private withEncodedFile (encoding: Encoding) (source: string) action =
+    let path = Path.Combine(Path.GetTempPath(), "dreamsleeve-config-encoding-" + Guid.NewGuid().ToString("N") + ".toml")
+    try
+        File.WriteAllBytes(path, Array.append (encoding.GetPreamble()) (encoding.GetBytes source))
+        action path
+    finally
+        File.Delete path
+
+let private paddedBytes maximum (source: string) =
+    source + "\n#" + String('x', maximum - Encoding.UTF8.GetByteCount source - 2)
 
 let private parsed path =
     match Configuration.parse [|"--config"; path|] with
@@ -71,6 +90,79 @@ let tests = testList "Server configuration" [
             | other -> failtestf "%A" other)
         for invalid in ["words = 'badword'\n"; "words = [1]\n"; "phrases = ['x']\n"; "words = ['x'\n"] do
             Expect.isError (Configuration.parseModeration invalid) $"invalid rules: {invalid}"
+
+    testCase "an existing directory is a read failure rather than missing optional rules" <| fun _ ->
+        let directory = Path.Combine(Path.GetTempPath(), "dreamsleeve-config-directory-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        try
+            Expect.isError (Configuration.loadModeration { Enabled = true; RulesPath = directory }) "A directory cannot silently disable moderation as a missing file."
+            let names, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = directory }
+            Expect.equal names.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "The optional dictionary still falls back."
+            Expect.stringContains warning.Value "Cannot read pseudonyms" "The diagnostic distinguishes read failure from absence."
+            Expect.isError (Configuration.parse [|"--config"; directory|]) "The required configuration cannot be a directory."
+            Expect.isError (Configuration.writeDefaults directory) "An export write failure remains typed."
+            match Configuration.loadModeration { Enabled = false; RulesPath = directory } with
+            | Ok (rules, None) -> Expect.isTrue rules.IsEmpty "Disabled moderation never opens the rejected path."
+            | other -> failtestf "Unexpected disabled moderation outcome: %A" other
+        finally
+            Directory.Delete directory
+
+    testCase "the bounded reader does not trust Length and leaves the stream owned by its caller" <| fun _ ->
+        use growing = new MisreportedLengthStream(Array.create 1000 (byte 'x'))
+        Expect.equal (Configuration.readBounded growing 64) (Error FileReadError.TooLarge) "A misleading length cannot bypass the byte cap."
+        Expect.equal growing.Position 65L "Only cap+1 bytes were consumed."
+        Expect.isTrue growing.CanRead "The caller still owns the rejected stream."
+        use exact = new MisreportedLengthStream(Array.create 64 (byte 'x'))
+        Expect.equal (Configuration.readBounded exact 64) (Ok (String('x', 64))) "The exact limit remains readable through partial reads."
+        Expect.isTrue exact.CanRead "Successful read also leaves ownership with the caller."
+
+    testCase "configuration and dictionary byte limits reject cap+1 while preserving exact caps" <| fun _ ->
+        let config = paddedBytes 65536 ""
+        withFile config (fun path -> Expect.isOk (Configuration.parse [|"--config"; path|]) "Exact configuration byte cap.")
+        withFile (config + "x") (fun path -> Expect.isError (Configuration.parse [|"--config"; path|]) "Configuration cap+1 rejected.")
+        let rules = paddedBytes 1048576 "words = ['word']"
+        withFile rules (fun path -> Expect.isOk (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Exact moderation byte cap.")
+        withFile (rules + "x") (fun path -> Expect.isError (Configuration.loadModeration { Enabled = true; RulesPath = path }) "Moderation cap+1 rejected.")
+        let names = paddedBytes 65536 "names = ['Бард']"
+        withFile names (fun path ->
+            let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal dictionary.Count 1 "Exact pseudonym byte cap, including multibyte content."
+            Expect.isNone warning "Valid dictionary has no fallback warning.")
+        withFile (names + "x") (fun path ->
+            let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+            Expect.equal dictionary.Names Dreamsleeve.Server.Domain.PseudonymDictionary.builtIn.Names "Oversized optional dictionary retains fallback."
+            Expect.stringContains warning.Value "exceeds 64 KiB" "Size refusal is diagnostic.")
+
+    testCase "bounded file reads preserve ReadAllText UTF BOM decoding and include BOM in the cap" <| fun _ ->
+        let encodings: Encoding list = [
+            UTF8Encoding(true); UnicodeEncoding(false, true); UnicodeEncoding(true, true)
+            UTF32Encoding(false, true); UTF32Encoding(true, true)
+        ]
+        for encoding in encodings do
+            withEncodedFile encoding "[Server]\nPort=9123\n" (fun path ->
+                Expect.equal (parsed path).Server.Port 9123us $"Configuration decoded as {encoding.WebName}.")
+            withEncodedFile encoding "words = ['ёж']" (fun path ->
+                match Configuration.loadModeration { Enabled = true; RulesPath = path } with
+                | Ok (rules, _) -> Expect.isFalse (Dreamsleeve.Server.Domain.Moderation.allows rules "ёж") "Decoded Unicode moderation rule."
+                | Error error -> failtest error)
+            withEncodedFile encoding "names = ['Бард']" (fun path ->
+                let dictionary, warning = Configuration.loadPseudonyms { Configuration.defaults.Identity with PseudonymsPath = path }
+                Expect.equal (dictionary.Names |> List.map Dreamsleeve.Server.Domain.Pseudonym.value) [ "Бард" ] "Decoded Unicode dictionary."
+                Expect.isNone warning "A supported BOM is not malformed input.")
+        withEncodedFile (UTF8Encoding(true)) (paddedBytes 65536 "") (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "The BOM's three bytes count toward the file cap.")
+
+    testCase "bounded source decoding preserves ReadAllText replacement for malformed UTF-8" <| fun _ ->
+        withFile "" (fun path ->
+            File.WriteAllBytes(path, [| byte '#'; 0xFFuy |])
+            let expected = File.ReadAllText path
+            Expect.equal (Configuration.readModerationSource path) (Ok expected) "The new byte bound does not invent a stricter encoding policy.")
+
+    testCase "duplicate keys are malformed TOML at all configuration boundaries" <| fun _ ->
+        withFile "[Server]\nPort=9123\nPort=9124\n" (fun path ->
+            Expect.isError (Configuration.parse [|"--config"; path|]) "Duplicate configuration key rejected.")
+        Expect.isError (Configuration.parseModeration "words=['one']\nwords=['two']\n") "Duplicate moderation key rejected."
+        Expect.isError (Configuration.parsePseudonyms "names=['Бард']\nnames=['Рыбак']\n") "Duplicate pseudonym key rejected."
 
     testCase "block and flag tiers load from sections; top-level keys stay the block tier" <| fun _ ->
         let text = String.concat "\n" [

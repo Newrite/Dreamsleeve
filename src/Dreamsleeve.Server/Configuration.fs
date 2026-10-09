@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Net
 open System.Globalization
+open System.Security
 open Microsoft.FSharp.Reflection
 open Tomlyn
 open Tomlyn.Model
@@ -106,6 +107,12 @@ type LaunchCommand =
     | Run of ApplicationConfig * GameSettings
     | WriteConfig of string
     | Help
+
+[<RequireQualifiedAccess>]
+type internal FileReadError =
+    | Missing
+    | TooLarge
+    | Failed of exn
 
 [<RequireQualifiedAccess>]
 module Configuration =
@@ -228,31 +235,64 @@ module Configuration =
         elif value :? IPAddress then box (string value)
         else value
 
-    let private load path =
+    [<Literal>]
+    let private MaxConfigurationBytes = 65536
+
+    // The caller owns the stream. Reading cap+1 bytes detects growth without
+    // trusting an earlier pathname or stream length observation.
+    let internal readBounded (stream: Stream) maxBytes =
+        let bytes = Array.zeroCreate<byte> (maxBytes + 1)
+        let mutable length = 0
+        let mutable ended = false
+        while not ended && length < bytes.Length do
+            let read = stream.Read(bytes, length, bytes.Length - length)
+            if read = 0 then ended <- true
+            else length <- length + read
+        if length > maxBytes then Error FileReadError.TooLarge
+        else
+            use memory = new MemoryStream(bytes, 0, length, false)
+            use reader = new StreamReader(memory, System.Text.Encoding.UTF8, true)
+            Ok (reader.ReadToEnd())
+
+    let private readText path maxBytes =
         try
-            if FileInfo(path).Length > 65536L then Error "Server configuration must not exceed 65536 bytes."
-            else
-                let source = File.ReadAllText path
-                // DOM deserialization alone does not reject duplicate TOML keys.
-                let document = Tomlyn.Parsing.SyntaxParser.Parse(source, path, true)
-                if document.HasErrors then Error $"Invalid TOML configuration: {document.Diagnostics}"
-                else
-                    let table = TomlSerializer.Deserialize<TomlTable>(source)
-                    overlay "" (box defaults) (box table) |> Result.map unbox<ApplicationConfig>
+            use stream = File.OpenRead path
+            readBounded stream maxBytes
         with
-        | :? TomlException as error -> Error $"Invalid TOML configuration: {error.Message}"
-        | :? ArgumentException as error -> Error $"Cannot read configuration: {error.Message}"
-        | :? IOException as error -> Error $"Cannot read configuration: {error.Message}"
-        | :? UnauthorizedAccessException as error -> Error $"Cannot read configuration: {error.Message}"
+        | :? FileNotFoundException | :? DirectoryNotFoundException -> Error FileReadError.Missing
+        | :? IOException as error -> Error(FileReadError.Failed error)
+        | :? UnauthorizedAccessException as error -> Error(FileReadError.Failed error)
+        | :? ArgumentException as error -> Error(FileReadError.Failed error)
+        | :? SecurityException as error -> Error(FileReadError.Failed error)
+
+    // DOM deserialization alone does not reject duplicate TOML keys. Only the
+    // dependency parser/deserializer is inside this malformed-input adapter.
+    let private parseTable description (sourceName: string) (source: string) =
+        try
+            let document = Tomlyn.Parsing.SyntaxParser.Parse(source, sourceName, true)
+            if document.HasErrors then Error $"Invalid {description}: {document.Diagnostics}"
+            else Ok (TomlSerializer.Deserialize<TomlTable>(source))
+        with :? TomlException as error -> Error $"Invalid {description}: {error.Message}"
+
+    let private load path =
+        match readText path MaxConfigurationBytes with
+        | Error FileReadError.Missing -> Error $"Cannot read configuration: File not found: {path}"
+        | Error FileReadError.TooLarge -> Error "Server configuration must not exceed 65536 bytes."
+        | Error(FileReadError.Failed error) -> Error $"Cannot read configuration: {error.Message}"
+        | Ok source ->
+            parseTable "TOML configuration" path source
+            |> Result.bind (fun table -> overlay "" (box defaults) (box table) |> Result.map unbox<ApplicationConfig>)
 
     let writeDefaults path =
+        let source = TomlSerializer.Serialize(toTableValue (box defaults))
         try
-            File.WriteAllText(path, TomlSerializer.Serialize(toTableValue (box defaults)))
+            File.WriteAllText(path, source)
             Ok ()
         with
         | :? ArgumentException as error -> Error error.Message
         | :? IOException as error -> Error error.Message
         | :? UnauthorizedAccessException as error -> Error error.Message
+        | :? SecurityException as error -> Error error.Message
 
     let private isLoopback (uri: Uri) = uri.Host = "127.0.0.1" || uri.Host = "[::1]" || uri.Host = "::1"
 
@@ -375,7 +415,7 @@ module Configuration =
     let render (config: ApplicationConfig) = TomlSerializer.Serialize(toTableValue (box config))
 
     [<Literal>]
-    let private MaxRulesBytes = 1048576L
+    let private MaxRulesBytes = 1048576
 
     let private stringList (table: TomlTable) name =
         match table.TryGetValue name with
@@ -404,10 +444,9 @@ module Configuration =
     /// Parses the separate word-list file: [block] refuses, [flag] marks.
     /// Top-level words/substrings/exceptions are the block tier of older files.
     let parseModeration (source: string) =
-        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "moderation", true)
-        if document.HasErrors then Error $"Invalid moderation TOML: {document.Diagnostics}"
-        else
-            let table = TomlSerializer.Deserialize<TomlTable>(source)
+        match parseTable "moderation TOML" "moderation" source with
+        | Error error -> Error error
+        | Ok table ->
             let legacy = TomlTable()
             let mutable unknown = None
             for key in table.Keys do
@@ -429,36 +468,32 @@ module Configuration =
                     tierSource flag "flag." |> Result.map (fun flagged -> merge top blocked, flagged)))))
                 tiers |> Result.map (fun (block, flag) -> Moderation.create block |> Moderation.withFlags flag)
 
+    let internal readModerationSource path = readText path MaxRulesBytes
+
     /// Disabled moderation uses empty rules. A missing file is a warning: the
     /// server runs with an empty list rather than refusing to start.
     let loadModeration (settings: ModerationSettings) : Result<ModerationRules * string option, string> =
         if not settings.Enabled then Ok (Moderation.empty, None)
         else
-            try
-                let file = FileInfo settings.RulesPath
-                if not file.Exists then
-                    Ok (Moderation.empty, Some $"Moderation rules file not found: {file.FullName}; the word list is empty.")
-                elif file.Length > MaxRulesBytes then Error "Moderation rules must not exceed 1 MiB."
-                else
-                    parseModeration (File.ReadAllText file.FullName)
-                    |> Result.map (fun rules ->
-                        rules, (if rules.IsEmpty && not rules.HasFlags then Some "Moderation rules contain no words or substrings." else None))
-            with
-            | :? TomlException as error -> Error $"Invalid moderation TOML: {error.Message}"
-            | :? IOException as error -> Error $"Cannot read moderation rules: {error.Message}"
-            | :? UnauthorizedAccessException as error -> Error $"Cannot read moderation rules: {error.Message}"
-            | :? ArgumentException as error -> Error $"Cannot read moderation rules: {error.Message}"
+            match readModerationSource settings.RulesPath with
+            | Error FileReadError.Missing ->
+                Ok (Moderation.empty, Some $"Moderation rules file not found: {settings.RulesPath}; the word list is empty.")
+            | Error FileReadError.TooLarge -> Error "Moderation rules must not exceed 1 MiB."
+            | Error(FileReadError.Failed error) -> Error $"Cannot read moderation rules: {error.Message}"
+            | Ok source ->
+                parseModeration source
+                |> Result.map (fun rules ->
+                    rules, (if rules.IsEmpty && not rules.HasFlags then Some "Moderation rules contain no words or substrings." else None))
 
     [<Literal>]
-    let private MaxPseudonymsBytes = 65536L
+    let private MaxPseudonymsBytes = 65536
 
     /// The pseudonym file: version = 1 and names = [...]. Entries that break the
     /// rules of Pseudonym.create or repeat are skipped and counted.
     let parsePseudonyms (source: string) =
-        let document = Tomlyn.Parsing.SyntaxParser.Parse(source, "pseudonyms", true)
-        if document.HasErrors then Error $"Invalid pseudonym TOML: {document.Diagnostics}"
-        else
-            let table = TomlSerializer.Deserialize<TomlTable>(source)
+        match parseTable "pseudonym TOML" "pseudonyms" source with
+        | Error error -> Error error
+        | Ok table ->
             match table.Keys |> Seq.tryFind (fun key -> key <> "version" && key <> "names") with
             | Some key -> Error $"Unknown pseudonym setting: {key}"
             | None ->
@@ -477,20 +512,17 @@ module Configuration =
     /// falls back to the built-in list with a warning, like the client does.
     let loadPseudonyms (options: IdentityOptions) : PseudonymDictionary * string option =
         let fallback reason = PseudonymDictionary.builtIn, Some $"{reason}; using the {PseudonymDictionary.builtIn.Count} built-in pseudonyms."
-        try
-            let file = FileInfo options.PseudonymsPath
-            if String.IsNullOrWhiteSpace options.PseudonymsPath || not file.Exists then fallback $"Pseudonym file not found: {options.PseudonymsPath}"
-            elif file.Length > MaxPseudonymsBytes then fallback "Pseudonym file exceeds 64 KiB"
-            else
-                match parsePseudonyms (File.ReadAllText file.FullName) with
+        if String.IsNullOrWhiteSpace options.PseudonymsPath then fallback $"Pseudonym file not found: {options.PseudonymsPath}"
+        else
+            match readText options.PseudonymsPath MaxPseudonymsBytes with
+            | Error FileReadError.Missing -> fallback $"Pseudonym file not found: {options.PseudonymsPath}"
+            | Error FileReadError.TooLarge -> fallback "Pseudonym file exceeds 64 KiB"
+            | Error(FileReadError.Failed error) -> fallback $"Cannot read pseudonyms: {error.Message}"
+            | Ok source ->
+                match parsePseudonyms source with
                 | Error error -> fallback error
                 | Ok (dictionary, 0) -> dictionary, None
                 | Ok (dictionary, skipped) -> dictionary, Some $"Pseudonym file: {skipped} invalid or repeated entries skipped."
-        with
-        | :? TomlException as error -> fallback $"Invalid pseudonym TOML: {error.Message}"
-        | :? IOException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
-        | :? UnauthorizedAccessException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
-        | :? ArgumentException as error -> fallback $"Cannot read pseudonyms: {error.Message}"
 
     let rec private arguments configFile port (remainingArgs: string list) =
         match remainingArgs with
