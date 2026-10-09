@@ -49,7 +49,9 @@ public:
           new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime), std::move(ports)}
       };
       // Before the threads: the first connection already goes by the route.
-      const auto known = [&](std::optional<std::size_t> index) { return index && *index < app->routes.size() ? index : std::nullopt; };
+      const auto known = [&](std::optional<std::size_t> index) {
+        return index && *index < app->routes.size() ? index : std::nullopt;
+      };
       const auto chosen = known(preference.chosen);
       app->exchange->SetRouteChoice(chosen);
       app->automatic = !chosen;
@@ -258,8 +260,10 @@ private:
     template <class Request>
     auto OnRoutes(Request request)
     {
-      auto       result      = request(Route());
-      const auto unanswered  = [&] { return !result && result.error().code == Auth::FailureCode::Unreachable; };
+      auto       result     = request(Route());
+      const auto unanswered = [&] {
+        return !result && result.error().code == Auth::FailureCode::Unreachable;
+      };
       for (std::size_t tried = 1; unanswered() && tried < routes.size() && !exchange->AuthenticationCanceled() && NextRoute(); ++tried)
         result = request(Route());
       if (!unanswered()) NoteReached();
@@ -294,9 +298,8 @@ private:
         exchange->PublishSavedLogin(false);
         return {};
       }
-      auto result = OnRoutes([&](const ConnectionRoute& route) {
-        return Auth::Logout(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
-      });
+      auto result = OnRoutes(
+        [&](const ConnectionRoute& route) { return Auth::Logout(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth); });
       // Keep the credential on transient failure so the UI can retry revocation.
       // ForgetSavedLogin is the explicit offline alternative.
       if (!result) return result;

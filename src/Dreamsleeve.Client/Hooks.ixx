@@ -41,7 +41,7 @@ namespace Hooks
     constexpr auto UpdateActor3D = REL::VariantID(38404, 39395, 0x65A140);
     constexpr auto Clear3DFlags  = REL::VariantID(38868, 39909, 0x687870);
 
-    constexpr auto ObjectNetCopy = REL::VariantID(69139, 70500, 0xCA5580);
+    constexpr auto ObjectNetCopy         = REL::VariantID(69139, 70500, 0xCA5580);
     constexpr auto ObjectNetProcessClone = REL::VariantID(69162, 70523, 0xCA6A50);
 
     constexpr auto StreamCtor      = REL::VariantID(68971, 70324, 0xC9EC40);
@@ -433,22 +433,27 @@ public:
 
     static void ControllerProcess(RE::NiObject* controller, RE::NiCloningProcess& process)
     {
-      if(snapshot != &process) controller->ProcessClone(process);
+      if (snapshot != &process) controller->ProcessClone(process);
     }
 
-    static RE::NiPointer<RE::NiObject> Clone(
-      RE::NiNode* root, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs)
+    static RE::NiPointer<RE::NiObject> Clone(RE::NiNode* root, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs)
     {
-      if(!PhantomThread() || !root) return {};
+      if (!PhantomThread() || !root) return {};
       const RE::NiPointer<RE::NiNode> source{root};
-      RE::NiCloningProcess process{};
-      process.copyType = 1; // Native CopyMembers: preserve names without suffixes.
-      process.scale = {1,1,1};
+      RE::NiCloningProcess            process{};
+      process.copyType = 1;  // Native CopyMembers: preserve names without suffixes.
+      process.scale    = {1, 1, 1};
+
       struct Scope
       {
         RE::NiCloningProcess* previous;
-        ~Scope() { snapshot = previous; }
+
+        ~Scope()
+        {
+          snapshot = previous;
+        }
       } scope{std::exchange(snapshot, &process)};
+
       RE::NiPointer<RE::NiObject> clone{source->CreateClone(process)};
       if (clone)
       {
@@ -458,7 +463,7 @@ public:
         for (const auto& [original, copied] : process.cloneMap)
         {
           auto* from = netimmerse_cast<RE::NiAVObject*>(original);
-          auto* to = netimmerse_cast<RE::NiAVObject*>(copied);
+          auto* to   = netimmerse_cast<RE::NiAVObject*>(copied);
           if (from && to) pairs.emplace(from, to);
         }
       }
@@ -467,12 +472,13 @@ public:
 
     static bool Install()
     {
-      const auto copy = Address::ObjectNetCopy.address() + REL::Relocate(0x259,0x25B,0x259);
-      const auto process = Address::ObjectNetProcessClone.address() + 0x64;
-      constexpr std::array<std::uint8_t,6> copyBytes{0xFF,0x90,0xB8,0,0,0};
-      constexpr std::array<std::uint8_t,6> processBytes{0xFF,0x90,0xE8,0,0,0};
-      if(!std::ranges::equal(copyBytes, std::span{reinterpret_cast<const std::uint8_t*>(copy),6}) ||
-         !std::ranges::equal(processBytes, std::span{reinterpret_cast<const std::uint8_t*>(process),6}))
+      const auto                            copy    = Address::ObjectNetCopy.address() + REL::Relocate(0x259, 0x25B, 0x259);
+      const auto                            process = Address::ObjectNetProcessClone.address() + 0x64;
+      constexpr std::array<std::uint8_t, 6> copyBytes{0xFF, 0x90, 0xB8, 0, 0, 0};
+      constexpr std::array<std::uint8_t, 6> processBytes{0xFF, 0x90, 0xE8, 0, 0, 0};
+      if (
+        !std::ranges::equal(copyBytes, std::span{reinterpret_cast<const std::uint8_t*>(copy), 6}) ||
+        !std::ranges::equal(processBytes, std::span{reinterpret_cast<const std::uint8_t*>(process), 6}))
       {
         logger::error("Native phantom disabled: controller clone call sites changed");
         return false;
@@ -497,7 +503,7 @@ public:
       logger::warn("Native phantom disabled for unaudited runtime {}", version.string());
       return false;
     }
-    if(!PhantomClone::Install()) return false;
+    if (!PhantomClone::Install()) return false;
     ModelCompleted::Install();
     phantomThread = std::this_thread::get_id();
     const Dreamsleeve::Game::PhantomNative::Engine

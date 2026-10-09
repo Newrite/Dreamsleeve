@@ -79,8 +79,8 @@ export namespace Dreamsleeve::Host
     // Height of the glow above the pose origin, game units.
     double fireflyHeightOffset{110};
     // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
-    bool        showGroundNotes{true};
-    bool        showDeathMarks{true};
+    bool showGroundNotes{true};
+    bool showDeathMarks{true};
     // Notes and death marks only of players who share a guild with you; your own always.
     bool        markGuildmatesOnly{false};
     double      maxVisibleNotes{16};
@@ -202,14 +202,21 @@ export namespace Dreamsleeve::Host
   });
 
   // "#RRGGBB"; anything else is the default.
-  constexpr auto ColorKeys =
-    std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor"});
+  constexpr auto ColorKeys = std::to_array<std::string_view>(
+    {"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor"});
 
   // How names, texts, dates and whose marks are projected. These apply to every
   // surface at once, without saving, and a change projects the session again.
-  constexpr auto InstantKeys =
-    std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle", "markGuildmatesOnly",
-      "publishPhantoms", "showPhantoms", "phantomFallback", "combatHidePhantoms"});
+  constexpr auto InstantKeys = std::to_array<std::string_view>(
+    {"nameMode",
+     "streamerMode",
+     "textFilter",
+     "markDateStyle",
+     "markGuildmatesOnly",
+     "publishPhantoms",
+     "showPhantoms",
+     "phantomFallback",
+     "combatHidePhantoms"});
 
   // The hide-my-name choices in the order of Domain::HiddenIdentity.
   constexpr auto HidingNames = std::to_array<std::string_view>({"off", "everywhere", "exceptGroundMarks"});

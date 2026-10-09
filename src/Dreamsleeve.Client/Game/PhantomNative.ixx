@@ -64,7 +64,7 @@ export namespace Dreamsleeve::Game::PhantomNative
 
   P::Result<void> BindTransforms(
     const std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs,
-    std::unordered_map<const RE::NiTransform*, Binding>& transforms)
+    std::unordered_map<const RE::NiTransform*, Binding>&        transforms)
   {
     for (const auto& [source, clone] : pairs)
     {
@@ -299,7 +299,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     const auto cloneStart = Clock::now();
 #endif
     std::unordered_map<RE::NiAVObject*, RE::NiAVObject*> pairs;
-    RE::NiPointer<RE::NiObject> holder = engine.clone(live, pairs);
+    RE::NiPointer<RE::NiObject>                          holder = engine.clone(live, pairs);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto cloneEnd = Clock::now();
 #endif
@@ -313,18 +313,18 @@ export namespace Dreamsleeve::Game::PhantomNative
     for (auto* node : cloned)
       if (auto* tree = netimmerse_cast<RE::BSFlattenedBoneTree*>(node)) engine.normalizeBones(*tree);
     const std::unordered_set<RE::NiAVObject*> clonedNodes{cloned.begin(), cloned.end()};
-    std::erase_if(pairs, [&](const auto& pair) {
-      return !sourceNodes.contains(pair.first) || !clonedNodes.contains(pair.second);
-    });
-    std::unordered_map<const RE::NiTransform*, Binding>  transforms;
+    std::erase_if(pairs, [&](const auto& pair) { return !sourceNodes.contains(pair.first) || !clonedNodes.contains(pair.second); });
+    std::unordered_map<const RE::NiTransform*, Binding> transforms;
     if (auto paired = BindTransforms(pairs, transforms); !paired) return std::unexpected(paired.error());
     for (auto* source : required)
       if (!pairs.contains(source))
-        return A::Fail(P::Failure::InvalidLink, std::format(
-          "clone omitted required native geometry: name={} type={} parent={}",
-          source->name.c_str() ? source->name.c_str() : "",
-          source->GetRTTI()->GetName(),
-          source->parent && source->parent->name.c_str() ? source->parent->name.c_str() : ""));
+        return A::Fail(
+          P::Failure::InvalidLink,
+          std::format(
+            "clone omitted required native geometry: name={} type={} parent={}",
+            source->name.c_str() ? source->name.c_str() : "",
+            source->GetRTTI()->GetName(),
+            source->parent && source->parent->name.c_str() ? source->parent->name.c_str() : ""));
     for (const auto& [source, target] : pairs)
     {
       auto* geometry = source->AsGeometry();

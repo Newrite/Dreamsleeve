@@ -32,8 +32,8 @@ export namespace Dreamsleeve::Client::Auth
     InvalidResponse,
     CredentialStorage,
     Canceled,
-    NameNotAllowed,        // Registration: the server word list refused a name.
-    Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
+    NameNotAllowed,         // Registration: the server word list refused a name.
+    Banned,                 // Sign-in and resume while a ban holds; see Failure::ban.
     RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
     AddressBanned,          // The server banned the IP range of this computer; see Failure::ban.
     DeviceBanned,           // An account ban covers this computer.
@@ -46,9 +46,9 @@ export namespace Dreamsleeve::Client::Auth
   enum class RegistrationMode
   {
     Unknown,
-    Open,    // Registration in the game and the first Steam sign-in.
-    Steam,   // New accounts only from a Steam sign-in.
-    Manual   // Administrators create accounts in the admin panel.
+    Open,   // Registration in the game and the first Steam sign-in.
+    Steam,  // New accounts only from a Steam sign-in.
+    Manual  // Administrators create accounts in the admin panel.
   };
 
   struct Methods
@@ -261,10 +261,16 @@ namespace Dreamsleeve::Client::Auth
     }
 
     // A request without a body is a GET.
-    std::expected<HttpResponse, SendFailure> Send(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
+    std::expected<HttpResponse, SendFailure> Send(
+      std::string_view   url,
+      const wchar_t*     path,
+      const std::string& body,
+      bool               allowInsecureRemote = false)
     {
-      const auto failed = [](Result<HttpResponse> local) { return std::unexpected{SendFailure{std::move(local.error())}}; };
-      auto       endpoint = ParseUrl(url, allowInsecureRemote);
+      const auto failed = [](Result<HttpResponse> local) {
+        return std::unexpected{SendFailure{std::move(local.error())}};
+      };
+      auto endpoint = ParseUrl(url, allowInsecureRemote);
       if (!endpoint) return std::unexpected{SendFailure{endpoint.error()}};
       if (body.size() > 16384) return std::unexpected{SendFailure{"Authentication request is too large"}};
 
@@ -296,7 +302,8 @@ namespace Dreamsleeve::Client::Auth
         return failed(SystemError("Auth request policy"));
       // HTTPS uses WinHTTP's normal certificate and hostname validation.
       const auto     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-      const wchar_t* headers  = body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
+      const wchar_t* headers =
+        body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
       if (
         !WinHttpSendRequest(
           request.get(),
@@ -310,7 +317,9 @@ namespace Dreamsleeve::Client::Auth
       {
         // The name, the connection, TLS or the wait for a response failed.
         auto unanswered = SystemError("Authentication request");
-        return std::unexpected{SendFailure{std::move(unanswered.error()), true}};
+        return std::unexpected{
+            SendFailure{std::move(unanswered.error()), true}
+        };
       }
 
       HttpResponse result;
@@ -685,7 +694,7 @@ namespace Dreamsleeve::Client::Auth
     {
       T* value{};
 
-      ComRef() = default;
+      ComRef()                         = default;
       ComRef(const ComRef&)            = delete;
       ComRef& operator=(const ComRef&) = delete;
 

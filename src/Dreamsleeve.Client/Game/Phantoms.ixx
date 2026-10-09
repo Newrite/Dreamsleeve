@@ -439,8 +439,9 @@ namespace Phantoms
     // Apply visibility even while waiting for the local player/cell or replay.
     if (!settings.receive && !state.visuals.empty())
     {
-      for (const auto& [id, visual] : state.visuals) exchange.SceneMemory(id, 0);
-      state.visuals.clear(); // Scene destruction detaches each root on this game thread.
+      for (const auto& [id, visual] : state.visuals)
+        exchange.SceneMemory(id, 0);
+      state.visuals.clear();  // Scene destruction detaches each root on this game thread.
     }
     auto* player = RE::PlayerCharacter::GetSingleton();
     auto* cell   = player ? player->GetParentCell() : nullptr;

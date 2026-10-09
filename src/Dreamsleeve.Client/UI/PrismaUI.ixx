@@ -237,12 +237,13 @@ namespace PrismaUI
         .ui               = runtime.ui,
         .bubbles          = runtime.bubbles,
         .manualDisconnect = runtime.manualDisconnect,
-        .ports = {
-                  .saveUi        = Runtime::SaveUi,
-                  .close         = Deactivate,
-                  .activationKey = Events::SetActivationKey,
-                  .noteSpot      = World::Spot,
-                  .copyText      = Dreamsleeve::Utils::Clipboard::Copy}
+        .ports            = {
+                             .saveUi        = Runtime::SaveUi,
+                             .close         = Deactivate,
+                             .activationKey = Events::SetActivationKey,
+                             .noteSpot      = World::Spot,
+                             .copyText      = Dreamsleeve::Utils::Clipboard::Copy
+        }
     };
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)

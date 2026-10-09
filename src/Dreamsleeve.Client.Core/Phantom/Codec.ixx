@@ -11,11 +11,16 @@ export namespace Dreamsleeve::Client::Phantom
 
   struct AssetDelta
   {
-    Digest baseHash, hash;
+    Digest        baseHash, hash;
     std::uint32_t compressedBytes{};
-    bool operator==(const AssetDelta&) const = default;
+    bool          operator==(const AssetDelta&) const = default;
   };
-  struct PreparedDelta { AssetDelta descriptor; std::shared_ptr<const Bytes> bytes; };
+
+  struct PreparedDelta
+  {
+    AssetDelta                   descriptor;
+    std::shared_ptr<const Bytes> bytes;
+  };
 
   struct PreparedAsset
   {

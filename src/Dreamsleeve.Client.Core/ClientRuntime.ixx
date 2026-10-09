@@ -57,7 +57,10 @@ public:
       if (transport->State() != ClientState::Disconnecting) DropGuest();
     }
 
-    void UseHttpEndpoint(std::string url, bool insecure) { phantoms.ConfigureHttp(std::move(url), insecure); }
+    void UseHttpEndpoint(std::string url, bool insecure)
+    {
+      phantoms.ConfigureHttp(std::move(url), insecure);
+    }
 
     // Where the next connection goes; a guest link elsewhere is dropped. now:
     // the guest connects at once rather than after its retry wait.

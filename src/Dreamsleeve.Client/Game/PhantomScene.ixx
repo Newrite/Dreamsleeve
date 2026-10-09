@@ -109,9 +109,9 @@ public:
       // residency: NIF + native arrays + native GPU buffers + loader scratch.
       const auto bytes = Reservation(asset);
       if (bytes > budget.memoryBytes)
-        return A::Fail(P::Failure::LimitExceeded,
-          std::format("scene.memory: native_required={} available={} shared_asset={}",
-            bytes, budget.memoryBytes, asset.MemoryBytes()));
+        return A::Fail(
+          P::Failure::LimitExceeded,
+          std::format("scene.memory: native_required={} available={} shared_asset={}", bytes, budget.memoryBytes, asset.MemoryBytes()));
       return std::unique_ptr<Scene>(new Scene(std::move(asset), engine, context, generation, look, bytes));
     }
 

@@ -116,7 +116,7 @@ private:
     void ClearPublication(bool retainBasis = false)
     {
       // A compression basis has no generation/pose authority in the next context.
-      auto basis = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
+      auto       basis            = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
       const auto basisReservation = basis ? (basis == localAsset ? localReservation : previousReservation) : 0;
       ++localRevision;
       localGeneration.reset();
@@ -128,7 +128,7 @@ private:
       snapshot.reset();
       publication.reset();
       localAsset.reset();
-      previousAsset = std::move(basis);
+      previousAsset       = std::move(basis);
       previousReservation = basisReservation;
       encoded.reset();
       localReservation = 0;
@@ -155,10 +155,8 @@ private:
     {
       // Once decode completes, worker scratch and compressed input are released.
       // The immutable asset is shared with Game; charge it once here.
-      const auto contentBytes = remote.Asset() ? Retained(remote)
-                              : remote.WaitingBudget() ? 0 : Reservation(remote.descriptor);
-      return contentBytes + remote.sceneBytes +
-             (remote.previous ? Retained(*remote.previous) : 0);
+      const auto contentBytes = remote.Asset() ? Retained(remote) : remote.WaitingBudget() ? 0 : Reservation(remote.descriptor);
+      return contentBytes + remote.sceneBytes + (remote.previous ? Retained(*remote.previous) : 0);
     }
 
     std::uint64_t Reserved(std::uint64_t except = 0) const

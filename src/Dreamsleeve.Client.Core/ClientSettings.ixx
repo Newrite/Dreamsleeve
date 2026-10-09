@@ -229,15 +229,15 @@ namespace Dreamsleeve::Client
 
     export struct SettingsFile
     {
-      int               version{ClientSettingsVersion};
-      std::string       serverHost{Configuration{}.serverHost};
-      Port              serverPort{Configuration{}.serverPort};
-      std::string       authUrl{ClientSettings{}.authUrl};
-      Configuration     client{};
-      InterpolationFile interpolation{};
-      std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
-      std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
-      bool              allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
+      int                          version{ClientSettingsVersion};
+      std::string                  serverHost{Configuration{}.serverHost};
+      Port                         serverPort{Configuration{}.serverPort};
+      std::string                  authUrl{ClientSettings{}.authUrl};
+      Configuration                client{};
+      InterpolationFile            interpolation{};
+      std::size_t                  commandCapacity{ClientSettings{}.commandCapacity};
+      std::size_t                  stateCapacity{ClientSettings{}.stateCapacity};
+      bool                         allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
       std::vector<ConnectionRoute> routes;
     };
 
@@ -249,10 +249,13 @@ namespace Dreamsleeve::Client
       for (std::size_t index = 0; index < settings.routes.size(); ++index)
       {
         const auto& route = settings.routes[index];
-        const auto  field = [&](std::string_view key) { return std::format("routes[{}].{}", index + 1, key); };
-        const bool  control =
+        const auto  field = [&](std::string_view key) {
+          return std::format("routes[{}].{}", index + 1, key);
+        };
+        const bool control =
           std::ranges::any_of(route.name, [](char value) { return static_cast<unsigned char>(value) < 0x20 || value == 0x7F; });
-        if (route.name.empty() || route.name.size() > MaxRouteNameBytes || control || !names.insert(route.name).second) return field("name");
+        if (route.name.empty() || route.name.size() > MaxRouteNameBytes || control || !names.insert(route.name).second)
+          return field("name");
         if (!DreamNetAddress::IsHostSyntax(route.serverHost)) return field("serverHost");
         if (route.serverPort == 0) return field("serverPort");
         if (!Auth::ValidateUrl(route.authUrl, settings.allowInsecureRemoteAuth)) return field("authUrl");
@@ -338,7 +341,7 @@ namespace Dreamsleeve::Client
     // The historical file default predates the two phantom lanes. This is a
     // configuration migration; every connection still uses the current protocol.
     if (file.client.network.channelLimit == 3) file.client.network.channelLimit = MinChannels;
-    const auto& view       = file.interpolation;
+    const auto& view = file.interpolation;
     file.client.movement =
       {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
     return ClientSettings{

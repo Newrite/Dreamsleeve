@@ -7,8 +7,8 @@ import Dreamsleeve.Client.ProtocolChannels;
 export namespace Dreamsleeve::Client::Phantom::Wire
 {
 
-  constexpr auto          ModelsLane = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Models);
-  constexpr auto          PosesLane  = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Poses);
+  constexpr auto          ModelsLane          = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Models);
+  constexpr auto          PosesLane           = static_cast<std::uint8_t>(Dreamsleeve::Client::Wire::Channel::Poses);
   constexpr std::uint32_t MaxAssetPacketBytes = 4096;
 
   struct Descriptor
@@ -35,17 +35,17 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Publish
   {
-    Descriptor    asset;
-    std::uint64_t context{};
-    RequestId     request;
+    Descriptor                asset;
+    std::uint64_t             context{};
+    RequestId                 request;
     std::optional<AssetDelta> delta;
   };
 
   struct Download
   {
-    std::uint64_t player{};
-    Generation    generation;
-    RequestId     request;
+    std::uint64_t         player{};
+    Generation            generation;
+    RequestId             request;
     std::optional<Digest> baseHash;
   };
 
@@ -73,14 +73,18 @@ export namespace Dreamsleeve::Client::Phantom::Wire
 
   struct Transfer
   {
-    TransferId    transfer;
-    Descriptor    asset;
-    std::uint64_t player{};
-    bool          upload{};
-    RequestId     request;
-    std::string   httpToken;
+    TransferId                transfer;
+    Descriptor                asset;
+    std::uint64_t             player{};
+    bool                      upload{};
+    RequestId                 request;
+    std::string               httpToken;
     std::optional<AssetDelta> delta;
-    std::uint32_t BodyBytes() const { return delta ? delta->compressedBytes : asset.compressedBytes; }
+
+    std::uint32_t BodyBytes() const
+    {
+      return delta ? delta->compressedBytes : asset.compressedBytes;
+    }
   };
 
   struct Complete
