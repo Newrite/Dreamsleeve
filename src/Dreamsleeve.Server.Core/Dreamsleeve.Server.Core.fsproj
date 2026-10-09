@@ -38,6 +38,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="Dreamsleeve.Server.Tests" />
         <ProjectReference Include="../Dreamsleeve.Agent/Dreamsleeve.Agent.fsproj" />
         <ProjectReference Include="../Dreamsleeve.Server.Domain/Dreamsleeve.Server.Domain.fsproj" />
         <ProjectReference Include="../Dreamsleeve.Protocol.Dotnet/Dreamsleeve.Protocol.Dotnet.csproj" />

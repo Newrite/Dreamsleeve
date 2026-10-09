@@ -40,6 +40,7 @@ let main argv =
         PhantomHttpTests.tests
         PlayerSessionTests.tests
         ServerRuntimeTests.tests
+        RuntimeStartupTests.tests
         ServerRuntimeTests.hiddenIdentityTests
         ServerRuntimeTests.adminTests
         ServerRuntimeTests.displayNameTests

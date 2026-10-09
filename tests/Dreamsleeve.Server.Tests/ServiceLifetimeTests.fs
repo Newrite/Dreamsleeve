@@ -31,7 +31,27 @@ let private expectFailures expected result =
             | ServiceFailureReason.Faulted actual -> check (Object.ReferenceEquals(error, actual)) "The original lifecycle fault was replaced."
             | ServiceFailureReason.StartRejected actual -> failtestf "Unexpected startup refusal: %A" actual) expected actual
 
+let private failedTask<'Value> (errors: exn list) =
+    let completion = TaskCompletionSource<'Value>()
+    completion.SetException errors
+    completion.Task
+
 let tests = testList "Server service lifetime" [
+    case "compound serve and cleanup tasks retain every original cause at each stage" (fun () -> task {
+        use auth = authentication ()
+        let first = InvalidOperationException "serve first" :> exn
+        let second = InvalidOperationException "serve second" :> exn
+        let cleanupFirst = InvalidOperationException "cleanup first" :> exn
+        let cleanupSecond = InvalidOperationException "cleanup second" :> exn
+        let! result = ServiceLifetime.run auth (fun () -> Task.FromResult(Ok None))
+                          (fun _ -> failedTask<int> [first; second])
+                          (fun _ -> failedTask<unit> [cleanupFirst; cleanupSecond])
+                          stop
+        expectFailures [ServiceFailureStage.StartOrServe, first; ServiceFailureStage.StartOrServe, second
+                        ServiceFailureStage.StopAdmin, cleanupFirst; ServiceFailureStage.StopAdmin, cleanupSecond] result
+        check auth.Completion.IsCompletedSuccessfully "Compound failure skipped authentication cleanup."
+    })
+
     case "typed admin startup refusal skips serving and joins authentication" (fun () -> task {
         use auth = authentication ()
         let refusal = AgentStartError.InvalidCapacity("capacity", 0)

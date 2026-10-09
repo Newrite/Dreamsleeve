@@ -42,6 +42,7 @@
     <Compile Include="PhantomTests.fs" />
     <Compile Include="PhantomHttpTests.fs" />
     <Compile Include="ServerRuntimeTests.fs" />
+    <Compile Include="RuntimeStartupTests.fs" />
     <Compile Include="EnetTransportTests.fs" />
     <Compile Include="PhantomE2ETests.fs" />
     <Compile Include="TransportOwnerTests.fs" />

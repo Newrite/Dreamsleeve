@@ -97,6 +97,7 @@ module ServerRuntime =
         Schedule: AnnouncementSchedule
         Transport: ServerTransport
         Logger: ILogger
+        SourceAcquired: System.Threading.Tasks.Task -> unit
         mutable Sources: Sources option
         mutable Stopping: bool
         mutable StopDeadline: int64
@@ -529,54 +530,85 @@ module ServerRuntime =
         | Guilds of GuildsAgent.StartError
         | Presence of AgentStartError
 
+    type private SourceStartupCleanupException(rejection: SourceStartError, errors: exn list) =
+        inherit AggregateException($"Runtime source startup was refused ({rejection}) and its lifetime cleanup failed.", errors)
+        member _.Rejection = rejection
+
     let private initialize (options: ServerRuntimeOptions) authenticator state (context: ReliableAgentContext<ServerRuntimeMessage>) = task {
         let output = context.Ref.Map ServerRuntimeMessage.Host
         let game = state.Settings
         let started = ResizeArray<(unit -> unit) * System.Threading.Tasks.Task>()
         let track (agent: ReliableAgent<'Message>) =
             started.Add(agent.Abort, agent.Completion)
+            state.SourceAcquired agent.Completion
             agent
-        let chat = ChatRoomAgent.start options.Chat ChatChannelKind.Global output |> Result.map track |> Result.mapError SourceStartError.Chat
-        let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat game.Announcements) ChatChannelKind.System output
-                     |> Result.map track |> Result.mapError SourceStartError.Chat
-        let marks = GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
-                    |> Result.map track |> Result.mapError SourceStartError.GroundMarks
-        let guilds = GuildsAgent.start game.Guilds game.GuildLimits state.Moderation options.Chat.Rate state.Guilds output state.Logger
-                     |> Result.map track |> Result.mapError SourceStartError.Guilds
-        let observation = state.Phantoms |> Option.map PhantomAgent.observationMode |> Option.defaultValue PhantomObservationMode.Disabled
-        let presence = PresenceAgent.startObserved observation options.Presence output |> Result.map track |> Result.mapError SourceStartError.Presence
-        match chat, system, marks, guilds, presence with
-        | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
-        | _, _, _, Error error, _ | _, _, _, _, Error error ->
-            state.Logger.LogError("Source startup failed: {Error}", error)
-            // Every successful sibling is owned until its actual cleanup has finished.
-            for abort, _ in started do abort ()
-            try
-                do! System.Threading.Tasks.Task.WhenAll(started |> Seq.map snd)
-            with :? OperationCanceledException -> ()
-            context.Abort()
-        | Ok chat, Ok system, Ok marks, Ok guilds, Ok presence ->
-            context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
-            context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
-            context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
-            context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
-            context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
-            context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
-            context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
-            state.Sources <- Some {
-                Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
-                ChatCleanup = AgentOutbox.Create(state.CleanupCapacity, chat.Ref)
-                SystemCleanup = AgentOutbox.Create(state.CleanupCapacity, system.Ref)
-                PresenceCleanup = AgentOutbox.Create(state.CleanupCapacity, presence.Ref)
-                GroundMarksCleanup = AgentOutbox.Create(state.CleanupCapacity, marks.Ref)
-                GuildsCleanup = AgentOutbox.Create(state.CleanupCapacity, guilds.Ref)
-                ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
-            }
-            state.Transport.SetReadyHandler(fun () ->
-                context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentTryDeliveryResult.Posted)
-            schedule options state context
-            state.Logger.LogDebug("Server runtime started: up to {MaxSessions} connections, open timeout {OpenTimeoutMs} ms",
-                                  options.MaxSessions, options.OpenTimeoutMs)
+        let! outcome = OwnedCleanup.captureResult(fun () -> task {
+            let chat = ChatRoomAgent.start options.Chat ChatChannelKind.Global output |> Result.map track |> Result.mapError SourceStartError.Chat
+            let system = ChatRoomAgent.start (AnnouncementOptions.channelOptions options.Chat game.Announcements) ChatChannelKind.System output
+                         |> Result.map track |> Result.mapError SourceStartError.Chat
+            let marks = GroundMarksAgent.start game.GroundMarks game.GroundMarkRules state.Persistence.Loaded state.Persistence.NextId state.Persistence.Writer output state.Logger
+                        |> Result.map track |> Result.mapError SourceStartError.GroundMarks
+            let guilds = GuildsAgent.start game.Guilds game.GuildLimits state.Moderation options.Chat.Rate state.Guilds output state.Logger
+                         |> Result.map track |> Result.mapError SourceStartError.Guilds
+            let observation = state.Phantoms |> Option.map PhantomAgent.observationMode |> Option.defaultValue PhantomObservationMode.Disabled
+            let presence = PresenceAgent.startObserved observation options.Presence output |> Result.map track |> Result.mapError SourceStartError.Presence
+            return
+                match chat, system, marks, guilds, presence with
+                | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
+                | _, _, _, Error error, _ | _, _, _, _, Error error -> Error error
+                | Ok chat, Ok system, Ok marks, Ok guilds, Ok presence -> Ok(chat, system, marks, guilds, presence)
+        })
+        let releaseStarted () =
+            let children = List.ofSeq started
+            let aborts = children |> List.map (fun (abort, _) -> fun () -> abort (); System.Threading.Tasks.Task.CompletedTask)
+            let joins = children |> List.map (fun (_, completion) -> fun () -> (task {
+                let! errors = OwnedCleanup.capture(fun () -> completion)
+                // Only the actual cancellation of a child we just aborted is expected here.
+                if not completion.IsCanceled then do! OwnedCleanup.finish errors
+            } :> System.Threading.Tasks.Task))
+            OwnedCleanup.release (aborts @ joins)
+        let abortRuntime () = OwnedCleanup.capture(fun () -> context.Abort(); System.Threading.Tasks.Task.CompletedTask)
+        match outcome with
+        | Error initial ->
+            let! cleanup = releaseStarted ()
+            let! stopping = abortRuntime ()
+            return! OwnedCleanup.finish (initial @ cleanup @ stopping)
+        | Ok(Error refusal) ->
+            let! reporting = OwnedCleanup.capture(fun () -> state.Logger.LogError("Source startup failed: {Error}", refusal); System.Threading.Tasks.Task.CompletedTask)
+            let! cleanup = releaseStarted ()
+            let! stopping = abortRuntime ()
+            match reporting @ cleanup @ stopping with
+            | [] -> ()
+            | errors -> return! System.Threading.Tasks.Task.FromException<unit>(SourceStartupCleanupException(refusal, errors))
+        | Ok(Ok(chat, system, marks, guilds, presence)) ->
+            // A transfer fault still leaves the explicit ledger responsible for every returned owner.
+            let! transfer = OwnedCleanup.capture(fun () -> task {
+                context.Own(chat, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Chat, outcome))
+                context.Own(system, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.System, outcome))
+                context.Own(presence, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Presence, outcome))
+                context.Own(marks, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GroundMarks, outcome))
+                context.Own(guilds, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Guilds, outcome))
+                context.Watch(state.Guilds.WriterStopped, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.GuildStorage, outcome))
+                context.Watch(authenticator.Completion, fun outcome -> ServerRuntimeMessage.SourceStopped(SessionSource.Authentication, outcome))
+                state.Sources <- Some {
+                    Chat = chat; System = system; Presence = presence; GroundMarks = marks; Guilds = guilds
+                    ChatCleanup = AgentOutbox.Create(state.CleanupCapacity, chat.Ref)
+                    SystemCleanup = AgentOutbox.Create(state.CleanupCapacity, system.Ref)
+                    PresenceCleanup = AgentOutbox.Create(state.CleanupCapacity, presence.Ref)
+                    GroundMarksCleanup = AgentOutbox.Create(state.CleanupCapacity, marks.Ref)
+                    GuildsCleanup = AgentOutbox.Create(state.CleanupCapacity, guilds.Ref)
+                    ChatStopped = false; SystemStopped = false; PresenceStopped = false; GroundMarksStopped = false; GuildsStopped = false
+                }
+                state.Transport.SetReadyHandler(fun () ->
+                    context.Ref.TryPost ServerRuntimeMessage.TransportReady = AgentTryDeliveryResult.Posted)
+                schedule options state context
+                state.Logger.LogDebug("Server runtime started: up to {MaxSessions} connections, open timeout {OpenTimeoutMs} ms",
+                                      options.MaxSessions, options.OpenTimeoutMs)
+            })
+            if not transfer.IsEmpty then
+                let! cleanup = releaseStarted ()
+                let! stopping = abortRuntime ()
+                return! OwnedCleanup.finish (transfer @ cleanup @ stopping)
     }
 
     let private stopped (options: ServerRuntimeOptions) state context connectionId (outcome: Result<unit, exn>) =
@@ -611,7 +643,7 @@ module ServerRuntime =
 
     // Callbacks may remove routes. Reuse the detached iteration buffer and release
     // references afterwards; never keep a live Dictionary enumerator across close/reset.
-    let private visitRoutes state visit =
+    let inline private visitRoutes state ([<InlineIfLambda>] visit) =
         let count = state.Table.Connections.Count
         if state.RouteScratch.Length < count then
             state.RouteScratch <- Array.zeroCreate (max count (state.RouteScratch.Length * 2))
@@ -850,7 +882,7 @@ module ServerRuntime =
     /// transport AFTER this agent's Completion, including Abort/fault paths.
     /// The checked settings, moderation rules and pseudonym dictionary are
     /// fixed for the runtime lifetime.
-    let private startWithStorage storage (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
+    let private startWithStorage sourceAcquired storage (settings: GameSettings) (moderation: ModerationRules) (pseudonyms: PseudonymDictionary) (persistence: GroundMarkPersistence)
               (guilds: GuildPersistence) (authenticator: SessionAuthenticator) transport (logger: ILogger) =
         let options = settings.Runtime
         let agentOptions = { AgentOptions.create "server-runtime" with Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve }
@@ -864,6 +896,7 @@ module ServerRuntime =
                 Settings = settings; Moderation = moderation; Persistence = persistence; Guilds = guilds
                 Schedule = AnnouncementSchedule.create (now ()) settings.Schedule
                 Transport = transport; Logger = logger
+                SourceAcquired = sourceAcquired
                 Sources = None; Stopping = false; SourcesStopping = false; Ticker = None; TickInterval = interval; CleanupCapacity = cleanup; LastTick = 0L; StopDeadline = 0L
                 AddressBans = []
                 Phantoms = storage |> Option.map (fun (storage, http) -> PhantomAgent.create settings.Phantoms storage http transport.Send)
@@ -873,7 +906,11 @@ module ServerRuntime =
             Ok agent
 
     let start settings moderation pseudonyms persistence guilds authenticator transport logger =
-        startWithStorage None settings moderation pseudonyms persistence guilds authenticator transport logger
+        startWithStorage ignore None settings moderation pseudonyms persistence guilds authenticator transport logger
 
     let startWithPhantoms storage http settings moderation pseudonyms persistence guilds authenticator transport logger =
-        startWithStorage (Some (storage, http)) settings moderation pseudonyms persistence guilds authenticator transport logger
+        startWithStorage ignore (Some (storage, http)) settings moderation pseudonyms persistence guilds authenticator transport logger
+
+    /// Test observation of actual acquired completions; registration always precedes this callback.
+    let internal startObservedSources sourceAcquired settings moderation pseudonyms persistence guilds authenticator transport logger =
+        startWithStorage sourceAcquired None settings moderation pseudonyms persistence guilds authenticator transport logger

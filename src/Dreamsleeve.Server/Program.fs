@@ -194,33 +194,30 @@ let private waitForStop settings (authentication: ReliableAgent<AuthMessage>) (a
 }
 
 let private stopRuntime settings (logger: ILogger) (runtime: ReliableAgent<ServerRuntimeMessage>) = task {
-    if not runtime.Completion.IsCompleted then
-        use deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(float settings.Runtime.ShutdownTimeoutMs + 2000.0))
-        let! admitted = runtime.PostAsync(ServerRuntimeMessage.Stop, deadline.Token)
-        match admitted with
-        | AgentPostResult.Posted | AgentPostResult.Closed -> ()
-        | AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped -> runtime.Abort()
-
-        try
-            do! runtime.Completion.WaitAsync(deadline.Token)
-        with :? OperationCanceledException when deadline.IsCancellationRequested ->
-            logger.LogWarning("Shutdown guard elapsed; canceling remaining runtime work")
-            runtime.Abort()
-            do! runtime.Completion
+    if runtime.Completion.IsCompleted then
+        let! completion = OwnedCleanup.capture(fun () -> runtime.Completion)
+        return! OwnedCleanup.finish completion
     else
-        do! runtime.Completion
-}
-
-let private stopHost (host: Microsoft.AspNetCore.Builder.WebApplication option) (name: string) (logger: ILogger) = task {
-    match host with
-    | None -> return true
-    | Some host ->
-        try
-            do! host.StopAsync()
-            return true
-        with error ->
-            logger.LogError(error, "{Listener} listener shutdown failed", box name)
-            return false
+        use deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(float settings.Runtime.ShutdownTimeoutMs + 2000.0))
+        let! admission = OwnedCleanup.captureResult(fun () -> runtime.PostAsync(ServerRuntimeMessage.Stop, deadline.Token))
+        let! admissionFailures = task {
+            match admission with
+            | Ok (AgentPostResult.Posted | AgentPostResult.Closed) -> return []
+            | Ok (AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped) ->
+                return! OwnedCleanup.capture(fun () -> runtime.Abort(); Task.CompletedTask)
+            | Error errors ->
+                let! abort = OwnedCleanup.capture(fun () -> runtime.Abort(); Task.CompletedTask)
+                return errors @ abort
+        }
+        let! guarded = OwnedCleanup.capture(fun () -> runtime.Completion.WaitAsync(deadline.Token))
+        if runtime.Completion.IsCompleted then
+            let! completion = OwnedCleanup.capture(fun () -> runtime.Completion)
+            return! OwnedCleanup.finish (admissionFailures @ completion)
+        else
+            let! abort = OwnedCleanup.capture(fun () -> runtime.Abort(); Task.CompletedTask)
+            let! reporting = OwnedCleanup.capture(fun () -> logger.LogWarning("Shutdown guard elapsed; canceling remaining runtime work"); Task.CompletedTask)
+            let! completion = OwnedCleanup.capture(fun () -> runtime.Completion)
+            return! OwnedCleanup.finish (admissionFailures @ guarded @ abort @ reporting @ completion)
 }
 
 // Marks are moderated with the current word list when loaded: a text that the
@@ -261,12 +258,19 @@ let private WriterDrainSeconds = 30
 
 let private stopWriter (logger: ILogger) (what: string) (writer: ReliableAgent<'Write>) = task {
     writer.Complete() |> ignore
-    try do! writer.Completion.WaitAsync(TimeSpan.FromSeconds(float WriterDrainSeconds))
-    with :? TimeoutException ->
-        logger.LogError("{What} writes did not finish within {Seconds} s; dropping {Count} queued writes",
-                        what, WriterDrainSeconds, writer.QueueLength)
-        writer.Abort()
-        try do! writer.Completion with _ -> ()
+    let! guarded = OwnedCleanup.capture(fun () -> writer.Completion.WaitAsync(TimeSpan.FromSeconds(float WriterDrainSeconds)))
+    if not writer.Completion.IsCompleted then
+        // Stop admission before reporting; the logger cannot skip actual owner cleanup.
+        let! abort = OwnedCleanup.capture(fun () -> writer.Abort(); Task.CompletedTask)
+        let! reporting = OwnedCleanup.capture(fun () ->
+            logger.LogError("{What} writes did not finish within {Seconds} s; dropping {Count} queued writes", what, WriterDrainSeconds, writer.QueueLength)
+            Task.CompletedTask)
+        let! completion = OwnedCleanup.capture(fun () -> writer.Completion)
+        return! OwnedCleanup.finish (guarded @ abort @ reporting @ completion)
+    else
+        // The guard's wrapper may expose only one fault; inspect the actual writer task.
+        let! completion = OwnedCleanup.capture(fun () -> writer.Completion)
+        return! OwnedCleanup.finish completion
 }
 
 /// The game part, restarted as one: a fresh load of the marks and the guilds with
@@ -281,24 +285,24 @@ type private GameStartError =
     | Agent of AgentStartError
 
 let private joinAbortedOwner (completion: Task) = task {
-    try do! completion
-    with :? OperationCanceledException when completion.IsCanceled -> ()
+    let! errors = OwnedCleanup.capture(fun () -> completion)
+    if not completion.IsCanceled then return! OwnedCleanup.finish errors
 }
 
 let private abortWriters (writer: ReliableAgent<GroundMarkWrite>) (guildWriter: ReliableAgent<GuildWrite>) = task {
-    writer.Abort()
-    guildWriter.Abort()
-    let joined = Task.WhenAll [joinAbortedOwner writer.Completion :> Task; joinAbortedOwner guildWriter.Completion :> Task]
-    try do! joined
-    with error ->
-        if joined.IsFaulted then return! Task.FromException<unit> joined.Exception
-        else return! Task.FromException<unit> error
+    let! errors = OwnedCleanup.release [
+        (fun () -> writer.Abort(); Task.CompletedTask)
+        (fun () -> guildWriter.Abort(); Task.CompletedTask)
+        (fun () -> joinAbortedOwner writer.Completion :> Task)
+        (fun () -> joinAbortedOwner guildWriter.Completion :> Task)
+    ]
+    return! OwnedCleanup.finish errors
 }
 
 /// A real cleanup fault after a typed refusal preserves that refusal and all
 /// cleanup exceptions; ordinary refused startup does not manufacture an exception.
 type private GameStartCleanupException(rejection: GameStartError, failures: exn list) =
-    inherit AggregateException("Game startup was refused and construction cleanup failed.", failures)
+    inherit AggregateException($"Game startup was refused ({rejection}) and construction cleanup failed.", failures)
     member _.Rejection = rejection
 
 let private startGame publishHttp settings (game: GameSettings) moderation pseudonyms (authentication: ReliableAgent<AuthMessage>) (logger: ILogger)
@@ -348,35 +352,28 @@ let private startGame publishHttp settings (game: GameSettings) moderation pseud
                         | Error error -> return Error(GameStartError.Agent error)
                         | Ok runtime ->
                             cleanups.Add(fun () -> task {
-                                publishHttp None
                                 runtime.Abort()
                                 do! joinAbortedOwner runtime.Completion
                             })
+                            cleanups.Add(fun () -> publishHttp None; Task.CompletedTask)
                             publishHttp (Some phantomHttp)
                             let! admitted = authentication.Ref.PostAsync(AuthMessage.SetChangeTarget(runtime.Ref.Map ServerRuntimeMessage.AccountChanged))
                             match admitted with
                             | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
                             let completion = task {
-                                let! outcome = task {
-                                    try
-                                        do! runtime.Completion
-                                        return None
-                                    with error -> return Some error
-                                }
-                                if outcome.IsSome then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
-                                try transport.Dispose()
-                                with error -> logger.LogError(error, "ENet transport disposal failed")
-                                publishHttp None
-                                do! phantomHttp.Dispose()
-                                try do! phantomStorage.Dispose()
-                                with error -> logger.LogError(error, "Phantom storage disposal failed")
-                                try do! stopWriter logger "Ground mark" writer
-                                with error -> logger.LogError(error, "Ground mark writer failed")
-                                try do! stopWriter logger "Guild" guildWriter
-                                with error -> logger.LogError(error, "Guild writer failed")
-                                match outcome with
-                                | Some error -> raise error
-                                | None -> ()
+                                let! initial = OwnedCleanup.capture(fun () -> runtime.Completion)
+                                let! reporting = OwnedCleanup.capture(fun () ->
+                                    if not initial.IsEmpty then logger.LogWarning("Game runtime stopped; releasing ENet and finishing queued mark and guild writes")
+                                    Task.CompletedTask)
+                                let! cleanup = OwnedCleanup.release [
+                                    (fun () -> transport.Dispose(); Task.CompletedTask)
+                                    (fun () -> publishHttp None; Task.CompletedTask)
+                                    (fun () -> phantomHttp.Dispose() :> Task)
+                                    (fun () -> phantomStorage.Dispose() :> Task)
+                                    (fun () -> stopWriter logger "Ground mark" writer :> Task)
+                                    (fun () -> stopWriter logger "Guild" guildWriter :> Task)
+                                ]
+                                return! OwnedCleanup.finish (initial @ reporting @ cleanup)
                             }
                             return Ok {
                                 SupervisedChild.Value = runtime
@@ -384,37 +381,24 @@ let private startGame publishHttp settings (game: GameSettings) moderation pseud
                                 SupervisedChild.Stop = fun () -> stopRuntime settings logger runtime
                             }
         }
-        let! outcome = task {
-            try
-                let! result = construct
-                return Ok result
-            with error -> return Error error
-        }
-        let releaseFailedConstruction () = task {
-            let failures = ResizeArray<exn>()
-            for cleanup in cleanups |> Seq.rev do
-                try do! cleanup ()
-                with error ->
-                    failures.Add error
-                    logger.LogError(error, "Failed construction resource cleanup faulted")
-            return List.ofSeq failures
-        }
+        let! outcome = OwnedCleanup.captureResult(fun () -> construct)
+        let releaseFailedConstruction () = OwnedCleanup.release (cleanups |> Seq.rev |> List.ofSeq)
         match outcome with
         | Ok(Ok child) -> return Ok child
-        | Ok(Error error) ->
-            logger.LogError("Game startup refused: {Error}", error)
-            let! failures = releaseFailedConstruction ()
-            match failures with
-            | [] -> return Error error
-            | failures ->
-                return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(GameStartCleanupException(error, failures))
-        | Error error ->
-            logger.LogError(error, "Game startup faulted before ownership transfer")
-            let! failures = releaseFailedConstruction ()
-            match failures with
-            | [] -> return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>> error
-            | failures ->
-                return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(AggregateException("Game startup and resource cleanup faulted.", error :: failures))
+        | Ok(Error refusal) ->
+            let! reporting = OwnedCleanup.capture(fun () -> logger.LogError("Game startup refused: {Error}", refusal); Task.CompletedTask)
+            let! cleanup = releaseFailedConstruction ()
+            match reporting @ cleanup with
+            | [] -> return Error refusal
+            | errors -> return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(GameStartCleanupException(refusal, errors))
+        | Error initial ->
+            let! reporting = OwnedCleanup.capture(fun () ->
+                for error in initial do logger.LogError(error, "Game startup faulted before ownership transfer")
+                Task.CompletedTask)
+            let! cleanup = releaseFailedConstruction ()
+            match initial @ reporting @ cleanup with
+            | [error] -> return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>> error
+            | errors -> return! Task.FromException<Result<SupervisedChild<ReliableAgent<ServerRuntimeMessage>>, GameStartError>>(AggregateException("Game startup and resource cleanup faulted.", errors))
 }
 
 /// The supervisor's events in the log. firstStart settles with the first start:
@@ -455,102 +439,109 @@ let private serve settings (game: GameSettings) moderation configuration pseudon
     let mutable content = None
     let currentContent () = lock contentGate (fun () -> content)
     let publishContent value = lock contentGate (fun () -> content <- value)
-    match SessionDescriber.start 64 with
-    | Error error ->
-        logger.LogError("Session describer configuration refused: {Error}", error)
-        return 1
-    | Ok describer ->
-        let web = AuthRoutes.buildWithPhantoms currentContent game.Phantoms.HttpRequestsPerMinute (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
-        let mutable panel = None
-        let supervisor = ref None
-        let current () = supervisor.Value |> Option.bind (fun (running: AgentSupervisor<ReliableAgent<ServerRuntimeMessage>, GameStartError>) -> running.Current)
-        try
+    let admissionStops = ResizeArray<unit -> Task>()
+    let gameStops = ResizeArray<unit -> Task>()
+    let disposals = ResizeArray<unit -> Task>()
+    let construct () = task {
+        match SessionDescriber.start 64 with
+        | Error error ->
+            logger.LogError("Session describer configuration refused: {Error}", error)
+            return 1
+        | Ok describer ->
+            disposals.Add(fun () -> (task {
+                describer.Complete() |> ignore
+                let! errors = OwnedCleanup.capture(fun () -> describer.Completion)
+                return! OwnedCleanup.finish errors
+            } :> Task))
+            let web = AuthRoutes.buildWithPhantoms currentContent game.Phantoms.HttpRequestsPerMinute (WebPorts.authListener settings) (WebPorts.authRoutes settings) moderation (WebPorts.auth settings authentication) log
+            admissionStops.Add(fun () -> web.StopAsync())
+            disposals.Add(fun () -> web.DisposeAsync().AsTask())
+            let supervisor = ref None
+            let current () = supervisor.Value |> Option.bind (fun (running: AgentSupervisor<ReliableAgent<ServerRuntimeMessage>, GameStartError>) -> running.Current)
             let canceled = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
             let handler = ConsoleCancelEventHandler(fun _ event ->
                 event.Cancel <- true
                 canceled.TrySetResult() |> ignore)
             Console.CancelKeyPress.AddHandler handler
-            use hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
-
-            try
-                let mutable exitCode = 0
-                try
-                    do! web.StartAsync()
-                    // The panel starts after authentication and stops before the game part.
-                    let mutable canStartGame = true
-                    match admin with
-                    | Some service ->
-                        let ports = WebPorts.admin service authentication current describer configuration
-                        let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
-                        panel <- Some host
-                        do! host.StartAsync()
-                        logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
-                        let! outcome =
-                            service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
-                            |> consoleCommand "Admin startup status" (fun status -> task {
-                                match status with
-                                | Ok (AdminReply.Configured false) ->
-                                    return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
-                                | Ok _ -> return ConsoleCommandOutcome.Handled
-                                | Error error ->
-                                    logger.LogWarning("Admin panel status unavailable: {Error}", error)
-                                    return ConsoleCommandOutcome.Handled
-                            })
-                        match outcome with
-                        | ConsoleCommandOutcome.Handled -> ()
-                        | ConsoleCommandOutcome.Unconfirmed ->
-                            canStartGame <- false
-                            exitCode <- 1
-                        | ConsoleCommandOutcome.StopServer error ->
-                            logger.LogError(error, "Admin startup request failed")
-                            canStartGame <- false
-                            exitCode <- 1
-                    | None -> logger.LogInformation("Admin panel disabled")
-                    if canStartGame then
-                        let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
-                        let startedSupervisor =
-                            AgentSupervisor.tryStart "game-supervisor" (Configuration.restartPolicy settings.Recovery)
-                                (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
-                        match startedSupervisor with
+            disposals.Add(fun () -> Console.CancelKeyPress.RemoveHandler handler; Task.CompletedTask)
+            let hostStopping = web.Lifetime.ApplicationStopping.Register(fun () -> canceled.TrySetResult() |> ignore)
+            disposals.Add(fun () -> hostStopping.Dispose(); Task.CompletedTask)
+            let mutable exitCode = 0
+            do! web.StartAsync()
+            // The panel starts after authentication and stops before the game part.
+            let mutable canStartGame = true
+            match admin with
+            | Some service ->
+                let ports = WebPorts.admin service authentication current describer configuration
+                let host = AdminRoutes.build (WebPorts.adminListener settings) (WebPorts.adminRoutes settings moderation) ports log
+                admissionStops.Insert(0, fun () -> host.StopAsync())
+                disposals.Add(fun () -> host.DisposeAsync().AsTask())
+                do! host.StartAsync()
+                logger.LogInformation("Admin panel: {AdminUrl}", settings.Admin.Listener.ListenUrl)
+                let! outcome =
+                    service.TryAskAsync(fun reply -> AdminMessage.Access(AdminCommand.Status, reply))
+                    |> consoleCommand "Admin startup status" (fun status -> task {
+                        match status with
+                        | Ok (AdminReply.Configured false) ->
+                            return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+                        | Ok _ -> return ConsoleCommandOutcome.Handled
                         | Error error ->
-                            logger.LogError("Supervisor configuration refused: {Error}", error)
-                            exitCode <- 1
-                        | Ok running ->
-                            supervisor.Value <- Some running
-                            let! started = firstStart.Task
-                            if started then
-                                let! serviceFailure = waitForStop settings authentication admin current running.Completion canceled.Task
-                                match serviceFailure with
-                                | None -> ()
-                                | Some error ->
-                                    logger.LogError(error, "Console service request faulted")
-                                    exitCode <- 1
-                            if not started || running.Completion.IsFaulted then exitCode <- 1
-                with error ->
-                    logger.LogError(error, "Server listener failed")
+                            logger.LogWarning("Admin panel status unavailable: {Error}", error)
+                            return ConsoleCommandOutcome.Handled
+                    })
+                match outcome with
+                | ConsoleCommandOutcome.Handled -> ()
+                | ConsoleCommandOutcome.Unconfirmed ->
+                    canStartGame <- false
                     exitCode <- 1
-
-                // Stop HTTP admission before stopping the account and admin agents.
-                // Existing bounded requests may finish while the ENet runtime drains.
-                let! panelStopped = stopHost panel "Admin" logger
-                let! authStopped = stopHost (Some web) "Authentication" logger
-                if not (panelStopped && authStopped) then exitCode <- 1
-
-                match supervisor.Value with
-                | Some running ->
-                    try do! running.StopAsync()
-                    with error ->
-                        logger.LogError(error, "Game runtime stopped with an error")
-                        exitCode <- 1
-                | None -> ()
-                return exitCode
-            finally
-                Console.CancelKeyPress.RemoveHandler handler
-        finally
-            panel |> Option.iter (fun host -> host.DisposeAsync().AsTask().GetAwaiter().GetResult())
-            web.DisposeAsync().AsTask().GetAwaiter().GetResult()
-            describer.Complete() |> ignore
-            describer.Completion.GetAwaiter().GetResult()
+                | ConsoleCommandOutcome.StopServer error ->
+                    logger.LogError(error, "Admin startup request failed")
+                    canStartGame <- false
+                    exitCode <- 1
+            | None -> logger.LogInformation("Admin panel disabled")
+            if canStartGame then
+                let firstStart = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                let startedSupervisor =
+                    AgentSupervisor.tryStart "game-supervisor" (Configuration.restartPolicy settings.Recovery)
+                        (startGame publishContent settings game moderation pseudonyms authentication logger) (gameEvents settings logger firstStart)
+                match startedSupervisor with
+                | Error error ->
+                    logger.LogError("Supervisor configuration refused: {Error}", error)
+                    exitCode <- 1
+                | Ok running ->
+                    supervisor.Value <- Some running
+                    gameStops.Add(fun () -> (task {
+                        let! stopped = OwnedCleanup.capture(fun () -> running.StopAsync())
+                        // StopAsync deliberately consumes this supervisor's sole prior exhaustion.
+                        // For an actual stop fault, Completion is authoritative for all causes.
+                        if not stopped.IsEmpty then
+                            let! completed = OwnedCleanup.capture(fun () -> running.Completion)
+                            return! OwnedCleanup.finish (if completed.IsEmpty then stopped else completed)
+                    } :> Task))
+                    let! _ = Task.WhenAny(firstStart.Task :> Task, running.Completion)
+                    let started = firstStart.Task.IsCompletedSuccessfully && firstStart.Task.Result
+                    if started then
+                        let! serviceFailure = waitForStop settings authentication admin current running.Completion canceled.Task
+                        match serviceFailure with
+                        | None -> ()
+                        | Some error ->
+                            logger.LogError(error, "Console service request faulted")
+                            exitCode <- 1
+                    if not started || running.Completion.IsFaulted then exitCode <- 1
+            return exitCode
+    }
+    let! outcome = OwnedCleanup.captureResult construct
+    // Close HTTP admission, join the game, then release hosts/registrations/describer independently.
+    let actions = List.ofSeq admissionStops @ List.ofSeq gameStops @ (disposals |> Seq.rev |> List.ofSeq)
+    let! cleanup = OwnedCleanup.release actions
+    let initial, exitCode = match outcome with Ok code -> [], code | Error errors -> errors, 1
+    let! reporting = OwnedCleanup.capture(fun () ->
+        for error in initial @ cleanup do logger.LogError(error, "Server listener lifetime failed")
+        Task.CompletedTask)
+    match initial @ cleanup @ reporting with
+    | [] -> return exitCode
+    | [error] -> return! Task.FromException<int> error
+    | errors -> return! Task.FromException<int>(AggregateException("Server listeners and owned cleanup failed.", errors))
 }
 
 let private stopAuthentication (authentication: ReliableAgent<AuthMessage>) = task {
@@ -559,7 +550,8 @@ let private stopAuthentication (authentication: ReliableAgent<AuthMessage>) = ta
         match admitted with
         | AgentPostResult.Posted | AgentPostResult.Closed -> ()
         | AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped -> authentication.Abort()
-    do! authentication.Completion
+    let! errors = OwnedCleanup.capture(fun () -> authentication.Completion)
+    return! OwnedCleanup.finish errors
 }
 
 let private stopAdmin (admin: ReliableAgent<AdminMessage> option) = task {
@@ -569,8 +561,11 @@ let private stopAdmin (admin: ReliableAgent<AdminMessage> option) = task {
         match admitted with
         | AgentPostResult.Posted | AgentPostResult.Closed -> ()
         | AgentPostResult.Canceled | AgentPostResult.Full | AgentPostResult.Dropped -> service.Abort()
-        do! service.Completion
-    | Some service -> do! service.Completion
+        let! errors = OwnedCleanup.capture(fun () -> service.Completion)
+        return! OwnedCleanup.finish errors
+    | Some service ->
+        let! errors = OwnedCleanup.capture(fun () -> service.Completion)
+        return! OwnedCleanup.finish errors
     | None -> ()
 }
 
@@ -590,6 +585,16 @@ let private configurationView (settings: ApplicationConfig) (pseudonyms: Dreamsl
         { Title = "Псевдонимы"; Text = $"{pseudonyms.Count} имён; файл {settings.Identity.PseudonymsPath}" }
     ]
     fun () -> sections
+
+type private ServiceReportingException(failures: ServiceFailure list, reporting: exn list) =
+    inherit AggregateException(
+        "Service lifecycle failure reporting also failed. " +
+        (failures |> List.choose (fun failure ->
+            match failure.Reason with
+            | ServiceFailureReason.StartRejected error -> Some $"Startup refused during {failure.Stage}: {error}."
+            | ServiceFailureReason.Faulted _ -> None) |> String.concat " "),
+        (failures |> List.choose (fun failure -> match failure.Reason with ServiceFailureReason.Faulted error -> Some error | ServiceFailureReason.StartRejected _ -> None)) @ reporting)
+    member _.Failures = failures
 
 let private run (settings: ApplicationConfig, game: GameSettings) = task {
     use log = ServerLogging.create settings.Logging
@@ -642,14 +647,19 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
                     logger.LogInformation("Server stopped with exit code {ExitCode}", exitCode)
                     return exitCode
                 | Error failures ->
-                    for failure in failures do
-                        match failure.Reason with
-                        | ServiceFailureReason.StartRejected error -> logger.LogError("Server service startup refused during {Stage}: {Failure}", failure.Stage, error)
-                        | ServiceFailureReason.Faulted error -> logger.LogError(error, "Server service lifecycle failed during {Stage}", failure.Stage)
-                    return 1
+                    let! reporting = OwnedCleanup.release [
+                        for failure in failures -> fun () ->
+                            match failure.Reason with
+                            | ServiceFailureReason.StartRejected error -> logger.LogError("Server service startup refused during {Stage}: {Failure}", failure.Stage, error)
+                            | ServiceFailureReason.Faulted error -> logger.LogError(error, "Server service lifecycle failed during {Stage}", failure.Stage)
+                            Task.CompletedTask
+                    ]
+                    if reporting.IsEmpty then return 1
+                    else return! Task.FromException<int>(ServiceReportingException(failures, reporting))
     with error ->
-        logger.LogError(error, "Server failed")
-        return 1
+        let! reporting = OwnedCleanup.capture(fun () -> logger.LogError(error, "Server failed"); Task.CompletedTask)
+        if reporting.IsEmpty then return 1
+        else return! Task.FromException<int>(AggregateException("Server failure reporting also failed.", error :: reporting))
 }
 
 [<EntryPoint>]
@@ -669,5 +679,5 @@ let main args =
     | Ok (LaunchCommand.Run(settings, game)) ->
         try run (settings, game) |> fun work -> work.GetAwaiter().GetResult()
         with error ->
-            eprintfn "Server startup failed: %s" error.Message
+            eprintfn "Server startup failed: %s" (error.ToString())
             1

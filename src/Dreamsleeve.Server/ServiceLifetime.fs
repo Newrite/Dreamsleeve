@@ -29,21 +29,22 @@ module ServiceLifetime =
         let failures = ResizeArray<ServiceFailure>()
         let mutable admin = None
         let mutable exitCode = 1
-        // This is the server lifecycle boundary, not an operation adapter.
-        try
-            match! startAdmin () with
-            | Error error -> failures.Add { Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.StartRejected error }
-            | Ok started ->
-                admin <- started
-                let! result = serve admin
-                exitCode <- result
-        with error -> failures.Add { Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.Faulted error }
+        // These are lifetime boundaries: inspect the actual returned tasks before wrappers select one fault.
+        let record (stage: ServiceFailureStage) (errors: exn list) =
+            for error in errors do failures.Add { Stage = stage; Reason = ServiceFailureReason.Faulted error }
+        match! OwnedCleanup.captureResult startAdmin with
+        | Error errors -> record ServiceFailureStage.StartOrServe errors
+        | Ok(Error error) -> failures.Add { Stage = ServiceFailureStage.StartOrServe; Reason = ServiceFailureReason.StartRejected error }
+        | Ok(Ok started) ->
+            admin <- started
+            match! OwnedCleanup.captureResult(fun () -> serve admin) with
+            | Ok result -> exitCode <- result
+            | Error errors -> record ServiceFailureStage.StartOrServe errors
 
-        try do! stopAdmin admin
-        with error -> failures.Add { Stage = ServiceFailureStage.StopAdmin; Reason = ServiceFailureReason.Faulted error }
-
-        try do! stopAuthentication authentication
-        with error -> failures.Add { Stage = ServiceFailureStage.StopAuthentication; Reason = ServiceFailureReason.Faulted error }
+        let! adminErrors = OwnedCleanup.capture(fun () -> stopAdmin admin :> Task)
+        record ServiceFailureStage.StopAdmin adminErrors
+        let! authenticationErrors = OwnedCleanup.capture(fun () -> stopAuthentication authentication :> Task)
+        record ServiceFailureStage.StopAuthentication authenticationErrors
 
         if failures.Count = 0 then return Ok exitCode
         else return Error(List.ofSeq failures)
