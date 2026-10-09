@@ -41,6 +41,7 @@ public:
       book.limits = limits;
       for (auto& guild : guilds)
         if (auto added = book.Add(std::move(guild)); !added) return std::unexpected{std::move(added.error())};
+
       for (auto& invite : invites)
       {
         if (book.FindInvite(invite.guildId))
@@ -49,6 +50,7 @@ public:
           };
         book.invites.push_back(std::move(invite));
       }
+
       book.revision = 0;
       return book;
     }
@@ -106,11 +108,13 @@ public:
         return std::unexpected{
             Domain::Error{Domain::ErrorCode::DuplicateKey, "guild_id"}
         };
+
       for (auto member = guild.members.begin(); member != guild.members.end(); ++member)
         if (std::ranges::contains(guild.members.begin(), member, member->profile.playerId, MemberId))
           return std::unexpected{
               Domain::Error{Domain::ErrorCode::DuplicatePlayer, "members"}
           };
+
       guilds.push_back(std::move(guild));
       ++revision;
       return {};
@@ -121,6 +125,7 @@ public:
     {
       const auto found = std::ranges::find(guilds, guildId, &Domain::Guild::guildId);
       if (found == guilds.end()) return UnknownGuild();
+
       if (removals.size() == RecentRemovals) removals.erase(removals.begin());
       removals.push_back({++revision, guildId, std::move(found->name), reason});
       guilds.erase(found);
@@ -132,6 +137,7 @@ public:
     {
       auto* guild = FindMutable(guildId);
       if (!guild) return UnknownGuild();
+
       auto found = std::ranges::find(guild->members, member.profile.playerId, MemberId);
       if (found == guild->members.end())
         guild->members.push_back(std::move(member));

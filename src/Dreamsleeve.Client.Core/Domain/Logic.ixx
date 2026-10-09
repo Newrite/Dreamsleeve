@@ -95,9 +95,11 @@ export namespace Domain::Checks
   // years 1..99999, Tamriel months of fixed length, 24 hours.
   bool ValidGameDate(const GameDate& value)
   {
-    return value.era >= 1 && value.era <= 99 && value.year >= 1 && value.year <= 99999 && value.month >= 1 && value.month <= 12 &&
-           value.day >= 1 && value.day <= Calendar::MonthLength(value.month) && value.dayOfWeek <= 6 && value.hour <= 23 &&
-           value.minute <= 59;
+    return value.era >= 1 && value.era <= 99 &&
+           value.year >= 1 && value.year <= 99999 &&
+           value.month >= 1 && value.month <= 12 &&
+           value.day >= 1 && value.day <= Calendar::MonthLength(value.month) &&
+           value.dayOfWeek <= 6 && value.hour <= 23 && value.minute <= 59;
   }
 
 }
@@ -214,6 +216,7 @@ export namespace Domain::Motion
     }
     else if ((stampUs == 0) != (previousStampUs == 0))
       return std::nullopt;
+
     if (time - receivedAt > delay || receivedAt - time > maxGap) return std::nullopt;
     return time;
   }
@@ -225,6 +228,7 @@ export namespace Domain::Motion
     const auto lerp = [alpha](float a, float b) {
       return static_cast<float>(std::lerp(static_cast<double>(a), static_cast<double>(b), alpha));
     };
+
     auto result        = to;
     result.position    = {lerp(from.position.X, to.position.X), lerp(from.position.Y, to.position.Y), lerp(from.position.Z, to.position.Z)};
     result.sampledAtUs = 0;
@@ -271,6 +275,7 @@ export namespace Domain::Players
   {
     for (const auto& key : patch.removed)
       values.erase(key);
+
     for (const auto& [key, info] : patch.set)
       values.insert_or_assign(key, info);
   }

@@ -121,7 +121,8 @@ export namespace Domain
   {
     FormKey     form{};
     std::string name{};
-    bool        operator==(const NamedForm&) const = default;
+
+    bool operator==(const NamedForm&) const = default;
   };
 
   struct PlayerActivity
@@ -130,7 +131,8 @@ export namespace Domain
     std::optional<std::string> targetName;
     LockDifficulty             lockDifficulty{LockDifficulty::Unknown};
     std::optional<std::string> menuKey;
-    bool                       operator==(const PlayerActivity&) const = default;
+
+    bool operator==(const PlayerActivity&) const = default;
   };
 
   struct PlaceDescription
@@ -140,7 +142,8 @@ export namespace Domain
     std::string nearbyMarkerName;
     std::string markerKind;
     bool        isInterior{};
-    bool        operator==(const PlaceDescription&) const = default;
+
+    bool operator==(const PlaceDescription&) const = default;
   };
 
   struct PlayerDetails
@@ -150,7 +153,8 @@ export namespace Domain
     PlayerActivity                  activity{};
     std::optional<PlaceDescription> place;
     std::optional<std::int64_t>     gameStartedAtUnixMs;
-    bool                            operator==(const PlayerDetails&) const = default;
+
+    bool operator==(const PlayerDetails&) const = default;
   };
 
   // What changed in a player's actor values: keys removed first, then the new
@@ -159,7 +163,8 @@ export namespace Domain
   {
     std::vector<ActorValueKey>                            removed;
     std::vector<std::pair<ActorValueKey, ActorValueInfo>> set;
-    bool                                                  operator==(const ActorValuesPatch&) const = default;
+
+    bool operator==(const ActorValuesPatch&) const = default;
   };
 
   // Present components replace the old ones; an empty inner value clears an
@@ -171,7 +176,8 @@ export namespace Domain
     std::optional<PlayerActivity>                  activity;
     std::optional<std::optional<PlaceDescription>> place;
     std::optional<std::optional<std::int64_t>>     gameStartedAtUnixMs;
-    bool                                           operator==(const PlayerDetailsPatch&) const = default;
+
+    bool operator==(const PlayerDetailsPatch&) const = default;
   };
 
   // A pseudonymous profile is what others see of a player who hides their
