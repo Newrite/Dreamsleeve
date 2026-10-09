@@ -94,14 +94,107 @@ let private readConsole (writer: ChannelWriter<string option>) (token: Cancellat
     | :? OperationCanceledException -> writer.TryComplete() |> ignore
     | error -> writer.TryComplete(error) |> ignore
 
+// Command dispatch has no ownership of the console reader or stop state.
+// It reports the existing outcome; waitForStop alone decides whether to stop.
+let private dispatchConsole settings (authentication: ReliableAgent<AuthMessage>)
+                            (admin: ReliableAgent<AdminMessage> option)
+                            (game: unit -> ReliableAgent<ServerRuntimeMessage> option)
+                            (parts: string array) = task {
+    let chatInput = settings.Server.ChatInput
+
+    match parts with
+    | [| "announce"; message |] ->
+        // An administrator notice for everyone online; it also enters the chat history.
+        match Dreamsleeve.Server.Domain.ChatMessageText.create chatInput.MessageText message with
+        | Error _ ->
+            printfn "Announcement text must have 1..%d characters without control characters." chatInput.MessageText
+        | Ok text ->
+            match game () with
+            | None -> printfn "The game runtime is restarting; announcement not queued."
+            | Some runtime ->
+                let announcement = {
+                    Text = text
+                    Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin
+                }
+                match runtime.TryPost(ServerRuntimeMessage.Announce announcement) with
+                | AgentPostResult.Posted -> printfn "Announcement queued."
+                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
+                    printfn "Runtime is busy; announcement not queued."
+        return ConsoleCommandOutcome.Handled
+
+    | [| ("reset-password" | "revoke-access") as operation; name |] ->
+        match Dreamsleeve.Server.Domain.Username.create chatInput.Username name with
+        | Error _ ->
+            printfn "Invalid username."
+            return ConsoleCommandOutcome.Handled
+        | Ok username ->
+            let command =
+                if operation = "reset-password" then AccountAccessCommand.CreatePasswordReset username
+                else AccountAccessCommand.RevokeAccount username
+
+            return! authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
+                |> consoleCommand "Account command" (fun result -> task {
+                    match result with
+                    | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
+                    | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
+                    | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.ProfileChanged _)
+                    | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
+                    | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
+                    | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
+                    | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _)
+                    | Ok (AccountAccessResult.SteamStarted _) | Ok AccountAccessResult.SteamPending ->
+                        printfn "Unexpected administrative result."
+                    | Error error -> printfn "Administrative operation failed: %A" error
+                    return ConsoleCommandOutcome.Handled
+                })
+
+    | [| "registration" |] | [| "registration"; _ |] ->
+        // Without a mode it shows the one in force.
+        let command =
+            if parts.Length = 1 then Some AccountAccessCommand.ReadRegistration
+            else
+                Dreamsleeve.Server.Domain.RegistrationMode.ofKey (parts[1].Trim())
+                |> Option.map (fun mode -> AccountAccessCommand.SetRegistration(mode, ValueNone))
+
+        match command with
+        | None ->
+            printfn "Registration modes: open | steam | manual."
+            return ConsoleCommandOutcome.Handled
+        | Some command ->
+            return! authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
+                |> consoleCommand "Registration" (fun result -> task {
+                    match result with
+                    | Ok (AccountAccessResult.Registration mode) ->
+                        printfn "Registration mode: %s" (Dreamsleeve.Server.Domain.RegistrationMode.key mode)
+                    | Ok _ -> printfn "Unexpected registration result."
+                    | Error error -> printfn "Registration mode not changed: %A" error
+                    return ConsoleCommandOutcome.Handled
+                })
+
+    | [| "admin-setup" |] ->
+        return! adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
+
+    | [| "admin-reset"; name |] ->
+        match Dreamsleeve.Server.Domain.Username.create chatInput.Username name with
+        | Error _ ->
+            printfn "Invalid administrator name."
+            return ConsoleCommandOutcome.Handled
+        | Ok name ->
+            return! adminCode admin (AdminCommand.IssueResetCode name) settings.Admin.Service.CodeLifetimeMinutes
+
+    | _ ->
+        printfn "Commands: %s" Commands
+        return ConsoleCommandOutcome.Handled
+}
+
 let private waitForStop settings (authentication: ReliableAgent<AuthMessage>) (admin: ReliableAgent<AdminMessage> option)
                         (game: unit -> ReliableAgent<ServerRuntimeMessage> option) (supervision: Task) (canceled: Task) = task {
-    let chatInput = settings.Server.ChatInput
     use inputCancellation = new CancellationTokenSource()
     let input = Channel.CreateBounded<string option>(BoundedChannelOptions(1, SingleReader = true, SingleWriter = true))
     let _reader = Task.Run(Action(readConsole input.Writer inputCancellation.Token))
     let mutable stopping = false
     let mutable serviceFailure = None
+
     let applyOutcome = function
         | ConsoleCommandOutcome.Handled | ConsoleCommandOutcome.Unconfirmed -> ()
         | ConsoleCommandOutcome.StopServer error ->
@@ -120,76 +213,14 @@ let private waitForStop settings (authentication: ReliableAgent<AuthMessage>) (a
                 | Some value when value.Trim().Equals("quit", StringComparison.OrdinalIgnoreCase) -> stopping <- true
                 | Some value when value.Trim().Length > 0 ->
                     let parts = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)
-                    if parts.Length = 2 && parts[0] = "announce" then
-                        // An administrator notice for everyone online; it also enters the chat history.
-                        match Dreamsleeve.Server.Domain.ChatMessageText.create chatInput.MessageText parts[1] with
-                        | Error _ -> printfn "Announcement text must have 1..%d characters without control characters." chatInput.MessageText
-                        | Ok text ->
-                            match game () with
-                            | None -> printfn "The game runtime is restarting; announcement not queued."
-                            | Some runtime ->
-                                match runtime.TryPost(ServerRuntimeMessage.Announce { Text = text; Kind = Dreamsleeve.Server.Domain.AnnouncementKind.Admin }) with
-                                | AgentPostResult.Posted -> printfn "Announcement queued."
-                                | AgentPostResult.Full | AgentPostResult.Closed | AgentPostResult.Canceled | AgentPostResult.Dropped ->
-                                    printfn "Runtime is busy; announcement not queued."
-                    elif parts.Length = 2 && (parts[0] = "reset-password" || parts[0] = "revoke-access") then
-                        match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
-                        | Error _ -> printfn "Invalid username."
-                        | Ok username ->
-                            let command = if parts[0] = "reset-password" then AccountAccessCommand.CreatePasswordReset username else AccountAccessCommand.RevokeAccount username
-                            let! outcome =
-                                authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
-                                |> consoleCommand "Account command" (fun result -> task {
-                                    match result with
-                                    | Ok (AccountAccessResult.PasswordResetCreated code) -> printfn "One-time reset code (deliver privately): %s" code
-                                    | Ok AccountAccessResult.Completed -> printfn "Account access revoked."
-                                    | Ok (AccountAccessResult.Registered _) | Ok (AccountAccessResult.SignedIn _) | Ok (AccountAccessResult.ProfileChanged _)
-                                    | Ok (AccountAccessResult.Sanctioned _) | Ok (AccountAccessResult.SanctionLifted _) | Ok AccountAccessResult.Kicked
-                                    | Ok (AccountAccessResult.ActiveSanctions _) | Ok (AccountAccessResult.AccountCreated _) | Ok (AccountAccessResult.Registration _)
-                                    | Ok (AccountAccessResult.AddressesBanned _) | Ok (AccountAccessResult.AddressBanLifted _) | Ok (AccountAccessResult.AddressBans _)
-                                    | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _)
-                                    | Ok (AccountAccessResult.SteamStarted _) | Ok AccountAccessResult.SteamPending ->
-                                        printfn "Unexpected administrative result."
-                                    | Error error -> printfn "Administrative operation failed: %A" error
-                                    return ConsoleCommandOutcome.Handled
-                                })
-                            applyOutcome outcome
-                    elif parts[0] = "registration" then
-                        // Without a mode it shows the one in force.
-                        let command =
-                            if parts.Length = 1 then Some AccountAccessCommand.ReadRegistration
-                            else
-                                Dreamsleeve.Server.Domain.RegistrationMode.ofKey (parts[1].Trim())
-                                |> Option.map (fun mode -> AccountAccessCommand.SetRegistration(mode, ValueNone))
-                        match command with
-                        | None -> printfn "Registration modes: open | steam | manual."
-                        | Some command ->
-                            let! outcome =
-                                authentication.TryAskAsync(fun reply -> AuthMessage.Access(command, reply))
-                                |> consoleCommand "Registration" (fun result -> task {
-                                    match result with
-                                    | Ok (AccountAccessResult.Registration mode) ->
-                                        printfn "Registration mode: %s" (Dreamsleeve.Server.Domain.RegistrationMode.key mode)
-                                    | Ok _ -> printfn "Unexpected registration result."
-                                    | Error error -> printfn "Registration mode not changed: %A" error
-                                    return ConsoleCommandOutcome.Handled
-                                })
-                            applyOutcome outcome
-                    elif parts.Length = 1 && parts[0] = "admin-setup" then
-                        let! outcome = adminCode admin AdminCommand.IssueSetupCode settings.Admin.Service.CodeLifetimeMinutes
-                        applyOutcome outcome
-                    elif parts.Length = 2 && parts[0] = "admin-reset" then
-                        match Dreamsleeve.Server.Domain.Username.create chatInput.Username parts[1] with
-                        | Error _ -> printfn "Invalid administrator name."
-                        | Ok name ->
-                            let! outcome = adminCode admin (AdminCommand.IssueResetCode name) settings.Admin.Service.CodeLifetimeMinutes
-                            applyOutcome outcome
-                    else printfn "Commands: %s" Commands
+                    let! outcome = dispatchConsole settings authentication admin game parts
+                    applyOutcome outcome
                 | Some _ -> ()
             else
                 stopping <- true
     finally
         inputCancellation.Cancel()
+
     return serviceFailure
 }
 
@@ -233,9 +264,12 @@ let private loadGroundMarks settings moderation (logger: ILogger) = task {
         let blocked, kept =
             stored.Marks |> List.partition (fun record -> not (Dreamsleeve.Server.Domain.Moderation.allows moderation record.Mark.Text))
         let records =
-            kept |> List.map (fun record ->
-                { Mark = Dreamsleeve.Server.Domain.GroundMark.withFlagged (Dreamsleeve.Server.Domain.Moderation.flag moderation record.Mark.Text) record.Mark
-                  Author = Dreamsleeve.Server.Domain.Moderation.publicProfile moderation record.Author } : StoredGroundMark)
+            kept
+            |> List.map (fun record ->
+                {
+                    Mark = Dreamsleeve.Server.Domain.GroundMark.withFlagged (Dreamsleeve.Server.Domain.Moderation.flag moderation record.Mark.Text) record.Mark
+                    Author = Dreamsleeve.Server.Domain.Moderation.publicProfile moderation record.Author
+                } : StoredGroundMark)
         if not blocked.IsEmpty then
             logger.LogWarning("Withholding {Count} stored ground marks that the current word list refuses", blocked.Length)
         return Ok (records, stored.NextId)
@@ -343,10 +377,17 @@ let private startGame publishHttp settings (game: GameSettings) moderation pseud
                         cleanups.Add(fun () -> phantomStorage.Dispose() :> Task)
                         let phantomHttp = PhantomHttp.create game.Phantoms phantomStorage
                         cleanups.Add(fun () -> phantomHttp.Dispose() :> Task)
-                        let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref }
+                        let marks = {
+                            Loaded = records
+                            NextId = nextId
+                            Writer = writer.Ref
+                        }
                         let guildStorage = {
-                            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
-                            Writer = guildWriter.Ref; WriterStopped = guildWriter.Completion
+                            Loaded = guilds.Guilds
+                            Profiles = guilds.Profiles
+                            NextId = guilds.NextId
+                            Writer = guildWriter.Ref
+                            WriterStopped = guildWriter.Completion
                         }
                         match ServerRuntime.startWithPhantoms phantomStorage phantomHttp game moderation pseudonyms marks guildStorage (AuthService.authenticator authentication) transport logger with
                         | Error error -> return Error(GameStartError.Agent error)
@@ -534,7 +575,10 @@ let private serve settings (game: GameSettings) moderation configuration pseudon
     // Close HTTP admission, join the game, then release hosts/registrations/describer independently.
     let actions = List.ofSeq admissionStops @ List.ofSeq gameStops @ (disposals |> Seq.rev |> List.ofSeq)
     let! cleanup = OwnedCleanup.release actions
-    let initial, exitCode = match outcome with Ok code -> [], code | Error errors -> errors, 1
+    let initial, exitCode =
+        match outcome with
+        | Ok code -> [], code
+        | Error errors -> errors, 1
     let! reporting = OwnedCleanup.capture(fun () ->
         for error in initial @ cleanup do logger.LogError(error, "Server listener lifetime failed")
         Task.CompletedTask)
@@ -580,9 +624,18 @@ let private configurationView (settings: ApplicationConfig) (pseudonyms: Dreamsl
             | Error FileReadError.TooLarge -> "(не прочитан: файл превышает 1 МиБ)"
             | Error (FileReadError.Failed error) -> $"(не прочитан: {error.Message})"
     let sections = [
-        { Title = "server.toml — действующие значения"; Text = Configuration.render settings }
-        { Title = $"moderation.toml — {settings.Moderation.RulesPath}"; Text = moderation }
-        { Title = "Псевдонимы"; Text = $"{pseudonyms.Count} имён; файл {settings.Identity.PseudonymsPath}" }
+        {
+            Title = "server.toml — действующие значения"
+            Text = Configuration.render settings
+        }
+        {
+            Title = $"moderation.toml — {settings.Moderation.RulesPath}"
+            Text = moderation
+        }
+        {
+            Title = "Псевдонимы"
+            Text = $"{pseudonyms.Count} имён; файл {settings.Identity.PseudonymsPath}"
+        }
     ]
     fun () -> sections
 
@@ -608,58 +661,67 @@ let private run (settings: ApplicationConfig, game: GameSettings) = task {
         logger.LogError("Moderation configuration failed: {Failure}", error)
         return 1
     | Ok (moderation, warning) ->
-    warning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
-    logger.LogInformation("Moderation word list: {State}", if settings.Moderation.Enabled then "enabled" else "disabled")
-    let pseudonyms, pseudonymWarning = Configuration.loadPseudonyms settings.Identity
-    pseudonymWarning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
-    logger.LogInformation("Hidden identity: {State}, {Count} pseudonyms, switch interval {Interval} ms",
-                          (if settings.Identity.AllowHiddenIdentity then "allowed" else "not allowed"), pseudonyms.Count, settings.Identity.ToggleIntervalMs)
-    logger.LogInformation("Client announcements: trusted client {TrustedClient}, third party {ThirdParty}; scheduled: {Scheduled}",
-                          settings.Announcements.TrustedClient.Enabled, settings.Announcements.ThirdParty.Enabled, settings.Announcements.Scheduled.Length)
-    try
-        // Migrations and password-hasher startup run before either listener.
-        let! initialized = Task.Run(fun () -> SqliteAccountStore.initialize settings.Database)
-        match initialized with
-        | Error error ->
-            logger.LogError("Database initialization failed: {Failure}", error)
-            return 1
-        | Ok () ->
-            logger.LogInformation("Account database ready: {DatabasePath}", settings.Database.DatabasePath)
-            // The password hasher starts with the service, off the console thread.
-            let! started = Task.Run(fun () -> AuthService.start settings.Authentication.Service settings.Database logger TimeProvider.System)
-            match started with
+        warning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
+        logger.LogInformation("Moderation word list: {State}", if settings.Moderation.Enabled then "enabled" else "disabled")
+        let pseudonyms, pseudonymWarning = Configuration.loadPseudonyms settings.Identity
+        pseudonymWarning |> Option.iter (fun text -> logger.LogWarning("{Warning}", text))
+        logger.LogInformation("Hidden identity: {State}, {Count} pseudonyms, switch interval {Interval} ms",
+                              (if settings.Identity.AllowHiddenIdentity then "allowed" else "not allowed"), pseudonyms.Count, settings.Identity.ToggleIntervalMs)
+        logger.LogInformation("Client announcements: trusted client {TrustedClient}, third party {ThirdParty}; scheduled: {Scheduled}",
+                              settings.Announcements.TrustedClient.Enabled, settings.Announcements.ThirdParty.Enabled, settings.Announcements.Scheduled.Length)
+
+        try
+            // Migrations and password-hasher startup run before either listener.
+            let! initialized = Task.Run(fun () -> SqliteAccountStore.initialize settings.Database)
+            match initialized with
             | Error error ->
-                logger.LogError("Authentication startup failed while reading IP range bans: {Failure}", error)
+                logger.LogError("Database initialization failed: {Failure}", error)
                 return 1
-            | Ok authentication ->
-                let startAdmin () = task {
-                    if settings.Admin.Enabled then
-                        let! started = Task.Run(fun () -> AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
-                        return started |> Result.map Some
-                    else return Ok None
-                }
-                let! result =
-                    ServiceLifetime.run authentication startAdmin
-                        (fun admin -> serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log)
-                        stopAdmin stopAuthentication
-                match result with
-                | Ok exitCode ->
-                    logger.LogInformation("Server stopped with exit code {ExitCode}", exitCode)
-                    return exitCode
-                | Error failures ->
-                    let! reporting = OwnedCleanup.release [
-                        for failure in failures -> fun () ->
-                            match failure.Reason with
-                            | ServiceFailureReason.StartRejected error -> logger.LogError("Server service startup refused during {Stage}: {Failure}", failure.Stage, error)
-                            | ServiceFailureReason.Faulted error -> logger.LogError(error, "Server service lifecycle failed during {Stage}", failure.Stage)
-                            Task.CompletedTask
-                    ]
-                    if reporting.IsEmpty then return 1
-                    else return! Task.FromException<int>(ServiceReportingException(failures, reporting))
-    with error ->
-        let! reporting = OwnedCleanup.capture(fun () -> logger.LogError(error, "Server failed"); Task.CompletedTask)
-        if reporting.IsEmpty then return 1
-        else return! Task.FromException<int>(AggregateException("Server failure reporting also failed.", error :: reporting))
+            | Ok () ->
+                logger.LogInformation("Account database ready: {DatabasePath}", settings.Database.DatabasePath)
+                // The password hasher starts with the service, off the console thread.
+                let! started = Task.Run(fun () -> AuthService.start settings.Authentication.Service settings.Database logger TimeProvider.System)
+                match started with
+                | Error error ->
+                    logger.LogError("Authentication startup failed while reading IP range bans: {Failure}", error)
+                    return 1
+                | Ok authentication ->
+                    let startAdmin () = task {
+                        if settings.Admin.Enabled then
+                            let! started = Task.Run(fun () -> AdminService.start settings.Admin.Service settings.Database logger TimeProvider.System)
+                            return started |> Result.map Some
+                        else
+                            return Ok None
+                    }
+                    let! result =
+                        ServiceLifetime.run authentication startAdmin
+                            (fun admin -> serve settings game moderation (configurationView settings pseudonyms) pseudonyms authentication admin logger log)
+                            stopAdmin stopAuthentication
+
+                    match result with
+                    | Ok exitCode ->
+                        logger.LogInformation("Server stopped with exit code {ExitCode}", exitCode)
+                        return exitCode
+                    | Error failures ->
+                        let! reporting = OwnedCleanup.release [
+                            for failure in failures -> fun () ->
+                                match failure.Reason with
+                                | ServiceFailureReason.StartRejected error ->
+                                    logger.LogError("Server service startup refused during {Stage}: {Failure}", failure.Stage, error)
+                                | ServiceFailureReason.Faulted error ->
+                                    logger.LogError(error, "Server service lifecycle failed during {Stage}", failure.Stage)
+                                Task.CompletedTask
+                        ]
+                        if reporting.IsEmpty then
+                            return 1
+                        else
+                            return! Task.FromException<int>(ServiceReportingException(failures, reporting))
+        with error ->
+            let! reporting = OwnedCleanup.capture(fun () -> logger.LogError(error, "Server failed"); Task.CompletedTask)
+            if reporting.IsEmpty then
+                return 1
+            else
+                return! Task.FromException<int>(AggregateException("Server failure reporting also failed.", error :: reporting))
 }
 
 [<EntryPoint>]
@@ -674,8 +736,12 @@ let main args =
         0
     | Ok (LaunchCommand.WriteConfig path) ->
         match Configuration.writeDefaults path with
-        | Ok () -> printfn "Wrote %s" path; 0
-        | Error error -> eprintfn "%s" error; 2
+        | Ok () ->
+            printfn "Wrote %s" path
+            0
+        | Error error ->
+            eprintfn "%s" error
+            2
     | Ok (LaunchCommand.Run(settings, game)) ->
         try run (settings, game) |> fun work -> work.GetAwaiter().GetResult()
         with error ->
