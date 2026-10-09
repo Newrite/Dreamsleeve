@@ -13,9 +13,11 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     let total = ids.Length
     let globalIndex index = offset + index * stride
     let indices = ids |> Array.mapi (fun index id -> id, index) |> dict
+
     let pending = Array.init count (fun _ -> Dictionary<uint64, float * bool>())
     let nextRequest = Array.create count 2UL
     let due = Array.zeroCreate<float> count
+
     let latest = Array.zeroCreate<PlayerLocation> total
     let contexts = Array.zeroCreate<uint64> count
     let sequences = Array.zeroCreate<uint64> count
@@ -30,6 +32,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     let seenX = Array2D.zeroCreate<float32> count total
     let initialized = Array2D.zeroCreate<bool> count total
     let mutable initializedCount = 0
+
     let ages, acknowledgements, iterations = Distribution(), Distribution(), Distribution()
     let mutable crossProcess = 0L
     let mutable measuring = false
@@ -42,6 +45,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     let mutable missed = 0L
     let mutable maxPending = 0
     let mutable finalConverged = false
+
     // Actor values as the plugin sends them: global fan-out to every online player.
     let metadataDue = Array.zeroCreate<float> count
     let metadataRequests = Array.init count (fun _ -> HashSet<uint64>())
@@ -49,19 +53,22 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     let mutable metadataSent = 0L
     let mutable metadataReceived = 0L
     let mutable metadataReceivedBytes = 0L
+
     // Server kind numbers are global, so one set serves every local client.
     let healthKinds = HashSet<uint64>()
 
     let submit index action =
         let requestId = nextRequest[index]
         nextRequest[index] <- requestId + 1UL
+
         let packet = ClientPacket(ProtocolVersion = Dreamsleeve.Server.Core.ProtocolCodec.Version,
                                   RequestId = requestId, UpdatePlayer = action)
         if send index packet then
             pending[index].Add(requestId, (now(), measuring))
             maxPending <- max maxPending pending[index].Count
             true
-        else false
+        else
+            false
 
     let position index time =
         let step = int ((time - started) / 2000.)
@@ -119,6 +126,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
             contexts[index] <- contexts[index] + 1UL
             sequences[index] <- 0UL
             submit index (UpdatePlayer(SetLocation = SetPlayerLocation(ContextRevision = contexts[index], Location = location))) |> ignore
+
         latest[source] <- location
         publishPose index location
 
@@ -163,6 +171,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     member _.PreparePositions(serviceBatch: unit -> unit) =
         started <- now()
         warmPositions <- Array.init total (fun index -> position index started)
+
         for index in 0 .. count - 1 do
             move index started
             if index % 16 = 15 then serviceBatch()
@@ -190,7 +199,9 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
     member _.Start(startTime) =
         measuring <- true
         started <- startTime
-        for index in 0 .. count - 1 do due[index] <- started + float (globalIndex index) * 1000. / (rate * float total)
+
+        for index in 0 .. count - 1 do
+            due[index] <- started + float (globalIndex index) * 1000. / (rate * float total)
         if actorValuesHz > 0. then
             for index in 0 .. count - 1 do
                 metadataDue[index] <- started + float (globalIndex index) * 1000. / (actorValuesHz * float total)
@@ -204,6 +215,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                 missed <- missed + int64 (floor ((time - due[index]) / interval))
                 due[index] <- time + interval
                 move index time
+
         if actorValuesHz > 0. then
             for index in 0 .. count - 1 do
                 if time >= metadataDue[index] then
@@ -256,6 +268,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         if measuring then receivedBytes <- receivedBytes + int64 size
         for kind in presence.ActorValueKinds do
             if kind.Key = "skyrim:health" then healthKinds.Add kind.Id |> ignore
+
         for player in presence.Updated do
             if isNull player.Profile then fail "Invalid player update"
             else
@@ -266,6 +279,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                         initializedCount <- initializedCount + 1
                 | _ -> fail "Unexpected character initialization"
                 baseline observer player.Profile.PlayerId player.ViewRevision player.MovementSequence player.Location
+
         if measuring then
             for patch in presence.Metadata do
                 match patch.ActorValues |> Seq.tryFind (fun entry -> healthKinds.Contains entry.Kind) with
@@ -275,6 +289,7 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
                     let sentAt = float entry.Resource.Current * 65536. + float entry.Resource.Maximum
                     metadataAges.Add(max 0. (now() - sentAt))
                 | _ -> ()
+
         for entry in presence.Visibility do
             // A baseline is in the recipient's own place, the space of its batch.
             let location =
@@ -307,22 +322,39 @@ type Probe(scenario: string, rate: float, replicationMs: int, actorValuesHz: flo
         valid
 
     member _.Report(loadMs) =
-        {| scenario = scenario; clients = count; sourceHz = rate; replicationMs = replicationMs; visibilityDistance = 8192
+        {| scenario = scenario
+           clients = count
+           sourceHz = rate
+           replicationMs = replicationMs
+           visibilityDistance = 8192
            warmPositions = warmPositions.Length > 0
-           sentSamples = sent; receivedMovements = received; visibilityClears = cleared
-           sentPayloadBytes = sentBytes; receivedPayloadBytes = receivedBytes
+           sentSamples = sent
+           receivedMovements = received
+           visibilityClears = cleared
+           sentPayloadBytes = sentBytes
+           receivedPayloadBytes = receivedBytes
            sentPayloadBytesPerSecond = float sentBytes * 1000. / max 1. loadMs
            receivedPayloadBytesPerSecond = float receivedBytes * 1000. / max 1. loadMs
            actualSamplesPerClientSecond = float sent * 1000. / (max 1. loadMs * float count)
-           generatorMissedIntervals = missed; pendingThrottledSamples = 0L; maxPendingPerClient = maxPending
-           initializedPairs = initializedCount; expectedInitializedPairs = count * total
-           finalStateConverged = finalConverged; pending = pending |> Array.sumBy _.Count
-           deliveryAgeMs = ages.Summary(); receiveGapMs = receiveGaps.Summary(); controlAckMs = acknowledgements.Summary()
-           crossProcessMovements = crossProcess; serviceIterationMs = iterations.Summary()
-           actorValuesHz = actorValuesHz; actorValuesSent = metadataSent; metadataReceived = metadataReceived
+           generatorMissedIntervals = missed
+           pendingThrottledSamples = 0L
+           maxPendingPerClient = maxPending
+           initializedPairs = initializedCount
+           expectedInitializedPairs = count * total
+           finalStateConverged = finalConverged
+           pending = pending |> Array.sumBy _.Count
+           deliveryAgeMs = ages.Summary()
+           receiveGapMs = receiveGaps.Summary()
+           controlAckMs = acknowledgements.Summary()
+           crossProcessMovements = crossProcess
+           serviceIterationMs = iterations.Summary()
+           actorValuesHz = actorValuesHz
+           actorValuesSent = metadataSent
+           metadataReceived = metadataReceived
            metadataReceivedPerSecond = float metadataReceived * 1000. / max 1. loadMs
            metadataReceivedPayloadBytes = metadataReceivedBytes
-           metadataAgeMs = metadataAges.Summary(); actorValuesAckMs = metadataAcks.Summary()
+           metadataAgeMs = metadataAges.Summary()
+           actorValuesAckMs = metadataAcks.Summary()
            percentileMethod = "fixed logarithmic histogram, upper bounds within 1% + 0.01 ms" |}
 
 // Deterministic checks of the load generator's oracle, without sockets or load.
@@ -332,9 +364,16 @@ let verifyOracle () =
     let mutable time = 1000.
     let fail message = invalidOp message
     let check condition message = if not condition then fail message
+
     let probe = Probe("dense", 20., 50, 0., [| 1UL |], 0, 1, 1, (fun () -> time),
-                      (fun packetIndex packet -> check (packetIndex = 0) "Unexpected sender"; controls.Add packet; true),
-                      (fun packetIndex packet -> check (packetIndex = 0) "Unexpected sender"; samples.Add packet; true), fail)
+                      (fun packetIndex packet ->
+                          check (packetIndex = 0) "Unexpected sender"
+                          controls.Add packet
+                          true),
+                      (fun packetIndex packet ->
+                          check (packetIndex = 0) "Unexpected sender"
+                          samples.Add packet
+                          true), fail)
     probe.Start(0.)
     probe.SendDue()
     check (controls.Count = 1 && samples.Count = 1) "Initial context and sample must use separate envelopes"
@@ -362,13 +401,16 @@ let verifyOracle () =
     check (not (probe.Converged())) "Realtime must not establish visibility before control baseline"
     baseline 1UL initial
     check (probe.Converged()) "Sequence-zero control baseline must establish final position"
+
     movement 2UL 1UL wrong
     check (probe.Converged()) "Future view must wait for its reliable baseline"
     movement 1UL 0UL wrong
     check (probe.Converged()) "Older or repeated sequence must not replace the baseline"
+
     movement 1UL 1UL samples[0].Sample.Pose
     movement 1UL 1UL wrong
     check (probe.Converged()) "Duplicate sample must not overwrite accepted position"
+
     baseline 2UL null
     movement 1UL 100UL samples[0].Sample.Pose
     check (not (probe.Converged())) "Old-view movement must not resurrect cleared visibility"
@@ -386,11 +428,16 @@ let verifyOracle () =
     check (probe.Pending = 0) "Final repeats must not wait for acknowledgements"
     movement 3UL repeated.Sequence repeated.Pose
     check (probe.Converged()) "A later repeat must recover the lost final sample"
+
     let warmControls = ResizeArray<ClientPacket>()
     let warmSamples = ResizeArray<ClientMovementPacket>()
     let warm = Probe("spaces", 20., 50, 0., [|1UL|], 0, 1, 1, (fun () -> time),
-                     (fun _ packet -> warmControls.Add packet; true),
-                     (fun _ packet -> warmSamples.Add packet; true), fail)
+                     (fun _ packet ->
+                         warmControls.Add packet
+                         true),
+                     (fun _ packet ->
+                         warmSamples.Add packet
+                         true), fail)
     check (not warm.PositionsPrepared) "Cold mode must not report warmup completion"
     warm.PreparePositions(ignore)
     check (warmControls.Count = 1 && not warm.PositionsPrepared) "Warmup waits for reliable ACK and visibility"
