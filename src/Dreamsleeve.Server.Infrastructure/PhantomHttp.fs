@@ -30,11 +30,23 @@ module PhantomHttp =
     let private meter = new System.Diagnostics.Metrics.Meter("Dreamsleeve.PhantomHttp")
     let private events = meter.CreateCounter<int64>("phantom.http")
     type private Transfer = {
-        Id: PhantomTransferId; Owner: Guid; Upload: bool; Lease: PhantomHttpLease
-        Stop: CancellationTokenSource; mutable Claimed: bool
-        Finished: TaskCompletionSource; Budget: HttpByteBudget; Admitted: int64; Generation: uint64
+        Id: PhantomTransferId
+        Owner: Guid
+        Upload: bool
+        Lease: PhantomHttpLease
+
+        Stop: CancellationTokenSource
+        mutable Claimed: bool
+        Finished: TaskCompletionSource
+
+        Budget: HttpByteBudget
+        Admitted: int64
+        Generation: uint64
     }
-    type private PeerBudget = { Value: HttpByteBudget; mutable Users: int }
+    type private PeerBudget = {
+        Value: HttpByteBudget
+        mutable Users: int
+    }
 
     /// Storage is already admitted/pinned when a capability is issued. The
     /// registry owns only HTTP operation lifetime, never model readiness/AOI.
@@ -46,7 +58,10 @@ module PhantomHttp =
         let globalBudget = HttpByteBudget(options.ModelBytesPerSecond)
         let mutable closed = false
         let failure = TaskCompletionSource<exn>(TaskCreationOptions.RunContinuationsAsynchronously)
-        let failOwner error = lock gate (fun () -> closed <- true; failure.TrySetResult error |> ignore)
+        let failOwner error =
+            lock gate (fun () ->
+                closed <- true
+                failure.TrySetResult error |> ignore)
         let admit (owner, id, manifest: PhantomManifest, upload, change: PhantomDelta option) =
             lock gate (fun () ->
                 let token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes 32)
@@ -55,29 +70,49 @@ module PhantomHttp =
                 else
                     let budget =
                         match peers.TryGetValue owner with
-                        | true, existing -> existing.Users <- existing.Users + 1; existing.Value
+                        | true, existing ->
+                            existing.Users <- existing.Users + 1
+                            existing.Value
                         | _ ->
                             let value = HttpByteBudget(options.PlayerModelBytesPerSecond)
-                            peers[owner] <- { Value = value; Users = 1 }
+                            peers[owner] <- {
+                                Value = value
+                                Users = 1
+                            }
                             value
-                    let transfer = { Id = id; Owner = owner; Upload = upload; Lease = lease
-                                     Stop = new CancellationTokenSource(); Claimed = false
-                                     Finished = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); Budget = budget
-                                     Admitted = Stopwatch.GetTimestamp(); Generation = manifest.Generation.Value }
-                    transfers.Add(id, transfer); tokens.Add(token, transfer)
+                    let transfer = {
+                        Id = id
+                        Owner = owner
+                        Upload = upload
+                        Lease = lease
+
+                        Stop = new CancellationTokenSource()
+                        Claimed = false
+                        Finished = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+
+                        Budget = budget
+                        Admitted = Stopwatch.GetTimestamp()
+                        Generation = manifest.Generation.Value
+                    }
+                    transfers.Add(id, transfer)
+                    tokens.Add(token, transfer)
                 lease)
         let readBody (body: Stream) (memory: Memory<byte>) cancellation = task {
             try
                 let! count = body.ReadAsync(memory, cancellation)
                 return Ok count
-            with :? IOException -> return Error PhantomHttpError.Io
+            with :? IOException ->
+                return Error PhantomHttpError.Io
         }
+
         let writeBody (body: Stream) (memory: Memory<byte>) cancellation = task {
             try
                 do! body.WriteAsync(memory, cancellation)
                 return Ok ()
-            with :? IOException -> return Error PhantomHttpError.Io
+            with :? IOException ->
+                return Error PhantomHttpError.Io
         }
+
         let pump (transfer: Transfer) (request: PhantomHttpRequest) = task {
             use linked = CancellationTokenSource.CreateLinkedTokenSource(request.Cancellation, transfer.Stop.Token)
             let cancellation = linked.Token
@@ -86,6 +121,7 @@ module PhantomHttp =
             let enabled = events.Enabled
             let mutable emitted = Stopwatch.GetTimestamp()
             let totals = Array.zeroCreate<float> 4
+
             let emit phase operation =
                 if enabled then
                     let mutable tags = TagList()
@@ -105,18 +141,29 @@ module PhantomHttp =
                     if elapsed >= 250. || Stopwatch.GetElapsedTime(emitted).TotalMilliseconds >= 1000. then emit phase elapsed
             let stamp () = if enabled then Stopwatch.GetTimestamp() else 0L
             emit "claimed" 0.
-            use finish = { new IDisposable with member _.Dispose() = emit (if cancellation.IsCancellationRequested then "canceled" elif offset = transfer.Lease.Size && Result.isOk outcome then "body_complete" else "failed") 0. }
+            use finish = {
+                new IDisposable with
+                    member _.Dispose() =
+                        emit
+                            (if cancellation.IsCancellationRequested then "canceled"
+                             elif offset = transfer.Lease.Size && Result.isOk outcome then "body_complete"
+                             else "failed")
+                            0.
+            }
             // One bounded body buffer, never a model-sized HTTP/protobuf string.
             let buffer = Array.zeroCreate<byte> options.ChunkBytes
             request.BeginResponse transfer.Lease.Size
+
             while offset < transfer.Lease.Size && Result.isOk outcome && not cancellation.IsCancellationRequested do
                 let count = min options.ChunkBytes (transfer.Lease.Size - offset)
                 let peerAt = stamp ()
                 do! transfer.Budget.Wait(count, cancellation)
                 measured 0 "peer_budget" peerAt
+
                 let globalAt = stamp ()
                 do! globalBudget.Wait(count, cancellation)
                 measured 1 "global_budget" globalAt
+
                 if transfer.Upload then
                     let mutable read = 0
                     let mutable ended = false
@@ -125,9 +172,12 @@ module PhantomHttp =
                         let! received = readBody request.Body (buffer.AsMemory(read, count - read)) cancellation
                         measured 3 "read" bodyAt
                         match received with
-                        | Error error -> outcome <- Error error; ended <- true
+                        | Error error ->
+                            outcome <- Error error
+                            ended <- true
                         | Ok 0 -> ended <- true
                         | Ok count -> read <- read + count
+
                     if Result.isError outcome then ()
                     elif read <> count then outcome <- Error PhantomHttpError.Truncated
                     else
@@ -157,6 +207,7 @@ module PhantomHttp =
                         | Ok () -> offset <- offset + count
                 if offset = count then emit "first_body" 0.
                 transfer.Lease.Advance offset
+
             return if cancellation.IsCancellationRequested then Error PhantomHttpError.Canceled else outcome
         }
         let serve (request: PhantomHttpRequest) = task {
@@ -169,6 +220,7 @@ module PhantomHttp =
                         tokens.Remove request.Token |> ignore
                         Ok transfer
                 | _ -> Error PhantomHttpError.Capability)
+
             match admitted with
             | Error reason -> return Error reason
             | Ok transfer ->
@@ -187,7 +239,8 @@ module PhantomHttp =
                         failOwner error
                         transfer.Lease.Fault error
                         return! Task.FromException<Result<unit, PhantomHttpError>>(error)
-                finally transfer.Finished.TrySetResult() |> ignore
+                finally
+                    transfer.Finished.TrySetResult() |> ignore
         }
         let cancel id = task {
             let found = lock gate (fun () ->
@@ -201,6 +254,7 @@ module PhantomHttp =
                     if not transfer.Claimed then transfer.Finished.TrySetResult() |> ignore
                     Some transfer
                 | _ -> None)
+
             match found with
             | None -> ()
             | Some transfer ->
@@ -221,16 +275,29 @@ module PhantomHttp =
                     match canceled with
                     | Some error -> return! Task.FromException<unit>(error)
                     | None -> return ()
-                finally transfer.Stop.Dispose()
+                finally
+                    transfer.Stop.Dispose()
         }
         let dispose () = task {
-            let ids = lock gate (fun () -> closed <- true; transfers.Keys |> Seq.toArray)
+            let ids =
+                lock gate (fun () ->
+                    closed <- true
+                    transfers.Keys |> Seq.toArray)
             let mutable first = None
             for id in ids do
-                try do! cancel id
-                with error -> if first.IsNone then first <- Some error
+                try
+                    do! cancel id
+                with error ->
+                    if first.IsNone then first <- Some error
+
             match first with
             | Some error -> return! Task.FromException<unit>(error)
             | None -> return ()
         }
-        { Admit = admit; Cancel = cancel; Serve = serve; Dispose = dispose; OwnerFailure = failure.Task }
+        {
+            Admit = admit
+            Cancel = cancel
+            Serve = serve
+            Dispose = dispose
+            OwnerFailure = failure.Task
+        }

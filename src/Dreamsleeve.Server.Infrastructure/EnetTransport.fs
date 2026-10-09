@@ -54,7 +54,12 @@ module PumpHealth =
         | Report of failures: int * last: SocketError
         | Broken of persistent: bool
 
-    let create () = { FailingSince = ValueNone; Unreported = 0; LastError = SocketError.Success; LastReport = ValueNone }
+    let create () = {
+        FailingSince = ValueNone
+        Unreported = 0
+        LastError = SocketError.Success
+        LastReport = ValueNone
+    }
 
     let private due state now =
         state.Unreported > 0 && state.LastReport |> ValueOption.forall (fun last -> now - last >= ReportIntervalMs)
@@ -75,6 +80,7 @@ module PumpHealth =
             if state.FailingSince.IsNone then state.FailingSince <- ValueSome now
             state.Unreported <- state.Unreported + 1
             state.LastError <- error
+
             if now - state.FailingSince.Value >= MaxFailingMs then Verdict.Broken true
             elif due state now then report state now
             else Verdict.Passing
@@ -141,6 +147,7 @@ module EnetTransport =
                 ConnectId = peer.ConnectId
                 Outgoing = PacketBudget(state.Config.MaxOutgoingPacketsPerPeer, int64 state.Config.MaxOutgoingBytesPerPeer)
                 Closing = false
+
                 PoseReceivedAt = Environment.TickCount64
                 PoseSamples = 2.0
             }
@@ -165,6 +172,7 @@ module EnetTransport =
         | true, connection when connection.ConnectId = event.Peer.ConnectId && not connection.Closing ->
             let reliable = (packet.Flags &&& EnetPacketFlag.Reliable) = EnetPacketFlag.Reliable
             let unsequenced = (packet.Flags &&& EnetPacketFlag.Unsequenced) = EnetPacketFlag.Unsequenced
+
             match DeliveryLane.fromChannel event.ChannelId with
             | Error _ ->
                 reset state connection.Id
@@ -174,6 +182,7 @@ module EnetTransport =
                 if lane = DeliveryLane.Poses then
                     connection.PoseSamples <- min 2.0 (connection.PoseSamples + double (time - connection.PoseReceivedAt) / double state.Phantoms.PoseIntervalMs)
                     connection.PoseReceivedAt <- time
+
                 // The only reliable Poses packet is ENet's empty epoch marker at
                 // unreliable sequence rollover. It never reaches the domain codec.
                 if lane = DeliveryLane.Poses && reliable && not unsequenced && packet.DataLength = 0un then ()
@@ -264,8 +273,10 @@ module EnetTransport =
                     | LaneReliability.Reliable -> PacketDelivery.Reliable
                     | LaneReliability.Sequenced -> PacketDelivery.Sequenced
                     | LaneReliability.SequencedFragmented -> PacketDelivery.SequencedFragmented
+
                 let result = OutgoingPackets.TrySend(connection.Peer, ReadOnlySpan<byte>(bytes), state.Outgoing, connection.Outgoing, DeliveryLane.toChannel packet.Lane, delivery)
                 TransportDiagnostics.EndSend(started, bytes.Length)
+
                 match result with
                 | PacketSendResult.Sent ->
                     TransportDiagnostics.RecordAcceptedPacket(connection.Peer, bytes.Length)
@@ -340,6 +351,7 @@ module EnetTransport =
                                     logger.LogWarning(
                                         "The system granted smaller UDP socket buffers than Server.ReceiveBufferBytes {Receive} / SendBufferBytes {Send}; on Linux raise net.core.rmem_max and net.core.wmem_max",
                                         config.ReceiveBufferBytes, config.SendBufferBytes)
+
                                 // Checksums and compression stay disabled, matching the native client.
                                 host.SetMaximumPacketSize(unativeint config.MaxPacketBytes)
                                 host.SetMaximumWaitingData(unativeint config.MaxWaitingData)
@@ -353,7 +365,9 @@ module EnetTransport =
                                     Host = host
                                     Connections = Dictionary()
                                     Slots = Dictionary()
+
                                     Outgoing = PacketBudget(config.MaxOutgoingPackets, int64 config.MaxOutgoingBytes, max 1 (min config.PeerLimit (max 1 (config.MaxOutgoingPackets / 8))))
+
                                     Disposed = false
                                 }
                                 let transport = {
