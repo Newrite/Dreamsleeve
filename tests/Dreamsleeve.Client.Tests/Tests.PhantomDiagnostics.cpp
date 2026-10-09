@@ -634,7 +634,7 @@ TEST_CASE("continuous trace retains packet slices and excludes control payloads"
   T::Packet(false, 0, bytes);
   T::Observe(T::Metric::CapturePose, 2.5);
   T::FlushMetrics();
-  T::Stop();
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
   CHECK_FALSE(T::Enabled());
   std::string                        content;
   std::vector<std::filesystem::path> parts;
@@ -677,7 +677,143 @@ TEST_CASE("continuous trace retains packet slices and excludes control payloads"
   CHECK(packets == 4);
   CHECK(metrics == 1);
   REQUIRE(T::Start(path));
-  T::Stop();
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
   std::filesystem::remove_all(path);
+}
+
+TEST_CASE("continuous trace cleanup launch failure retains its writer and prevents replacement")
+{
+  namespace T = Dreamsleeve::Client::Diagnostics::Trace;
+  Fixture f;
+  REQUIRE(T::Start(f.root));
+  T::Testing::FailNextCleanupLaunch();
+  const auto failed = T::Stop();
+  REQUIRE_FALSE(failed);
+  CHECK(failed.error().kind == T::TraceFailure::CleanupLaunch);
+  CHECK(T::Enabled());
+  T::Event("after-failed-stop");
+  T::Testing::FailNextCleanupLaunch();
+  const auto replacement = T::Start(f.root);
+  REQUIRE_FALSE(replacement);
+  CHECK(replacement.error().kind == T::TraceFailure::CleanupLaunch);
+  CHECK(T::Enabled());
+  CHECK(std::distance(std::filesystem::directory_iterator(f.root), std::filesystem::directory_iterator{}) == 1);
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
+  CHECK_FALSE(T::Enabled());
+  std::string content;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(f.root))
+    if (entry.path().extension() == ".jsonl")
+    {
+      const auto bytes = File(entry.path());
+      content.append(bytes.begin(), bytes.end());
+    }
+  CHECK(content.find("after-failed-stop") != std::string::npos);
+}
+
+TEST_CASE("continuous trace pending cleanup bounds the session until the worker releases ownership")
+{
+  namespace T = Dreamsleeve::Client::Diagnostics::Trace;
+
+  Fixture f;
+
+  struct Gate
+  {
+    std::promise<void> value;
+    bool               opened{};
+
+    void Open()
+    {
+      if (!std::exchange(opened, true)) value.set_value();
+    }
+
+    ~Gate()
+    {
+      Open();
+    }
+  } gate;
+
+  REQUIRE(T::Start(f.root));
+  T::Event("before-gated-cleanup");
+  T::Testing::GateNextCleanup(gate.value.get_future().share());
+  auto       stopping = std::async(std::launch::async, [] { return T::Stop(); });
+  const auto ready    = stopping.wait_for(std::chrono::seconds(3));
+  if (ready != std::future_status::ready) gate.Open();  // A failing implementation must not hang the test process.
+  REQUIRE(ready == std::future_status::ready);
+  REQUIRE(stopping.get() == T::StopOutcome::CleanupPending);
+  CHECK_FALSE(T::Enabled());
+  for (int i = 0; i < 3; ++i)
+  {
+    const auto refused = T::Start(f.root);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().kind == T::TraceFailure::CleanupPending);
+  }
+  CHECK(std::distance(std::filesystem::directory_iterator(f.root), std::filesystem::directory_iterator{}) == 1);
+  REQUIRE(T::Stop() == T::StopOutcome::CleanupPending);
+  gate.Open();
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (T::Stop() == T::StopOutcome::CleanupPending && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
+  REQUIRE(T::Start(f.root));
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
+  CHECK_FALSE(T::Enabled());
+}
+
+TEST_CASE("continuous trace preserves expected storage failures and failed-open partial ownership")
+{
+  namespace T = Dreamsleeve::Client::Diagnostics::Trace;
+  Fixture f;
+
+  struct DirectoryCleanup
+  {
+    std::filesystem::path root;
+
+    ~DirectoryCleanup()
+    {
+      // Never remove an active/pending writer's files, including assertion failure.
+      const auto stopped = T::Stop();
+      if (stopped && *stopped == T::StopOutcome::Stopped)
+      {
+        std::error_code error;
+        std::filesystem::remove_all(root, error);
+      }
+    }
+  } cleanup{f.root};
+
+  std::filesystem::create_directories(f.root);
+  const auto blocked = f.root / "blocked";
+  {
+    std::ofstream blocker(blocked);
+    blocker << "preserve";
+  }
+  const auto unavailable = T::Start(blocked);
+  REQUIRE_FALSE(unavailable);
+  CHECK(unavailable.error().kind == T::TraceFailure::Storage);
+  CHECK_FALSE(T::Enabled());
+  CHECK(File(blocked).size() == 8);
+  const auto root = f.root / "trace";
+  REQUIRE(T::Start(root));
+  const auto session = std::filesystem::directory_iterator(root)->path();
+  const auto models  = session / "models";
+  const auto hash    = std::string(64, 'a');
+  const auto partial = models / (hash + ".zst.partial");
+  std::filesystem::create_directories(partial);
+  {
+    std::ofstream prior(partial / "preserve.txt");
+    prior << "preserve";
+  }
+  T::Asset(hash, std::array<std::uint8_t, 2>{1, 2});
+  CHECK(File(partial / "preserve.txt").size() == 8);
+  CHECK_FALSE(std::filesystem::exists(models / (hash + ".zst")));
+  T::FlushMetrics();
+  REQUIRE(T::Stop() == T::StopOutcome::Stopped);
+  std::string content;
+  for (const auto& entry : std::filesystem::directory_iterator(session))
+    if (entry.path().extension() == ".jsonl")
+    {
+      const auto bytes = File(entry.path());
+      content.append(bytes.begin(), bytes.end());
+    }
+  CHECK(content.find("\"write_errors_total\":1") != std::string::npos);
 }
 #endif

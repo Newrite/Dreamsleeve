@@ -266,6 +266,17 @@ export namespace Runtime
     return Host::SaveUiFile(state.uiPath, state.ui);
   }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  void StopTrace()
+  {
+    const auto trace = Dream::Diagnostics::Trace::Stop();
+    if (!trace)
+      logger::warn("Phantom trace cleanup could not start: {}", trace.error().detail);
+    else if (*trace == Dream::Diagnostics::Trace::StopOutcome::CleanupPending)
+      logger::warn("Phantom trace cleanup is pending; diagnostics may be incomplete");
+  }
+#endif
+
   // Creates Core objects. Skyrim data is not needed; the network thread starts here.
   bool Initialize()
   {
@@ -290,9 +301,9 @@ export namespace Runtime
     }
 
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-    if (settings->client.phantomDiagnostics &&
-        !Dream::Diagnostics::Trace::Start(state.clientPath.parent_path() / "phantom-diagnostics"))
-      logger::warn("Cannot start phantom diagnostics in Data; gameplay continues");
+    if (settings->client.phantomDiagnostics)
+      if (auto trace = Dream::Diagnostics::Trace::Start(state.clientPath.parent_path() / "phantom-diagnostics"); !trace)
+        logger::warn("Cannot start phantom diagnostics in Data: {}; gameplay continues", trace.error().detail);
 #else
     if (settings->client.phantomDiagnostics) logger::warn("phantomDiagnostics requires a diagnostics build");
 #endif
@@ -317,7 +328,7 @@ export namespace Runtime
     {
       logger::error("Cannot create client application: {}", app.error());
 #ifdef DREAMSLEEVE_DIAGNOSTICS
-      Dream::Diagnostics::Trace::Stop();
+      StopTrace();
 #endif
       return false;
     }
@@ -362,7 +373,7 @@ export namespace Runtime
     if (state.app) state.app->Stop();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     Dream::Diagnostics::Trace::FlushMetrics();
-    Dream::Diagnostics::Trace::Stop();
+    StopTrace();
 #endif
     logger::info("Client application stopped");
   }
