@@ -15,8 +15,10 @@ type AgentSendFailure =
 type AgentDeliveryCapacity private (value: int) =
     member internal _.Value = value
     static member TryCreate(value: int) =
-        if value < 1 then Error (AgentStartError.InvalidCapacity("deliveryCapacity", value))
-        else Ok (AgentDeliveryCapacity value)
+        if value < 1 then
+            Error (AgentStartError.InvalidCapacity("deliveryCapacity", value))
+        else
+            Ok (AgentDeliveryCapacity value)
 
 /// Library boundary: capacity is released by delivery workers, never by the owner's
 /// mailbox. Thus a saturated request handler can await capacity without a reply cycle.
@@ -59,7 +61,9 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
     let launch (context: ReliableAgentContext<'Request>) operation =
         let finished = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
         let previous = if ordered then tail else Task.CompletedTask
-        if ordered then tail <- finished.Task
+
+        if ordered then
+            tail <- finished.Task
 
         try
             context.StartDelivery(deliver previous finished operation)
@@ -102,6 +106,7 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
 
     member _.Send(context: ReliableAgentContext<'Request>, destination, createReply, onFailure) = task {
         do! slots.WaitAsync context.CancellationToken
+
         let reply =
             try
                 // A released reservation can race Abort after WaitAsync succeeds.
@@ -119,6 +124,7 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
 
     member _.SendAsync(context: ReliableAgentContext<'Request>, destination, execute, onFailure) = task {
         do! slots.WaitAsync context.CancellationToken
+
         let run (token: CancellationToken) = task {
             token.ThrowIfCancellationRequested()
             let! reply = execute token
@@ -150,9 +156,11 @@ module private DeliveryFailure =
             | AgentSendFailure.Faulted error -> context.Fail error
             | AgentSendFailure.Closed | AgentSendFailure.Canceled -> ()
             context.Fail original
+
         let message =
             try Ok (toMessage failure)
             with error -> Error error
+
         match message with
         | Error error -> retain error
         | Ok value ->
@@ -181,8 +189,11 @@ type AgentOutbox<'Message> private (capacity: AgentDeliveryCapacity, destination
         AgentOutbox<'Message>(capacity, destination)
 
     static member TryCreate(capacity: int, destination: ReliableAgentRef<'Message>) =
-        if isNull (box destination) then Error (AgentStartError.NullArgument "destination")
-        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> AgentOutbox<'Message>.Create(budget, destination))
+        if isNull (box destination) then
+            Error (AgentStartError.NullArgument "destination")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> AgentOutbox<'Message>.Create(budget, destination))
 
     member _.Count = window.Count
     member _.IsEmpty = window.Count = 0
@@ -211,9 +222,13 @@ module AgentOutbox =
         handle
 
     let tryCreateHandler capacity (output: ReliableAgentRef<'Reply>) (execute: 'Request -> 'Reply) =
-        if isNull (box output) then Error (AgentStartError.NullArgument "output")
-        elif isNull (box execute) then Error (AgentStartError.NullArgument "execute")
-        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> createHandler budget output execute)
+        if isNull (box output) then
+            Error (AgentStartError.NullArgument "output")
+        elif isNull (box execute) then
+            Error (AgentStartError.NullArgument "execute")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> createHandler budget output execute)
 
 [<RequireQualifiedAccess>]
 module AgentReplyDispatcher =
@@ -245,11 +260,19 @@ module AgentReplyDispatcher =
 
 
     let tryCreateHandler capacity (replyTo: 'Request -> ReliableAgentRef<'Reply>) (execute: 'Request -> 'Reply) =
-        if isNull (box replyTo) then Error (AgentStartError.NullArgument "replyTo")
-        elif isNull (box execute) then Error (AgentStartError.NullArgument "execute")
-        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> createHandler budget replyTo execute)
+        if isNull (box replyTo) then
+            Error (AgentStartError.NullArgument "replyTo")
+        elif isNull (box execute) then
+            Error (AgentStartError.NullArgument "execute")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> createHandler budget replyTo execute)
 
     let tryCreateAsyncHandler capacity (replyTo: 'Request -> ReliableAgentRef<'Reply>) (execute: CancellationToken -> 'Request -> Task<'Reply>) =
-        if isNull (box replyTo) then Error (AgentStartError.NullArgument "replyTo")
-        elif isNull (box execute) then Error (AgentStartError.NullArgument "execute")
-        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> createAsyncHandler budget replyTo execute)
+        if isNull (box replyTo) then
+            Error (AgentStartError.NullArgument "replyTo")
+        elif isNull (box execute) then
+            Error (AgentStartError.NullArgument "execute")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> createAsyncHandler budget replyTo execute)

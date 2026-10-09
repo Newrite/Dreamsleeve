@@ -23,19 +23,28 @@ module RestartPolicy =
     let private MaxDoublings = 30
 
     let tryValidate (policy: RestartPolicy) =
-        if isNull (box policy) then Error (AgentStartError.NullArgument "policy")
-        elif policy.InitialDelay < TimeSpan.Zero then Error (AgentStartError.InvalidRestartPolicy "InitialDelay")
+        if isNull (box policy) then
+            Error (AgentStartError.NullArgument "policy")
+        elif policy.InitialDelay < TimeSpan.Zero then
+            Error (AgentStartError.InvalidRestartPolicy "InitialDelay")
         elif policy.MaxDelay < policy.InitialDelay || policy.MaxDelay.Ticks / TimeSpan.TicksPerMillisecond > 4294967294L then
             Error (AgentStartError.InvalidRestartPolicy "MaxDelay")
-        elif policy.MaxRestarts < 0 then Error (AgentStartError.InvalidRestartPolicy "MaxRestarts")
-        elif policy.Window <= TimeSpan.Zero then Error (AgentStartError.InvalidRestartPolicy "Window")
-        else Ok policy
+        elif policy.MaxRestarts < 0 then
+            Error (AgentStartError.InvalidRestartPolicy "MaxRestarts")
+        elif policy.Window <= TimeSpan.Zero then
+            Error (AgentStartError.InvalidRestartPolicy "Window")
+        else
+            Ok policy
 
     /// The delay after the n-th failure within the window, n >= 1.
     let delay policy failures =
         let doublings = min MaxDoublings (max 0 (failures - 1))
         let ticks = float policy.InitialDelay.Ticks * Math.Pow(2.0, float doublings)
-        if ticks >= float policy.MaxDelay.Ticks then policy.MaxDelay else TimeSpan.FromTicks(int64 ticks)
+
+        if ticks >= float policy.MaxDelay.Ticks then
+            policy.MaxDelay
+        else
+            TimeSpan.FromTicks(int64 ticks)
 
 /// A started child: the value consumers use, its full stop (including the
 /// release of everything it owns) and its graceful stop. Qualified, so that
@@ -69,7 +78,9 @@ type SupervisorEvent<'Child, 'StartError> =
 /// rejections remain typed, and an actual last fault is the original inner exception.
 type SupervisorGaveUpException<'StartError>(name: string, failures: int, failure: SupervisorFailure<'StartError>) =
     inherit Exception($"Supervisor {name} gave up after {failures} failures.",
-                      match failure with SupervisorFailure.Faulted error -> error | SupervisorFailure.StartRejected _ | SupervisorFailure.CompletedUnexpectedly -> null)
+                      match failure with
+                      | SupervisorFailure.Faulted error -> error
+                      | SupervisorFailure.StartRejected _ | SupervisorFailure.CompletedUnexpectedly -> null)
     member _.Failures = failures
     member _.Failure = failure
 
@@ -132,6 +143,7 @@ module AgentSupervisor =
                         if not (failures |> Seq.exists (fun previous -> Object.ReferenceEquals(previous, error))) then
                             failures.Add error
                             failureSink error
+
                     let join operation = task {
                         let mutable work: Task = null
                         try
@@ -139,13 +151,18 @@ module AgentSupervisor =
                             do! work
                         with error ->
                             if not (isNull work) && work.IsFaulted then
-                                for failure in work.Exception.InnerExceptions do retain failure
-                            else retain error
+                                for failure in work.Exception.InnerExceptions do
+                                    retain failure
+                            else
+                                retain error
                     }
                     do! join child.Stop
                     do! join (fun () -> child.Completion)
-                    if failures.Count = 0 then pending.TrySetResult() |> ignore
-                    else pending.TrySetException(failures) |> ignore
+
+                    if failures.Count = 0 then
+                        pending.TrySetResult() |> ignore
+                    else
+                        pending.TrySetException(failures) |> ignore
                 }
                 cleanup |> ignore
             pending.Task :> Task
@@ -167,8 +184,14 @@ module AgentSupervisor =
         let current = ref (None: 'Child option)
         let exhausted = ref (None: exn option)
         let state = {
-            Generation = 0; Launching = false; Child = ValueNone; Restarts = 0
-            Stopping = false; Delay = ValueNone; Failures = Queue()
+            Generation = 0
+            Launching = false
+            Child = ValueNone
+            Restarts = 0
+
+            Stopping = false
+            Delay = ValueNone
+            Failures = Queue()
         }
 
         let serve (child: OwnedChild<'Child> voption) =
@@ -181,13 +204,20 @@ module AgentSupervisor =
             let mutable succeeded = true
             pending |> ValueOption.iter (fun cancel ->
                 try cancel.Cancel()
-                with error -> succeeded <- false; context.Fail error
+                with error ->
+                    succeeded <- false
+                    context.Fail error
+
                 try cancel.Dispose()
-                with error -> succeeded <- false; context.Fail error)
+                with error ->
+                    succeeded <- false
+                    context.Fail error)
             succeeded
 
         let report (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) original event =
-            try observe event; true
+            try
+                observe event
+                true
             with error ->
                 original |> Option.iter context.Fail
                 context.Fail error
@@ -251,8 +281,10 @@ module AgentSupervisor =
             let window = int64 (policy.Window.TotalSeconds * float time.TimestampFrequency)
             while state.Failures.Count > 0 && now - state.Failures.Peek() >= window do
                 state.Failures.Dequeue() |> ignore
+
             state.Failures.Enqueue now
             let failures = state.Failures.Count
+
             if failures > policy.MaxRestarts then
                 let error = SupervisorGaveUpException<'StartError>(name, failures, failure)
                 Volatile.Write(&exhausted.contents, Some(error :> exn))
@@ -293,6 +325,7 @@ module AgentSupervisor =
                 | Ok(Ok child), false ->
                     let owned = own context child
                     serve (ValueSome owned)
+
                     if report context None (SupervisorEvent.Started(child.Value, state.Restarts)) then
                         context.Watch(child.Completion, fun outcome -> SupervisorMessage.ChildStopped(generation, outcome))
                     else
@@ -334,9 +367,14 @@ module AgentSupervisor =
                 Volatile.Read(&exhausted.contents) |> Option.exists (fun original -> Object.ReferenceEquals(original, error))))
 
     let tryStartWithTimeProvider (time: TimeProvider) name policy start observe =
-        if isNull time then Error (AgentStartError.NullArgument "time")
-        elif isNull (box start) then Error (AgentStartError.NullArgument "start")
-        elif isNull (box observe) then Error (AgentStartError.NullArgument "observe")
-        else RestartPolicy.tryValidate policy |> Result.bind (fun policy -> startCheckedWithTimeProvider time name policy start observe)
+        if isNull time then
+            Error (AgentStartError.NullArgument "time")
+        elif isNull (box start) then
+            Error (AgentStartError.NullArgument "start")
+        elif isNull (box observe) then
+            Error (AgentStartError.NullArgument "observe")
+        else
+            RestartPolicy.tryValidate policy
+            |> Result.bind (fun policy -> startCheckedWithTimeProvider time name policy start observe)
 
     let tryStart name policy start observe = tryStartWithTimeProvider TimeProvider.System name policy start observe

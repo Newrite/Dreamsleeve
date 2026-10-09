@@ -193,8 +193,10 @@ type ReplyChannel<'T> internal (completion: TaskCompletionSource<AgentAskResult<
 
     /// <summary>Attempts to return a request-local error without faulting an abandoned task.</summary>
     member _.TryReplyError(error: exn) =
-        if isNull error then Error (AgentRequestError.NullArgument(nameof error))
-        else Ok (completion.TrySetResult(AgentAskResult.Faulted error))
+        if isNull error then
+            Error (AgentRequestError.NullArgument(nameof error))
+        else
+            Ok (completion.TrySetResult(AgentAskResult.Faulted error))
 
     // Runtime catch sites already hold a nonnull original exception.
     member internal _.ReplyFault(error: exn) = completion.TrySetResult(AgentAskResult.Faulted error) |> ignore
@@ -276,7 +278,8 @@ module internal AgentInternals =
     let invalidTimeout timeout =
         match timeout with
         | Some value when value <> Timeout.InfiniteTimeSpan &&
-                          (value < TimeSpan.Zero || value > TimeSpan.FromMilliseconds(4294967294.0)) -> Some value
+                          (value < TimeSpan.Zero || value > TimeSpan.FromMilliseconds(4294967294.0)) ->
+            Some value
         | Some _ | None -> None
 
     type CheckedAgentOptions<'Message> = {
@@ -293,7 +296,9 @@ module internal AgentInternals =
                   options.OnStopped |> Option.map (fun callback -> "OnStopped", box callback)
                   options.OnError |> Option.map (fun callback -> "OnError", box callback)
                   isControl |> Option.map (fun callback -> "isControl", box callback) ]
-                |> List.tryPick (function Some(name, callback) when isNull callback -> Some name | _ -> None)
+                |> List.tryPick (function
+                    | Some(name, callback) when isNull callback -> Some name
+                    | _ -> None)
 
         let error =
             if isNull (box options) then Some (AgentStartError.NullArgument "options")
@@ -321,15 +326,24 @@ module internal AgentInternals =
         | None ->
             // CLIMutable input must not remain an alias into a prepared construction.
             let snapshot = {
-                Name = options.Name; Mailbox = options.Mailbox; SingleWriter = options.SingleWriter
-                DefaultAskTimeout = options.DefaultAskTimeout; OnStarted = options.OnStarted
-                OnStopped = options.OnStopped; OnError = options.OnError
+                Name = options.Name
+                Mailbox = options.Mailbox
+                SingleWriter = options.SingleWriter
+                DefaultAskTimeout = options.DefaultAskTimeout
+
+                OnStarted = options.OnStarted
+                OnStopped = options.OnStopped
+                OnError = options.OnError
             }
             let reliable =
                 match snapshot.Mailbox with
                 | AgentMailbox.Unbounded _ | AgentMailbox.BoundedWithControl _ -> true
                 | AgentMailbox.Bounded(_, mode, _) -> mode = BoundedChannelFullMode.Wait
-            Ok { Options = snapshot; IsControl = isControl; IsReliable = reliable }
+            Ok {
+                Options = snapshot
+                IsControl = isControl
+                IsReliable = reliable
+            }
 
     let resultForStop reason =
         match reason with
@@ -716,7 +730,10 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
     let failCore error = requestImmediateStop (AgentStopReason.Faulted error)
 
     let attempt (operation: unit -> unit) =
-        try operation () with error -> failCore error
+        try
+            operation ()
+        with error ->
+            failCore error
 
     let attemptAsync (operation: unit -> Task) = task {
         let mutable work: Task = null
@@ -725,8 +742,10 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
             do! work
         with error ->
             if not (isNull work) && work.IsFaulted then
-                for failure in work.Exception.InnerExceptions do failCore failure
-            else failCore error
+                for failure in work.Exception.InnerExceptions do
+                    failCore failure
+            else
+                failCore error
     }
 
     let tryWriteReliable (envelope: MailboxEnvelope<'Message>) =
@@ -949,7 +968,8 @@ type Agent<'Message> private (checkedOptions: CheckedAgentOptions<'Message>, han
         options.OnStopped |> Option.iter (fun callback -> attempt (fun () -> callback (options.Name, reason)))
 
         let errors = lock lifecycleGate (fun () -> failures.ToArray())
-        if errors.Length > 0 then completion.TrySetException(errors) |> ignore
+        if errors.Length > 0 then
+            completion.TrySetException(errors) |> ignore
         else
             match reason with
             | AgentStopReason.Completed -> completion.TrySetResult() |> ignore
@@ -1413,7 +1433,8 @@ type StatefulAgent<'State, 'Command>
 
                         match transition with
                         | StatefulTransition.Stay -> ()
-                        | StatefulTransition.SetState nextState -> applyCommandState agentContext nextState
+                        | StatefulTransition.SetState nextState ->
+                            applyCommandState agentContext nextState
                         | StatefulTransition.Stop -> agentContext.Complete() |> ignore
                         | StatefulTransition.StopWithState nextState ->
                             applyCommandState agentContext nextState
@@ -1485,11 +1506,13 @@ type StatefulAgent<'State, 'Command>
     /// Timeout includes admission and reply; an admitted command may still execute after timeout.
     /// </summary>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        if isNull (box buildMessage) then Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
-        else inner.TryAskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box buildMessage) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Command (buildMessage reply)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Enqueues a read query to safely project data from the current state.
@@ -1500,11 +1523,13 @@ type StatefulAgent<'State, 'Command>
     /// <param name="timeout">An optional timeout for the query.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        if isNull (box projection) then Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
-        else inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box projection) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Signals the stateful agent to stop accepting new commands and let the current mailbox drain gracefully.
@@ -1782,11 +1807,13 @@ type MutableStatefulAgent<'State, 'Command>
     /// Timeout includes admission and reply; an admitted command may still execute after timeout.
     /// </summary>
     member _.TryAskAsync<'Reply>(buildMessage: ReplyChannel<'Reply> -> 'Command, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        if isNull (box buildMessage) then Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
-        else inner.TryAskAsync(
-            (fun reply -> Command (buildMessage reply)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box buildMessage) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "buildMessage"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Command (buildMessage reply)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Enqueues a read query to safely project data from the current mutable state.
@@ -1798,11 +1825,13 @@ type MutableStatefulAgent<'State, 'Command>
     /// <param name="timeout">An optional timeout for the query.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     member _.TryReadAsync<'Reply>(projection: 'State -> 'Reply, ?timeout: TimeSpan, ?cancellationToken: CancellationToken) =
-        if isNull (box projection) then Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
-        else inner.TryAskAsync(
-            (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
-            ?timeout = timeout,
-            ?cancellationToken = cancellationToken)
+        if isNull (box projection) then
+            Task.FromResult (AgentAskResult.InvalidRequest (AgentRequestError.NullArgument "projection"))
+        else
+            inner.TryAskAsync(
+                (fun reply -> Query (StateQuery<'State, 'Reply>(projection, reply) :> IStateQuery<'State>)),
+                ?timeout = timeout,
+                ?cancellationToken = cancellationToken)
 
     /// <summary>
     /// Signals the mutable stateful agent to stop accepting new commands and let the current mailbox drain gracefully.

@@ -4,13 +4,15 @@ open System
 open System.Collections.Generic
 open Dreamsleeve.Agent
 
-type PlayerPresence =
-    { PlayerId: uint64
-      Location: string
-      X: float32
-      Y: float32
-      Z: float32
-      Health: int }
+type PlayerPresence = {
+    PlayerId: uint64
+    Location: string
+
+    X: float32
+    Y: float32
+    Z: float32
+    Health: int
+}
 
 type PresenceCommand =
     | Upsert of PlayerPresence
@@ -35,18 +37,28 @@ let run () = task {
             AgentOptions =
                 { AgentOptions.create "presence" with
                     Mailbox = AgentMailbox.boundedWait 128
-                    DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.) } }
+                    DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.)
+                }
+        }
 
     // The dictionary belongs exclusively to the agent from this point onward.
     match MutableStatefulAgent.TryStart(options, Dictionary<uint64, PlayerPresence>(), handle) with
-    | Error error -> eprintfn "presence: startup rejected: %A" error
+    | Error error ->
+        eprintfn "presence: startup rejected: %A" error
     | Ok owner ->
         use presence = owner
 
         let! posted =
             presence.PostAsync(Upsert
-                { PlayerId = 7UL; Location = "Balmora"
-                  X = 10.f; Y = 2.f; Z = 0.f; Health = 100 })
+                {
+                    PlayerId = 7UL
+                    Location = "Balmora"
+
+                    X = 10.f
+                    Y = 2.f
+                    Z = 0.f
+                    Health = 100
+                })
 
         match posted with
         | AgentPostResult.Posted -> ()
@@ -66,10 +78,12 @@ let run () = task {
                 | AgentAskResult.Replied count ->
                     printfn "presence: snapshot=%d; removed=%b; current=%d"
                         snapshot.Length removed count
-                | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure -> eprintfn "presence: count not confirmed: %A" failure
+                | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
+                    eprintfn "presence: count not confirmed: %A" failure
             | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
                 eprintfn "presence: removal not confirmed: %A; do not retry automatically" failure
-        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure -> eprintfn "presence: snapshot not confirmed: %A" failure
+        | (AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.Closed | AgentAskResult.TimedOut | AgentAskResult.Canceled | AgentAskResult.Faulted _ | AgentAskResult.InvalidRequest _) as failure ->
+            eprintfn "presence: snapshot not confirmed: %A" failure
 
         presence.Complete() |> ignore
         do! presence.Completion

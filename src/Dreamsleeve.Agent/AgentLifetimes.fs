@@ -23,18 +23,22 @@ module AgentLifetimeExtensions =
                             return Error (if causes.Count = 1 then causes[0] else AggregateException(causes))
                         else return Error error
                 }
+
                 let retainChildFailures () =
                     if child.Completion.IsFaulted then
-                        for error in child.Completion.Exception.InnerExceptions do context.Fail error
+                        for error in child.Completion.Exception.InnerExceptions do
+                            context.Fail error
                     else
                         match outcome with
                         | Error error -> context.Fail error
                         | Ok () -> ()
+
                 // Parent Abort may cancel the child. Actual cleanup faults remain faults.
                 if not (token.IsCancellationRequested && child.Completion.IsCanceled) then
                     let message =
                         try Ok (stopped outcome)
                         with error -> Error error
+
                     match message with
                     | Error error ->
                         retainChildFailures ()
@@ -66,6 +70,7 @@ module AgentLifetimeExtensions =
                         return Ok ()
                     with error -> return Error error
                 }
+
                 if not cancel.IsCancellationRequested then
                     let! delivered = context.PostAsync(stopped outcome, cancellationToken = cancel.Token)
                     match delivered with
@@ -144,9 +149,13 @@ module AgentReplyScope =
 
 
     let tryCreate (context: ReliableAgentContext<'Owner>) (target: Agent<'Target>) capacity closedReply busyReply =
-        if isNull (box context) then Error (AgentStartError.NullArgument "context")
-        elif isNull (box target) then Error (AgentStartError.NullArgument "target")
-        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> create context target budget closedReply busyReply)
+        if isNull (box context) then
+            Error (AgentStartError.NullArgument "context")
+        elif isNull (box target) then
+            Error (AgentStartError.NullArgument "target")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> create context target budget closedReply busyReply)
 
     let createForReliable context (target: ReliableAgent<'Target>) capacity closedReply busyReply =
         create context target.Agent capacity closedReply busyReply

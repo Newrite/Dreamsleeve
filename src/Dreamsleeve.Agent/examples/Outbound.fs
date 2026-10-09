@@ -14,7 +14,8 @@ let private handle (send: string -> string -> Task) (context: AgentContext<Outbo
         if not context.CancellationToken.IsCancellationRequested then
             do! send recipient text
     | SendAndConfirm (recipient, text, reply) ->
-        if context.CancellationToken.IsCancellationRequested then reply.Cancel()
+        if context.CancellationToken.IsCancellationRequested then
+            reply.Cancel()
         else
             do! send recipient text
             reply.Reply ()
@@ -24,7 +25,8 @@ let run () = task {
     let options =
         { AgentOptions.create "outbound" with
             Mailbox = AgentMailbox.boundedWait 32
-            DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.) }
+            DefaultAskTimeout = Some (TimeSpan.FromSeconds 2.)
+        }
 
     // Replace with an asynchronous dependency that accepts ctx.CancellationToken.
     // This example confirms local processing, not delivery to a remote player.
@@ -33,7 +35,8 @@ let run () = task {
         Task.CompletedTask
 
     match Agent.TryStart(options, handle send) with
-    | Error error -> eprintfn "agent: startup rejected: %A" error
+    | Error error ->
+        eprintfn "agent: startup rejected: %A" error
     | Ok owner ->
         use agent = owner
 

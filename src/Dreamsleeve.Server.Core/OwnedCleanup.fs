@@ -15,6 +15,7 @@ module OwnedCleanup =
         let started =
             try Ok(action ())
             with error -> Error [error]
+
         match started with
         | Error errors -> return Error errors
         | Ok work ->
@@ -28,6 +29,7 @@ module OwnedCleanup =
         let started =
             try Ok(action ())
             with error -> Error [error]
+
         match started with
         | Error errors -> return errors
         | Ok work ->
@@ -43,6 +45,7 @@ module OwnedCleanup =
         for action in actions do
             let! failures = capture action
             errors.AddRange failures
+
         return List.ofSeq errors
     }
 
