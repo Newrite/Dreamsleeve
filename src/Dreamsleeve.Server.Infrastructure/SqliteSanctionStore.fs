@@ -72,20 +72,34 @@ module SqliteSanctionStore =
         | ValueNone, ValueNone -> Ok ValueNone
         | ValueSome _, ValueSome _ -> Error()
 
+    let private SanctionProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Int32
+           SqliteStored.Column.Text
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger)
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger)
+           SqliteStored.Column.UnixMilliseconds
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds) |]
+
+    let private TargetProjection =
+        [| SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Integer |]
+
     // The columns of Columns, in their order. Only an actual SQLite integer
     // can name a kind; its full stored width is checked before the domain lookup.
     let private read (reader: DbDataReader) =
-        let kind =
-            match reader.GetValue 2 with
-            | :? int64 as value -> storedInt32 value |> ValueOption.bind SanctionKind.ofInt
-            | _ -> ValueNone
-        match SanctionId.create (reader.GetInt64 0), storedPlayer (reader.GetInt64 1), kind,
-              SanctionReason.create (reader.GetString 3), issuer reader,
-              time (reader.GetInt64 6), optionalTime reader 7 with
-        | Ok id, Ok target, ValueSome kind, Ok reason, Ok issuedBy, Ok issuedAt, Ok expires ->
-            Ok { Id = id; Target = target; Kind = kind; Scope = SanctionScope.Server; Reason = reason; IssuedBy = issuedBy
-                 IssuedAt = issuedAt; Expires = expires }
-        | _ -> invalidData ()
+        SqliteAccountStore.storedRow reader 0 SanctionProjection (fun () ->
+            let kind =
+                match reader.GetValue 2 with
+                | :? int64 as value -> storedInt32 value |> ValueOption.bind SanctionKind.ofInt
+                | _ -> ValueNone
+            match SanctionId.create (reader.GetInt64 0), storedPlayer (reader.GetInt64 1), kind,
+                  SanctionReason.create (reader.GetString 3), issuer reader,
+                  time (reader.GetInt64 6), optionalTime reader 7 with
+            | Ok id, Ok target, ValueSome kind, Ok reason, Ok issuedBy, Ok issuedAt, Ok expires ->
+                Ok { Id = id; Target = target; Kind = kind; Scope = SanctionScope.Server; Reason = reason; IssuedBy = issuedBy
+                     IssuedAt = issuedAt; Expires = expires }
+            | _ -> invalidData ())
 
     let private readAll (reader: DbDataReader) row =
         let rec next rows =
@@ -233,7 +247,8 @@ module SqliteSanctionStore =
                     [ "@now", box (milliseconds now); "@limit", box MaxListed ]
             use reader = statement.ExecuteReader()
             readAll reader (fun reader ->
-                match read reader, Username.create Int32.MaxValue (reader.GetString 8), DisplayName.create Int32.MaxValue (reader.GetString 9),
-                      nameColor (reader.GetInt64 10) with
-                | Ok sanction, Ok username, Ok name, Ok color -> Ok { Sanction = sanction; Target = PlayerData.create sanction.Target username name color }
-                | _ -> invalidData ()))
+                SqliteAccountStore.storedRow reader 8 TargetProjection (fun () ->
+                    match read reader, Username.create Int32.MaxValue (reader.GetString 8), DisplayName.create Int32.MaxValue (reader.GetString 9),
+                          nameColor (reader.GetInt64 10) with
+                    | Ok sanction, Ok username, Ok name, Ok color -> Ok { Sanction = sanction; Target = PlayerData.create sanction.Target username name color }
+                    | _ -> invalidData ())))

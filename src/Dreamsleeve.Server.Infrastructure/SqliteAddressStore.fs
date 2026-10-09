@@ -49,23 +49,43 @@ module SqliteAddressStore =
                 | Error error -> Error error
         next []
 
+    let private BanProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Blob
+           SqliteStored.Column.Int32
+           SqliteStored.Column.Text
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger)
+           SqliteStored.Column.UnixMilliseconds
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds) |]
+
+    let private AddressProjection =
+        [| SqliteStored.Column.Blob; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.Integer |]
+
+    let private MatchProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text |]
+
+    let private ColorProjection =
+        [| SqliteStored.Column.Integer |]
+
     // The columns of BanColumns, in their order.
     let private readBan (reader: DbDataReader) =
-        let issuer =
-            match optional reader 4 with
-            | ValueSome admin -> AdminId.create admin |> Result.map ValueSome
-            | ValueNone -> Ok ValueNone
-        match AddressRange.ofStored (bytes reader 1) (int (reader.GetInt64 2)), SanctionReason.create (reader.GetString 3), issuer with
-        | Some range, Ok reason, Ok issuedBy when reader.GetInt64 0 > 0L ->
-            Ok { Id = reader.GetInt64 0; Range = range; Reason = reason; IssuedBy = issuedBy; IssuedAt = time reader 5
-                 Expires = optional reader 6 |> ValueOption.map DateTimeOffset.FromUnixTimeMilliseconds }
-        | _ -> invalidData ()
+        SqliteAccountStore.storedRow reader 0 BanProjection (fun () ->
+            let issuer =
+                match optional reader 4 with
+                | ValueSome admin -> AdminId.create admin |> Result.map ValueSome
+                | ValueNone -> Ok ValueNone
+            match AddressRange.ofStored (bytes reader 1) (int (reader.GetInt64 2)), SanctionReason.create (reader.GetString 3), issuer with
+            | Some range, Ok reason, Ok issuedBy when reader.GetInt64 0 > 0L ->
+                Ok { Id = reader.GetInt64 0; Range = range; Reason = reason; IssuedBy = issuedBy; IssuedAt = time reader 5
+                     Expires = optional reader 6 |> ValueOption.map DateTimeOffset.FromUnixTimeMilliseconds }
+            | _ -> invalidData ())
 
     // address, first_seen, last_seen, sign_ins from index on.
     let private readAddress (reader: DbDataReader) index =
-        match ClientAddress.ofBytes (bytes reader index) with
-        | Some address -> Ok { Address = address; FirstSeen = time reader (index + 1); LastSeen = time reader (index + 2); SignIns = reader.GetInt64(index + 3) }
-        | None -> invalidData ()
+        SqliteAccountStore.storedRow reader index AddressProjection (fun () ->
+            match ClientAddress.ofBytes (bytes reader index) with
+            | Some address -> Ok { Address = address; FirstSeen = time reader (index + 1); LastSeen = time reader (index + 2); SignIns = reader.GetInt64(index + 3) }
+            | None -> invalidData ())
 
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
 
@@ -99,10 +119,12 @@ module SqliteAddressStore =
                     [ "@first", box first; "@last", box last; "@limit", box MaxListed ]
             use reader = statement.ExecuteReader()
             readAll reader (fun reader ->
-                match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-                      DisplayName.create Int32.MaxValue (reader.GetString 2), readAddress reader 3, nameColor (reader.GetInt64 7) with
-                | Ok id, Ok username, Ok name, Ok address, Ok color -> Ok { Player = PlayerData.create id username name color; Address = address }
-                | _ -> invalidData ()))
+                SqliteAccountStore.storedRow reader 0 MatchProjection (fun () ->
+                    SqliteAccountStore.storedRow reader 7 ColorProjection (fun () ->
+                        match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
+                              DisplayName.create Int32.MaxValue (reader.GetString 2), readAddress reader 3, nameColor (reader.GetInt64 7) with
+                        | Ok id, Ok username, Ok name, Ok address, Ok color -> Ok { Player = PlayerData.create id username name color; Address = address }
+                        | _ -> invalidData ()))))
 
     /// The bans in force at now, newest first.
     let active config (now: DateTimeOffset) token =

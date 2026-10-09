@@ -253,7 +253,10 @@ module AdminService =
                 | AdminCommand.ActiveSanctions, _ ->
                     SqliteSanctionStore.listActive database now token |> stored (AdminReply.ActiveSanctions >> reply)
             with
-            | :? OperationCanceledException -> Error AdminServiceError.Unavailable
+            | :? OperationCanceledException when token.IsCancellationRequested -> Error AdminServiceError.Unavailable
+            // Fresh request supervision: per-unit contexts/transactions have
+            // disposed before this boundary; actor state changes only on completion.
+            // The failed work is not retried and its original cause is logged.
             | error ->
                 logger.LogError(error, "Admin operation failed")
                 Error AdminServiceError.Unavailable

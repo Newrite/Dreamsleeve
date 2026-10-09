@@ -111,17 +111,36 @@ module SqliteAdminStore =
                         insertSession context account.Id (session account.Id)
                         Ok (Some account)))
 
+    let private AdminProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text |]
+
+    let private SessionProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds |]
+
+    let private CredentialProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text |]
+
+    let private TokenProjection =
+        [| SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds |]
+
+    let private PlayerProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Int32; SqliteStored.Column.Integer |]
+
+    let private NameProjection =
+        [| SqliteStored.Column.Text; SqliteStored.Column.Text; (SqliteStored.Column.Nullable SqliteStored.Column.Text); SqliteStored.Column.UnixMilliseconds |]
+
+    let private AuditProjection =
+        [| (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger); (SqliteStored.Column.Nullable SqliteStored.Column.Text); (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger); (SqliteStored.Column.Nullable SqliteStored.Column.Text); SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds |]
+
     let findAdmin config (username: Username) token =
         SqliteAccountStore.withContext config token (fun context ->
-            let name = Username.value username
-            let query = select {
-                for stored in main.admin_accounts do
-                where (stored.username = name)
-                select stored
-            }
-            match context.SelectOne query with
-            | None -> Ok None
-            | Some row -> admin row.id row.username |> Result.map (fun account -> Some { Account = account; PasswordHash = row.password_hash }))
+            use statement = command context "SELECT id, username, password_hash FROM admin_accounts WHERE username=@name" [ "@name", box (Username.value username) ]
+            use reader = statement.ExecuteReader()
+            if not (reader.Read()) then Ok None
+            else
+                SqliteAccountStore.storedRow reader 0 CredentialProjection (fun () ->
+                    admin (reader.GetInt64 0) (reader.GetString 1)
+                    |> Result.map (fun account -> Some { Account = account; PasswordHash = reader.GetString 2 })))
 
     /// Compare-and-swap, like player rehashing.
     let rehashAdmin config (id: AdminId) expectedHash replacementHash token =
@@ -137,7 +156,10 @@ module SqliteAdminStore =
             transaction context (fun () ->
                 use statement = command context "SELECT id, username FROM admin_accounts WHERE id=@id" [ "@id", box (AdminId.value id) ]
                 use reader = statement.ExecuteReader()
-                let found = if reader.Read() then admin (reader.GetInt64 0) (reader.GetString 1) |> Result.map Some else Ok None
+                let found =
+                    if reader.Read() then
+                        SqliteAccountStore.storedRow reader 0 AdminProjection (fun () -> admin (reader.GetInt64 0) (reader.GetString 1) |> Result.map Some)
+                    else Ok None
                 reader.Close()
                 match found with
                 | Error error -> Error error
@@ -156,14 +178,19 @@ module SqliteAdminStore =
                 Ok ()))
 
     let private adminFor context sql hash (now: DateTimeOffset voption) =
-        let parameters = [ "@hash", box hash ] @ (match now with ValueSome time -> [ "@now", box (milliseconds time) ] | ValueNone -> [])
-        use statement = command context sql parameters
+        use statement = command context sql [ "@hash", box hash ]
         use reader = statement.ExecuteReader()
-        if reader.Read() then admin (reader.GetInt64 0) (reader.GetString 1) |> Result.map Some else Ok None
+        let projection = if now.IsSome then SessionProjection else AdminProjection
+        if reader.Read() then
+            SqliteAccountStore.storedRow reader 0 projection (fun () ->
+                match now with
+                | ValueSome time when reader.GetInt64 2 <= milliseconds time -> Ok None
+                | ValueSome _ | ValueNone -> admin (reader.GetInt64 0) (reader.GetString 1) |> Result.map Some)
+        else Ok None
 
     let findSession config hash (now: DateTimeOffset) token =
         SqliteAccountStore.withContext config token (fun context ->
-            adminFor context "SELECT a.id, a.username FROM admin_sessions s JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=@hash AND s.expires_at>@now" hash (ValueSome now))
+            adminFor context "SELECT a.id, a.username, s.expires_at FROM admin_sessions s JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=@hash" hash (ValueSome now))
 
     let deleteSession config hash token =
         SqliteAccountStore.withContext config token (fun context ->
@@ -193,12 +220,15 @@ module SqliteAdminStore =
             let rows = ResizeArray()
             let mutable failure = None
             while failure.IsNone && reader.Read() do
-                match ApiTokenLabel.create (reader.GetString 1), Username.create Int32.MaxValue (reader.GetString 2) with
-                | Ok label, Ok owner ->
-                    rows.Add { TokenHash = reader.GetString 0; Label = label; Owner = owner; CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 3) }
-                | _ -> failure <- Some "A stored API token is invalid."
+                match SqliteStored.validate reader 0 TokenProjection with
+                | Error error -> failure <- Some(AccountStoreError.Failed error)
+                | Ok () ->
+                    match ApiTokenLabel.create (reader.GetString 1), Username.create Int32.MaxValue (reader.GetString 2) with
+                    | Ok label, Ok owner ->
+                        rows.Add { TokenHash = reader.GetString 0; Label = label; Owner = owner; CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 3) }
+                    | _ -> failure <- Some(AccountStoreError.Failed(InvalidDataException "A stored API token is invalid."))
             match failure with
-            | Some message -> invalidData message
+            | Some error -> Error error
             | None -> Ok (List.ofSeq rows))
 
     /// False when no such token exists; nothing is audited then.
@@ -211,11 +241,12 @@ module SqliteAdminStore =
                 Ok (removed > 0)))
 
     let private readPlayer (reader: DbDataReader) =
-        match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-              DisplayName.create Int32.MaxValue (reader.GetString 2), PlayerRole.ofInt (int (reader.GetInt64 3)), nameColor (reader.GetInt64 4) with
-        | Ok playerId, Ok username, Ok displayName, ValueSome role, Ok color when reader.GetInt64 0 > 0L ->
-            Ok { Profile = PlayerData.create playerId username displayName color; Role = role }
-        | _ -> invalidData "A stored player is invalid."
+        SqliteAccountStore.storedRow reader 0 PlayerProjection (fun () ->
+            match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
+                  DisplayName.create Int32.MaxValue (reader.GetString 2), PlayerRole.ofInt (int (reader.GetInt64 3)), nameColor (reader.GetInt64 4) with
+            | Ok playerId, Ok username, Ok displayName, ValueSome role, Ok color when reader.GetInt64 0 > 0L ->
+                Ok { Profile = PlayerData.create playerId username displayName color; Role = role }
+            | _ -> invalidData "A stored player is invalid.")
 
     let private readPlayers (reader: DbDataReader) =
         let rows = ResizeArray()
@@ -295,16 +326,19 @@ module SqliteAdminStore =
                 let rows = ResizeArray()
                 let mutable failure = None
                 while failure.IsNone && reader.Read() do
-                    let changedBy =
-                        if reader.IsDBNull 2 then Ok None
-                        else Username.create Int32.MaxValue (reader.GetString 2) |> Result.map Some
-                    match changedBy with
-                    | Ok changedBy ->
-                        rows.Add { OldName = reader.GetString 0; NewName = reader.GetString 1; ChangedBy = changedBy
-                                   At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 3) }
-                    | Error _ -> failure <- Some "A stored administrator name is invalid."
+                    match SqliteStored.validate reader 0 NameProjection with
+                    | Error error -> failure <- Some(AccountStoreError.Failed error)
+                    | Ok () ->
+                        let changedBy =
+                            if reader.IsDBNull 2 then Ok None
+                            else Username.create Int32.MaxValue (reader.GetString 2) |> Result.map Some
+                        match changedBy with
+                        | Ok changedBy ->
+                            rows.Add { OldName = reader.GetString 0; NewName = reader.GetString 1; ChangedBy = changedBy
+                                       At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 3) }
+                        | Error _ -> failure <- Some(AccountStoreError.Failed(InvalidDataException "A stored administrator name is invalid."))
                 match failure with
-                | Some message -> invalidData message
+                | Some error -> Error error
                 | None -> Ok (List.ofSeq rows))
 
     /// An action that another owner performed (rename, reset, revoke, announcement).
@@ -339,13 +373,18 @@ module SqliteAdminStore =
                     elif not (reader.IsDBNull 2) then PlayerId.create (uint64 (reader.GetInt64 2)) |> Result.map (AuditActor.Moderator >> ValueSome)
                     else Ok ValueNone
             while failure.IsNone && reader.Read() do
-                let actorName = if reader.IsDBNull 0 then name 3 else name 1
-                match actor (), actorName, AdminAction.ofKey (reader.GetString 4) with
-                | Ok actor, Ok actorName, Some action ->
-                    rows.Add { Actor = actor; ActorName = actorName; Action = action; Target = reader.GetString 5; Details = reader.GetString 6
-                               At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 7) }
-                | Error _, _, _ | _, Error _, _ -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line names an invalid actor."))
-                | Ok _, Ok _, None -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line has an unknown action."))
+                match SqliteStored.validate reader 0 AuditProjection with
+                | Error error -> failure <- Some(AccountStoreError.Failed error)
+                | Ok () when not (reader.IsDBNull 0) && not (reader.IsDBNull 2) ->
+                    failure <- Some(AccountStoreError.Failed(InvalidDataException "An audit line names two actors."))
+                | Ok () ->
+                    let actorName = if reader.IsDBNull 0 then name 3 else name 1
+                    match actor (), actorName, AdminAction.ofKey (reader.GetString 4) with
+                    | Ok actor, Ok actorName, Some action ->
+                        rows.Add { Actor = actor; ActorName = actorName; Action = action; Target = reader.GetString 5; Details = reader.GetString 6
+                                   At = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 7) }
+                    | Error _, _, _ | _, Error _, _ -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line names an invalid actor."))
+                    | Ok _, Ok _, None -> failure <- Some (AccountStoreError.Failed(InvalidDataException "An audit line has an unknown action."))
             match failure with
             | Some error -> Error error
             | None -> Ok (List.ofSeq rows))

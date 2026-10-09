@@ -38,28 +38,53 @@ module SqliteGuildStore =
                 | Error error -> Error error
         next []
 
+    let private MemberProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Int32
+           SqliteStored.Column.UnixMilliseconds
+           (SqliteStored.Column.Nullable SqliteStored.Column.Text)
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger)
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds)
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds) |]
+
+    let private InviteProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.UnixMilliseconds
+           SqliteStored.Column.UnixMilliseconds |]
+
+    let private GuildProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds |]
+
+    let private ProfileProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Integer |]
+
     let private memberOf (reader: DbDataReader) =
-        let guild = GuildId.create (uint64 (reader.GetInt64 0))
-        let player = PlayerId.create (uint64 (reader.GetInt64 1))
-        let role = GuildRole.ofInt (reader.GetInt32 2)
-        let mute =
-            match optional reader 4 reader.GetString, optional reader 5 reader.GetInt64, optional reader 6 reader.GetInt64 with
-            | ValueSome reason, ValueSome by, ValueSome at ->
-                match SanctionReason.create reason, PlayerId.create (uint64 by) with
-                | Ok reason, Ok by ->
-                    Ok(ValueSome { Reason = reason; IssuedBy = by; IssuedAt = time at; Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time })
+        SqliteAccountStore.storedRow reader 0 MemberProjection (fun () ->
+            let guild = GuildId.create (uint64 (reader.GetInt64 0))
+            let player = PlayerId.create (uint64 (reader.GetInt64 1))
+            let role = GuildRole.ofInt (reader.GetInt32 2)
+            let mute =
+                match optional reader 4 reader.GetString, optional reader 5 reader.GetInt64, optional reader 6 reader.GetInt64 with
+                | ValueSome reason, ValueSome by, ValueSome at ->
+                    match SanctionReason.create reason, PlayerId.create (uint64 by) with
+                    | Ok reason, Ok by ->
+                        Ok(ValueSome { Reason = reason; IssuedBy = by; IssuedAt = time at; Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time })
+                    | _ -> Error()
+                | ValueNone, ValueNone, ValueNone -> Ok ValueNone
                 | _ -> Error()
-            | ValueNone, ValueNone, ValueNone -> Ok ValueNone
-            | _ -> Error()
-        match guild, player, role, mute with
-        | Ok guild, Ok player, ValueSome role, Ok mute -> Ok(guild, { Player = player; Role = role; JoinedAt = time (reader.GetInt64 3); Mute = mute })
-        | _ -> invalidData "A stored guild member is invalid."
+            match guild, player, role, mute with
+            | Ok guild, Ok player, ValueSome role, Ok mute -> Ok(guild, { Player = player; Role = role; JoinedAt = time (reader.GetInt64 3); Mute = mute })
+            | _ -> invalidData "A stored guild member is invalid.")
 
     let private inviteOf (reader: DbDataReader) =
-        match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)), PlayerId.create (uint64 (reader.GetInt64 2)) with
-        | Ok guild, Ok player, Ok by ->
-            Ok { Guild = guild; Player = player; InvitedBy = by; CreatedAt = time (reader.GetInt64 3); Expires = time (reader.GetInt64 4) }
-        | _ -> invalidData "A stored guild invitation is invalid."
+        SqliteAccountStore.storedRow reader 0 InviteProjection (fun () ->
+            match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)), PlayerId.create (uint64 (reader.GetInt64 2)) with
+            | Ok guild, Ok player, Ok by ->
+                Ok { Guild = guild; Player = player; InvitedBy = by; CreatedAt = time (reader.GetInt64 3); Expires = time (reader.GetInt64 4) }
+            | _ -> invalidData "A stored guild invitation is invalid.")
 
     /// Every guild with its members and invitations, the profiles they name and
     /// the next ID. Stored names stay as they are, whatever the limits are now.
@@ -71,19 +96,21 @@ module SqliteGuildStore =
                 readAll reader row
             let guilds =
                 rows "SELECT id, name, created_at FROM guilds ORDER BY id" (fun reader ->
-                    match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1) with
-                    | Ok id, Ok name -> Ok(id, name, time (reader.GetInt64 2))
-                    | _ -> invalidData "A stored guild is invalid.")
+                    SqliteAccountStore.storedRow reader 0 GuildProjection (fun () ->
+                        match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1) with
+                        | Ok id, Ok name -> Ok(id, name, time (reader.GetInt64 2))
+                        | _ -> invalidData "A stored guild is invalid."))
             let members =
                 rows "SELECT guild_id, player_id, role, joined_at, mute_reason, muted_by, muted_at, muted_until FROM guild_members" memberOf
             let invites = rows "SELECT guild_id, player_id, invited_by, created_at, expires_at FROM guild_invites" inviteOf
             let profiles =
                 rows "SELECT p.player_id, a.username, p.display_name, p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites)"
                     (fun reader ->
-                        match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-                              DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
-                        | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
-                        | _ -> invalidData "A stored profile is invalid.")
+                        SqliteAccountStore.storedRow reader 0 ProfileProjection (fun () ->
+                            match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
+                                  DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
+                            | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
+                            | _ -> invalidData "A stored profile is invalid."))
             match guilds, members, invites, profiles with
             | Ok guilds, Ok members, Ok invites, Ok profiles ->
                 let membersOf = members |> List.groupBy fst |> Map.ofList
@@ -96,11 +123,10 @@ module SqliteGuildStore =
                           Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
                           Invites = invitesOf |> Map.tryFind id |> Option.defaultValue [] })
                 // sqlite_sequence is not a schema table; the sequence outlives deleted rows.
-                let highest =
-                    scalar context "SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'guilds'), 0), COALESCE((SELECT MAX(id) FROM guilds), 0))" []
-                    :?> int64
-                if highest < 0L || uint64 highest >= GuildId.MaxValue - 1UL then invalidData "The guild ID sequence is exhausted."
-                else Ok { Guilds = stored; Profiles = profiles; NextId = uint64 highest + 1UL }
+                match scalar context "SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'guilds'), 0), COALESCE((SELECT MAX(id) FROM guilds), 0))" [] with
+                | :? int64 as highest when highest >= 0L && uint64 highest < GuildId.MaxValue - 1UL ->
+                    Ok { Guilds = stored; Profiles = profiles; NextId = uint64 highest + 1UL }
+                | _ -> invalidData "The guild ID sequence is invalid or exhausted."
             | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error)
 
     let private guild (id: GuildId) = box (int64 (GuildId.value id))

@@ -59,8 +59,15 @@ module SqliteAccountStore =
 
                 if token.IsCancellationRequested then Error AccountStoreError.Canceled
                 else action context
-            with error ->
-                Error(AccountStoreError.Failed error)
+            with
+            | :? SqliteException as error -> Error(AccountStoreError.Failed error)
+            | :? OperationCanceledException when token.IsCancellationRequested -> Error AccountStoreError.Canceled
+
+    // Only a checked projection reaches provider conversion getters.
+    let internal storedRow reader first columns decode =
+        SqliteStored.validate reader first columns
+        |> Result.mapError (fun error -> AccountStoreError.Failed error)
+        |> Result.bind decode
 
     let private toProfile username (row: main.profiles) =
         if row.player_id <= 0L || row.account_id <= 0L then
@@ -76,25 +83,25 @@ module SqliteAccountStore =
         | ValueSome role when value >= 0L && value <= 1L -> Ok role
         | ValueSome _ | ValueNone -> invalidData "The stored player role is unknown."
 
+    let private AccountColumns =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.PositiveInteger; SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Text; SqliteStored.Column.Integer; SqliteStored.Column.Text; SqliteStored.Column.Int32 |]
+
     let find config (username: Username) token =
         withContext config token (fun context ->
             let name = Username.value username
-            let query = select {
-                for account in main.accounts do
-                join profile in main.profiles on (account.id = profile.account_id)
-                join password in main.account_passwords on (account.id = password.account_id)
-                leftJoin role in main.player_roles on (profile.player_id = role.Value.player_id)
-                where (account.username = name)
-                select (account, profile, password, role)
-            }
-
-            match context.SelectOne query with
-            | None -> Ok None
-            | Some (account, profile, password, role) ->
-                let role = role |> Option.map (fun row -> toRole row.role) |> Option.defaultValue (Ok PlayerRole.Player)
-                match toProfile username profile, role with
-                | Ok data, Ok role -> Ok (Some { AccountId = account.id; Profile = data; Role = role; PasswordHash = password.password_hash })
-                | Error error, _ | _, Error error -> Error error)
+            use statement = command context
+                                "SELECT a.id, p.player_id, p.account_id, p.display_name, p.name_color, c.password_hash, COALESCE(r.role,0) FROM accounts a JOIN profiles p ON a.id=p.account_id JOIN account_passwords c ON a.id=c.account_id LEFT JOIN player_roles r ON p.player_id=r.player_id WHERE a.username=@name"
+                                [ "@name", box name ]
+            use reader = statement.ExecuteReader()
+            if not (reader.Read()) then Ok None
+            else
+                storedRow reader 0 AccountColumns (fun () ->
+                    let profile: main.profiles = { player_id = reader.GetInt64 1; account_id = reader.GetInt64 2
+                                                   display_name = reader.GetString 3; name_color = reader.GetInt64 4 }
+                    match toProfile username profile, toRole (reader.GetInt64 6) with
+                    | Ok data, Ok role -> Ok(Some { AccountId = reader.GetInt64 0; Profile = data; Role = role; PasswordHash = reader.GetString 5 })
+                    | Error error, _ | _, Error error -> Error error))
 
     let private insertAccount (context: QueryContext) username =
         let row: main.accounts = { id = 0L; username = Username.value username }
@@ -170,14 +177,23 @@ module SqliteAccountStore =
     [<Literal>]
     let private RoleJoin = "LEFT JOIN player_roles r ON r.player_id=p.player_id"
 
-    let private readIdentity (reader: System.Data.Common.DbDataReader) =
+    let private IdentityProjection =
+        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Text; SqliteStored.Column.Int32; SqliteStored.Column.Integer |]
+
+    let private TokenIdentityProjection = Array.append IdentityProjection [| SqliteStored.Column.Integer |]
+
+    let private readIdentityWith projection (reader: System.Data.Common.DbDataReader) =
         if not (reader.Read()) then Ok None
         else
-            match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)),
-                  DisplayName.create Int32.MaxValue (reader.GetString 3), toRole (reader.GetInt64 4), nameColor (reader.GetInt64 5) with
-            | Ok username, Ok playerId, Ok displayName, Ok role, Ok color when reader.GetInt64 0 > 0L ->
-                Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName color; Role = role })
-            | _ -> invalidData "Invalid stored account identity."
+            storedRow reader 0 projection (fun () ->
+                match Username.create Int32.MaxValue (reader.GetString 1), PlayerId.create (uint64 (reader.GetInt64 2)),
+                      DisplayName.create Int32.MaxValue (reader.GetString 3), toRole (reader.GetInt64 4), nameColor (reader.GetInt64 5) with
+                | Ok username, Ok playerId, Ok displayName, Ok role, Ok color when reader.GetInt64 0 > 0L ->
+                    Ok (Some { AccountId = reader.GetInt64 0; Profile = PlayerData.create playerId username displayName color; Role = role })
+                | _ -> invalidData "Invalid stored account identity.")
+
+    let private readIdentity reader = readIdentityWith IdentityProjection reader
 
     let findAccount config (username: Username) token =
         withContext config token (fun context ->
@@ -198,10 +214,13 @@ module SqliteAccountStore =
 
     let private accountForToken context kind hash now =
         use statement = command context
-                            $"SELECT {IdentityColumns} FROM auth_tokens t JOIN accounts a ON a.id=t.account_id JOIN profiles p ON p.account_id=a.id {RoleJoin} WHERE t.token_hash=@hash AND t.kind=@kind AND t.expires_at>@now"
-                            [ "@hash", box hash; "@kind", box kind; "@now", box now ]
+                            $"SELECT {IdentityColumns}, t.expires_at FROM auth_tokens t JOIN accounts a ON a.id=t.account_id JOIN profiles p ON p.account_id=a.id {RoleJoin} WHERE t.token_hash=@hash AND t.kind=@kind"
+                            [ "@hash", box hash; "@kind", box kind ]
         use reader = statement.ExecuteReader()
-        readIdentity reader |> Result.bind (function Some account -> Ok account | None -> Error AccountStoreError.InvalidCredential)
+        readIdentityWith TokenIdentityProjection reader
+        |> Result.bind (function
+            | Some account when reader.GetInt64 6 > now -> Ok account
+            | Some _ | None -> Error AccountStoreError.InvalidCredential)
 
     let private insertToken context accountId kind hash expires =
         execute context "INSERT INTO auth_tokens(token_hash, account_id, kind, expires_at) VALUES (@hash, @id, @kind, @expires)"
@@ -279,15 +298,19 @@ module SqliteAccountStore =
                 | :? string as current ->
                     let previous = DisplayName.create Int32.MaxValue current
                     let last =
-                        if changedBy.IsSome || minInterval <= TimeSpan.Zero then None
+                        if changedBy.IsSome || minInterval <= TimeSpan.Zero then Ok None
                         else
                             match scalar context "SELECT MAX(at) FROM display_name_changes WHERE player_id=@id AND changed_by IS NULL" parameters with
-                            | :? int64 as at -> Some (DateTimeOffset.FromUnixTimeMilliseconds at)
-                            | _ -> None
+                            | :? int64 as at ->
+                                try Ok(Some(DateTimeOffset.FromUnixTimeMilliseconds at))
+                                with :? ArgumentOutOfRangeException -> invalidData "The stored name-change time is outside its range."
+                            | :? DBNull -> Ok None // MAX over no history rows.
+                            | _ -> invalidData "The stored name-change time has an invalid representation."
                     match previous, last with
                     | Error _, _ -> invalidData "The stored display name is invalid."
-                    | Ok _, Some at when at + minInterval > now -> Ok (RenameOutcome.TooSoon(at + minInterval - now))
-                    | Ok previous, _ ->
+                    | _, Error error -> Error error
+                    | Ok _, Ok(Some at) when now - at < minInterval -> Ok (RenameOutcome.TooSoon(minInterval - (now - at)))
+                    | Ok previous, Ok _ ->
                         if previous <> displayName then
                             execute context "UPDATE profiles SET display_name=@name WHERE player_id=@id"
                                 [ "@name", box (DisplayName.value displayName); "@id", box (int64 id) ] |> ignore
@@ -309,7 +332,8 @@ module SqliteAccountStore =
                             Ok (RenameOutcome.Renamed(previous, stored))
                         | Ok None -> Ok RenameOutcome.NotFound
                         | Error error -> Error error
-                | _ -> Ok RenameOutcome.NotFound)
+                | null -> Ok RenameOutcome.NotFound
+                | _ -> invalidData "The stored display name has an invalid representation.")
 
     /// Replaces the name color of an existing profile; the caller checked that
     /// the player may choose it. None: no such profile.
@@ -366,7 +390,8 @@ module SqliteAccountStore =
                 match RegistrationMode.ofKey stored with
                 | Some mode -> Ok mode
                 | None -> invalidData "The stored registration mode is unknown."
-            | _ -> Ok RegistrationMode.initial)
+            | null -> Ok RegistrationMode.initial
+            | _ -> invalidData "The stored registration mode has an invalid representation.")
 
     /// changedBy is the administrator, absent for the console.
     let setRegistrationMode config (mode: RegistrationMode) (changedBy: AdminId voption) (now: DateTimeOffset) token =

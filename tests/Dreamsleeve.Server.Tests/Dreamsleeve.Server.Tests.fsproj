@@ -28,6 +28,7 @@
     <Compile Include="Fixtures/MemoryProfileStore.fs" />
     <Compile Include="ProfileStoreTests.fs" />
     <Compile Include="SqliteAccountStoreTests.fs" />
+    <Compile Include="SqliteBoundaryTests.fs" />
     <Compile Include="AuthServiceTests.fs" />
     <Compile Include="ServiceLifetimeTests.fs" />
     <Compile Include="SteamOpenIdTests.fs" />

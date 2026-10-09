@@ -85,26 +85,64 @@ module SqliteGroundMarkStore =
                          Author = PlayerData.create author username displayName color }
             | _ -> invalidData "A stored ground mark or its author profile is invalid."
 
+    let private MarkProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           (SqliteStored.Column.Nullable SqliteStored.Column.Text)
+           SqliteStored.Column.Integer
+           SqliteStored.Column.Text
+           SqliteStored.Column.Text
+           SqliteStored.Column.Integer
+           SqliteStored.Column.Number
+           SqliteStored.Column.Number
+           SqliteStored.Column.Number
+           SqliteStored.Column.Number
+           SqliteStored.Column.UnixMilliseconds
+           (SqliteStored.Column.Nullable SqliteStored.Column.Text)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Text
+           SqliteStored.Column.Integer
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Text |]
+
     /// All marks, ascending by ID, with the storage high-water mark. Expiry is
     /// the owner's rule and is applied after loading.
     let loadAll config token =
         SqliteAccountStore.withContext config token (fun context ->
-            let query = select {
-                for mark in main.ground_marks do
-                join profile in main.profiles on (mark.author_id = profile.player_id)
-                join account in main.accounts on (profile.account_id = account.id)
-                orderBy mark.id
-                select (mark, profile, account)
-            }
-            let rows = context.Select query |> List.ofSeq
-            let records =
-                rows |> List.fold (fun state (mark, profile, account) ->
-                    match state with
+            use statement = SqliteStatements.command context
+                                "SELECT m.id,m.author_id,m.character_name,m.kind,m.text,m.plugin_name,m.local_form_id,m.x,m.y,m.z,m.heading,m.created_at,m.author_pseudonym,m.game_era,m.game_year,m.game_month,m.game_day,m.game_day_of_week,m.game_hour,m.game_minute,p.player_id,p.account_id,p.display_name,p.name_color,a.id,a.username FROM ground_marks m JOIN profiles p ON m.author_id=p.player_id JOIN accounts a ON p.account_id=a.id ORDER BY m.id"
+                                []
+            use reader = statement.ExecuteReader()
+            let optional index read = if reader.IsDBNull index then None else Some(read index)
+            let rec next records =
+                if not (reader.Read()) then Ok records
+                else
+                    let decoded = SqliteAccountStore.storedRow reader 0 MarkProjection (fun () ->
+                        let mark: main.ground_marks = {
+                            id = reader.GetInt64 0; author_id = reader.GetInt64 1; character_name = optional 2 reader.GetString
+                            kind = reader.GetInt64 3; text = reader.GetString 4; plugin_name = reader.GetString 5; local_form_id = reader.GetInt64 6
+                            x = reader.GetDouble 7; y = reader.GetDouble 8; z = reader.GetDouble 9; heading = reader.GetDouble 10
+                            created_at = reader.GetInt64 11; author_pseudonym = optional 12 reader.GetString
+                            game_era = optional 13 reader.GetInt64; game_year = optional 14 reader.GetInt64; game_month = optional 15 reader.GetInt64
+                            game_day = optional 16 reader.GetInt64; game_day_of_week = optional 17 reader.GetInt64
+                            game_hour = optional 18 reader.GetInt64; game_minute = optional 19 reader.GetInt64 }
+                        let profile: main.profiles = { player_id = reader.GetInt64 20; account_id = reader.GetInt64 21
+                                                       display_name = reader.GetString 22; name_color = reader.GetInt64 23 }
+                        let account: main.accounts = { id = reader.GetInt64 24; username = reader.GetString 25 }
+                        toRecord mark profile account)
+                    match decoded with
+                    | Ok record -> next (record :: records)
                     | Error error -> Error error
-                    | Ok records ->
-                        match toRecord mark profile account with
-                        | Ok record -> Ok (record :: records)
-                        | Error error -> Error error) (Ok [])
+            let records = next []
+            reader.Close()
             match records with
             | Error error -> Error error
             | Ok reversed ->
@@ -112,9 +150,10 @@ module SqliteGroundMarkStore =
                 use sequence = context.Connection.CreateCommand()
                 sequence.CommandText <-
                     "SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'ground_marks'), 0), COALESCE((SELECT MAX(id) FROM ground_marks), 0))"
-                let highest = sequence.ExecuteScalar() :?> int64
-                if highest < 0L || highest = Int64.MaxValue then invalidData "The ground mark ID sequence is exhausted."
-                else Ok { Marks = List.rev reversed; NextId = uint64 highest + 1UL })
+                match sequence.ExecuteScalar() with
+                | :? int64 as highest when highest >= 0L && highest < Int64.MaxValue ->
+                    Ok { Marks = List.rev reversed; NextId = uint64 highest + 1UL }
+                | _ -> invalidData "The ground mark ID sequence is invalid or exhausted.")
 
     let private insertInto (context: QueryContext) (mark: GroundMark) =
         let id = GroundMarkId.value mark.Id

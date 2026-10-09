@@ -19,6 +19,9 @@ module SqliteDeviceStore =
 
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
 
+    let private DeviceProjection =
+        [| SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.Integer |]
+
     /// One more sign-in of the player from device at now. Rows not seen for
     /// keepDays go in the same transaction.
     let record config (playerId: PlayerId) (device: DeviceId) (now: DateTimeOffset) (keepDays: int) token =
@@ -39,10 +42,13 @@ module SqliteDeviceStore =
             let rec next rows =
                 if not (reader.Read()) then Ok(List.rev rows)
                 else
-                    match DeviceId.create (reader.GetString 0) with
-                    | Ok device ->
-                        let entry = { Device = device; FirstSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 1)
-                                      LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 2); SignIns = reader.GetInt64 3 }
-                        next (entry :: rows)
-                    | Error _ -> Error(AccountStoreError.Failed(InvalidDataException "A stored device is invalid."))
+                    let stored = SqliteAccountStore.storedRow reader 0 DeviceProjection (fun () ->
+                        match DeviceId.create (reader.GetString 0) with
+                        | Ok device ->
+                            Ok { Device = device; FirstSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 1)
+                                 LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 2); SignIns = reader.GetInt64 3 }
+                        | Error _ -> Error(AccountStoreError.Failed(InvalidDataException "A stored device is invalid.")))
+                    match stored with
+                    | Ok entry -> next (entry :: rows)
+                    | Error error -> Error error
             next [])

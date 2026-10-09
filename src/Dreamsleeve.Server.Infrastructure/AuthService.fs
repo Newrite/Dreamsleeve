@@ -562,7 +562,10 @@ module AuthService =
                 | AccountAccessCommand.BeginSteam _ | AccountAccessCommand.CompleteSteam _ | AccountAccessCommand.PollSteam _ ->
                     Error AccountAccessError.Unavailable
             with
-            | :? OperationCanceledException -> Error AccountAccessError.Unavailable
+            | :? OperationCanceledException when token.IsCancellationRequested -> Error AccountAccessError.Unavailable
+            // Fresh request supervision: per-unit contexts/transactions have
+            // disposed before this boundary; actor state changes only on completion.
+            // The failed work is not retried and its original cause is logged.
             | error ->
                 logger.LogError(error, "Account operation failed")
                 Error AccountAccessError.Unavailable
