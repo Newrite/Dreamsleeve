@@ -187,6 +187,7 @@ public:
       std::unordered_set<std::string> used;
       for (const auto& record : book.aliases)
         if (record.server == scope) used.insert(record.name);
+
       std::uniform_int_distribution<std::size_t> pick{0, aliasNames.size() - 1};
       const auto&                                base = aliasNames[pick(random)];
       auto                                       name = base;
@@ -205,6 +206,7 @@ public:
         book.aliases.push_back({scope, std::to_string(id), name});
         aliasIndex.emplace(key, book.aliases.size() - 1);
       }
+
       dirty = true;
       return name;
     }

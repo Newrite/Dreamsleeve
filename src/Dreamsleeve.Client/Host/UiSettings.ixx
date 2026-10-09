@@ -25,6 +25,7 @@ export namespace Dreamsleeve::Host
     bool   fireflyNameOcclusion{true};
     double fireflyNameFontSize{18};
     double fireflyNameOffset{35};
+
     // Chat bubbles above fireflies; independent of names and of the chat window fade.
     bool        showBubbles{true};
     double      bubbleDuration{8.0};      // Seconds a message stays fully visible.
@@ -33,6 +34,7 @@ export namespace Dreamsleeve::Host
     double      bubbleFontSize{16};       // HUD units.
     double      bubbleMaxWidth{320};      // HUD units, including padding.
     double      bubbleBackground{0.65};   // Background fill only; the text stays opaque.
+
     std::string onlineView{"cards"};
     bool        fade{true};
     double      delay{12.0};
@@ -45,12 +47,15 @@ export namespace Dreamsleeve::Host
     double      background{0.82};
     bool        timestamps{true};
     bool        fullColor{false};
+
     // username | display | character. "account" from older files reads as username.
     std::string nameMode{"display"};
     // Local pseudonyms instead of every real name; not sent to the server.
     bool streamerMode{false};
+
     // Ranges the server flagged: off (show) | mask (stars) | hide (whole message).
     std::string textFilter{"off"};
+
     bool        locked{true};
     double      x{0.025};
     double      y{0.42};
@@ -58,10 +63,12 @@ export namespace Dreamsleeve::Host
     double      height{390.0};
     std::string activationKey{"Enter"};
     std::string theme{"skyrim"};
+
     // Hidden while the player is in combat, each surface on its own.
     bool combatHideFireflies{false};
     bool combatHideNames{false};
     bool combatHideBubbles{false};
+
     // System channel: tab (only its own tab) | all (also the "all" view) | current (every tab).
     std::string announcementChannels{"all"};
     // Shown origins and kinds; announcement and admin kinds follow their origin only.
@@ -70,14 +77,17 @@ export namespace Dreamsleeve::Host
     bool announcementsThirdParty{true};
     bool announcementsEvents{true};
     bool announcementsPeriodic{true};
+
     // Bubble look above fireflies: the fill opacity is bubbleBackground; a
     // border and the text colour ("#RRGGBB") are separate, so "no box at all"
     // is background 0 with the border off.
     bool        bubbleBorder{true};
     std::string bubbleTextColor{"#EEECE5"};
     std::string fireflyNameColor{"#EEECE5"};
+
     // Height of the glow above the pose origin, game units.
     double fireflyHeightOffset{110};
+
     // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
     bool showGroundNotes{true};
     bool showDeathMarks{true};
@@ -100,6 +110,7 @@ export namespace Dreamsleeve::Host
     bool        deathBorder{true};
     bool        combatHideGroundMarks{false};  // Statics and labels.
     bool        combatHideGroundText{false};   // Labels only.
+
     // The in-game date as a header line on top of a mark's bubble. Style
     // "tamriel" (Тирдас, 17 Последнего зерна) or "earth" (Вторник, 17 августа);
     // the era and year are Tamriel's either way. The web UI lists use the same style.
@@ -112,14 +123,17 @@ export namespace Dreamsleeve::Host
     bool        showPhantoms{true};
     bool        phantomFallback{true};
     bool        combatHidePhantoms{false};
+
     double      maxVisiblePhantoms{4};
     double      phantomDrawDistance{4096};
     double      phantomOpacity{0.6};
     std::string phantomColor{"#8CCCCC"};
+
     double      phantomSampleRate{10};
     double      phantomDelayMs{100};
     double      phantomExtrapolationMs{100};
     double      phantomTimeoutMs{1000};
+
     double      phantomMemoryMiB{512};
     double      phantomCacheMiB{1024};
     double      phantomUploadKiB{5120};
@@ -148,11 +162,13 @@ export namespace Dreamsleeve::Host
   constexpr auto NumberRules = std::to_array<NumberRule>({
       {"fireflyNameFontSize", 8, 48},
       {"fireflyNameOffset", 0, 512},
+
       {"bubbleDuration", 1, 60},
       {"bubbleFadeDuration", 0.1, 5},
       {"bubbleFontSize", 8, 48},
       {"bubbleMaxWidth", 120, 800},
       {"bubbleBackground", 0, 1},
+
       {"delay", 0, 120},
       {"duration", 0, 5},
       {"idleOpacity", 0, 1},
@@ -160,11 +176,14 @@ export namespace Dreamsleeve::Host
       {"fontSize", 12, 26},
       {"lineHeight", 1.1, 2},
       {"background", 0, 1},
+
       {"x", 0, 1},
       {"y", 0, 1},
       {"width", 320, 1600},
       {"height", 220, 1200},
+
       {"fireflyHeightOffset", 0, 512},
+
       {"maxVisibleNotes", 1, 64, true},
       {"maxVisibleDeaths", 1, 64, true},
       {"groundDrawDistance", 0, 16384},
@@ -176,13 +195,16 @@ export namespace Dreamsleeve::Host
       {"groundMaxWidth", 120, 800},
       {"groundBackground", 0, 1},
       {"deathBackground", 0, 1},
+
       {"maxVisiblePhantoms", 0, 16, true},
       {"phantomDrawDistance", 0, 16384},
       {"phantomOpacity", 0, 1},
+
       {"phantomSampleRate", 1, 50, true},
       {"phantomDelayMs", 0, 500, true},
       {"phantomExtrapolationMs", 0, 250, true},
       {"phantomTimeoutMs", 500, 5000, true},
+
       {"phantomMemoryMiB", 64, 2048, true},
       {"phantomCacheMiB", 0, 8192, true},
       {"phantomUploadKiB", 64, 8192, true},
@@ -475,8 +497,10 @@ export namespace Dreamsleeve::Host
       std::ofstream output{temporary, std::ios::binary | std::ios::noreplace};
       if (!output) return std::unexpected{"Cannot create temporary UI settings file"};
       partial.owned      = true;
+
       const bool written = static_cast<bool>(output << *text << '\n');
       output.close();
+
       if (!written) return partial.Reject("Cannot write UI settings");
       if (!output) return partial.Reject("Cannot finish UI settings write");
     }
@@ -484,6 +508,7 @@ export namespace Dreamsleeve::Host
     std::filesystem::rename(temporary, path, error);
     if (error) return partial.Reject("Cannot replace UI settings file: " + error.message());
     partial.owned = false;
+
     return {};
   }
 

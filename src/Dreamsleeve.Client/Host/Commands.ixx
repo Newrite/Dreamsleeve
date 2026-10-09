@@ -97,12 +97,15 @@ export namespace Dreamsleeve::Host
         auto&      chat  = context.ui.ui.chat;
         const bool names = InstantChanged(chat, command.settings);
         chat             = std::move(command.settings);
+
         if (names)
         {
           context.session.Refresh();
           Emit(context.session.IgnoredList(chat));
         }
+
         context.ports.activationKey(chat.activationKey);
+
         Bridge::SettingsResultEvent result{.revision = command.revision};
         if (auto saved = context.ports.saveUi(); !saved) result.error = Bridge::ClipError(saved.error());
         Emit(std::move(result));

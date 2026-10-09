@@ -229,8 +229,10 @@ namespace PrismaUI
       logger::warn("UI command rejected: {}", command.error());
       return;
     }
+
     auto& runtime = Runtime::Get();
     if (!runtime.app) return;
+
     Dreamsleeve::Host::CommandContext context{
         .exchange         = runtime.app->Exchange(),
         .session          = runtime.session,
@@ -245,9 +247,11 @@ namespace PrismaUI
                              .copyText      = Dreamsleeve::Utils::Clipboard::Copy
         }
     };
+
     const auto output = Dreamsleeve::Host::Handle(context, std::move(*command));
     for (const auto& note : output.notes)
       logger::warn("{}", note);
+
     Dispatch(output.events);
   }
 
