@@ -73,8 +73,10 @@ let awaitReply (work: Task<AgentAskResult<'T>>) = task {
 
 let terminal (work: Task) = task {
     let mutable error = None
-    try do! work.WaitAsync guard
-    with ex -> error <- Some ex
+    try
+        do! work.WaitAsync guard
+    with ex ->
+        error <- Some ex
     check work.IsCompleted "Agent did not reach terminal state within the guard."
     return error
 }
@@ -115,12 +117,15 @@ let ordinaryHandler (seen: ConcurrentQueue<int>) (context: AgentContext<Message>
     | Hold (entered, release) ->
         entered.TrySetResult() |> ignore
         do! release.Task.WaitAsync context.CancellationToken
-    | Record number -> seen.Enqueue number
+    | Record number ->
+        seen.Enqueue number
     | Request (number, reply) ->
         seen.Enqueue number
         reply.Reply number
-    | FailRequest (error, _) | FailMessage error -> return raise error
-    | CaptureReply (captured, reply) -> captured.TrySetResult reply |> ignore
+    | FailRequest (error, _) | FailMessage error ->
+        return raise error
+    | CaptureReply (captured, reply) ->
+        captured.TrySetResult reply |> ignore
 }
 
 let holdAgent (agent: Agent<Message>) = task {
@@ -204,7 +209,10 @@ let admittedCommandCommitsAfterTimeout () = task {
         effects.Enqueue 1
         lateReply.TrySetResult(reply.TryReply 1) |> ignore
     })
-    let request = agent.TryAskAsync((fun reply -> built <- built + 1; reply), timeout = TimeSpan.FromMilliseconds 80.)
+    let request =
+        agent.TryAskAsync((fun reply ->
+            built <- built + 1
+            reply), timeout = TimeSpan.FromMilliseconds 80.)
     try
         do! awaitResult entered.Task // The request is admitted and its handler has started.
         let! result = awaitResult request
@@ -226,7 +234,11 @@ let preCanceledAskHasNoSideEffects () = task {
     use cancellation = new CancellationTokenSource()
     cancellation.Cancel()
     let mutable built = false
-    let! result = agent.TryAskAsync((fun reply -> built <- true; Request(1, reply)), cancellationToken = cancellation.Token) |> awaitResult
+    let! result =
+        agent.TryAskAsync((fun reply ->
+            built <- true
+            Request(1, reply)), cancellationToken = cancellation.Token)
+        |> awaitResult
     equal AgentAskResult.Canceled result
     check (not built) "A pre-canceled Ask invoked the message builder."
     agent.Complete() |> ignore
@@ -239,7 +251,11 @@ let invalidAskTimeoutHasNoSideEffects () = task {
     use agent = TestAgent.Start(AgentOptions.create "invalid-timeout", ordinaryHandler seen)
     for timeout in [ TimeSpan.FromMilliseconds -2.0; TimeSpan.MaxValue ] do
         let mutable built = false
-        let! result = agent.TryAskAsync((fun reply -> built <- true; Request(1, reply)), timeout = timeout) |> awaitResult
+        let! result =
+            agent.TryAskAsync((fun reply ->
+                built <- true
+                Request(1, reply)), timeout = timeout)
+            |> awaitResult
         match result with
         | AgentAskResult.InvalidRequest(AgentRequestError.InvalidTimeout actual) -> equal timeout actual
         | other -> failwithf "Expected timeout validation failure, received %A" other
@@ -306,7 +322,8 @@ let dropAccounting () = task {
     let seen = ConcurrentQueue<int>()
     use agent = TestAgent.Start(options "drop-accounting" (AgentMailbox.bounded 3 BoundedChannelFullMode.DropOldest), ordinaryHandler seen)
     let! release = holdAgent agent
-    for number in 1 .. 1000 do equal AgentPostResult.Posted (agent.TryPost(Record number))
+    for number in 1 .. 1000 do
+        equal AgentPostResult.Posted (agent.TryPost(Record number))
     equal 3 agent.QueueLength
     equal 997L agent.DroppedCount
     release.SetResult()
@@ -319,7 +336,12 @@ let dropAccounting () = task {
 let requestFailureCanContinue () = task {
     let expected = InvalidOperationException "request handler" :> exn
     let mutable errors = 0
-    let config = { AgentOptions.create "continue" with OnError = Some(fun _ -> errors <- errors + 1; AgentErrorAction.Continue) }
+    let config = {
+        AgentOptions.create "continue" with
+            OnError = Some(fun _ ->
+                errors <- errors + 1
+                AgentErrorAction.Continue)
+    }
     use agent = TestAgent.Start(config, ordinaryHandler (ConcurrentQueue<int>()))
     let! result = agent.TryAskAsync(fun reply -> FailRequest(expected, reply)) |> awaitResult
     expectFault expected result
@@ -351,10 +373,13 @@ let cooperativeAbortHasConsistentNotifications () = task {
     let started = gate<unit> ()
     let stopped = ConcurrentQueue<AgentStopReason>()
     let mutable errors = 0
-    let config =
-        { AgentOptions.create "cooperative-abort" with
-            OnError = Some(fun _ -> errors <- errors + 1; AgentErrorAction.Stop)
-            OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
+    let config = {
+        AgentOptions.create "cooperative-abort" with
+            OnError = Some(fun _ ->
+                errors <- errors + 1
+                AgentErrorAction.Stop)
+            OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason)
+    }
     use agent = TestAgent.Start(config, fun context () -> task {
         started.TrySetResult() |> ignore
         do! Task.Delay(Timeout.Infinite, context.CancellationToken)
@@ -374,7 +399,10 @@ let cooperativeAbortHasConsistentNotifications () = task {
 let gracefulCompleteDrainsAndIsStable () = task {
     let seen = ConcurrentQueue<int>()
     let stopped = ConcurrentQueue<AgentStopReason>()
-    let config = { AgentOptions.create "complete" with OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
+    let config = {
+        AgentOptions.create "complete" with
+            OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason)
+    }
     use agent = TestAgent.Start(config, ordinaryHandler seen)
     let! release = holdAgent agent
     equal AgentPostResult.Posted (agent.TryPost(Record 1))
@@ -402,11 +430,14 @@ let throwingCancellationCallbackCannotStrandWriter () = task {
     let original = InvalidOperationException "cancel callback"
     use agent = TestAgent.Start(options "throwing-cancel" (AgentMailbox.boundedWait 1), fun context number -> task {
         if number = 0 then
-            use registration = context.CancellationToken.Register(fun () -> canceled.TrySetResult() |> ignore; raise original)
+            use registration = context.CancellationToken.Register(fun () ->
+                canceled.TrySetResult() |> ignore
+                raise original)
             entered.TrySetResult() |> ignore
             // Deliberately noncooperative: Abort must release writers before this finishes.
             do! release.Task
-        else seen.Enqueue number
+        else
+            seen.Enqueue number
     })
     try
         equal AgentPostResult.Posted (agent.TryPost 0)
@@ -477,8 +508,10 @@ let stateHandler (seen: ConcurrentQueue<int>) (context: StatefulAgentContext) st
     | Add number ->
         seen.Enqueue number
         return StatefulTransition.SetState(state + number)
-    | Explode error | ExplodeReply (error, _) -> return raise error
-    | Finish -> return StatefulTransition.Stop
+    | Explode error | ExplodeReply (error, _) ->
+        return raise error
+    | Finish ->
+        return StatefulTransition.Stop
     | AddReply (number, reply) ->
         let next = state + number
         reply.Reply next
@@ -495,8 +528,10 @@ let mutableHandler (seen: ConcurrentQueue<int>) (context: StatefulAgentContext) 
         state.Add number
         seen.Enqueue number
         return MutableStatefulTransition.Stay
-    | Explode error | ExplodeReply (error, _) -> return raise error
-    | Finish -> return MutableStatefulTransition.Stop
+    | Explode error | ExplodeReply (error, _) ->
+        return raise error
+    | Finish ->
+        return MutableStatefulTransition.Stop
     | AddReply (number, reply) ->
         state.Add number
         reply.Reply(state |> Seq.sum)
@@ -506,7 +541,10 @@ let mutableHandler (seen: ConcurrentQueue<int>) (context: StatefulAgentContext) 
 let statefulErrorStopDiscards () = task {
     let seen = ConcurrentQueue<int>()
     let expected = InvalidOperationException "state error" :> exn
-    let config = { StatefulAgentOptions.create "state-stop" with OnUnhandled = Some(fun _ -> StatefulErrorAction.Stop) }
+    let config = {
+        StatefulAgentOptions.create "state-stop" with
+            OnUnhandled = Some(fun _ -> StatefulErrorAction.Stop)
+    }
     use agent = TestStatefulAgent.Start(config, 0, stateHandler seen)
     let entered, release = gate<unit> (), gate<unit> ()
     equal AgentPostResult.Posted (agent.TryPost(GateState(entered, release)))
@@ -524,7 +562,10 @@ let statefulErrorStopDiscards () = task {
 let mutableErrorStopDiscards () = task {
     let seen = ConcurrentQueue<int>()
     let expected = InvalidOperationException "mutable error" :> exn
-    let config = { MutableStatefulAgentOptions.create "mutable-stop" with OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Stop) }
+    let config = {
+        MutableStatefulAgentOptions.create "mutable-stop" with
+            OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Stop)
+    }
     use agent = TestMutableAgent.Start(config, ResizeArray<int>(), mutableHandler seen)
     let entered, release = gate<unit> (), gate<unit> ()
     equal AgentPostResult.Posted (agent.TryPost(GateState(entered, release)))
@@ -584,11 +625,17 @@ let queryFailuresAreIsolated () = task {
 let statefulPolicyPrecedenceAndRecovery () = task {
     let transitions = ConcurrentQueue<int * int>()
     let mutable baseCalls = 0
-    let config =
-        { StatefulAgentOptions.create "policy-state" with
-            AgentOptions = { AgentOptions.create "policy-state" with OnError = Some(fun _ -> baseCalls <- baseCalls + 1; AgentErrorAction.Stop) }
+    let config = {
+        StatefulAgentOptions.create "policy-state" with
+            AgentOptions = {
+                AgentOptions.create "policy-state" with
+                    OnError = Some(fun _ ->
+                        baseCalls <- baseCalls + 1
+                        AgentErrorAction.Stop)
+            }
             OnUnhandled = Some(fun _ -> StatefulErrorAction.ReplaceStateAndContinue 100)
-            OnTransition = Some transitions.Enqueue }
+            OnTransition = Some transitions.Enqueue
+    }
     use agent = TestStatefulAgent.Start(config, 1, stateHandler (ConcurrentQueue<int>()))
     equal AgentPostResult.Posted (agent.TryPost(Explode(InvalidOperationException "recover")))
     equal AgentPostResult.Posted (agent.TryPost(Add 3))
@@ -602,7 +649,12 @@ let statefulPolicyPrecedenceAndRecovery () = task {
 
 let basePolicyFallbackForBothWrappers () = task {
     let mutable calls = 0
-    let baseOptions = { AgentOptions.create "fallback" with OnError = Some(fun _ -> Interlocked.Increment(&calls) |> ignore; AgentErrorAction.Continue) }
+    let baseOptions = {
+        AgentOptions.create "fallback" with
+            OnError = Some(fun _ ->
+                Interlocked.Increment(&calls) |> ignore
+                AgentErrorAction.Continue)
+    }
     let stateOptions = { StatefulAgentOptions.create "state-fallback" with AgentOptions = baseOptions }
     let mutableOptions = { MutableStatefulAgentOptions.create "mutable-fallback" with AgentOptions = baseOptions }
     use stateAgent = TestStatefulAgent.Start(stateOptions, 1, stateHandler (ConcurrentQueue<int>()))
@@ -623,7 +675,10 @@ let basePolicyFallbackForBothWrappers () = task {
 
 let statefulAtomicCommandReplies () = task {
     let error = InvalidOperationException "state request" :> exn
-    let config = { StatefulAgentOptions.create "state-ask" with OnUnhandled = Some(fun _ -> StatefulErrorAction.KeepStateAndContinue) }
+    let config = {
+        StatefulAgentOptions.create "state-ask" with
+            OnUnhandled = Some(fun _ -> StatefulErrorAction.KeepStateAndContinue)
+    }
     use agent = TestStatefulAgent.Start(config, 10, stateHandler (ConcurrentQueue<int>()))
     let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
@@ -637,7 +692,10 @@ let statefulAtomicCommandReplies () = task {
 
 let mutableAtomicCommandReplies () = task {
     let error = InvalidOperationException "mutable request" :> exn
-    let config = { MutableStatefulAgentOptions.create "mutable-ask" with OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Continue) }
+    let config = {
+        MutableStatefulAgentOptions.create "mutable-ask" with
+            OnUnhandled = Some(fun _ -> MutableStatefulErrorAction.Continue)
+    }
     use agent = TestMutableAgent.Start(config, ResizeArray<int>([ 10 ]), mutableHandler (ConcurrentQueue<int>()))
     let! value = agent.TryAskAsync(fun reply -> AddReply(5, reply)) |> awaitReply
     equal 15 value
@@ -661,9 +719,10 @@ let synchronousIdleAbortCancelsLifetime () = task {
             let captured = gate<CancellationToken * CancellationTokenRegistration> ()
             let mutable callbacks = 0
             let stopped = ConcurrentQueue<AgentStopReason>()
-            let config =
-                { options $"sync-idle-{iteration}" mailbox with
-                    OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
+            let config = {
+                options $"sync-idle-{iteration}" mailbox with
+                    OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason)
+            }
             use agent = TestAgent.Start(config, fun context () -> task {
                 let token = context.CancellationToken
                 let registration = token.Register(fun () -> Interlocked.Increment(&callbacks) |> ignore)
@@ -687,9 +746,10 @@ let concurrentTerminalRequestsRemainConsistent () = task {
     let registered = gate<CancellationTokenRegistration> ()
     let mutable callbacks = 0
     let stopped = ConcurrentQueue<AgentStopReason>()
-    let config =
-        { options "concurrent-stop" AgentMailbox.unboundedAllowSync with
-            OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason) }
+    let config = {
+        options "concurrent-stop" AgentMailbox.unboundedAllowSync with
+            OnStopped = Some(fun (_, reason) -> stopped.Enqueue reason)
+    }
     use agent = TestAgent.Start(config, fun context () -> task {
         let registration = context.CancellationToken.Register(fun () -> Interlocked.Increment(&callbacks) |> ignore)
         registered.TrySetResult registration |> ignore
@@ -707,8 +767,10 @@ let concurrentTerminalRequestsRemainConsistent () = task {
         let callers =
             [| for index in 0 .. 15 -> task {
                 do! startRace.Task
-                if index % 2 = 0 then agent.Complete() |> ignore
-                else agent.Abort()
+                if index % 2 = 0 then
+                    agent.Complete() |> ignore
+                else
+                    agent.Abort()
             } |]
         startRace.SetResult()
         let! _ = Task.WhenAll callers |> awaitResult
