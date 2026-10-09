@@ -80,7 +80,14 @@ namespace Plugin
 
   export bool Load(const SKSE::LoadInterface* skse)
   {
-    Logging::SetupLog();
+    if (auto logging = Logging::SetupLog(); !logging)
+    {
+      // Available before file logging and SKSE initialization; no failing path
+      // conversion or dependency fatal reporter is needed for this diagnostic.
+      const auto diagnostic = std::format("DreamsleeveClient: {}\n", logging.error().detail);
+      REX::W32::OutputDebugStringA(diagnostic.c_str());
+      return false;
+    }
 
     const auto plugin = SKSE::PluginDeclaration::GetSingleton();
     logger::info("{} v{} is loading on runtime {}", plugin->GetName(), plugin->GetVersion(), REL::Module::get().version().string());
