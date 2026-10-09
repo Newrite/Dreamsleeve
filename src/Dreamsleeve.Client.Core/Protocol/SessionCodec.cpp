@@ -20,6 +20,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<SessionEnded> Ended(const P::SessionEnded& source)
   {
     if (!P::SessionEndReason_IsValid(source.reason()) || source.reason() == P::SESSION_END_REASON_UNSPECIFIED) return Invalid("reason");
+
     SessionEnded result{
         {static_cast<Domain::SessionEndReason>(source.reason()), source.text()}
     };
@@ -36,6 +37,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     SessionOpened result{requestId, source.self_player_id()};
     result.serverName    = source.server_name();
     result.announcements = Policy(source.announcements());
+
     if (
       !P::HiddenIdentity_IsValid(source.hidden_identity()) ||
       source.has_own_pseudonym() != (source.hidden_identity() != P::HIDDEN_IDENTITY_NONE))
@@ -43,13 +45,16 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (source.has_own_pseudonym()) result.ownPseudonym = source.own_pseudonym();
     result.hiding = static_cast<Domain::HiddenIdentity>(source.hidden_identity());
     if (source.has_mute()) result.mute = Mute(source.mute());
+
     auto role = Role(source.role());
     if (!role) return std::unexpected{role.error()};
     result.role = *role;
+
     ActorValueKinds kinds;
     auto            defined = ReadKinds(source.actor_value_kinds(), kinds);
     if (!defined) return std::unexpected{defined.error()};
     result.kinds = std::move(*defined);
+
     for (const auto& player : source.players())
     {
       auto decoded = Player(config, player, kinds);
@@ -60,7 +65,8 @@ namespace Dreamsleeve::Client::Wire::Detail
 
     // Server-wide kinds exist once each, which also bounds the welcome size.
     // Channel identity and message rules are checked by the model on registration and merge.
-    bool global = false, system = false;
+    bool global = false;
+    bool system = false;
     for (const auto& channel : source.channels())
     {
       if (channel.channel_id() == Domain::InvalidId) return Invalid("channel_id");

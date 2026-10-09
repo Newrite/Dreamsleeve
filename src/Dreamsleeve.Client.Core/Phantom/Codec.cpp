@@ -12,7 +12,8 @@ namespace Dreamsleeve::Client::Phantom
   namespace
   {
 
-    constexpr std::uint32_t AssetMagic = 0x41504C44, PoseMagic = 0x50504C44;
+    constexpr std::uint32_t AssetMagic = 0x41504C44;
+    constexpr std::uint32_t PoseMagic  = 0x50504C44;
 
     std::unexpected<Error> Fail(Failure failure, std::string_view field)
     {
@@ -303,6 +304,7 @@ namespace Dreamsleeve::Client::Phantom
     if (w.bytes.size() > limits.assetBytes) return std::unexpected(Error{Failure::LimitExceeded, "asset.bytes"});
     auto compressed = Compress(w.bytes, limits.compressedAssetBytes, 3);
     if (!compressed) return std::unexpected(compressed.error());
+
     auto digest = Hash(*compressed);
     if (!digest) return std::unexpected(digest.error());
     return PreparedAsset{
@@ -332,6 +334,7 @@ namespace Dreamsleeve::Client::Phantom
     const std::uint64_t size = 60 + snapshot.channels.size() * 23ULL + snapshot.bounds.size() * 16ULL;
     if (size > limits.poseBytes) return Fail(Failure::LimitExceeded, "pose.bytes");
     if (auto valid = ValidateSnapshot(snapshot, asset.Layout()); !valid) return std::unexpected(valid.error());
+
     Writer w;
     w.bytes.reserve(static_cast<std::size_t>(size));
     w.Put(PoseMagic);
@@ -343,6 +346,7 @@ namespace Dreamsleeve::Client::Phantom
     w.Vector(snapshot.origin);
     w.Put(static_cast<std::uint32_t>(snapshot.channels.size()));
     w.Put(static_cast<std::uint32_t>(snapshot.bounds.size()));
+
     for (const auto& channel : snapshot.channels)
     {
       if (auto position = PutPosition(w, channel.world.position, snapshot.origin); !position) return std::unexpected(position.error());
@@ -358,11 +362,13 @@ namespace Dreamsleeve::Client::Phantom
       w.Put(static_cast<std::uint16_t>(scale));
       w.Put<std::uint8_t>(channel.hidden ? 1 : 0);
     }
+
     for (const auto& bound : snapshot.bounds)
     {
       if (auto position = PutPosition(w, bound.center, snapshot.origin); !position) return std::unexpected(position.error());
       w.Put(bound.radius);
     }
+
     auto data = std::span(w.bytes);
     BytePlanes<23>(data.subspan(60, snapshot.channels.size() * 23));
     BytePlanes<16>(data.subspan(60 + snapshot.channels.size() * 23, snapshot.bounds.size() * 16));
@@ -396,6 +402,7 @@ namespace Dreamsleeve::Client::Phantom
     if (r.Get<std::uint32_t>() != PoseMagic) return Fail(Failure::InvalidFormat, "pose.magic");
     const auto version = r.Get<std::uint32_t>();
     if (version != PoseVersion && !(archived && version == 2)) return Fail(Failure::InvalidFormat, "pose.version");
+
     Snapshot snapshot;
     snapshot.generation  = {r.Get<std::uint64_t>()};
     snapshot.sequence    = {r.Get<std::uint64_t>()};
@@ -408,12 +415,14 @@ namespace Dreamsleeve::Client::Phantom
     if (channels != asset.Layout().requiredChannels.size() || bounds != asset.Layout().bounds.size())
       return Fail(Failure::InvalidFormat, "pose.counts");
     if (r.Remaining() != channels * 23ULL + bounds * 16ULL) return Fail(Failure::InvalidFormat, "pose.size");
+
     if (version == PoseVersion)
     {
       auto data = std::span(*raw);
       BytePlanes<23, true>(data.subspan(60, channels * 23ULL));
       BytePlanes<16, true>(data.subspan(60 + channels * 23ULL, bounds * 16ULL));
     }
+
     snapshot.channels.reserve(channels);
     for (std::uint32_t i = 0; i < channels; ++i)
     {
@@ -438,8 +447,10 @@ namespace Dreamsleeve::Client::Phantom
       channel.hidden = hidden != 0;
       snapshot.channels.push_back(channel);
     }
+
     for (std::uint32_t i = 0; i < bounds; ++i)
       snapshot.bounds.push_back({GetPosition(r, snapshot.origin), r.Get<float>()});
+
     if (auto end = r.End(); !end) return std::unexpected(end.error());
     if (auto valid = ValidateSnapshot(snapshot, asset.Layout()); !valid) return std::unexpected(valid.error());
     return snapshot;

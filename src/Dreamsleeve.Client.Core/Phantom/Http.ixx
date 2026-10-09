@@ -35,7 +35,8 @@ export namespace Dreamsleeve::Client::Phantom
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       const Wire::Transfer& transfer;
-      Clock::time_point     start{Clock::now()}, emitted{start};
+      Clock::time_point     start{Clock::now()};
+      Clock::time_point     emitted{start};
       std::array<double, 5> totals{};
       std::uint32_t         progress{};
       bool                  active{Diagnostics::Trace::Enabled()};
@@ -120,6 +121,7 @@ export namespace Dreamsleeve::Client::Phantom
           at  = std::max(Clock::now(), due);
           due = at + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(double(bytes) / std::max(1u, rate)));
         }
+
         std::mutex                  waitMutex;
         std::unique_lock            lock(waitMutex);
         std::condition_variable_any wake;
@@ -134,8 +136,12 @@ export namespace Dreamsleeve::Client::Phantom
       HINTERNET                   handle{};
       std::mutex                  mutex;
       std::condition_variable_any changed;
-      DWORD                       event{}, count{}, error{};
-      bool                        closing{}, callback{};
+      DWORD                       event{};
+      DWORD                       count{};
+      DWORD                       error{};
+
+      bool                        closing{};
+      bool                        callback{};
 
       static void CALLBACK Status(HINTERNET, DWORD_PTR context, DWORD status, void* data, DWORD length)
       {
@@ -184,6 +190,7 @@ export namespace Dreamsleeve::Client::Phantom
           std::lock_guard lock(mutex);
           event = count = error = 0;
         }
+
         if (!call())
         {
           const auto      failure = GetLastError();
@@ -191,6 +198,7 @@ export namespace Dreamsleeve::Client::Phantom
           error = failure;
           return false;
         }
+
         std::unique_lock lock(mutex);
         return changed.wait(lock, stop, [this, expected] { return event == expected || error; }) && !error;
       }
@@ -218,11 +226,13 @@ export namespace Dreamsleeve::Client::Phantom
     {
       if (auto valid = Auth::ValidateUrl(url, insecure); !valid) return valid.error();
       if (!session) return "WinHTTP session unavailable";
+
       int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url.data(), static_cast<int>(url.size()), nullptr, 0);
       if (!length) return "HTTP URL encoding";
       std::wstring wide(length, L'\0');
       if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url.data(), static_cast<int>(url.size()), wide.data(), length))
         return "HTTP URL encoding";
+
       URL_COMPONENTS parts{};
       parts.dwStructSize     = sizeof(parts);
       parts.dwHostNameLength = DWORD(-1);
@@ -230,6 +240,7 @@ export namespace Dreamsleeve::Client::Phantom
       std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
       Handle       connection{WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0)};
       if (!connection) return "HTTP connection";
+
       std::array<std::uint8_t, 1> tail{};
       // Buffers belong to job; request drains callbacks before Run returns.
       Request request;
@@ -242,6 +253,7 @@ export namespace Dreamsleeve::Client::Phantom
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
       if (!request.handle || !request.Attach()) return "HTTP request";
+
       DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
       DWORD disabled  = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
       if (
@@ -249,12 +261,14 @@ export namespace Dreamsleeve::Client::Phantom
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects)) ||
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
         return "HTTP options";
+
       std::wstring headers = L"Authorization: Bearer " + std::wstring(job.transfer.httpToken.begin(), job.transfer.httpToken.end()) +
                              L"\r\nContent-Type: application/octet-stream\r\n";
       const auto   fail    = [&] {
         std::lock_guard lock(request.mutex);
         return stop.stop_requested() ? std::string("HTTP canceled") : "WinHTTP error " + std::to_string(request.error);
       };
+
       if (!trace.Step(0, "send", [&] {
             return request.Step(stop, WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE, [&] {
               return WinHttpSendRequest(
@@ -268,6 +282,7 @@ export namespace Dreamsleeve::Client::Phantom
             });
           }))
         return fail();
+
       if (job.transfer.upload)
       {
         while (job.progress < job.input->size())
@@ -286,6 +301,7 @@ export namespace Dreamsleeve::Client::Phantom
           trace.Progress(job.progress.load());
         }
       }
+
       if (!trace.Step(1, "headers", [&] {
             return request.Step(stop, WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE, [&] {
               return WinHttpReceiveResponse(request.handle, nullptr);
@@ -303,6 +319,7 @@ export namespace Dreamsleeve::Client::Phantom
         return "HTTP status";
       if (status != (job.transfer.upload ? 204u : 200u)) return "HTTP status " + std::to_string(status);
       if (job.transfer.upload) return {};
+
       DWORD contentLength{}, headerSize = sizeof(contentLength);
       if (
         !WinHttpQueryHeaders(
@@ -330,6 +347,7 @@ export namespace Dreamsleeve::Client::Phantom
         job.progress = offset + request.count;
         trace.Progress(job.progress.load());
       }
+
       if (!trace.Step(4, "eof", [&] {
             return request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] {
               return WinHttpReadData(request.handle, tail.data(), 1, nullptr);
@@ -365,6 +383,7 @@ public:
     {
       if (jobs.size() >= 8 || origin.empty() || !rate || (transfer.upload && (!input || input->size() != transfer.BodyBytes())))
         return false;
+
       auto job      = std::make_unique<Job>();
       job->transfer = std::move(transfer);
       job->input    = std::move(input);
@@ -408,6 +427,7 @@ public:
           ++it;
           continue;
         }
+
         auto& job = **it;
         output.push_back({job.transfer, std::move(job.output), std::move(job.error)});
         it = jobs.erase(it);

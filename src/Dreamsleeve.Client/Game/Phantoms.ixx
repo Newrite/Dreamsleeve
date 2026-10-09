@@ -243,6 +243,7 @@ namespace Phantoms
 #endif
       return;
     }
+
     if (state.source && publishing && !exchange.Capturing(state.generation))
     {
       if (state.previous && exchange.Capturing(state.previous->generation))
@@ -257,8 +258,10 @@ namespace Phantoms
       state.cadence.Defer(now);
       return;
     }
+
     if (!state.source && publishing && exchange.Capturing(state.generation)) exchange.RestartCapture();
     if (!state.cadence.Due(now, settings.sampleRate)) return;
+
     const auto* camera      = RE::PlayerCamera::GetSingleton();
     const bool  firstPerson = camera && camera->IsInFirstPerson();
     if (state.previous && !exchange.Capturing(state.previous->generation)) state.previous.reset();
@@ -269,6 +272,7 @@ namespace Phantoms
       auto pose = old.source->Sample(player, firstPerson, {old.generation, {++old.sequence.value}, 1, Micros(now)}, true);
       return pose ? std::make_shared<const P::Snapshot>(std::move(*pose)) : nullptr;
     };
+
     if (!state.source || ((!publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now))))
     {
       const auto changeReason = state.source ? state.source->ChangeReason() : std::string_view{"initial"};
@@ -285,6 +289,7 @@ namespace Phantoms
           Error(opened.error(), now);
           return false;
         }
+
         auto asset = std::move(opened->asset);
 #ifdef DREAMSLEEVE_DIAGNOSTICS
         Dreamsleeve::Client::Diagnostics::Trace::Event(
@@ -305,6 +310,7 @@ namespace Phantoms
           asset.Value().nif.size() / 1048576.0,
           std::chrono::duration<double, std::milli>(Clock::now() - now).count(),
           changeReason);
+
         if (publishing && !exchange.Submit(*captureContext, nextGeneration, asset)) return false;
         if (publishing && state.source && exchange.Capturing(state.generation))
           state.previous = RetainedSource{state.generation, state.sequence, std::move(state.source)};
@@ -314,6 +320,7 @@ namespace Phantoms
 #ifdef DREAMSLEEVE_DIAGNOSTICS
         state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(asset));
 #endif
+
         state.source = std::move(opened->source);
         ReportCaptureHealth();
         auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
@@ -323,6 +330,7 @@ namespace Phantoms
         if (publishing) exchange.Submit(std::move(initial), priorPose());
         return true;
       };
+
       if (replace()) return;
       if (!state.source)
       {
@@ -330,6 +338,7 @@ namespace Phantoms
         return;
       }
     }
+
     if (publishing && !exchange.PosesRequired()) return;
     if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
     {
@@ -358,6 +367,7 @@ namespace Phantoms
         state.cadence.Defer(now);
       return;
     }
+
     ReportCaptureHealth();
     auto sampled = std::make_shared<const P::Snapshot>(std::move(*pose));
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -408,6 +418,22 @@ namespace Phantoms
     exchange.SceneMemory(id, visual.MemoryBytes());
   }
 
+  // Commit an already posed and attached candidate on the game thread.
+  // The current scene stays owned until this accepted replacement is promoted.
+  void PromoteRemoteScene(Visual& visual, const P::Remote& remote, P::Exchange& exchange)
+  {
+    visual.current = std::move(visual.candidate);
+    exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
+    logger::info(
+      "[Phantom] native scene displayed: player={} generation={} bytes={}",
+      remote.player,
+      remote.descriptor.generation.value,
+      visual.current->scene->MemoryBytes());
+    visual.candidate.reset();
+    visual.look.reset();
+    exchange.SceneMemory(remote.player, visual.MemoryBytes());
+  }
+
   export void Tick(Clock::time_point now, Nameplates::Frame& names)
   {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -436,6 +462,7 @@ namespace Phantoms
       state.settings = settings;
       exchange.Configure(settings);
     }
+
     // Apply visibility even while waiting for the local player/cell or replay.
     if (!settings.receive && !state.visuals.empty())
     {
@@ -443,6 +470,7 @@ namespace Phantoms
         exchange.SceneMemory(id, 0);
       state.visuals.clear();  // Scene destruction detaches each root on this game thread.
     }
+
     auto* player = RE::PlayerCharacter::GetSingleton();
     auto* cell   = player ? player->GetParentCell() : nullptr;
     auto* root   = player ? player->Get3D(false) : nullptr;
@@ -452,6 +480,7 @@ namespace Phantoms
       Clear("game-context-ended");
       return;
     }
+
     const auto space = player && cell ? World::CurrentSpace(player) : std::nullopt;
     const bool ready = World::PlayerReady() && cell && cell->IsAttached() && parent && space;
     const auto observed = state.context.Observe(ready
@@ -480,6 +509,7 @@ namespace Phantoms
       }
       return;
     }
+
     if (state.waiting) logger::info("Phantom capture resumed in {} {:08X}", space->interior ? "CELL" : "WRLD", space->form->GetFormID());
     state.waiting = false;
     if (observed == Capture::Context::Observation::Changed)
@@ -500,6 +530,7 @@ namespace Phantoms
       return;
     }
 #endif
+
     CapturePlayer(*player);
     auto display = exchange.Read();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -568,6 +599,7 @@ namespace Phantoms
       ResetResources();
       return;
     }
+
     if (!settings.receive) return;
     const auto observer = World::Observe(player);
     if (!observer) return;
@@ -576,6 +608,7 @@ namespace Phantoms
     std::ranges::sort(display.remotes, {}, &P::Remote::player);
     const auto first = std::ranges::upper_bound(display.remotes, state.cursor, {}, &P::Remote::player);
     std::rotate(display.remotes.begin(), first, display.remotes.end());
+
     std::uint32_t      buildSteps = 1;
     Scene::FrameBudget frame{65536};
     for (const auto& remote : display.remotes)
@@ -587,6 +620,7 @@ namespace Phantoms
         runtime.session.HidesPlayerRepresentation(remote.player, ui.fireflyGuildmatesOnly) ||
         !Domain::Spatial::Reach(observer->space, observer->position, movement->location.locationId, movement->position, settings.distance))
         continue;
+
       retained.insert(remote.player);
       auto&      visual   = state.visuals[remote.player];
       const auto revision = std::pair{remote.view, remote.descriptor.generation};
@@ -607,6 +641,7 @@ namespace Phantoms
           }
         }
       }
+
       auto pose = remote.playback.At(Micros(now), settings);
       if (remote.Asset() && pose)
       {
@@ -636,6 +671,7 @@ namespace Phantoms
           else if (!scene)
             Error(scene.error(), now);
         }
+
         const auto failedTarget = [&](const P::Error& error) {
           Error(error, now);
           if (visual.candidate)
@@ -647,8 +683,16 @@ namespace Phantoms
           else
             Hide(visual, now);
         };
-        Slot* target = visual.candidate ? &*visual.candidate
-                                        : (visual.current && Matches(*visual.current, remote, context) ? &*visual.current : nullptr);
+
+        Slot* target = nullptr;
+        if (visual.candidate)
+        {
+          target = &*visual.candidate;
+        }
+        else if (visual.current && Matches(*visual.current, remote, context))
+        {
+          target = &*visual.current;
+        }
         if (target)
         {
           if (visual.candidate && buildSteps)
@@ -667,6 +711,7 @@ namespace Phantoms
               target = nullptr;
             }
           }
+
           if (target && !(settings.hideInCombat && player->IsInCombat()))
           {
             auto applied = target->scene->Apply(*pose, context, frame);
@@ -688,17 +733,9 @@ namespace Phantoms
                       context.epoch,
                       context.space.id));
 #endif
-                  visual.current = std::move(visual.candidate);
-                  exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
-                  logger::info(
-                    "[Phantom] native scene displayed: player={} generation={} bytes={}",
-                    remote.player,
-                    remote.descriptor.generation.value,
-                    visual.current->scene->MemoryBytes());
-                  visual.candidate.reset();
-                  visual.look.reset();
-                  exchange.SceneMemory(remote.player, visual.MemoryBytes());
+                  PromoteRemoteScene(visual, remote, exchange);
                 }
+
                 visual.applied = now;
                 visual.active  = true;
                 state.cursor   = remote.player;
@@ -716,6 +753,7 @@ namespace Phantoms
         }
       }
       ForgetCleared(visual, exchange, remote.player);
+
       if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
       {
         Hide(visual, now);
@@ -729,6 +767,7 @@ namespace Phantoms
         visual.active = visual.current && visual.current->scene->Ready();
         continue;
       }
+
       if (!visual.active || !visual.current) continue;
       const auto look = std::pair{settings.color, settings.opacity};
       if (visual.look != look)
@@ -743,8 +782,10 @@ namespace Phantoms
         }
         visual.look = look;
       }
+
       PlayerLabels::Add(names, remote.player, visual.current->scene->LabelAnchor(), online->second, now);
     }
+
     std::erase_if(state.visuals, [&](const auto& entry) {
       if (retained.contains(entry.first)) return false;
 #ifdef DREAMSLEEVE_DIAGNOSTICS

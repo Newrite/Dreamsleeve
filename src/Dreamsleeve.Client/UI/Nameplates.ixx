@@ -134,7 +134,15 @@ namespace Nameplates
   // Object names in the HUD layer; a kind prefix keeps players and marks apart.
   std::string ObjectName(std::string_view prefix, const LabelKey& key)
   {
-    std::string_view kind = key.kind == LabelKind::Player ? "player" : key.kind == LabelKind::Note ? "note" : "death";
+    std::string_view kind = "death";
+    if (key.kind == LabelKind::Player)
+    {
+      kind = "player";
+    }
+    else if (key.kind == LabelKind::Note)
+    {
+      kind = "note";
+    }
     return std::format("{}_{}_{}", prefix, kind, key.id);
   }
 
@@ -303,54 +311,10 @@ namespace Nameplates
       return std::max(32.0, static_cast<double>(style.maxWidth) - 2 * BubblePadding + 2 * TextGutter);
     }
 
-    // Sets the header and the text, trims the text to the line budget and
-    // redraws the box around both. Runs only when a text or the style changed.
-    void LayoutBubble(BubbleClip& bubble, const std::string& header, const std::string& content)
-    {
-      const auto maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
-      // Fields were shrunk to the previous text; wrap the new one at full width.
-      const double wrapWidth = FieldWidth(bubble.style);
-      bubble.head.SetMember("_width", RE::GFxValue(wrapWidth));
-      bubble.text.SetMember("_width", RE::GFxValue(wrapWidth));
-      using Dreamsleeve::Utils::Text::CodePoints;
-      using Dreamsleeve::Utils::Text::Ellipsize;
-      // Plain UTF-8 text, never HTML or ActionScript from the network.
-      bubble.head.SetText(header.c_str());
-      const double headHeight = header.empty() ? 0 : Number(bubble.head, "textHeight");
-      const double headWidth  = header.empty() ? 0 : Number(bubble.head, "textWidth");
-      std::string  text       = CodePoints(content) > BubbleMaxChars ? Ellipsize(content, BubbleMaxChars) : content;
-      bubble.text.SetText(text.c_str());
-      double textHeight = content.empty() ? 0 : Number(bubble.text, "textHeight");
-      for (int step = 0; textHeight > maxHeight && step < 24; ++step)
-      {
-        const auto length = CodePoints(text);
-        if (length <= 8) break;
-        text = Ellipsize(text, length - std::max<std::size_t>(4, length / 8));
-        bubble.text.SetText(text.c_str());
-        textHeight = Number(bubble.text, "textHeight");
-      }
-      const double textWidth = content.empty() ? 0 : Number(bubble.text, "textWidth");
-      bubble.width =
-        std::min(static_cast<double>(bubble.style.maxWidth), std::max(textWidth, headWidth) + 2 * BubblePadding + 2 * TextGutter);
-      // Header on top, the text under it; each field keeps its 2px gutters.
-      const bool   both  = !header.empty() && !content.empty();
-      const double top   = BubblePadding - TextGutter;
-      const double textY = header.empty() ? top : top + headHeight + 2 * TextGutter + (both ? HeaderGap : 0);
-      bubble.height = (content.empty() ? textY - (both ? HeaderGap : 0) : textY + textHeight + 2 * TextGutter) + BubblePadding + TextGutter;
-      // Shrink the fields to the measured lines so centred text sits in the box,
-      // not in the wide field it wrapped in; the extra pixel keeps the wrap.
-      const double              shown = bubble.width - 2 * BubblePadding + 2 * TextGutter + 1;
-      RE::GFxValue::DisplayInfo head;
-      head.SetPosition(top, top);
-      bubble.head.SetDisplayInfo(head);
-      bubble.head.SetMember("_width", RE::GFxValue(shown));
-      RE::GFxValue::DisplayInfo body;
-      body.SetPosition(top, textY);
-      bubble.text.SetDisplayInfo(body);
-      bubble.text.SetMember("_width", RE::GFxValue(shown));
-      bubble.header  = header;
-      bubble.content = content;
+private:
 
+    void DrawBubbleBackground(BubbleClip& bubble, bool both, double textY)
+    {
       bubble.clip.Invoke("clear", nullptr);
       // Without a border the line is fully transparent; the outline path still
       // closes the fill.
@@ -382,6 +346,63 @@ namespace Nameplates
         corner(BubblePadding, rule, "moveTo");
         corner(bubble.width - BubblePadding, rule, "lineTo");
       }
+    }
+
+public:
+
+    // Sets the header and the text, trims the text to the line budget and
+    // redraws the box around both. Runs only when a text or the style changed.
+    void LayoutBubble(BubbleClip& bubble, const std::string& header, const std::string& content)
+    {
+      const auto maxHeight = BubbleMaxLines * bubble.style.fontSize * LineHeightFactor + 2 * TextGutter;
+      // Fields were shrunk to the previous text; wrap the new one at full width.
+      const double wrapWidth = FieldWidth(bubble.style);
+      bubble.head.SetMember("_width", RE::GFxValue(wrapWidth));
+      bubble.text.SetMember("_width", RE::GFxValue(wrapWidth));
+
+      using Dreamsleeve::Utils::Text::CodePoints;
+      using Dreamsleeve::Utils::Text::Ellipsize;
+      // Plain UTF-8 text, never HTML or ActionScript from the network.
+      bubble.head.SetText(header.c_str());
+      const double headHeight = header.empty() ? 0 : Number(bubble.head, "textHeight");
+      const double headWidth  = header.empty() ? 0 : Number(bubble.head, "textWidth");
+      std::string  text       = CodePoints(content) > BubbleMaxChars ? Ellipsize(content, BubbleMaxChars) : content;
+      bubble.text.SetText(text.c_str());
+      double textHeight = content.empty() ? 0 : Number(bubble.text, "textHeight");
+      for (int step = 0; textHeight > maxHeight && step < 24; ++step)
+      {
+        const auto length = CodePoints(text);
+        if (length <= 8) break;
+        text = Ellipsize(text, length - std::max<std::size_t>(4, length / 8));
+        bubble.text.SetText(text.c_str());
+        textHeight = Number(bubble.text, "textHeight");
+      }
+
+      const double textWidth = content.empty() ? 0 : Number(bubble.text, "textWidth");
+      bubble.width =
+        std::min(static_cast<double>(bubble.style.maxWidth), std::max(textWidth, headWidth) + 2 * BubblePadding + 2 * TextGutter);
+
+      // Header on top, the text under it; each field keeps its 2px gutters.
+      const bool   both  = !header.empty() && !content.empty();
+      const double top   = BubblePadding - TextGutter;
+      const double textY = header.empty() ? top : top + headHeight + 2 * TextGutter + (both ? HeaderGap : 0);
+      bubble.height = (content.empty() ? textY - (both ? HeaderGap : 0) : textY + textHeight + 2 * TextGutter) + BubblePadding + TextGutter;
+
+      // Shrink the fields to the measured lines so centred text sits in the box,
+      // not in the wide field it wrapped in; the extra pixel keeps the wrap.
+      const double              shown = bubble.width - 2 * BubblePadding + 2 * TextGutter + 1;
+      RE::GFxValue::DisplayInfo head;
+      head.SetPosition(top, top);
+      bubble.head.SetDisplayInfo(head);
+      bubble.head.SetMember("_width", RE::GFxValue(shown));
+      RE::GFxValue::DisplayInfo body;
+      body.SetPosition(top, textY);
+      bubble.text.SetDisplayInfo(body);
+      bubble.text.SetMember("_width", RE::GFxValue(shown));
+      bubble.header  = header;
+      bubble.content = content;
+
+      DrawBubbleBackground(bubble, both, textY);
     }
 
     // Releases every GFx object and the movie reference while Scaleform is alive.
@@ -458,8 +479,10 @@ namespace Nameplates
         Remove(entry.second.bubble);
         return true;
       });
+
       const auto rect = movie->GetVisibleFrameRect();
       if (!(rect.right > rect.left && rect.bottom > rect.top)) return;
+
       for (const auto& label : frame.labels)
       {
         auto&        entry = entries[label.key];

@@ -24,14 +24,16 @@ export namespace Dreamsleeve::Client::Phantom
 
     struct PoseJob
     {
-      std::uint64_t                         epoch, arrivalUs;
+      std::uint64_t                         epoch;
+      std::uint64_t                         arrivalUs;
       Wire::RemotePose                      pose;
       std::shared_ptr<const ValidatedAsset> asset;
     };
 
     struct ModelJob
     {
-      std::uint64_t                        epoch{}, revision{};
+      std::uint64_t                        epoch{};
+      std::uint64_t                        revision{};
       Generation                           generation;
       ValidatedAsset                       asset;
       std::shared_ptr<const PreparedAsset> basis;
@@ -59,7 +61,8 @@ export namespace Dreamsleeve::Client::Phantom
     std::function<Result<PreparedAsset>(ValidatedAsset)> prepare;
     // Only ModelRun touches the filesystem. Exchange owns prepared generations.
     std::optional<std::uint64_t> cacheBudget;
-    std::jthread                 modelThread, thread;
+    std::jthread                 modelThread;
+    std::jthread                 thread;
 
     void CacheFailure(const Error& error)
     {
@@ -87,17 +90,20 @@ export namespace Dreamsleeve::Client::Phantom
       if (job.epoch != exchange.Epoch()) return;
       const auto remote = exchange.Find(job.offer.player);
       if (!remote || remote->view != job.offer.view || remote->descriptor != job.offer.asset) return;
+
       if (auto loaded = exchange.AssetFor(job.offer.asset))
       {
         exchange.Loaded(job.epoch, job.offer, std::move(loaded), true);
         return;
       }
+
       auto bytes = job.bytes ? job.bytes : Cached(job.offer.asset.hash, job.offer.asset.compressedBytes);
       if (!bytes)
       {
         Miss(job);
         return;
       }
+
       if (job.delta)
       {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -116,6 +122,7 @@ export namespace Dreamsleeve::Client::Phantom
         }
         bytes = std::make_shared<const Bytes>(std::move(*full));
       }
+
       const auto digest = Hash(*bytes);
       if (!digest || *digest != job.offer.asset.hash)
       {
@@ -148,9 +155,11 @@ export namespace Dreamsleeve::Client::Phantom
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       Diagnostics::Trace::Asset(Hex(job.offer.asset.hash), *bytes);
 #endif
+
       const bool cached = !job.bytes;
       if (job.bytes)
         if (auto saved = cache.Save(job.offer.asset.hash, *bytes, exchange.Settings().diskBytes); !saved) CacheFailure(saved.error());
+
       // Complete persistence before releasing the decode reservation. Otherwise
       // Game could admit a replacement while these compressed buffers are live.
       bytes.reset();
@@ -175,12 +184,32 @@ export namespace Dreamsleeve::Client::Phantom
             baseHash = prior->second.hash;
         }
       }
+
       std::lock_guard lock(mutex);
       std::erase_if(missing, [&](const auto& value) { return value.epoch != job.epoch || value.offer.player == job.offer.player; });
       if (missing.size() < 16)
         missing.push_back({job.epoch, job.offer, baseHash});
       else
         exchange.Unavailable(job.epoch, job.offer, "Очередь загрузки моделей заполнена");
+    }
+
+    void DecodePose(const PoseJob& job)
+    {
+      if (job.epoch != exchange.Epoch()) return;
+
+      auto pose = [&] {
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseDecode);
+#endif
+        return ReadSnapshot(job.pose.sample.payload, *job.asset);
+      }();
+
+      if (
+        pose && pose->generation == job.pose.sample.generation && pose->context == job.pose.sample.context &&
+        pose->sequence == job.pose.sample.sequence && pose->sampledAtUs == job.pose.sample.sampledAtUs)
+        exchange.Pose(job.epoch, job.pose, std::make_shared<const Snapshot>(std::move(*pose)), job.arrivalUs);
+      else
+        exchange.Failed("Поза фантома: неверный формат");
     }
 
     void Run(std::stop_token stop)
@@ -201,6 +230,7 @@ export namespace Dreamsleeve::Client::Phantom
             });
           modelWake.notify_one();
         }
+
         // While the next asset is compressed, keep the committed scene moving.
         if (!work.asset && work.priorAsset)
         {
@@ -208,6 +238,7 @@ export namespace Dreamsleeve::Client::Phantom
           work.generation = work.previousGeneration;
           work.snapshot   = std::move(work.previousSnapshot);
         }
+
         if (work.snapshot && work.asset && work.generation == work.snapshot->generation && work.context)
         {
           auto snapshot    = *work.snapshot;
@@ -247,27 +278,15 @@ export namespace Dreamsleeve::Client::Phantom
           else
             exchange.Failed("Не удалось подготовить позу фантома: " + encoded.error().field);
         }
+
         std::map<std::pair<std::uint64_t, std::uint64_t>, PoseJob> batch;
         {
           std::lock_guard lock(mutex);
           batch.swap(poses);
         }
         for (const auto& [id, job] : batch)
-        {
-          if (job.epoch != exchange.Epoch()) continue;
-          auto pose = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-            Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseDecode);
-#endif
-            return ReadSnapshot(job.pose.sample.payload, *job.asset);
-          }();
-          if (
-            pose && pose->generation == job.pose.sample.generation && pose->context == job.pose.sample.context &&
-            pose->sequence == job.pose.sample.sequence && pose->sampledAtUs == job.pose.sample.sampledAtUs)
-            exchange.Pose(job.epoch, job.pose, std::make_shared<const Snapshot>(std::move(*pose)), job.arrivalUs);
-          else
-            exchange.Failed("Поза фантома: неверный формат");
-        }
+          DecodePose(job);
+
         std::unique_lock lock(mutex);
         wake.wait_for(lock, std::chrono::milliseconds(5), [&] { return stop.stop_requested() || !poses.empty(); });
       }
@@ -292,12 +311,14 @@ export namespace Dreamsleeve::Client::Phantom
                                  (remote->delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
           }
         }
+
         const auto settings = exchange.Settings();
         if (settings.diskBytes && cacheBudget != settings.diskBytes)
         {
           cacheBudget = settings.diskBytes;
           if (auto trimmed = cache.Trim(*cacheBudget); !trimmed) CacheFailure(trimmed.error());
         }
+
         if (capture && capture->epoch == exchange.Epoch() && exchange.Capturing(capture->generation))
         {
           auto result = [&] {
@@ -344,6 +365,7 @@ export namespace Dreamsleeve::Client::Phantom
           else
             exchange.PreparationFailed(capture->epoch, capture->revision, "Не удалось подготовить модель фантома: " + result.error().field);
         }
+
         if (remote)
         {
           Asset(*remote);
@@ -389,6 +411,7 @@ public:
         queued += 2ULL * job.offer.asset.rawBytes + job.offer.asset.compressedBytes +
                   (job.delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
       if (assets.size() >= 8 || queued > budget) return false;
+
       assets.push_back({epoch, std::move(offer), std::move(bytes), delta});
       modelWake.notify_one();
       return true;

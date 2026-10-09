@@ -58,9 +58,11 @@ public:
     Result<std::optional<std::uint32_t>> Inspect(const Digest& hash, std::uint32_t expectedSize = 0) const
     {
       if (directory.empty()) return std::nullopt;
+
       auto present = DirectoryPresent();
       if (!present) return std::unexpected(present.error());
       if (!*present) return std::nullopt;
+
       std::error_code error;
       const auto      size = std::filesystem::file_size(directory / (Hex(hash) + ".zst"), error);
       if (error == std::errc::no_such_file_or_directory) return std::nullopt;
@@ -75,6 +77,7 @@ public:
       auto size = Inspect(hash, expectedSize);
       if (!size) return std::unexpected(size.error());
       if (!*size) return std::nullopt;
+
       Bytes         bytes(**size);
       std::ifstream input(directory / (Hex(hash) + ".zst"), std::ios::binary);
       if (!input.is_open()) return std::unexpected(Storage("cache.open", {}));
@@ -106,10 +109,12 @@ public:
       auto present = DirectoryPresent();
       if (!present) return std::unexpected(present.error());
       if (!*present) return {};
+
       std::error_code                     error;
       std::filesystem::directory_iterator cursor(directory, error), end;
       if (error == std::errc::no_such_file_or_directory) return {};
       if (error) return std::unexpected(Storage("cache.list", error));
+
       std::vector<Entry> files;
       std::uint64_t      size{};
       while (cursor != end)
@@ -142,6 +147,7 @@ public:
         cursor.increment(error);
         if (error) return std::unexpected(Storage("cache.next", error));
       }
+
       std::ranges::sort(files, {}, &Entry::touched);
       for (const auto& file : files)
       {
@@ -155,9 +161,11 @@ public:
     Result<CacheWrite> Save(const Digest& hash, std::span<const std::uint8_t> bytes, std::uint64_t budget) const
     {
       if (directory.empty() || !budget || bytes.size() > budget) return CacheWrite::Skipped;
+
       std::error_code error;
       std::filesystem::create_directories(directory, error);
       if (error) return std::unexpected(Storage("cache.directory", error));
+
       const auto path = directory / (Hex(hash) + ".zst"), temporary = directory / (Hex(hash) + ".partial");
       bool       written{};
       {
@@ -173,6 +181,7 @@ public:
         if (auto removed = Remove(temporary); !removed) failure.field += "; " + removed.error().field;
         return std::unexpected(std::move(failure));
       }
+
       std::filesystem::rename(temporary, path, error);
       if (error)
       {
@@ -180,6 +189,7 @@ public:
         if (auto removed = Remove(temporary); !removed) failure.field += "; " + removed.error().field;
         return std::unexpected(std::move(failure));
       }
+
       if (auto trimmed = Trim(budget); !trimmed) return std::unexpected(trimmed.error());
       return CacheWrite::Stored;
     }

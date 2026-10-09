@@ -63,7 +63,14 @@ namespace Dreamsleeve::Client::Phantom::Wire
         return std::unexpected(Invalid("descriptor"));
       Digest digest;
       std::ranges::copy(in.hash(), digest.begin());
-      return Descriptor{digest, Generation{in.generation()}, in.format_version(), in.compressed_bytes(), in.raw_bytes(), in.channels()};
+      return Descriptor{
+          digest,
+          Generation{in.generation()},
+          in.format_version(),
+          in.compressed_bytes(),
+          in.raw_bytes(),
+          in.channels()
+      };
     }
 
     void Set(const Pose& pose, Proto::PoseSample* out)
@@ -178,7 +185,15 @@ namespace Dreamsleeve::Client::Phantom::Wire
           change = *parsed;
         }
         return Response{
-            Transfer{TransferId{v.transfer_id()}, *descriptor, v.player_id(), v.upload(), RequestId{v.request_id()}, v.http_token(), change}
+            Transfer{
+                TransferId{v.transfer_id()},
+                *descriptor,
+                v.player_id(),
+                v.upload(),
+                RequestId{v.request_id()},
+                v.http_token(),
+                change
+            }
         };
       }
       case Proto::ServerAssetPacket::kComplete: {
@@ -189,14 +204,14 @@ namespace Dreamsleeve::Client::Phantom::Wire
           return std::unexpected(Invalid("complete"));
         return Response{
             Complete{
-                     TransferId{v.transfer_id()},
-                     v.accepted(),
-                     v.reason(),
-                     v.player_id(),
-                     Generation{v.generation()},
-                     v.retry_after_ms(),
-                     v.upload(),
-                     RequestId{v.request_id()}
+                TransferId{v.transfer_id()},
+                v.accepted(),
+                v.reason(),
+                v.player_id(),
+                Generation{v.generation()},
+                v.retry_after_ms(),
+                v.upload(),
+                RequestId{v.request_id()}
             }
         };
       }
@@ -211,16 +226,19 @@ namespace Dreamsleeve::Client::Phantom::Wire
         const auto& v = packet.policy();
         Policy      policy;
         policy.enabled                     = v.enabled();
+
         policy.limits.assetBytes           = std::min(limits.assetBytes, v.raw_asset_bytes());
         policy.limits.compressedAssetBytes = std::min(limits.compressedAssetBytes, v.compressed_asset_bytes());
         policy.limits.nodes                = std::min(limits.nodes, v.channels());
         policy.limits.poseBytes            = std::min(limits.poseBytes, v.pose_bytes());
         policy.limits.compressedPoseBytes  = std::min(limits.compressedPoseBytes, v.compressed_pose_bytes());
+
         policy.sampleRate                  = std::clamp(v.sample_rate(), 1u, 50u);
         policy.maximumVisible              = std::min(v.maximum_visible(), 16u);
         policy.concurrentTransfers         = std::clamp(v.concurrent_transfers(), 1u, 8u);
         policy.modelBytesPerSecond         = std::min(v.model_bytes_per_second(), 64u * 1024 * 1024);
         policy.poseBytesPerSecond          = std::min(v.pose_bytes_per_second(), 4u * 1024 * 1024);
+
         if (
           !std::isfinite(v.distance()) || v.distance() < 0 || !policy.limits.assetBytes || !policy.limits.compressedAssetBytes ||
           !policy.limits.poseBytes || !policy.limits.compressedPoseBytes || !policy.limits.nodes)

@@ -22,7 +22,8 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     {
       std::filesystem::path directory;
       std::ofstream         file;
-      std::size_t           limit, bytes{};
+      std::size_t           limit;
+      std::size_t           bytes{};
       std::uint64_t         part{};
       std::function<void()> failed;
 
@@ -80,7 +81,8 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     struct Aggregate
     {
       std::uint64_t                 count{};
-      double                        sum{}, maximum{};
+      double                        sum{};
+      double                        maximum{};
       std::array<std::uint64_t, 10> buckets{};
     };
 
@@ -137,7 +139,8 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     {
       std::shared_ptr<Writer>             writer;
       std::shared_ptr<std::promise<void>> done;
-      std::shared_future<void>            accepted, gate;
+      std::shared_future<void>            accepted;
+      std::shared_future<void>            gate;
     };
 
     void __cdecl Cleanup(void* context)
@@ -147,10 +150,12 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       // writer copy so logger/pool destruction stays on this cleanup thread.
       job->accepted.wait();
       if (job->gate.valid()) job->gate.wait();
+
       job->writer->logger->flush();
       job->writer->logger.reset();
       job->writer->pool.reset();
       job->writer.reset();
+
       auto done = std::move(job->done);
       job.reset();
       done->set_value();
@@ -207,6 +212,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
   std::expected<void, TraceError> Start(const std::filesystem::path& directory, std::size_t partBytes)
   {
     if (partBytes < 1024) return std::unexpected(TraceError{TraceFailure::InvalidConfiguration, "trace part must be at least 1024 bytes"});
+
     std::lock_guard owner(lifecycle);
     const auto      stopped = StopOwned();
     if (!stopped) return std::unexpected(stopped.error());
@@ -242,6 +248,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     writer->logger->set_error_handler([weak = std::weak_ptr(writer)](const std::string&) {
       if (auto value = weak.lock()) WriteFailed(*value);
     });
+
     current.store(std::move(writer));
     Event(
       "start",
@@ -394,6 +401,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
   {
     const auto writer = current.load();
     if (!writer) return;
+
     std::array<Aggregate, names.size()> batch;
     {
       std::lock_guard lock(measurementsMutex);
@@ -419,9 +427,13 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
             a.maximum,
             buckets));
       }
+
     PROCESS_MEMORY_COUNTERS_EX memory{};
     memory.cb = sizeof(memory);
-    FILETIME   created{}, exited{}, kernel{}, user{};
+    FILETIME created{};
+    FILETIME exited{};
+    FILETIME kernel{};
+    FILETIME user{};
     const auto process = GetCurrentProcess();
     if (
       K32GetProcessMemoryInfo(process, reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory), sizeof(memory)) &&
@@ -439,6 +451,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
           memory.PageFaultCount,
           ticks(kernel) + ticks(user)));
     }
+
     Event(
       "writer",
       std::format(

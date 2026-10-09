@@ -59,11 +59,13 @@ export namespace Dreamsleeve::Host::Bridge
       "steamExpired",
       "unreachable",
   });
+
   // Auth::RegistrationMode from GET /auth/methods.
   constexpr auto RegistrationNames = std::to_array<std::string_view>({"unknown", "open", "steam", "manual"});
   constexpr auto OriginNames       = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
   constexpr auto KindNames         = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
   constexpr auto MarkKindNames     = std::to_array<std::string_view>({"note", "death"});
+
   // Domain::ChatChannelKind from Global; the numbers have gaps, the names follow the enumerators.
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "guild", "system"});
   // Domain::SessionEndReason from AccessRevoked.
@@ -399,6 +401,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::string                              username;
     std::optional<std::string>               character;
     bool                                     inCharacter{};
+
     std::optional<std::uint32_t>             level;
     std::optional<std::string>               location;
     std::optional<std::string>               zone;
@@ -406,11 +409,13 @@ export namespace Dreamsleeve::Host::Bridge
     std::optional<std::string>               nearbyMarker;
     std::optional<std::string>               markerKind;
     std::optional<bool>                      interior;
+
     std::optional<std::string>               activity;
     std::optional<std::string>               activityTarget;
     std::optional<std::string>               lockDifficulty;
     std::optional<std::string>               menu;
     std::optional<std::int64_t>              gameStartedAt;
+
     std::optional<std::vector<UiActorValue>> actorValues;
     bool                                     pseudonymous{};
   };
@@ -1334,6 +1339,7 @@ export namespace Dreamsleeve::Host::Bridge
   {
     auto player =
       ToUiAuthor(source.data, source.characterName, source.characterName.has_value() || source.characterNameWithheld, names, settings);
+
     const auto& details = source.details;
     player.level        = details.level;
     if (details.race) player.race = Text(details.race->name);
@@ -1367,9 +1373,11 @@ export namespace Dreamsleeve::Host::Bridge
           value.value = static_cast<double>(std::get<Domain::ScalarActorValue>(info.state).value);
         values.push_back(std::move(value));
       }
+
       std::ranges::sort(values, {}, &UiActorValue::key);
       player.actorValues = std::move(values);
     }
+
     return player;
   }
 
