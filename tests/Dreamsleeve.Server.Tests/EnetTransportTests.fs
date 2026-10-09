@@ -67,10 +67,12 @@ let private withPeersAtMtuObserved mtu received run =
         let mutable clientReady = false
         let pump () =
             service server (fun event ->
-                if event.Type = EnetEventType.Connect then serverPeer <- Some event.Peer
+                if event.Type = EnetEventType.Connect then
+                    serverPeer <- Some event.Peer
                 discard event)
             service client (fun event ->
-                if event.Type = EnetEventType.Connect then clientReady <- true
+                if event.Type = EnetEventType.Connect then
+                    clientReady <- true
                 received event
                 discard event)
         until (fun () -> serverPeer.IsSome && clientReady) pump
@@ -82,7 +84,10 @@ let private withPeersAtMtu mtu run = withPeersAtMtuObserved mtu ignore run
 let private withPeers run = withPeersAtMtu 1392u run
 
 let private withAdapter settings run =
-    let config = { settings with Port = freePort (); ServiceTimeoutMs = 0u }
+    let config =
+        { settings with
+            Port = freePort ()
+            ServiceTimeoutMs = 0u }
     let transport = EnetTransport.createInline config NullLogger.Instance |> ok
     try
         use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 5un, 0u, 0u, EnetHostOption.Ipv4)
@@ -110,8 +115,10 @@ let private logger observe =
 
 let private expectClosed (socket: Socket) =
     let mutable closed = false
-    try socket.ReceiveBufferSize |> ignore
-    with :? SocketException -> closed <- true
+    try
+        socket.ReceiveBufferSize |> ignore
+    with :? SocketException ->
+        closed <- true
     Expect.isTrue closed "The allocated native socket was closed before startup returned."
 
 let tests = testSequenced <| testList "ENet transport" [
@@ -138,9 +145,13 @@ let tests = testSequenced <| testList "ENet transport" [
             for lane, flags in [DeliveryLane.Models, EnetPacketFlag.Reliable; DeliveryLane.Poses, EnetPacketFlag.UnreliableFragment] do
                 let bytes = if lane = DeliveryLane.Models then payload[0..PhantomAssetLimits.assetPacketBytes-1] else payload
                 let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>(bytes), flags)
-                try Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "native send"
-                finally if packet.IsCreated then packet.Dispose()
+                try
+                    Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "native send"
+                finally
+                    if packet.IsCreated then
+                        packet.Dispose()
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, data) -> actual = lane && data = bytes | _ -> false)) pump
+
             let mutable received = None
             transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Poses; Bytes = payload }) |> ok
             until (fun () -> received.IsSome) (fun () ->
@@ -158,7 +169,10 @@ let tests = testSequenced <| testList "ENet transport" [
     testCase "rollover sends a budgeted empty reliable epoch marker and keeps every pose unreliable" <| fun _ ->
         let received = ResizeArray<byte * EnetPacketFlag * byte array>()
         let capture (event: EnetEvent) =
-            if event.Type = EnetEventType.Receive then received.Add(event.ChannelId, event.Packet.Flags, if event.Packet.DataLength = 0un then [||] else event.Packet.AsSpan().ToArray())
+            if event.Type = EnetEventType.Receive then
+                received.Add(event.ChannelId, event.Packet.Flags,
+                    if event.Packet.DataLength = 0un then [||]
+                    else event.Packet.AsSpan().ToArray())
         withPeersAtMtuObserved 1392u capture (fun _ peer pump ->
             let budget, peerBudget = PacketBudget(16, 1024L * 1024L), PacketBudget(16, 1024L * 1024L)
             let inner: enet.ENetPeer = NativePtr.read (peer.GetInner())
@@ -182,6 +196,7 @@ let tests = testSequenced <| testList "ENet transport" [
                 Expect.equal (flags &&& EnetPacketFlag.Reliable) (enum<EnetPacketFlag> 0) "No reliable pose at rollover."
                 Expect.equal (flags &&& EnetPacketFlag.Unsequenced) (enum<EnetPacketFlag> 0) "Sequenced."
                 Expect.equal budget.Bytes 0L "Both packet leases released."
+
             let mutable state = NativePtr.read channel
             state.outgoingUnreliableSequenceNumber <- UInt16.MaxValue
             NativePtr.write channel state
@@ -194,20 +209,30 @@ let tests = testSequenced <| testList "ENet transport" [
     testCase "empty reliable Poses epoch marker is swallowed before delivery policy and domain parsing" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ _ _ peer connection events _ pump ->
             let mutable marker = EnetPacket.Create(ReadOnlySpan<byte>.Empty, EnetPacketFlag.Reliable)
-            try Expect.isTrue (peer.TrySend(4uy, &marker)) "Epoch marker queued."
-            finally if marker.IsCreated then marker.Dispose()
+            try
+                Expect.isTrue (peer.TrySend(4uy, &marker)) "Epoch marker queued."
+            finally
+                if marker.IsCreated then
+                    marker.Dispose()
             let mutable pose = EnetPacket.Create(ReadOnlySpan<byte>([|1uy;2uy|]), EnetPacketFlag.UnreliableFragment)
-            try Expect.isTrue (peer.TrySend(4uy, &pose)) "Next pose queued."
-            finally if pose.IsCreated then pose.Dispose()
+            try
+                Expect.isTrue (peer.TrySend(4uy, &pose)) "Next pose queued."
+            finally
+                if pose.IsCreated then
+                    pose.Dispose()
             until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, DeliveryLane.Poses, _) -> true | _ -> false)) pump
             Expect.isFalse (events.Contains(ServerTransportEvent.Disconnected connection)) "Epoch marker does not violate reliable policy."
             let received = events |> Seq.choose (function ServerTransportEvent.Received(_, DeliveryLane.Poses, bytes) -> Some bytes | _ -> None) |> Seq.toArray
             Expect.equal received [|[|1uy;2uy|]|] "Marker never crosses transport boundary.")
+
     testCase "reliable poses are rejected instead of creating a reliable snapshot backlog" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ _ _ peer connection events _ pump ->
             let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|1uy|]), EnetPacketFlag.Reliable)
-            try Expect.isTrue (peer.TrySend(4uy, &packet)) "send invalid delivery"
-            finally if packet.IsCreated then packet.Dispose()
+            try
+                Expect.isTrue (peer.TrySend(4uy, &packet)) "send invalid delivery"
+            finally
+                if packet.IsCreated then
+                    packet.Dispose()
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.isFalse (events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) "not dispatched")
 
@@ -308,7 +333,8 @@ let tests = testSequenced <| testList "ENet transport" [
             Expect.isNotNull borrowed "Host reached the read boundary."
             expectClosed borrowed
         finally
-            if not (isNull borrowed) then borrowed.Dispose()
+            if not (isNull borrowed) then
+                borrowed.Dispose()
 
     testCase "unexpected startup logger fault escapes after releasing the allocated host" <| fun _ ->
         let failure = ArgumentException("logger fault is not host configuration rejection")
@@ -326,7 +352,8 @@ let tests = testSequenced <| testList "ENet transport" [
             Expect.isNotNull borrowed "Host reached the read boundary."
             expectClosed borrowed
         finally
-            if not (isNull borrowed) then borrowed.Dispose()
+            if not (isNull borrowed) then
+                borrowed.Dispose()
 
     testCase "failed optional trace disables only its probe and leaves transport usable" <| fun _ ->
         let directory = Path.Combine(Path.GetTempPath(), "dreamsleeve-enet-trace-" + Guid.NewGuid().ToString("N"))
@@ -341,9 +368,11 @@ let tests = testSequenced <| testList "ENet transport" [
                 use listener = new MeterListener()
                 let mutable samples = 0
                 listener.InstrumentPublished <- fun instrument listener ->
-                    if instrument.Meter.Name = "Dreamsleeve.Transport" then listener.EnableMeasurementEvents instrument
+                    if instrument.Meter.Name = "Dreamsleeve.Transport" then
+                        listener.EnableMeasurementEvents instrument
                 listener.SetMeasurementEventCallback<double>(fun instrument _ _ _ ->
-                    if instrument.Name = "transport.pending.bytes" then samples <- samples + 1)
+                    if instrument.Name = "transport.pending.bytes" then
+                        samples <- samples + 1)
                 listener.Start()
                 let diagnostics = TransportDiagnostics(fun error -> errors.Add error)
                 let budget = PacketBudget(2, 1024L)
@@ -370,9 +399,11 @@ let tests = testSequenced <| testList "ENet transport" [
                 use listener = new MeterListener()
                 let mutable samples = 0
                 listener.InstrumentPublished <- fun instrument listener ->
-                    if instrument.Meter.Name = "Dreamsleeve.Transport" then listener.EnableMeasurementEvents instrument
+                    if instrument.Meter.Name = "Dreamsleeve.Transport" then
+                        listener.EnableMeasurementEvents instrument
                 listener.SetMeasurementEventCallback<double>(fun instrument _ _ _ ->
-                    if instrument.Name = "transport.pending.bytes" then samples <- samples + 1)
+                    if instrument.Name = "transport.pending.bytes" then
+                        samples <- samples + 1)
                 listener.Start()
                 let diagnostics = TransportDiagnostics(fun error -> errors.Add error)
                 let budget = PacketBudget(2, 1024L)
@@ -382,6 +413,7 @@ let tests = testSequenced <| testList "ENet transport" [
                 Expect.equal files.Length 1 "Host trace created."
                 Expect.equal errors.Count 0 "Creation succeeds."
                 Expect.stringContains (File.ReadAllText files[0]) "\"kind\":\"host\"" "Real serialized header."
+
                 File.Delete files[0]
                 Directory.CreateDirectory files[0] |> ignore
                 let mutable native = NativePtr.read (peer.GetInner())
@@ -398,6 +430,7 @@ let tests = testSequenced <| testList "ENet transport" [
                     let mutable current = NativePtr.read (peer.GetInner())
                     current.earliestTimeout <- previousTimeout
                     NativePtr.write (peer.GetInner()) current
+
                 let peerBudget = PacketBudget(2, 1024L)
                 Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>([|1uy|]), budget, peerBudget)) PacketSendResult.Sent "Packet remains independently owned."
                 until (fun () -> budget.Packets = 0) pump)
@@ -462,7 +495,8 @@ let tests = testSequenced <| testList "ENet transport" [
                 let peerBudget = PacketBudget(peerLimit, 64L)
                 let bytes = [|1uy; 2uy; 3uy; 4uy|]
                 let sample () = OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget, 2uy, delivery)
-                for _ in 1 .. 3 do Expect.equal (sample()) PacketSendResult.Sent "Realtime fits below reserved slot."
+                for _ in 1 .. 3 do
+                    Expect.equal (sample()) PacketSendResult.Sent "Realtime fits below reserved slot."
                 Expect.equal (sample()) PacketSendResult.BudgetExceeded "Realtime cannot consume last reliable slot."
                 Expect.equal (hostBudget.Packets, peerBudget.Packets) (3, 3) "Refused sample reserves neither budget."
                 Expect.equal (OutgoingPackets.TrySend(peer, ReadOnlySpan<byte>(bytes), hostBudget, peerBudget))
@@ -518,12 +552,18 @@ let tests = testSequenced <| testList "ENet transport" [
         Expect.equal (hostBudget.Packets, peerBudget.Bytes) (0, 0L) "host destruction settled both budgets"
 
     testCase "adapter copies incoming packets and bounds sends until ENet frees them" <| fun _ ->
-        let settings = { ServerConfig.defaults with MaxOutgoingPacketsPerPeer = 1; MaxOutgoingPackets = 2 }
+        let settings =
+            { ServerConfig.defaults with
+                MaxOutgoingPacketsPerPeer = 1
+                MaxOutgoingPackets = 2 }
         withAdapter settings (fun _ transport _ peer connection events packets pump ->
             let bytes = [|10uy; 20uy; 30uy|]
             let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>(bytes), EnetPacketFlag.Reliable)
-            try Expect.isTrue (peer.TrySend(0uy, &packet)) "client send"
-            finally if packet.IsCreated then packet.Dispose()
+            try
+                Expect.isTrue (peer.TrySend(0uy, &packet)) "client send"
+            finally
+                if packet.IsCreated then
+                    packet.Dispose()
             until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) pump
             let received = events |> Seq.pick (function ServerTransportEvent.Received(id, lane, payload) -> Some(id, lane, payload) | _ -> None)
             Expect.equal received (connection, DeliveryLane.Control, bytes) "detached exact payload"
@@ -566,8 +606,11 @@ let tests = testSequenced <| testList "ENet transport" [
     testCase "unreliable application packets are rejected at the transport boundary" <| fun _ ->
         withAdapter ServerConfig.defaults (fun _ transport _ peer connection events _ pump ->
             let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|1uy|]), enum<EnetPacketFlag> 0)
-            try Expect.isTrue (peer.TrySend(0uy, &packet)) "send unreliable packet"
-            finally if packet.IsCreated then packet.Dispose()
+            try
+                Expect.isTrue (peer.TrySend(0uy, &packet)) "send unreliable packet"
+            finally
+                if packet.IsCreated then
+                    packet.Dispose()
             until (fun () -> events.Contains(ServerTransportEvent.Disconnected connection)) pump
             Expect.isFalse (events |> Seq.exists (function ServerTransportEvent.Received _ -> true | _ -> false)) "unreliable packet not dispatched"
             Expect.isError (transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = [|1uy|] })) "route reset")
@@ -577,8 +620,11 @@ let tests = testSequenced <| testList "ENet transport" [
             for lane in [DeliveryLane.Chat; DeliveryLane.Realtime] do
                 let flags = if lane = DeliveryLane.Realtime then enum<EnetPacketFlag> 0 else EnetPacketFlag.Reliable
                 let mutable packet = EnetPacket.Create(ReadOnlySpan<byte>([|DeliveryLane.toChannel lane|]), flags)
-                try Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "send on agreed channel"
-                finally if packet.IsCreated then packet.Dispose()
+                try
+                    Expect.isTrue (peer.TrySend(DeliveryLane.toChannel lane, &packet)) "send on agreed channel"
+                finally
+                    if packet.IsCreated then
+                        packet.Dispose()
                 until (fun () -> events |> Seq.exists (function ServerTransportEvent.Received(_, actual, _) -> actual = lane | _ -> false)) pump
             Expect.isFalse (events.Contains(ServerTransportEvent.Disconnected connection)) "supported channels retain connection"
             let oversized = Array.zeroCreate<byte> (transport.MaxUnfragmentedPayloadBytes connection + 1)
@@ -586,7 +632,10 @@ let tests = testSequenced <| testList "ENet transport" [
             transport.Send(connection, { Schedule = PacketSchedule.Ordered; Lane = DeliveryLane.Control; Bytes = oversized }) |> ok)
 
     testCase "a peer negotiating fewer than five channels is not admitted" <| fun _ ->
-        let settings = { ServerConfig.defaults with Port = freePort (); ServiceTimeoutMs = 0u }
+        let settings =
+            { ServerConfig.defaults with
+                Port = freePort ()
+                ServiceTimeoutMs = 0u }
         let transport = EnetTransport.createInline settings NullLogger.Instance |> ok
         try
             use client = EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 2un, 0u, 0u, EnetHostOption.Ipv4)
@@ -597,11 +646,13 @@ let tests = testSequenced <| testList "ENet transport" [
             let pump () =
                 events.AddRange(transport.Poll() |> ok)
                 service client (fun event ->
-                    if event.Type = EnetEventType.Disconnect then stopped <- true
+                    if event.Type = EnetEventType.Disconnect then
+                        stopped <- true
                     discard event)
             until (fun () -> stopped) pump
             Expect.equal events.Count 0 "incompatible peer is never visible to the application"
-        finally transport.Dispose()
+        finally
+            transport.Dispose()
 
     testCase "invalid outgoing budgets fail the settings check before any host exists" <| fun _ ->
         for settings in [
