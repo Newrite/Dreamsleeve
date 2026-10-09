@@ -106,4 +106,3 @@ let tests = testList "Agent construction" [
         for milliseconds, valid in [0., false; 0.9999, false; 1., true; 4294967294.9, true; 4294967295., false] do
             equal valid (AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds milliseconds) |> Result.isOk))
 ]
-
