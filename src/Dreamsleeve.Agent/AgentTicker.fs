@@ -13,14 +13,21 @@ type AgentTick = { DueTimestamp: int64; QueuedTimestamp: int64 }
 type AgentTicker internal (acknowledge: unit -> unit) =
     member _.Acknowledge() = acknowledge ()
 
+/// A period supported by PeriodicTimer, checked before an owner starts.
+[<Sealed>]
+type AgentTickerInterval private (value: TimeSpan) =
+    member internal _.Value = value
+    static member TryCreate(value: TimeSpan) =
+        let milliseconds = value.Ticks / TimeSpan.TicksPerMillisecond
+        if milliseconds < 1L || milliseconds > 4294967294L then Error (AgentStartError.InvalidInterval value)
+        else Ok (AgentTickerInterval value)
+
 [<RequireQualifiedAccess>]
 module AgentTicker =
     /// One tracked worker and at most one outstanding notification per owner.
     /// Complete detaches the timer; Abort cancels it. No owner state runs in the worker.
-    let startWithTimeProvider (time: TimeProvider) interval (context: AgentContext<'Message>) toMessage =
-        if interval <= TimeSpan.Zero then invalidArg (nameof interval) "Ticker interval must be positive."
-        if context.Ref.TryReliable().IsNone then invalidArg (nameof context) "A ticker requires a non-dropping mailbox."
-
+    let startWithTimeProvider (time: TimeProvider) (period: AgentTickerInterval) (context: ReliableAgentContext<'Message>) toMessage =
+        let interval = period.Value
         let mutable pending = 0
         let acknowledge () = Volatile.Write(&pending, 0)
         let period = max 1L (int64 (interval.TotalSeconds * float time.TimestampFrequency))
@@ -47,10 +54,8 @@ module AgentTicker =
                             let! posted = context.PostAsync(toMessage tick, cancellationToken = cancel.Token)
 
                             match posted with
-                            | AgentPostResult.Posted -> ()
-                            | AgentPostResult.Closed | AgentPostResult.Canceled -> running <- false
-                            | AgentPostResult.Full | AgentPostResult.Dropped ->
-                                invalidOp "A ticker requires reliable admission."
+                            | AgentDeliveryResult.Posted -> ()
+                            | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> running <- false
             with :? OperationCanceledException when cancel.IsCancellationRequested -> ()
         }
 
@@ -59,3 +64,13 @@ module AgentTicker =
 
     let start interval context toMessage =
         startWithTimeProvider TimeProvider.System interval context toMessage
+
+
+    let tryStartWithTimeProvider (time: TimeProvider) interval (context: ReliableAgentContext<'Message>) toMessage =
+        if isNull time then Error (AgentStartError.NullArgument "time")
+        elif isNull (box context) then Error (AgentStartError.NullArgument "context")
+        elif isNull (box toMessage) then Error (AgentStartError.NullArgument "toMessage")
+        else AgentTickerInterval.TryCreate interval |> Result.map (fun period -> startWithTimeProvider time period context toMessage)
+
+    let tryStart interval context toMessage =
+        tryStartWithTimeProvider TimeProvider.System interval context toMessage

@@ -7,7 +7,7 @@ open System.Threading.Tasks
 
 [<AutoOpen>]
 module AgentLifetimeExtensions =
-    type AgentContext<'Message> with
+    type ReliableAgentContext<'Message> with
         /// Own a child from this handler: parent cancellation aborts it, and parent
         /// Completion joins its actual cleanup. Graceful child Stop remains domain-specific.
         member context.Own(child: Agent<'Child>, stopped: Result<unit, exn> -> 'Message) =
@@ -31,25 +31,27 @@ module AgentLifetimeExtensions =
                 if not cancel.IsCancellationRequested then
                     let! delivered = context.PostAsync(stopped outcome, cancellationToken = cancel.Token)
                     match delivered with
-                    | AgentPostResult.Posted | AgentPostResult.Closed | AgentPostResult.Canceled -> ()
-                    | AgentPostResult.Full | AgentPostResult.Dropped ->
-                        invalidOp "Lifecycle observation requires a non-dropping owner mailbox."
+                    | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
             }
             context.StartDelivery observe
 
         member context.Watch(target: Agent<'Target>, stopped: Result<unit, exn> -> 'Message) =
             context.Watch(target.Completion, stopped)
 
+    type ReliableAgentContext<'Message> with
+        member context.Own(child: ReliableAgent<'Child>, stopped: Result<unit, exn> -> 'Message) =
+            context.Own(child.Agent, stopped)
+        member context.Watch(target: ReliableAgent<'Target>, stopped: Result<unit, exn> -> 'Message) =
+            context.Watch(target.Completion, stopped)
+
 /// Bounded ownership of forwarded reply channels. A library lock coordinates only
 /// reply settlement with target/owner termination; application state stays in handlers.
 [<Sealed>]
-type AgentReplyScope<'Reply> internal (capacity: int, closedReply: 'Reply, busyReply: 'Reply) =
+type AgentReplyScope<'Reply> internal (budget: AgentDeliveryCapacity, closedReply: 'Reply, busyReply: 'Reply) =
+    let capacity = budget.Value
     let gate = obj()
     let pending = HashSet<ReplyChannel<'Reply>>()
     let mutable closed = false
-
-    do
-        if capacity < 1 then invalidArg (nameof capacity) "Pending reply capacity must be positive."
 
     member _.Close() =
         lock gate (fun () ->
@@ -81,7 +83,7 @@ type AgentReplyScope<'Reply> internal (capacity: int, closedReply: 'Reply, busyR
                     reply.Reply closedReply
                     lock gate (fun () -> pending.Remove reply |> ignore)
             with error ->
-                reply.ReplyError error
+                reply.ReplyFault error
                 lock gate (fun () -> pending.Remove reply |> ignore)
                 reraise ()
 
@@ -89,7 +91,7 @@ type AgentReplyScope<'Reply> internal (capacity: int, closedReply: 'Reply, busyR
 module AgentReplyScope =
     /// Attach to one route. Either endpoint stopping closes the scope, even if the
     /// owner cannot process a termination message. Target faults do not fault the owner.
-    let create (context: AgentContext<'Owner>) (target: Agent<'Target>) capacity closedReply busyReply =
+    let create (context: ReliableAgentContext<'Owner>) (target: Agent<'Target>) (capacity: AgentDeliveryCapacity) closedReply busyReply =
         let scope = AgentReplyScope(capacity, closedReply, busyReply)
         let observe (token: CancellationToken) = task {
             use cancel = CancellationTokenSource.CreateLinkedTokenSource(token, context.DispatchStopped)
@@ -101,3 +103,12 @@ module AgentReplyScope =
         }
         context.StartDelivery observe
         scope
+
+
+    let tryCreate (context: ReliableAgentContext<'Owner>) (target: Agent<'Target>) capacity closedReply busyReply =
+        if isNull (box context) then Error (AgentStartError.NullArgument "context")
+        elif isNull (box target) then Error (AgentStartError.NullArgument "target")
+        else AgentDeliveryCapacity.TryCreate capacity |> Result.map (fun budget -> create context target budget closedReply busyReply)
+
+    let createForReliable context (target: ReliableAgent<'Target>) capacity closedReply busyReply =
+        create context target.Agent capacity closedReply busyReply

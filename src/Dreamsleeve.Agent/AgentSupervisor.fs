@@ -22,11 +22,14 @@ module RestartPolicy =
     [<Literal>]
     let private MaxDoublings = 30
 
-    let validate policy =
-        if policy.InitialDelay < TimeSpan.Zero then invalidArg (nameof policy) "InitialDelay must not be negative."
-        if policy.MaxDelay < policy.InitialDelay then invalidArg (nameof policy) "MaxDelay must not be less than InitialDelay."
-        if policy.MaxRestarts < 0 then invalidArg (nameof policy) "MaxRestarts must not be negative."
-        if policy.Window <= TimeSpan.Zero then invalidArg (nameof policy) "Window must be positive."
+    let tryValidate (policy: RestartPolicy) =
+        if isNull (box policy) then Error (AgentStartError.NullArgument "policy")
+        elif policy.InitialDelay < TimeSpan.Zero then Error (AgentStartError.InvalidRestartPolicy "InitialDelay")
+        elif policy.MaxDelay < policy.InitialDelay || policy.MaxDelay.Ticks / TimeSpan.TicksPerMillisecond > 4294967294L then
+            Error (AgentStartError.InvalidRestartPolicy "MaxDelay")
+        elif policy.MaxRestarts < 0 then Error (AgentStartError.InvalidRestartPolicy "MaxRestarts")
+        elif policy.Window <= TimeSpan.Zero then Error (AgentStartError.InvalidRestartPolicy "Window")
+        else Ok policy
 
     /// The delay after the n-th failure within the window, n >= 1.
     let delay policy failures =
@@ -66,23 +69,22 @@ type internal SupervisorMessage<'Child> =
     | Launched of generation: int * Result<SupervisedChild<'Child>, exn>
     | ChildStopped of generation: int * Result<unit, exn>
     | RestartDue of generation: int
-    | Stop of ReplyChannel<unit>
+    | Stop
 
 /// One supervisor per child, itself an agent: the child's start, its stop and the
 /// restart delays reach it as messages. Every stop it did not ask for is a failure,
 /// even a graceful one: the child is meant to run until StopAsync.
 [<Sealed>]
-type AgentSupervisor<'Child> internal (agent: Agent<SupervisorMessage<'Child>>, current: unit -> 'Child option, completion: Task) =
+type AgentSupervisor<'Child> internal (agent: ReliableAgent<SupervisorMessage<'Child>>, current: unit -> 'Child option, completion: Task) =
     /// The running child; none while it starts, restarts or after supervision ended.
     member _.Current = current ()
 
     /// Stops the child gracefully and ends supervision; nothing is restarted afterwards.
     member _.StopAsync() : Task = task {
-        let! result = agent.TryAskAsync SupervisorMessage.Stop
-        match result with
-        | AgentAskResult.Replied () | AgentAskResult.Closed | AgentAskResult.Canceled -> ()
-        | AgentAskResult.Full | AgentAskResult.Dropped | AgentAskResult.TimedOut -> invalidOp "The supervisor did not accept Stop."
-        | AgentAskResult.Faulted error -> raise error
+        // The shared terminal tasks join the same stop for concurrent callers.
+        // Closed admission can mean an already terminated supervisor; still observe it.
+        let! _ = agent.Ref.PostAsync SupervisorMessage.Stop
+        do! agent.Completion
         try do! completion with :? SupervisorGaveUpException -> ()
     }
 
@@ -97,7 +99,7 @@ module AgentSupervisor =
         mutable Child: SupervisedChild<'Child> voption
         mutable Restarts: int
         /// Stop callers; present once supervision is ending.
-        mutable Stopping: ReplyChannel<unit> list voption
+        mutable Stopping: bool
         mutable Delay: CancellationTokenSource voption
         /// Monotonic timestamps of the failures within the window.
         Failures: Queue<int64>
@@ -106,14 +108,13 @@ module AgentSupervisor =
     /// Supervises the children start makes, one at a time, restarting a failed one
     /// by policy. observe receives every event on the supervisor's handler and must
     /// be quick (logging); its exceptions are ignored.
-    let startWithTimeProvider (time: TimeProvider) name policy (start: CancellationToken -> Task<SupervisedChild<'Child>>)
+    let private startCheckedWithTimeProvider (time: TimeProvider) name policy (start: CancellationToken -> Task<SupervisedChild<'Child>>)
                               (observe: SupervisorEvent<'Child> -> unit) =
-        RestartPolicy.validate policy
         let finished = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
         let current = ref (None: 'Child option)
         let state = {
             Generation = 0; Launching = false; Child = ValueNone; Restarts = 0
-            Stopping = ValueNone; Delay = ValueNone; Failures = Queue()
+            Stopping = false; Delay = ValueNone; Failures = Queue()
         }
         let report event = try observe event with _ -> ()
 
@@ -125,8 +126,7 @@ module AgentSupervisor =
             state.Delay |> ValueOption.iter (fun cancel -> cancel.Cancel(); cancel.Dispose())
             state.Delay <- ValueNone
 
-        let finish (context: AgentContext<SupervisorMessage<'Child>>) =
-            state.Stopping |> ValueOption.iter (List.iter (fun reply -> reply.Reply()))
+        let finish (context: ReliableAgentContext<SupervisorMessage<'Child>>) =
             finished.TrySetResult() |> ignore
             context.Complete() |> ignore
 
@@ -135,13 +135,13 @@ module AgentSupervisor =
             try do! child.Completion with _ -> ()
         }
 
-        let launch (context: AgentContext<SupervisorMessage<'Child>>) =
+        let launch (context: ReliableAgentContext<SupervisorMessage<'Child>>) =
             state.Generation <- state.Generation + 1
             state.Launching <- true
             let generation = state.Generation
             context.PipeToSelf(start, fun result -> SupervisorMessage.Launched(generation, result))
 
-        let failed (context: AgentContext<SupervisorMessage<'Child>>) (error: exn) =
+        let failed (context: ReliableAgentContext<SupervisorMessage<'Child>>) (error: exn) =
             let now = time.GetTimestamp()
             let window = int64 (policy.Window.TotalSeconds * float time.TimestampFrequency)
             while state.Failures.Count > 0 && now - state.Failures.Peek() >= window do
@@ -164,27 +164,27 @@ module AgentSupervisor =
                 }
                 context.PipeToSelf(wait, fun _ -> SupervisorMessage.RestartDue generation)
 
-        let handle (context: AgentContext<SupervisorMessage<'Child>>) message = task {
+        let handle (context: ReliableAgentContext<SupervisorMessage<'Child>>) message = task {
             match message with
             | SupervisorMessage.Launch -> launch context
             | SupervisorMessage.Launched(generation, _) when generation <> state.Generation -> ()
             | SupervisorMessage.Launched(generation, result) ->
                 state.Launching <- false
                 match result, state.Stopping with
-                | Ok child, ValueSome _ ->
+                | Ok child, true ->
                     // Stop came while it was starting: it never serves.
                     do! stopChild child
                     finish context
-                | Error _, ValueSome _ -> finish context
-                | Error error, ValueNone ->
+                | Error _, true -> finish context
+                | Error error, false ->
                     report (SupervisorEvent.StartFailed error)
                     failed context error
-                | Ok child, ValueNone ->
+                | Ok child, false ->
                     serve (ValueSome child)
                     report (SupervisorEvent.Started(child.Value, state.Restarts))
                     context.PipeToSelf((fun _ -> task { do! child.Completion }), fun outcome ->
                         SupervisorMessage.ChildStopped(generation, outcome))
-            | SupervisorMessage.ChildStopped(generation, _) when generation <> state.Generation || state.Stopping.IsSome -> ()
+            | SupervisorMessage.ChildStopped(generation, _) when generation <> state.Generation || state.Stopping -> ()
             | SupervisorMessage.ChildStopped(_, outcome) ->
                 serve ValueNone
                 report (SupervisorEvent.Stopped outcome)
@@ -193,16 +193,14 @@ module AgentSupervisor =
                     | Ok () -> InvalidOperationException("The child completed without being asked to stop.") :> exn
                     | Error error -> error
                 failed context error
-            | SupervisorMessage.RestartDue generation when generation <> state.Generation || state.Stopping.IsSome -> ()
+            | SupervisorMessage.RestartDue generation when generation <> state.Generation || state.Stopping -> ()
             | SupervisorMessage.RestartDue _ ->
                 cancelDelay ()
                 state.Restarts <- state.Restarts + 1
                 launch context
-            | SupervisorMessage.Stop reply ->
-                match state.Stopping with
-                | ValueSome waiting -> state.Stopping <- ValueSome (reply :: waiting)
-                | ValueNone ->
-                    state.Stopping <- ValueSome [ reply ]
+            | SupervisorMessage.Stop ->
+                if not state.Stopping then
+                    state.Stopping <- true
                     cancelDelay ()
                     match state.Child with
                     | ValueSome child ->
@@ -214,8 +212,16 @@ module AgentSupervisor =
                     | ValueNone -> finish context
         }
 
-        let agent = Agent.Start(AgentOptions.create name, handle)
-        agent.TryPost SupervisorMessage.Launch |> ignore
-        AgentSupervisor(agent, (fun () -> Volatile.Read(&current.contents)), finished.Task)
+        Agent.TryPrepareReliable(AgentOptions.create name, handle)
+        |> Result.map (fun plan ->
+            let agent = plan.Start()
+            agent.TryPost SupervisorMessage.Launch |> ignore
+            AgentSupervisor(agent, (fun () -> Volatile.Read(&current.contents)), finished.Task))
 
-    let start name policy start observe = startWithTimeProvider TimeProvider.System name policy start observe
+    let tryStartWithTimeProvider (time: TimeProvider) name policy start observe =
+        if isNull time then Error (AgentStartError.NullArgument "time")
+        elif isNull (box start) then Error (AgentStartError.NullArgument "start")
+        elif isNull (box observe) then Error (AgentStartError.NullArgument "observe")
+        else RestartPolicy.tryValidate policy |> Result.bind (fun policy -> startCheckedWithTimeProvider time name policy start observe)
+
+    let tryStart name policy start observe = tryStartWithTimeProvider TimeProvider.System name policy start observe
