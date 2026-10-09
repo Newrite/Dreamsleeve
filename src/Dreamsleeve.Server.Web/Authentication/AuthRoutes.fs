@@ -51,7 +51,14 @@ module AuthRoutes =
     let MaxBodyBytes = 4096
 
     [<RequireQualifiedAccess>]
-    type private Operation = Register | Login | Resume | Logout | ResetPassword | SteamBegin | SteamPoll
+    type private Operation =
+        | Register
+        | Login
+        | Resume
+        | Logout
+        | ResetPassword
+        | SteamBegin
+        | SteamPoll
 
     let private unavailable () = WebHost.error 503 "unavailable" "Authentication is temporarily unavailable."
     let private invalid () = WebHost.error 400 "invalid_request" "Invalid authentication request."
@@ -133,17 +140,23 @@ module AuthRoutes =
         with :? JsonException as error -> Error error
 
     [<RequireQualifiedAccess>]
-    type private JsonRepresentationError = InvalidUnicode | InvalidKind
+    type private JsonRepresentationError =
+        | InvalidUnicode
+        | InvalidKind
 
     let private validateRepresentation (root: JsonElement) =
         // Parse bounds the immutable tree to 4096 bytes/depth 8 but defers Unicode
         // unescaping. Decode names and strings once before trusted command code.
         let rec decode (element: JsonElement) =
             match element.ValueKind with
-            | JsonValueKind.String -> element.GetString() |> ignore; true
+            | JsonValueKind.String ->
+                element.GetString() |> ignore
+                true
             | JsonValueKind.Object ->
                 element.EnumerateObject()
-                |> Seq.forall (fun property -> property.Name |> ignore; decode property.Value)
+                |> Seq.forall (fun property ->
+                    property.Name |> ignore
+                    decode property.Value)
             | JsonValueKind.Array -> element.EnumerateArray() |> Seq.forall decode
             | JsonValueKind.Number | JsonValueKind.True | JsonValueKind.False | JsonValueKind.Null -> true
             | JsonValueKind.Undefined | _ -> false
@@ -174,7 +187,11 @@ module AuthRoutes =
                     | Ok () ->
                         // Trusted shape/domain construction runs outside the JSON adapters.
                         let forwarded = WebHost.forwarded context
-                        let origin = { SignInOrigin.none with Address = forwarded.Client; Proxy = forwarded.Proxy }
+                        let origin = {
+                            SignInOrigin.none with
+                                Address = forwarded.Client
+                                Proxy = forwarded.Proxy
+                        }
                         return command settings moderation origin operation body.RootElement
     }
 
@@ -190,16 +207,30 @@ module AuthRoutes =
         | Ok (AccountAccessResult.SteamStarted(flow, secret, seconds)) ->
             match steamUrlFor settings context with
             | Some publicUrl ->
-                WebHost.json 200 {| flow = flow; secret = secret; browserUrl = SteamOpenId.loginUrl publicUrl flow; expiresInSeconds = seconds |}
+                WebHost.json 200 {|
+                    flow = flow
+                    secret = secret
+                    browserUrl = SteamOpenId.loginUrl publicUrl flow
+                    expiresInSeconds = seconds
+                |}
             | None -> unavailable ()
         | Ok AccountAccessResult.SteamPending -> WebHost.json 202 {| status = "pending" |}
         | Ok (AccountAccessResult.Registered profile) ->
-            WebHost.json 201 {| playerId = PlayerId.value profile.PlayerId; username = Username.value profile.Username
-                                displayName = DisplayName.value profile.DisplayName |}
+            WebHost.json 201 {|
+                playerId = PlayerId.value profile.PlayerId
+                username = Username.value profile.Username
+                displayName = DisplayName.value profile.DisplayName
+            |}
         | Ok (AccountAccessResult.SignedIn grant) ->
-            WebHost.json 200 {| playerId = PlayerId.value grant.Profile.PlayerId; username = Username.value grant.Profile.Username
-                                displayName = DisplayName.value grant.Profile.DisplayName; sessionTicket = grant.SessionTicket
-                                expiresInSeconds = grant.ExpiresInSeconds; rememberToken = grant.RememberToken |}
+            WebHost.json 200 {|
+                playerId = PlayerId.value grant.Profile.PlayerId
+                username = Username.value grant.Profile.Username
+                displayName = DisplayName.value grant.Profile.DisplayName
+
+                sessionTicket = grant.SessionTicket
+                expiresInSeconds = grant.ExpiresInSeconds
+                rememberToken = grant.RememberToken
+            |}
         | Ok AccountAccessResult.Completed -> Results.NoContent()
         // Trusted results never come from a public route.
         | Ok (AccountAccessResult.PasswordResetCreated _) | Ok (AccountAccessResult.ProfileChanged _)
@@ -209,15 +240,27 @@ module AuthRoutes =
         | Ok (AccountAccessResult.Addresses _) | Ok (AccountAccessResult.PlayersAt _) | Ok (AccountAccessResult.Devices _) -> unavailable ()
         // 403, not 401: a saved login stays saved and works again once the ban ends.
         | Error (AccountAccessError.Banned ban) ->
-            WebHost.json 403 {| code = "banned"; message = "The account is banned."; reason = SanctionReason.value ban.Reason
-                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
+            WebHost.json 403 {|
+                code = "banned"
+                message = "The account is banned."
+                reason = SanctionReason.value ban.Reason
+                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable
+            |}
         | Error (AccountAccessError.DeviceBanned ban) ->
-            WebHost.json 403 {| code = "device_banned"; message = "This device is banned."; reason = SanctionReason.value ban.Reason
-                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
+            WebHost.json 403 {|
+                code = "device_banned"
+                message = "This device is banned."
+                reason = SanctionReason.value ban.Reason
+                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable
+            |}
         // Like an account ban: the client shows the reason and the end and stops retrying.
         | Error (AccountAccessError.AddressBanned ban) ->
-            WebHost.json 403 {| code = "address_banned"; message = "Connections from this address are banned."; reason = SanctionReason.value ban.Reason
-                                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable |}
+            WebHost.json 403 {|
+                code = "address_banned"
+                message = "Connections from this address are banned."
+                reason = SanctionReason.value ban.Reason
+                untilUnixMs = ban.Expires |> ValueOption.map _.ToUnixTimeMilliseconds() |> ValueOption.toNullable
+            |}
         | Error AccountAccessError.InvalidCredentials -> WebHost.error 401 "invalid_credentials" "Invalid or expired credentials."
         | Error AccountAccessError.UsernameTaken -> WebHost.error 409 "username_taken" "Username is already registered."
         | Error (AccountAccessError.RegistrationClosed RegistrationMode.Steam) ->
@@ -234,6 +277,7 @@ module AuthRoutes =
         let timeout = TimeSpan.FromSeconds(float settings.RequestTimeoutSeconds)
         use deadline = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
         deadline.CancelAfter timeout
+
         let! result = task {
             let steamOff = (operation = Operation.SteamBegin || operation = Operation.SteamPoll) && settings.SteamPublicUrls.IsEmpty
             match! (if steamOff then Task.FromResult(Error (WebHost.error 404 "steam_disabled" "Steam sign-in is not enabled on this server."))
@@ -316,7 +360,11 @@ module AuthRoutes =
             if settings.SteamPublicUrls.IsEmpty then return 404, "Вход через Steam на этом сервере выключен."
             elif not (AuthService.validToken flow) then return 400, "Ссылка входа повреждена. Начните вход из игры заново."
             else
-                let fields = [ for pair in context.Request.Query do if pair.Key.StartsWith("openid.", StringComparison.Ordinal) then pair.Key, pair.Value.ToString() ]
+                let fields = [
+                    for pair in context.Request.Query do
+                        if pair.Key.StartsWith("openid.", StringComparison.Ordinal) then
+                            pair.Key, pair.Value.ToString()
+                ]
                 match! ports.Steam.Verify flow fields deadline.Token with
                 | Error SteamVerifyError.UserCanceled -> return 200, "Вход через Steam отменён. Вернитесь в игру."
                 | Error (SteamVerifyError.InvalidAnswer | SteamVerifyError.NotConfirmed) ->
@@ -332,11 +380,16 @@ module AuthRoutes =
                         | Ok profile -> profile
                         | Error error ->
                             logger.Information("Optional Steam profile unavailable: {Category}", steamProfileCategory error)
-                            { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+                            {
+                                SteamId = steamId
+                                PersonaName = ValueNone
+                                Created = ValueNone
+                            }
                     let profileCanceled =
                         match profileResult with
                         | Error (SteamProfileError.Request SteamRequestError.RequestCanceled) -> true
                         | Ok _ | Error _ -> false
+
                     // Even immediate missing-key profile success cannot complete a
                     // canceled sign-in; timeout does not prove an ask was unexecuted.
                     if deadline.IsCancellationRequested || profileCanceled then return steamCanceled context
@@ -369,7 +422,10 @@ module AuthRoutes =
         let answer =
             match result with
             | AgentAskResult.Replied (Ok (AccountAccessResult.Registration mode)) ->
-                WebHost.json 200 {| registration = RegistrationMode.key mode; steam = not settings.SteamPublicUrls.IsEmpty |}
+                WebHost.json 200 {|
+                    registration = RegistrationMode.key mode
+                    steam = not settings.SteamPublicUrls.IsEmpty
+                |}
             | AgentAskResult.InvalidRequest error ->
                 logger.Error("Authentication methods request was rejected before admission: {Error}", error)
                 unavailable ()
@@ -395,10 +451,22 @@ module AuthRoutes =
 
     /// The caller starts and stops this host and owns the account service.
     let private buildWithContent content httpRequestsPerMinute listener settings moderation ports (logger: ILogger) =
-        let limits = { MaxBodyBytes = MaxBodyBytes; MaxConnections = settings.MaxConnections; RequestTimeoutSeconds = settings.RequestTimeoutSeconds }
+        let limits = {
+            MaxBodyBytes = MaxBodyBytes
+            MaxConnections = settings.MaxConnections
+            RequestTimeoutSeconds = settings.RequestTimeoutSeconds
+        }
         let rule (context: HttpContext) =
-            if context.Request.Path = PathString("/phantoms/content") then { Bucket = "phantoms"; PermitsPerMinute = httpRequestsPerMinute }
-            else { Bucket = "auth"; PermitsPerMinute = settings.RequestsPerMinute }
+            if context.Request.Path = PathString("/phantoms/content") then
+                {
+                    Bucket = "phantoms"
+                    PermitsPerMinute = httpRequestsPerMinute
+                }
+            else
+                {
+                    Bucket = "auth"
+                    PermitsPerMinute = settings.RequestsPerMinute
+                }
         let rejected (_: HttpContext) = WebHost.error 429 "rate_limited" "Too many authentication requests. Try again later."
         let app = WebHost.create listener limits rule rejected logger
         app.UseFalco(content @ endpoints settings moderation ports logger) |> ignore
