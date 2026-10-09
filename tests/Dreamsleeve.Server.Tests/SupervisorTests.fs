@@ -60,6 +60,8 @@ let tests = testList "Supervisor" [
         do! serving supervisor 3
         do! supervisor.StopAsync() |> awaitUnit
         equal 1 (children.Stops 3)
+        equal 0 (children.Stops 1)
+        equal 0 (children.Stops 2)
         equal None supervisor.Current
         check supervisor.Completion.IsCompletedSuccessfully "graceful stop completes supervision"
         let recorded = List.ofSeq events
@@ -230,4 +232,123 @@ let tests = testList "Supervisor" [
         for invalid in [ { policy with InitialDelay = TimeSpan.FromSeconds -1.0 }; { policy with MaxDelay = TimeSpan.Zero }
                          { policy with MaxRestarts = -1 }; { policy with Window = TimeSpan.Zero } ] do
             Expect.isError (RestartPolicy.tryValidate invalid) $"refused: %A{invalid}"
+
+    testTask "concurrent Stop callers share one child stop and retain its cleanup failures" {
+        let completion, stopping = gate<unit>(), gate<unit>()
+        let primary = InvalidOperationException("child stop")
+        let secondary = InvalidOperationException("child completion cleanup")
+        let mutable stops = 0
+        let child = { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
+                      SupervisedChild.Stop = fun () ->
+                          Interlocked.Increment(&stops) |> ignore
+                          stopping.TrySetResult() |> ignore
+                          Task.FromException primary }
+        let supervisor, _ = supervise immediate (fun _ -> Task.FromResult(Ok child))
+        do! serving supervisor 1
+        let first = supervisor.StopAsync()
+        do! awaitUnit stopping.Task
+        let second = supervisor.StopAsync()
+        check (not first.IsCompleted && not second.IsCompleted && not supervisor.Completion.IsCompleted) "Every caller waits actual child cleanup."
+        completion.SetException secondary
+        for stop in [first; second] do
+            let! failure = terminal stop
+            check (failure |> Option.exists (fun actual -> Object.ReferenceEquals(primary, actual))) "Explicit Stop exposes original child stop fault."
+        let errors = supervisor.Completion.Exception.Flatten().InnerExceptions
+        for expected in [primary; secondary] do
+            equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
+        equal 1 stops
+        equal None supervisor.Current
+    }
+
+    testTask "Started observer fault owns child cleanup before publishing terminal completion" {
+        let completion, stopping = gate<unit>(), gate<unit>()
+        let original = InvalidOperationException("Started observer")
+        let stopFailure = InvalidOperationException("observer-triggered child stop")
+        let cleanupFailure = InvalidOperationException("observer-triggered child cleanup")
+        let mutable starts, stops = 0, 0
+        let start _ =
+            starts <- starts + 1
+            Task.FromResult(Ok { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
+                                SupervisedChild.Stop = fun () ->
+                                    Interlocked.Increment(&stops) |> ignore
+                                    stopping.TrySetResult() |> ignore
+                                    Task.FromException stopFailure })
+        let observe = function
+            | SupervisorEvent.Started _ -> raise original
+            | SupervisorEvent.StartFailed _ | SupervisorEvent.StartRejected _ | SupervisorEvent.Stopped _
+            | SupervisorEvent.Restarting _ | SupervisorEvent.GaveUp _ -> ()
+        let supervisor: AgentSupervisor<int, string> = TestSupervisor.start "observer-ownership" immediate start observe
+        do! awaitUnit stopping.Task
+        check (not supervisor.Completion.IsCompleted) "Observer fault cannot bypass child cleanup."
+        equal None supervisor.Current
+        completion.SetException cleanupFailure
+        let! failure = terminal supervisor.Completion
+        check (failure |> Option.exists (fun actual -> Object.ReferenceEquals(original, actual))) "Observer is original lifecycle fault."
+        let errors = supervisor.Completion.Exception.Flatten().InnerExceptions
+        for expected in [original; stopFailure; cleanupFailure] do
+            equal 1 (errors |> Seq.filter (fun actual -> Object.ReferenceEquals(expected, actual)) |> Seq.length)
+        equal 1 starts
+        equal 1 stops
+        let! failure = terminal (supervisor.StopAsync())
+        check (Option.isSome failure) "Callback/cleanup faults are not suppressed by Stop."
+    }
+
+    testTask "late successful factory joins one acquired child for all waiting Stop callers" {
+        let constructing, created, stopping, releaseCleanup = gate<unit>(), gate<unit>(), gate<unit>(), gate<unit>()
+        let completion = gate<unit>()
+        let mutable stops = 0
+        let start _ = task {
+            constructing.TrySetResult() |> ignore
+            do! created.Task
+            return Ok { SupervisedChild.Value = 1; SupervisedChild.Completion = completion.Task;
+                        SupervisedChild.Stop = fun () -> task {
+                            Interlocked.Increment(&stops) |> ignore
+                            stopping.TrySetResult() |> ignore
+                            do! releaseCleanup.Task
+                            completion.TrySetResult() |> ignore
+                        } }
+        }
+        let supervisor, events = supervise immediate start
+        do! awaitUnit constructing.Task
+        let first, second = supervisor.StopAsync(), supervisor.StopAsync()
+        created.SetResult()
+        do! awaitUnit stopping.Task
+        check (not first.IsCompleted && not second.IsCompleted && not supervisor.Completion.IsCompleted) "Late acquisition is still joined before any terminal success."
+        equal None supervisor.Current
+        releaseCleanup.SetResult()
+        do! awaitUnit first
+        do! awaitUnit second
+        equal 1 stops
+        check supervisor.Completion.IsCompletedSuccessfully "Actual late cleanup completed."
+        check (events |> Seq.forall (function SupervisorEvent.Started _ -> false | _ -> true)) "Late child never serves."
+    }
+
+    testTask "Stop consumes sole own exhaustion but preserves an additional observer fault" {
+        let original = InvalidOperationException("GaveUp observer")
+        let observe = function
+            | SupervisorEvent.GaveUp _ -> raise original
+            | SupervisorEvent.Started _ | SupervisorEvent.StartFailed _ | SupervisorEvent.StartRejected _
+            | SupervisorEvent.Stopped _ | SupervisorEvent.Restarting _ -> ()
+        let start (_: CancellationToken) = Task.FromResult(Error "expected refusal")
+        let supervisor: AgentSupervisor<int, string> = TestSupervisor.start "giveup-observer" { immediate with MaxRestarts = 0 } start observe
+        let! failure = terminal supervisor.Completion
+        check (failure |> Option.exists (fun (error: exn) -> error :? SupervisorGaveUpException<string>)) "Typed exhaustion remains the primary cause."
+        let errors = supervisor.Completion.Exception.InnerExceptions
+        equal 2 errors.Count
+        check (errors |> Seq.exists (fun error -> Object.ReferenceEquals(original, error))) "Secondary observer fault is retained."
+        let! failure = terminal (supervisor.StopAsync())
+        check (Option.isSome failure) "Additional fault must prevent exhaustion-only Stop consumption."
+    }
+
+    testTask "a child's generic exhaustion exception is not the supervisor's own exhaustion" {
+        let original = SupervisorGaveUpException<string>("nested child", 1, SupervisorFailure.StartRejected "child refusal")
+        let ready = gate<unit>()
+        let child = { SupervisedChild.Value = 1; SupervisedChild.Completion = ready.Task
+                      SupervisedChild.Stop = fun () -> ready.TrySetResult() |> ignore; Task.FromException original }
+        let supervisor, _ = supervise immediate (fun _ -> Task.FromResult(Ok child))
+        do! serving supervisor 1
+        let! failure = terminal (supervisor.StopAsync())
+        check (failure |> Option.exists (fun error -> Object.ReferenceEquals(original, error))) "Unrelated exhaustion cannot manufacture successful Stop."
+    }
+
 ]

@@ -86,71 +86,165 @@ type internal SupervisorMessage<'Child, 'StartError> =
 /// restart delays reach it as messages. Every stop it did not ask for is a failure,
 /// even a graceful one: the child is meant to run until StopAsync.
 [<Sealed>]
-type AgentSupervisor<'Child, 'StartError> internal (agent: ReliableAgent<SupervisorMessage<'Child, 'StartError>>, current: unit -> 'Child option, completion: Task) =
+type AgentSupervisor<'Child, 'StartError> internal (agent: ReliableAgent<SupervisorMessage<'Child, 'StartError>>, current: unit -> 'Child option, isExhaustion: exn -> bool) =
     /// The running child; none while it starts, restarts or after supervision ended.
     member _.Current = current ()
 
-    /// Stops the child gracefully and ends supervision; nothing is restarted afterwards.
+    /// Stops the child gracefully and ends supervision; concurrent callers join the same cleanup.
+    /// A sole prior exhaustion of this supervisor is consumed; other failures propagate.
+    /// Await exposes one error; Completion retains every original lifetime cause.
     member _.StopAsync() : Task = task {
         // The shared terminal tasks join the same stop for concurrent callers.
         // Closed admission can mean an already terminated supervisor; still observe it.
-        let! _ = agent.Ref.PostAsync SupervisorMessage.Stop
-        do! agent.Completion
-        try do! completion with :? SupervisorGaveUpException<'StartError> -> ()
+        let! admission = agent.Ref.PostAsync SupervisorMessage.Stop
+        match admission with
+        | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
+        try do! agent.Completion
+        with :? SupervisorGaveUpException<'StartError> as error when
+            agent.Completion.Exception.InnerExceptions.Count = 1 && isExhaustion error -> ()
     }
 
-    /// Completes after StopAsync; faults with SupervisorGaveUpException when restarts ran out.
-    member _.Completion = completion
+    /// Authoritative full lifetime result, including acquired child cleanup and observer faults.
+    /// Inspect Exception.InnerExceptions for all causes after a faulted completion.
+    member _.Completion = agent.Completion
 
 [<RequireQualifiedAccess>]
 module AgentSupervisor =
+    /// One actual stop per acquired child, shared by explicit stop and lifecycle
+    /// cleanup. Both Stop and full Completion are attempted, retaining every fault.
+    type private OwnedChild<'Child>(child: SupervisedChild<'Child>, failureSink: exn -> unit) =
+        let gate = obj()
+        let mutable stopping: TaskCompletionSource<unit> option = None
+        member _.Child = child
+        member _.Stop() : Task =
+            let pending, selected =
+                lock gate (fun () ->
+                    match stopping with
+                    | Some pending -> pending, false
+                    | None ->
+                        let pending = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                        stopping <- Some pending
+                        pending, true)
+            if selected then
+                let cleanup = task {
+                    let failures = ResizeArray<exn>()
+                    let retain error =
+                        if not (failures |> Seq.exists (fun previous -> Object.ReferenceEquals(previous, error))) then
+                            failures.Add error
+                            failureSink error
+                    let join operation = task {
+                        let mutable work: Task = null
+                        try
+                            work <- operation ()
+                            do! work
+                        with error ->
+                            if not (isNull work) && work.IsFaulted then
+                                for failure in work.Exception.InnerExceptions do retain failure
+                            else retain error
+                    }
+                    do! join child.Stop
+                    do! join (fun () -> child.Completion)
+                    if failures.Count = 0 then pending.TrySetResult() |> ignore
+                    else pending.TrySetException(failures) |> ignore
+                }
+                cleanup |> ignore
+            pending.Task :> Task
+
     type private State<'Child> = {
         mutable Generation: int
         mutable Launching: bool
-        mutable Child: SupervisedChild<'Child> voption
+        mutable Child: OwnedChild<'Child> voption
         mutable Restarts: int
-        /// Stop callers; present once supervision is ending.
         mutable Stopping: bool
         mutable Delay: CancellationTokenSource voption
-        /// Monotonic timestamps of the failures within the window.
         Failures: Queue<int64>
     }
 
-    /// Supervises the children start makes, one at a time, restarting a failed one
-    /// by policy. observe receives every event on the supervisor's handler and must
-    /// be quick (logging); its exceptions are ignored.
+    /// Observer callbacks belong to the supervisor lifecycle. Failed callbacks
+    /// stop supervision and release/join the acquired child, without restarting it.
     let private startCheckedWithTimeProvider (time: TimeProvider) name policy (start: CancellationToken -> Task<Result<SupervisedChild<'Child>, 'StartError>>)
                               (observe: SupervisorEvent<'Child, 'StartError> -> unit) =
-        let finished = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
         let current = ref (None: 'Child option)
+        let exhausted = ref (None: exn option)
         let state = {
             Generation = 0; Launching = false; Child = ValueNone; Restarts = 0
             Stopping = false; Delay = ValueNone; Failures = Queue()
         }
-        let report event = try observe event with _ -> ()
 
-        let serve (child: SupervisedChild<'Child> voption) =
+        let serve (child: OwnedChild<'Child> voption) =
             state.Child <- child
-            Volatile.Write(&current.contents, child |> ValueOption.map _.Value |> ValueOption.toOption)
+            Volatile.Write(&current.contents, child |> ValueOption.map (fun owned -> owned.Child.Value) |> ValueOption.toOption)
 
-        let cancelDelay () =
-            state.Delay |> ValueOption.iter (fun cancel -> cancel.Cancel(); cancel.Dispose())
+        let cancelDelay (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) =
+            let pending = state.Delay
             state.Delay <- ValueNone
+            let mutable succeeded = true
+            pending |> ValueOption.iter (fun cancel ->
+                try cancel.Cancel()
+                with error -> succeeded <- false; context.Fail error
+                try cancel.Dispose()
+                with error -> succeeded <- false; context.Fail error)
+            succeeded
+
+        let report (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) original event =
+            try observe event; true
+            with error ->
+                original |> Option.iter context.Fail
+                context.Fail error
+                state.Stopping <- true
+                serve ValueNone
+                cancelDelay context |> ignore
+                false
 
         let finish (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) =
-            finished.TrySetResult() |> ignore
+            serve ValueNone
             context.Complete() |> ignore
 
-        let stopChild (child: SupervisedChild<'Child>) = task {
-            try do! child.Stop() with _ -> ()
-            try do! child.Completion with _ -> ()
-        }
+        let own (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) child =
+            let owned = OwnedChild(child, context.Fail)
+            // Install ownership before reporting Started. DispatchStopped also
+            // runs on an observer fault, so cleanup cannot depend on another message.
+            let cleanup _ = task {
+                let detached = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+                use registration = context.DispatchStopped.Register(fun () -> detached.TrySetResult() |> ignore)
+                let! completed = Task.WhenAny(child.Completion, detached.Task)
+                if not (Object.ReferenceEquals(completed, child.Completion)) then
+                    do! owned.Stop()
+                // Already terminated children are joined. Their known outcome
+                // goes to ChildStopped and the existing reconstruction policy.
+            }
+            context.StartDelivery cleanup
+            owned
 
         let launch (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) =
             state.Generation <- state.Generation + 1
             state.Launching <- true
             let generation = state.Generation
-            context.PipeToSelf(start, fun result -> SupervisorMessage.Launched(generation, result))
+            let construct token = task {
+                let! result = task {
+                    try
+                        let! result = start token
+                        return Ok result
+                    with error -> return Error error
+                }
+                let! admitted = context.PostAsync(SupervisorMessage.Launched(generation, result), cancellationToken = token)
+                match admitted, result with
+                | AgentDeliveryResult.Posted, _ -> ()
+                | (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled), Ok(Ok child) ->
+                    // A successful late factory still transferred ownership.
+                    // Admission closure cannot drop its resource cleanup.
+                    do! (OwnedChild(child, context.Fail)).Stop()
+                | (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled), Error error ->
+                    match error with
+                    | :? OperationCanceledException when token.IsCancellationRequested -> ()
+                    | error -> context.Fail error
+                | (AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled), Ok(Error _) -> ()
+            }
+            context.StartDelivery construct
+
+        let sourceFault = function
+            | SupervisorFailure.Faulted error -> Some error
+            | SupervisorFailure.StartRejected _ | SupervisorFailure.CompletedUnexpectedly -> None
 
         let failed (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) (failure: SupervisorFailure<'StartError>) =
             let now = time.GetTimestamp()
@@ -160,68 +254,74 @@ module AgentSupervisor =
             state.Failures.Enqueue now
             let failures = state.Failures.Count
             if failures > policy.MaxRestarts then
-                report (SupervisorEvent.GaveUp failures)
-                finished.TrySetException(SupervisorGaveUpException<'StartError>(name, failures, failure)) |> ignore
-                context.Complete() |> ignore
+                let error = SupervisorGaveUpException<'StartError>(name, failures, failure)
+                Volatile.Write(&exhausted.contents, Some(error :> exn))
+                context.Fail error
+                report context None (SupervisorEvent.GaveUp failures) |> ignore
             else
                 let delay = RestartPolicy.delay policy failures
-                report (SupervisorEvent.Restarting(delay, failures))
-                let generation = state.Generation
-                let cancel = new CancellationTokenSource()
-                state.Delay <- ValueSome cancel
-                let wait (token: CancellationToken) = task {
-                    use linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancel.Token)
-                    do! Task.Delay(delay, time, linked.Token)
-                }
-                context.PipeToSelf(wait, fun _ -> SupervisorMessage.RestartDue generation)
+                if report context (sourceFault failure) (SupervisorEvent.Restarting(delay, failures)) then
+                    let generation = state.Generation
+                    let cancel = new CancellationTokenSource()
+                    state.Delay <- ValueSome cancel
+                    let wait (token: CancellationToken) = task {
+                        use linked = CancellationTokenSource.CreateLinkedTokenSource(token, cancel.Token)
+                        do! Task.Delay(delay, time, linked.Token)
+                    }
+                    context.PipeToSelf(wait, fun _ -> SupervisorMessage.RestartDue generation)
 
         let handle (context: ReliableAgentContext<SupervisorMessage<'Child, 'StartError>>) message = task {
             match message with
             | SupervisorMessage.Launch -> launch context
-            | SupervisorMessage.Launched(generation, _) when generation <> state.Generation -> ()
+            | SupervisorMessage.Launched(generation, result) when generation <> state.Generation ->
+                match result with
+                | Ok(Ok child) -> do! (OwnedChild(child, context.Fail)).Stop()
+                | Error _ | Ok(Error _) -> ()
             | SupervisorMessage.Launched(generation, result) ->
                 state.Launching <- false
                 match result, state.Stopping with
                 | Ok(Ok child), true ->
-                    // Stop came while it was starting: it never serves.
-                    do! stopChild child
+                    do! (OwnedChild(child, context.Fail)).Stop()
                     finish context
                 | Error _, true | Ok(Error _), true -> finish context
                 | Error error, false ->
-                    report (SupervisorEvent.StartFailed error)
-                    failed context (SupervisorFailure.Faulted error)
+                    if report context (Some error) (SupervisorEvent.StartFailed error) then
+                        failed context (SupervisorFailure.Faulted error)
                 | Ok(Error error), false ->
-                    report (SupervisorEvent.StartRejected error)
-                    failed context (SupervisorFailure.StartRejected error)
+                    if report context None (SupervisorEvent.StartRejected error) then
+                        failed context (SupervisorFailure.StartRejected error)
                 | Ok(Ok child), false ->
-                    serve (ValueSome child)
-                    report (SupervisorEvent.Started(child.Value, state.Restarts))
-                    context.PipeToSelf((fun _ -> task { do! child.Completion }), fun outcome ->
-                        SupervisorMessage.ChildStopped(generation, outcome))
+                    let owned = own context child
+                    serve (ValueSome owned)
+                    if report context None (SupervisorEvent.Started(child.Value, state.Restarts)) then
+                        context.Watch(child.Completion, fun outcome -> SupervisorMessage.ChildStopped(generation, outcome))
+                    else
+                        // Completion may have raced the observer fault and won the
+                        // ownership wait. Still retain its fault during terminal cleanup.
+                        do! owned.Stop()
             | SupervisorMessage.ChildStopped(generation, _) when generation <> state.Generation || state.Stopping -> ()
             | SupervisorMessage.ChildStopped(_, outcome) ->
                 serve ValueNone
-                report (SupervisorEvent.Stopped outcome)
                 let failure =
                     match outcome with
                     | Ok () -> SupervisorFailure.CompletedUnexpectedly
                     | Error error -> SupervisorFailure.Faulted error
-                failed context failure
+                if report context (sourceFault failure) (SupervisorEvent.Stopped outcome) then
+                    failed context failure
             | SupervisorMessage.RestartDue generation when generation <> state.Generation || state.Stopping -> ()
             | SupervisorMessage.RestartDue _ ->
-                cancelDelay ()
-                state.Restarts <- state.Restarts + 1
-                launch context
+                if cancelDelay context then
+                    state.Restarts <- state.Restarts + 1
+                    launch context
             | SupervisorMessage.Stop ->
                 if not state.Stopping then
                     state.Stopping <- true
-                    cancelDelay ()
+                    cancelDelay context |> ignore
                     match state.Child with
                     | ValueSome child ->
                         serve ValueNone
-                        do! stopChild child
+                        do! child.Stop()
                         finish context
-                    // The start in flight is stopped when it arrives.
                     | ValueNone when state.Launching -> ()
                     | ValueNone -> finish context
         }
@@ -230,7 +330,8 @@ module AgentSupervisor =
         |> Result.map (fun plan ->
             let agent = plan.Start()
             agent.TryPost SupervisorMessage.Launch |> ignore
-            AgentSupervisor(agent, (fun () -> Volatile.Read(&current.contents)), finished.Task))
+            AgentSupervisor(agent, (fun () -> Volatile.Read(&current.contents)), fun error ->
+                Volatile.Read(&exhausted.contents) |> Option.exists (fun original -> Object.ReferenceEquals(original, error))))
 
     let tryStartWithTimeProvider (time: TimeProvider) name policy start observe =
         if isNull time then Error (AgentStartError.NullArgument "time")
