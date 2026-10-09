@@ -209,11 +209,14 @@ let tests = testList "Authentication service" [
     case "saved token expiry and per-account limit are enforced" (fun () -> task {
         use database = new SqliteAccountStoreTests.Database()
         SqliteAccountStore.initialize database.Config |> ok
-        use service = start database.Config {
-            settings with
-                MaxSavedLogins = 1
-                MaxTickets = 10
-        } TimeProvider.System
+        use service =
+            start database.Config
+                {
+                    settings with
+                        MaxSavedLogins = 1
+                        MaxTickets = 10
+                }
+                TimeProvider.System
         let! _ = register service
         let! old = remember service
         let! current = remember service

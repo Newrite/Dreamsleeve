@@ -294,11 +294,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 Activity = ValueNone
                 GameStartedAt = ValueNone
         }
-        let clearOnly = encode {
-            patch with
-                ActorValues = ValueNone
-                Details = ValueSome clearing
-        } ActorValueKinds.none
+        let clearOnly =
+            encode
+                {
+                    patch with
+                        ActorValues = ValueNone
+                        Details = ValueSome clearing
+                }
+                ActorValueKinds.none
         Expect.isNull clearOnly.Metadata[0].Details "a pure clearing sends no details"
         Expect.sequenceEqual clearOnly.Metadata[0].ClearedDetails [ Dreamsleeve.Protocol.Chat.PlayerDetailsField.Level ] "only the level clears"
         Expect.isEmpty clearOnly.Metadata[0].RemovedActorValues "absent values are unchanged"
