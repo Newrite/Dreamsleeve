@@ -15,7 +15,6 @@ export using IpStrView        = std::string_view;
 export using HostName         = std::string;
 export using HostNameView     = std::string_view;
 export using Port             = std::uint16_t;
-export using BandwidthLimit   = enet_uint32;
 export using DisconnectReason = Protocol::Network::DisconnectReason;
 export using ChannelId        = enet_uint8;
 export using ChannelLimit     = size_t;

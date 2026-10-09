@@ -32,6 +32,7 @@ namespace
           .data                = {static_cast<std::uint64_t>(index + 1), "benchmark", "Benchmark"},
           .characterGeneration = 1
       });
+
     if (!model.Apply(1, OnlinePlayersReplaced{initial}) || !(*exchange)->Publish(model)) return false;
     (*exchange)->Drain(output);
     const auto epoch = MovementClock::now();
@@ -42,6 +43,7 @@ namespace
     std::size_t         poses{};
     double              checksum{};
     const auto          started = MovementClock::now();
+
     // 10 simulated seconds: 100 Hz scheduling grid, 10 Hz movement, 50 Hz rendering.
     for (int time = 0; time <= 10000; time += 10)
     {
@@ -62,6 +64,7 @@ namespace
         if (!(*exchange)->Publish(model)) return false;
         updateMs.push_back(Elapsed(before));
       }
+
       if (time % 20 == 0 && !(stalled && time >= 2000 && time < 4000))
       {
         const auto before = MovementClock::now();
@@ -77,6 +80,7 @@ namespace
             snapshot->observedAt = epoch + std::chrono::microseconds{stamp - 1000000};
           }
         }
+
         view->Apply(output.state, frameTime);
         for (int index = 0; index < players; ++index)
         {
@@ -88,8 +92,10 @@ namespace
         frameMs.push_back(Elapsed(before));
       }
     }
+
     const auto last  = view->Sample(1, epoch + std::chrono::seconds{11});
     const bool valid = last && last->position.X == 1000.f && (stalled ? recoveries > 0 : recoveries == 0);
+
     std::cout << "{\"players\":" << players << ",\"stalledConsumer\":" << (stalled ? "true" : "false")
               << ",\"success\":" << (valid ? "true" : "false") << ",\"wallMs\":" << Elapsed(started)
               << ",\"updateP50Ms\":" << Percentile(updateMs, .5) << ",\"updateP95Ms\":" << Percentile(updateMs, .95)

@@ -72,6 +72,7 @@ private:
     {
       std::uint64_t           viewRevision{};
       std::uint64_t           characterGeneration{};
+
       Clock::time_point       receivedAt{};
       std::deque<SamplePoint> samples;
       PlayoutClock            clock;
@@ -94,8 +95,10 @@ private:
     // Another view, character or space, a pause beyond maxGap or a teleport: snap.
     bool Discontinuous(const Track& track, const MovementObservation& observation) const
     {
-      return track.viewRevision != observation.viewRevision || track.characterGeneration != observation.characterGeneration ||
-             observation.receivedAt < track.receivedAt || observation.receivedAt - track.receivedAt > settings.maxGap ||
+      return track.viewRevision != observation.viewRevision ||
+             track.characterGeneration != observation.characterGeneration ||
+             observation.receivedAt < track.receivedAt ||
+             observation.receivedAt - track.receivedAt > settings.maxGap ||
              Domain::Spatial::Jumped(track.samples.back().location, *observation.location, settings.teleportDistance);
     }
 
@@ -128,6 +131,7 @@ private:
 
       const auto mapped = track.samples.empty() || Discontinuous(track, observation) ? std::nullopt : MapTime(track, observation);
       const auto time   = mapped.value_or(observation.receivedAt);
+
       if (!mapped)
       {
         track.samples.clear();
@@ -144,12 +148,14 @@ private:
       track.viewRevision        = observation.viewRevision;
       track.characterGeneration = observation.characterGeneration;
       track.receivedAt          = observation.receivedAt;
+
       track.clock.Push(
         Microseconds(time),
         Microseconds(observation.receivedAt),
         1,
         std::chrono::duration_cast<std::chrono::microseconds>(settings.delay).count(),
         settings.historyCapacity);
+
       track.samples.push_back({time, *observation.location});
       while (track.samples.size() > settings.historyCapacity)
         track.samples.pop_front();
@@ -158,6 +164,7 @@ private:
     void Replace(const std::vector<Domain::Player>& players, Clock::time_point now)
     {
       tracks.clear();
+
       for (const auto& player : players)
         Observe({player.data.playerId, player.characterGeneration, now, player.location, player.viewRevision});
     }
@@ -180,6 +187,7 @@ private:
     void ApplyOne(const ClientStateDelta& delta, Clock::time_point now)
     {
       if (Older(delta.generation, delta.revision) || (hasCursor && delta.generation == generation && delta.revision == revision)) return;
+
       if (!ready || delta.generation != generation)
       {
         tracks.clear();
@@ -198,11 +206,13 @@ private:
 
       for (const auto id : delta.removedPlayers)
         tracks.erase(id);
+
       revision = delta.revision;
     }
 
     MovementSettings                            settings;
     std::unordered_map<Domain::PlayerId, Track> tracks;
+
     std::uint64_t                               generation{};
     std::uint64_t                               revision{};
     bool                                        hasCursor{};

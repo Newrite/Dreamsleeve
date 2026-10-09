@@ -11,11 +11,13 @@ export namespace Dreamsleeve::Client::Phantom
     T    value{};
     auto operator<=>(const Id&) const = default;
   };
+
   using Generation                     = Id<struct GenerationTag, std::uint64_t>;
   using Sequence                       = Id<struct SequenceTag, std::uint64_t>;
   using TransferId                     = Id<struct TransferTag, std::uint64_t>;
   using RequestId                      = Id<struct RequestTag, std::uint64_t>;
   using NodeId                         = Id<struct NodeTag, std::uint32_t>;
+
   constexpr std::uint32_t NoNode       = std::numeric_limits<std::uint32_t>::max();
   constexpr std::uint32_t AssetVersion = 2;
   constexpr std::uint32_t PoseVersion  = 3;
@@ -60,7 +62,8 @@ export namespace Dreamsleeve::Client::Phantom
   struct NativeLayout
   {
     std::vector<NativeNode>    nodes;
-    std::vector<std::uint32_t> bounds, requiredChannels;
+    std::vector<std::uint32_t> bounds;
+    std::vector<std::uint32_t> requiredChannels;
     std::uint32_t              blocks{};
     std::uint64_t              vertexBytes{};
   };
@@ -73,9 +76,14 @@ export namespace Dreamsleeve::Client::Phantom
   struct Limits
   {
     std::uint32_t nodes{4096};
-    std::uint32_t assetBytes{128 * 1024 * 1024}, compressedAssetBytes{64 * 1024 * 1024};
-    std::uint32_t poseBytes{256 * 1024}, compressedPoseBytes{128 * 1024};
+
+    std::uint32_t assetBytes{128 * 1024 * 1024};
+    std::uint32_t compressedAssetBytes{64 * 1024 * 1024};
+
+    std::uint32_t poseBytes{256 * 1024};
+    std::uint32_t compressedPoseBytes{128 * 1024};
   };
+
   enum class Failure
   {
     InvalidFormat,
@@ -96,6 +104,7 @@ export namespace Dreamsleeve::Client::Phantom
     Failure     reason;
     std::string field;
   };
+
   template <class T>
   using Result = std::expected<T, Error>;
 
@@ -143,7 +152,8 @@ private:
   {
     Generation           generation;
     Sequence             sequence;
-    std::uint64_t        context{}, sampledAtUs{};
+    std::uint64_t        context{};
+    std::uint64_t        sampledAtUs{};
     Vec3                 origin;
     std::vector<Channel> channels;
     std::vector<Bound>   bounds;
@@ -160,6 +170,7 @@ private:
 
   // A complete pose is atomic. Geometry revisions publish a new native asset.
   Result<void> CheckSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset);
+
   enum class Representation
   {
     Disabled,
@@ -170,14 +181,27 @@ private:
 
   struct ViewSettings
   {
-    bool          publish{true}, receive{true}, fallback{true}, hideInCombat{false};
+    bool          publish{true};
+    bool          receive{true};
+    bool          fallback{true};
+    bool          hideInCombat{false};
     std::uint32_t maximum{4};
-    float         distance{4096}, opacity{0.6f};
+
+    float         distance{4096};
+    float         opacity{0.6f};
     Vec3          color{0.55f, 0.8f, 1};
-    std::uint32_t sampleRate{10}, delayMs{100}, extrapolationMs{100}, timeoutMs{1000};
-    std::uint64_t memoryBytes{512 * 1024 * 1024}, diskBytes{1024ULL * 1024 * 1024};
-    std::uint32_t uploadBytesPerSecond{5 * 1024 * 1024}, downloadBytesPerSecond{5 * 1024 * 1024};
-    bool          operator==(const ViewSettings&) const = default;
+
+    std::uint32_t sampleRate{10};
+    std::uint32_t delayMs{100};
+    std::uint32_t extrapolationMs{100};
+    std::uint32_t timeoutMs{1000};
+
+    std::uint64_t memoryBytes{512 * 1024 * 1024};
+    std::uint64_t diskBytes{1024ULL * 1024 * 1024};
+    std::uint32_t uploadBytesPerSecond{5 * 1024 * 1024};
+    std::uint32_t downloadBytesPerSecond{5 * 1024 * 1024};
+
+    bool operator==(const ViewSettings&) const = default;
   };
 
 }

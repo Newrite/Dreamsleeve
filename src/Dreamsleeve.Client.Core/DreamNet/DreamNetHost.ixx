@@ -18,8 +18,10 @@ export struct NetConfig
   size_t         channelLimit;
   BandwidthLimit inBwLimit;
   BandwidthLimit outBwLimit;
+
   size_t         maxPacketBytes{1024 * 1024};
   size_t         maxWaitingData{32 * 1024 * 1024};
+
   // UDP socket buffers, bytes; they replace the sizes enet_host_create sets.
   size_t receiveBufferBytes{ENET_HOST_RECEIVE_BUFFER_SIZE};
   size_t sendBufferBytes{ENET_HOST_SEND_BUFFER_SIZE};
@@ -53,6 +55,7 @@ export struct ServerConfig final : NetConfig
     config.maxWaitingData     = defaultNet.maxWaitingData;
     config.receiveBufferBytes = defaultNet.receiveBufferBytes;
     config.sendBufferBytes    = defaultNet.sendBufferBytes;
+
     return config;
   }
 };
@@ -98,6 +101,7 @@ export struct HostInfo final
   enet_uint32     outgoingBandwidth;
   size_t          maxPacketBytes;
   size_t          maxWaitingData;
+
   // Read back from the socket: the system may round or cap a requested size.
   size_t receiveBufferBytes;
   size_t sendBufferBytes;
@@ -152,6 +156,7 @@ export class DreamNetHost
     {
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateClient, "Cannot set the UDP socket buffers of the client host");
     }
+
     auto dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
@@ -197,6 +202,7 @@ export class DreamNetHost
     {
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::FailedCreateServer, "Cannot set the UDP socket buffers of the server host");
     }
+
     auto dreamHost = DreamNetHost(std::move(enetHost));
 
     if (runtimeConfig)
@@ -508,6 +514,7 @@ export class DreamNetHost
       return DreamNetError::MakeUnexpected(
         DreamNetErrorCode::InvalidConfig,
         "NetConfig.maxWaitingData must allow at least one maximum-size packet");
+
     constexpr auto maxSocketBuffer = static_cast<size_t>((std::numeric_limits<int>::max)());
     if (config.receiveBufferBytes == 0 || config.receiveBufferBytes > maxSocketBuffer)
       return DreamNetError::MakeUnexpected(DreamNetErrorCode::InvalidConfig, "NetConfig.receiveBufferBytes must be 1..2147483647");

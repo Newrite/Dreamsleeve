@@ -23,9 +23,11 @@ export namespace Dreamsleeve::Client::Phantom
         b.z = -b.z;
         b.w = -b.w;
       }
+
       Quaternion q{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
       const auto length = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
       if (length < 0.00001f) return a;
+
       q.x /= length;
       q.y /= length;
       q.z /= length;
@@ -50,6 +52,7 @@ export namespace Dreamsleeve::Client::Phantom
     {
       Snapshot result = b;
       result.origin   = Mix(a.origin, b.origin, t);
+
       for (std::size_t i = 0; i < result.channels.size(); ++i)
       {
         auto&       out    = result.channels[i];
@@ -59,6 +62,7 @@ export namespace Dreamsleeve::Client::Phantom
         out.world.scale    = left.world.scale + (out.world.scale - left.world.scale) * std::clamp(t, 0.0f, 1.0f);
         out.hidden         = t < 1 ? left.hidden : out.hidden;
       }
+
       for (std::size_t i = 0; i < result.bounds.size(); ++i)
       {
         result.bounds[i] = Cover(a.bounds[i], b.bounds[i]);
@@ -94,6 +98,7 @@ public:
     bool Push(std::shared_ptr<const Snapshot> pose, std::uint64_t arrivalUs, const ViewSettings& settings)
     {
       if (pose->sampledAtUs > MaximumSampleTime || arrivalUs > MaximumSampleTime) return false;
+
       if (!samples.empty())
       {
         const auto& last = *samples.back().pose;
@@ -104,35 +109,45 @@ public:
         else if (pose->sampledAtUs - last.sampledAtUs > 5000000)
           Clear();
       }
+
       if (!samples.empty() && (arrivalUs < samples.back().arrivalUs || arrivalUs - samples.back().arrivalUs > settings.timeoutMs * 1000ULL))
         Clear();
+
       const auto gap = samples.empty() ? 1 : pose->sequence.value - samples.back().pose->sequence.value;
       clock.Push(pose->sampledAtUs, arrivalUs, gap, settings.delayMs * 1000ULL, BufferedPoseCount);
       const Time time{std::chrono::microseconds{pose->sampledAtUs}};
       samples.push_back({std::move(pose), arrivalUs, time});
       while (samples.size() > BufferedPoseCount)
         samples.pop_front();
+
       return true;
     }
 
     struct Timing
     {
       std::size_t   samples{};
-      std::uint64_t sequence{}, sourceGapUs{}, arrivalGapUs{}, ageUs{};
+      std::uint64_t sequence{};
+      std::uint64_t sourceGapUs{};
+      std::uint64_t arrivalGapUs{};
+      std::uint64_t ageUs{};
+
       std::int64_t  aheadUs{};
-      double        delayUs{}, speed{1};
+      double        delayUs{};
+      double        speed{1};
     };
 
     // A read-only view of the existing buffer, not another clock/state owner.
     Timing Inspect(std::uint64_t nowUs, const ViewSettings& settings) const
     {
       if (samples.empty()) return {};
+
       const auto& last = samples.back();
       Timing      result{samples.size(), last.pose->sequence.value};
       result.ageUs   = nowUs >= last.arrivalUs ? nowUs - last.arrivalUs : 0;
       result.aheadUs = last.time.time_since_epoch().count() - clock.At(nowUs);
       result.delayUs = clock.DelayUs();
       result.speed   = clock.Speed();
+
       for (std::size_t i = 1; i < samples.size(); ++i)
       {
         result.sourceGapUs = std::max(result.sourceGapUs, samples[i].pose->sampledAtUs - samples[i - 1].pose->sampledAtUs);
@@ -146,8 +161,10 @@ public:
     {
       if (samples.empty() || nowUs < samples.back().arrivalUs || nowUs - samples.back().arrivalUs > settings.timeoutMs * 1000ULL)
         return std::nullopt;
+
       const Time target{std::chrono::microseconds{clock.At(nowUs)}};
       if (target <= samples.front().time) return *samples.front().pose;
+
       for (std::size_t i = 1; i < samples.size(); ++i)
       {
         const auto& a = *samples[i - 1].pose;
@@ -158,15 +175,27 @@ public:
             b,
             static_cast<float>((target - samples[i - 1].time).count()) / static_cast<float>(b.sampledAtUs - a.sampledAtUs));
       }
+
       if (samples.size() < 2) return *samples.back().pose;
+
       const auto& a     = *samples[samples.size() - 2].pose;
       const auto& b     = *samples.back().pose;
       const auto  extra = std::min<std::uint64_t>((target - samples.back().time).count(), settings.extrapolationMs * 1000ULL);
+
       // A teleport is never interpreted as velocity.
       if (Motion::Distance(a.origin, b.origin) > 512) return b;
+
       // Predict only root translation. Independent bone velocities stretch the
       // skeleton and detach weapons; retain the newest complete articulation.
-      Snapshot   result = b;
+      Snapshot result = b;
+      TranslateRoot(result, a, b, extra);
+      return result;
+    }
+
+private:
+
+    static void TranslateRoot(Snapshot& result, const Snapshot& a, const Snapshot& b, std::uint64_t extra)
+    {
       const auto ratio  = static_cast<float>(extra) / static_cast<float>(b.sampledAtUs - a.sampledAtUs);
       const Vec3 delta{(b.origin.x - a.origin.x) * ratio, (b.origin.y - a.origin.y) * ratio, (b.origin.z - a.origin.z) * ratio};
       const auto move = [&](Vec3& value) {
@@ -179,7 +208,6 @@ public:
         move(channel.world.position);
       for (auto& bound : result.bounds)
         move(bound.center);
-      return result;
     }
   };
 
