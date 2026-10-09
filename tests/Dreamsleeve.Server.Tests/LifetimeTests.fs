@@ -62,7 +62,7 @@ type private RouteMessage =
     | Close
     | HoldRoute of TaskCompletionSource<unit> * TaskCompletionSource<unit>
 
-let private startRouter capacity target =
+let private startRouterWithOptions agentOptions capacity target =
     let mutable scope: AgentReplyScope<int> option = None
     let handle (context: ReliableAgentContext<RouteMessage>) message = task {
         match message with
@@ -77,7 +77,10 @@ let private startRouter capacity target =
             entered.SetResult()
             do! release.Task.WaitAsync context.CancellationToken
     }
-    TestAgent.StartReliable(options "router" (AgentMailbox.boundedWait 2), handle)
+    TestAgent.StartReliable(agentOptions, handle)
+
+let private startRouter capacity target =
+    startRouterWithOptions (options "router" (AgentMailbox.boundedWait 2)) capacity target
 
 let private initialize (router: Agent<RouteMessage>) = task {
     let ready = gate<unit>()
@@ -275,7 +278,10 @@ let tests = testList "Lifetimes" [
     case "a forwarding exception settles an external caller and preserves the cause" (fun () -> task {
         let captured = Channel.CreateUnbounded<ReplyChannel<int>>()
         use target = TestAgent.Start(AgentOptions.create "target", targetHandler captured)
-        use router = startRouter 1 target
+        let mutable policies = 0
+        let routerOptions = { options "router" (AgentMailbox.boundedWait 2) with
+                                OnError = Some(fun _ -> policies <- policies + 1; AgentErrorAction.Continue) }
+        use router = startRouterWithOptions routerOptions 1 target
         do! initialize router
         let failure = InvalidOperationException("cannot schedule")
         let forward (_: ReliableAgentContext<ReplyChannel<int>>) reply = task {
@@ -287,8 +293,66 @@ let tests = testList "Lifetimes" [
         expectFault failure result
         let! _ = terminal router.Completion
         expectStopFault failure router.StopReason
+        equal 0 policies
+        equal 1 router.Completion.Exception.InnerExceptions.Count
+        check (obj.ReferenceEquals(failure, router.Completion.Exception.InnerExceptions[0])) "Route exception was replaced."
         do! finish caller
         do! finish target
+    })
+
+    case "Own delivers every child cause to the active owner's recovery policy" (fun () -> task {
+        let original, secondary = InvalidOperationException("child handler"), InvalidOperationException("child cleanup")
+        let owned, delivered = gate<unit>(), gate<Result<unit, exn>>()
+        let childOptions = { AgentOptions.create "recoverable-child" with OnStopped = Some(fun _ -> raise secondary) }
+        use child = TestAgent.Start(childOptions, fun _ (_: int) -> Task.FromException<unit>(original))
+        let handle (context: ReliableAgentContext<Result<unit, exn> option>) message = task {
+            match message with
+            | None -> context.Own(child, Some); owned.SetResult()
+            | Some outcome -> delivered.SetResult outcome
+        }
+        use parent = TestAgent.StartReliable(AgentOptions.create "recovering-parent", handle)
+        parent.TryPost None |> ignore
+        do! awaitUnit owned.Task
+        child.TryPost 0 |> ignore
+        let! outcome = awaitResult delivered.Task
+        match outcome with
+        | Error (:? AggregateException as error) ->
+            equal 2 error.InnerExceptions.Count
+            check (obj.ReferenceEquals(original, error.InnerExceptions[0])) "Primary child error order changed."
+            check (obj.ReferenceEquals(secondary, error.InnerExceptions[1])) "Secondary child error order changed."
+        | other -> failtestf "Expected complete child failure result, got %A" other
+        check parent.IsAcceptingMessages "An observed child failure bypassed the owner policy."
+        do! finish parent
+    })
+
+    case "parent Abort joins child cleanup and retains every child cleanup cause" (fun () -> task {
+        let cleanupEntered, cleanupRelease, owned = gate<unit>(), gate<unit>(), gate<unit>()
+        let original, secondary = InvalidOperationException("child stopped event"), InvalidOperationException("child stopped callback")
+        let childOptions = { AgentOptions.create "owned-cleanup-child" with OnStopped = Some(fun _ -> raise secondary) }
+        use child = TestAgent.Start(childOptions, fun _ (_: int) -> task { () })
+        child.Stopped.Add(fun _ ->
+            cleanupEntered.SetResult()
+            cleanupRelease.Task.GetAwaiter().GetResult()
+            raise original)
+        let handle (context: ReliableAgentContext<int>) message = task {
+            if message = 0 then
+                context.Own(child, fun _ -> 1)
+                owned.SetResult()
+        }
+        use parent = TestAgent.StartReliable(AgentOptions.create "owned-cleanup-parent", handle)
+        parent.TryPost 0 |> ignore
+        do! awaitUnit owned.Task
+        parent.Abort()
+        do! awaitUnit cleanupEntered.Task
+        check (not parent.Completion.IsCompleted) "Parent abandoned child cleanup."
+        cleanupRelease.SetResult()
+        let! _ = terminal parent.Completion
+        equal 2 parent.Completion.Exception.InnerExceptions.Count
+        for cause in [original; secondary] do
+            equal 1 (parent.Completion.Exception.InnerExceptions |> Seq.filter(fun error -> obj.ReferenceEquals(cause, error)) |> Seq.length)
+        equal (Some AgentStopReason.Aborted) parent.StopReason
+        check child.Completion.IsFaulted "Child cleanup fault was hidden."
+        equal 0 parent.QueueLength
     })
 
     case "startup callback fault settles pending requests and stops before dispatch" (fun () -> task {

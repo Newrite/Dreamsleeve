@@ -133,7 +133,7 @@ Completion settles.
 
 Construct one `AgentOutbox.TryCreate(capacity, destination)` per independently progressing
 route. From the owner handler, call `TrySend(context, message, onFailure)`.
-False means the local limit is full: the message was not scheduled. True means
+False means the local limit is full, the owner stopped, or scheduling failed: the message was not scheduled. True means
 accepted by the outbox, not delivered or processed by the destination. The limit
 includes queued messages, the current admission, and any pending failure notification.
 Only one actual admission runs at a time; ordering is FIFO.
@@ -219,7 +219,7 @@ an owner message from `Result<unit, exn>` after the child's actual Completion,
 including for an already stopped child. Parent Abort/fault aborts the child and joins
 its cleanup; cooperative cleanup may delay the parent. Graceful child Stop remains
 application-specific: stop children first, then Complete the parent. Own does not
-restart children or recover their state; `AgentSupervisor` restarts.
+restart children or recover their state; `AgentSupervisor` restarts. A delivered child failure preserves all causes (singleton original, ordered AggregateException for multiple); when shutdown or failed notification prevents delivery, Own retains every original cause in the parent Completion. Only actual child cancellation caused by parent cancellation is consumed.
 
 `context.Watch(target, stopped)` observes a shared dependency without owning it.
 The `Watch(completion: Task, stopped)` overload provides the same observation when
@@ -235,7 +235,7 @@ route. `scope.Forward(reply, send)` bounds unfinished reply channels and schedul
 forward through the supplied synchronous send function. The function runs outside
 the library lock, must return false when refused, and can use an outbox to preserve
 ordering with other target commands. False settles closedReply; a thrown exception
-settles the request error and propagates to the owner's error policy.
+settles the request with that original error, releases the scope reservation, and faults the owner's lifetime.
 
 Scope closure is automatic on target termination or owner shutdown, including when
 the owner mailbox is busy. `scope.Close()` also closes a domain route immediately,
@@ -301,7 +301,7 @@ within the window and the supervisor gives up: `Completion` faults with
 the moment of use instead of keeping a reference. `StopAsync()` stops the child gracefully and
 ends supervision: a pending restart is canceled, and a child still starting is stopped as soon
 as it starts. `observe` receives the events (`Started`, `StartFailed`, `Stopped`, `Restarting`,
-`GaveUp`) on the supervisor's handler: quick work such as logging only; exceptions are ignored.
+`GaveUp`) on the supervisor's handler: quick work such as logging only; observer failures stop and fault supervision.
 The supervisor neither restores the child's state nor replays its accepted commands.
 `startWithTimeProvider` lets tests drive the failure window without waiting.
 
@@ -309,3 +309,5 @@ The supervisor neither restores the child's state nor replays its accepted comma
 The child-start delegate returns `Task<Result<SupervisedChild<'Child>, 'StartError>>`. `SupervisorEvent<'Child,'StartError>.StartRejected` preserves an expected construction refusal; `StartFailed` preserves an unexpected thrown exception. Both use the same existing whole-child reconstruction policy. At exhaustion, `SupervisorGaveUpException<'StartError>.Failure` retains `SupervisorFailure.StartRejected reason`, `Faulted originalException`, or `CompletedUnexpectedly`; only an actual fault supplies `InnerException`. A rejected factory must release and join partially acquired resources before returning its typed error. This reconstruction policy never retries an individual admitted operation.
 
 Lifecycle notifications and cancellation callbacks belong to the owner. Their unexpected faults close admission and stop dispatch; an error notification fault overrides a handler policy that returns Continue. State replacement commits before OnTransition; if that notification faults, the committed owner is stopped rather than passed to recovery or reused for another command. Separate event/configured notifications are attempted independently; standard event multicast stops at its first throwing subscriber. Completion retains each original failure once by reference, including cancellation/cleanup failures, after pending requests and queue reservations have been released.
+
+Supervisor observer failures stop supervision and join any acquired child; they fault Completion without reconstructing another child. Concurrent StopAsync callers join the same child Stop and actual Completion. Both are attempted independently, retaining every original fault. StopAsync consumes only a sole prior exhaustion of this supervisor; it propagates additional cleanup or observer faults. Awaiting StopAsync exposes one exception, so Completion is the authoritative full lifetime result: inspect its Exception.InnerExceptions to retain all causes. A successfully admitted child termination result belongs to the established reconstruction policy; no individual operation is retried.

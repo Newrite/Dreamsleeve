@@ -55,6 +55,48 @@ let private complete (agent: Agent<'T>) = task {
 }
 
 let tests = testList "Outbox" [
+    case "synchronous execution retains Continue policy and releases the reply reservation" (fun () -> task {
+        let seen = ConcurrentQueue<int>()
+        use destination = TestAgent.Start(AgentOptions.create "business-reply", ordinaryHandler seen)
+        let original = InvalidOperationException("business execution")
+        let policyCalled = gate<exn>()
+        let policy (_, error) =
+            policyCalled.SetResult error
+            AgentErrorAction.Continue
+        let options = { AgentOptions.create "business-owner" with OnError = Some policy }
+        let execute value = if value = 1 then raise original else AgentTests.Message.Record value
+        let handle = TestReplyDispatcher.createHandler 1 (fun _ -> destination.Ref.TryReliable().Value) execute
+        use owner = TestAgent.StartReliable(options, handle)
+        owner.TryPost 1 |> ignore
+        let! observed = awaitResult policyCalled.Task
+        check (obj.ReferenceEquals(original, observed)) "Business exception was replaced."
+        equal AgentPostResult.Posted (owner.TryPost 2)
+        do! eventually (fun () -> seen.Count = 1)
+        do! complete owner
+        do! complete destination
+        equal [|2|] (seen.ToArray())
+    })
+
+    case "delivery and failure mapper faults retain both causes and release capacity" (fun () -> task {
+        let original, mapper = InvalidOperationException("delivery map"), InvalidOperationException("failure map")
+        use destination = TestAgent.Start(AgentOptions.create "mapping-target", fun _ (_: int) -> task { () })
+        let address = destination.Ref.TryReliable().Value.Map(fun (_: int) -> raise original)
+        let outbox = TestOutbox<int>.Create(1, address)
+        let mutable policies = 0
+        let options = { AgentOptions.create "mapping-owner" with OnError = Some(fun _ -> policies <- policies + 1; AgentErrorAction.Continue) }
+        let handle context value = task { outbox.TrySend(context, value, fun _ -> raise mapper) |> ignore }
+        use owner = TestAgent.StartReliable(options, handle)
+        owner.TryPost 1 |> ignore
+        let! _ = terminal owner.Completion
+        check owner.Completion.IsFaulted "Mapping faults were hidden."
+        equal 2 owner.Completion.Exception.InnerExceptions.Count
+        for cause in [original; mapper] do
+            equal 1 (owner.Completion.Exception.InnerExceptions |> Seq.filter(fun error -> obj.ReferenceEquals(cause, error)) |> Seq.length)
+        equal 0 policies
+        equal 0 outbox.Count
+        do! complete destination
+    })
+
     case "direct admission and queued fallback preserve FIFO and map each accepted message once" (fun () -> task {
         let seen, mapped = ConcurrentQueue<int>(), ConcurrentQueue<int>()
         use destination = TestAgent.Start(options "destination" (AgentMailbox.boundedWait 1), ordinaryHandler seen)

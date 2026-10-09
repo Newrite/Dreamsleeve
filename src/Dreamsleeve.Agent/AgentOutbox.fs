@@ -38,6 +38,7 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
         }
 
         match outcome with
+        | Some (AgentSendFailure.Faulted _ as failure) -> do! onFailure failure
         | Some failure when not token.IsCancellationRequested -> do! onFailure failure
         | Some _ | None -> ()
     }
@@ -62,22 +63,24 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
 
         try
             context.StartDelivery(deliver previous finished operation)
+            true
         with error ->
             finished.TrySetResult() |> ignore
             slots.Release() |> ignore
-            raise error
+            context.Fail error
+            false
 
     // Reservation is already owned. Map/post once, including the transition to waiting.
     let sendReady (context: ReliableAgentContext<'Request>) destination reply onFailure =
         let token = context.CancellationToken
         if token.IsCancellationRequested then
             slots.Release() |> ignore
-            token.ThrowIfCancellationRequested()
-
-        if not ordered || tail.IsCompleted then
+            false
+        elif not ordered || tail.IsCompleted then
             let admission = admit destination reply token
             if admission.IsCompletedSuccessfully && admission.Result = AgentDeliveryResult.Posted then
                 slots.Release() |> ignore
+                true
             else
                 // Even if Abort races us, observe the operation that already started.
                 launch context (observe admission onFailure)
@@ -94,7 +97,6 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
     member _.TrySend(context: ReliableAgentContext<'Request>, destination, reply, onFailure) =
         if slots.Wait(0) then
             sendReady context destination reply onFailure
-            true
         else
             false
 
@@ -104,12 +106,15 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
             try
                 // A released reservation can race Abort after WaitAsync succeeds.
                 context.CancellationToken.ThrowIfCancellationRequested()
-                createReply ()
-            with error ->
-                slots.Release() |> ignore
-                raise error
+                Ok (createReply ())
+            with error -> Error error
 
-        sendReady context destination reply onFailure
+        match reply with
+        | Error error ->
+            slots.Release() |> ignore
+            // Synchronous execution belongs to the handler's business error policy.
+            return! Task.FromException<unit>(error)
+        | Ok value -> sendReady context destination value onFailure |> ignore
     }
 
     member _.SendAsync(context: ReliableAgentContext<'Request>, destination, execute, onFailure) = task {
@@ -121,7 +126,7 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
         }
 
         // I/O (including its synchronous prefix) still starts outside the owning handler.
-        launch context run
+        launch context run |> ignore
     }
 
     member _.AbortAfterDrain(context: ReliableAgentContext<'Request>) =
@@ -135,17 +140,34 @@ type internal AgentDeliveryWindow(budget: AgentDeliveryCapacity, ordered: bool) 
 module private DeliveryFailure =
     let stop (context: ReliableAgentContext<'Message>) failure = task {
         match failure with
-        | AgentSendFailure.Faulted error -> return raise error
+        | AgentSendFailure.Faulted error -> context.Fail error
         | AgentSendFailure.Closed | AgentSendFailure.Canceled -> context.Abort()
     }
 
     let notify (context: ReliableAgentContext<'Message>) toMessage failure = task {
-        let! admission = context.PostAsync(toMessage failure, cancellationToken = context.CancellationToken)
-        match admission with
-        | AgentDeliveryResult.Posted -> ()
-        // Complete may close admission while a delivery is still finishing.
-        // Do not turn an undeliverable error into a successful Completion.
-        | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> do! stop context failure
+        let retain original =
+            match failure with
+            | AgentSendFailure.Faulted error -> context.Fail error
+            | AgentSendFailure.Closed | AgentSendFailure.Canceled -> ()
+            context.Fail original
+        let message =
+            try Ok (toMessage failure)
+            with error -> Error error
+        match message with
+        | Error error -> retain error
+        | Ok value ->
+            let! admission = task {
+                try
+                    let! delivered = context.PostAsync(value, cancellationToken = context.CancellationToken)
+                    return Ok delivered
+                with error -> return Error error
+            }
+            match admission with
+            | Ok AgentDeliveryResult.Posted -> ()
+            // Complete may close admission while a delivery is still finishing.
+            // Do not turn an undeliverable error into a successful Completion.
+            | Ok AgentDeliveryResult.Closed | Ok AgentDeliveryResult.Canceled -> do! stop context failure
+            | Error error -> retain error
     }
 
 /// Bounded FIFO sends owned by one handler. Successful delivery is library-internal.
@@ -165,7 +187,7 @@ type AgentOutbox<'Message> private (capacity: AgentDeliveryCapacity, destination
     member _.Count = window.Count
     member _.IsEmpty = window.Count = 0
 
-    /// False means the local limit is full and the message was not scheduled.
+    /// False means the local limit is full or the owner stopped before scheduling.
     /// By default an unavailable destination aborts the owner; exceptions fault it.
     member _.TrySend(context: ReliableAgentContext<'Owner>, message) =
         window.TrySend(context, destination, message, DeliveryFailure.stop context)
@@ -195,9 +217,9 @@ module AgentOutbox =
 
 [<RequireQualifiedAccess>]
 module AgentReplyDispatcher =
-    let private deliveryFailure failure = task {
+    let private deliveryFailure (context: ReliableAgentContext<'Owner>) failure = task {
         match failure with
-        | AgentSendFailure.Faulted error -> return raise error
+        | AgentSendFailure.Faulted error -> context.Fail error
         | AgentSendFailure.Closed | AgentSendFailure.Canceled -> ()
     }
 
@@ -207,7 +229,7 @@ module AgentReplyDispatcher =
     let createHandler (capacity: AgentDeliveryCapacity) (replyTo: 'Request -> ReliableAgentRef<'Reply>) (execute: 'Request -> 'Reply) =
         let window = AgentDeliveryWindow(capacity, false)
         let handle (context: ReliableAgentContext<'Owner>) (request: 'Request) =
-            window.Send(context, replyTo request, (fun () -> execute request), deliveryFailure)
+            window.Send(context, replyTo request, (fun () -> execute request), deliveryFailure context)
         handle
 
     /// Reserves capacity for the whole operation and reply before starting tracked work.
@@ -218,7 +240,7 @@ module AgentReplyDispatcher =
                            (execute: CancellationToken -> 'Request -> Task<'Reply>) =
         let window = AgentDeliveryWindow(capacity, false)
         let handle (context: ReliableAgentContext<'Owner>) (request: 'Request) =
-            window.SendAsync(context, replyTo request, (fun token -> execute token request), deliveryFailure)
+            window.SendAsync(context, replyTo request, (fun token -> execute token request), deliveryFailure context)
         handle
 
 
