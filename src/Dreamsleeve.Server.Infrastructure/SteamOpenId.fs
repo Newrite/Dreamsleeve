@@ -31,7 +31,12 @@ type SteamVerifyError =
     | Request of SteamRequestError
 
 [<RequireQualifiedAccess>]
-type SteamProfileFormatError = Json | Envelope | Identity | Name | Timestamp
+type SteamProfileFormatError =
+    | Json
+    | Envelope
+    | Identity
+    | Name
+    | Timestamp
 
 [<RequireQualifiedAccess>]
 type SteamProfileError =
@@ -55,9 +60,14 @@ module SteamOpenId =
     /// The Steam page the browser opens for this flow.
     let loginUrl (publicUrl: string) (flow: string) =
         let select = "http://specs.openid.net/auth/2.0/identifier_select"
-        [ "openid.ns", "http://specs.openid.net/auth/2.0"; "openid.mode", "checkid_setup"
-          "openid.return_to", returnUrl publicUrl flow; "openid.realm", publicUrl.TrimEnd('/')
-          "openid.identity", select; "openid.claimed_id", select ]
+        [
+            "openid.ns", "http://specs.openid.net/auth/2.0"
+            "openid.mode", "checkid_setup"
+            "openid.return_to", returnUrl publicUrl flow
+            "openid.realm", publicUrl.TrimEnd('/')
+            "openid.identity", select
+            "openid.claimed_id", select
+        ]
         |> List.map (fun (key, value) -> key + "=" + Uri.EscapeDataString value)
         |> String.concat "&"
         |> fun query -> Endpoint + "?" + query
@@ -87,8 +97,10 @@ module SteamOpenId =
         | Error error -> return Error error
         | Ok received ->
             use response = received
-            if not response.IsSuccessStatusCode then return Error (SteamRequestError.HttpStatus (int response.StatusCode))
-            else return! readContent response.Content token
+            if not response.IsSuccessStatusCode then
+                return Error (SteamRequestError.HttpStatus (int response.StatusCode))
+            else
+                return! readContent response.Content token
     }
 
     /// The SteamID confirmed for this flow; an intentional browser cancellation
@@ -101,7 +113,8 @@ module SteamOpenId =
         | Some "id_res", Some Endpoint, Some returned, Some id, Some identity when expected returned && id = identity ->
             let found = claimed.Match id
             let validNumber, steamId = UInt64.TryParse(found.Groups[1].Value, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture)
-            if not found.Success || not validNumber then return Error SteamVerifyError.InvalidAnswer
+            if not found.Success || not validNumber then
+                return Error SteamVerifyError.InvalidAnswer
             else
                 // Steam checks its own signature over the very fields it sent.
                 let check =
@@ -119,22 +132,31 @@ module SteamOpenId =
     }
 
     let private parseProfile (text: string) =
-        try Ok (JsonDocument.Parse text)
+        try
+            Ok (JsonDocument.Parse text)
         with :? JsonException -> Error SteamProfileFormatError.Json
 
     let private profileFields steamId (root: JsonElement) =
-        let unknown = { SteamId = steamId; PersonaName = ValueNone; Created = ValueNone }
+        let unknown = {
+            SteamId = steamId
+            PersonaName = ValueNone
+            Created = ValueNone
+        }
+
         let decode () =
-            if root.ValueKind <> JsonValueKind.Object then Error SteamProfileFormatError.Envelope
+            if root.ValueKind <> JsonValueKind.Object then
+                Error SteamProfileFormatError.Envelope
             else
                 match root.TryGetProperty "response" with
                 | true, response when response.ValueKind = JsonValueKind.Object ->
                     match response.TryGetProperty "players" with
                     | true, players when players.ValueKind = JsonValueKind.Array ->
-                        if players.GetArrayLength() = 0 then Ok unknown
+                        if players.GetArrayLength() = 0 then
+                            Ok unknown
                         else
                             let player = players[0]
-                            if player.ValueKind <> JsonValueKind.Object then Error SteamProfileFormatError.Envelope
+                            if player.ValueKind <> JsonValueKind.Object then
+                                Error SteamProfileFormatError.Envelope
                             else
                                 let identity =
                                     match player.TryGetProperty "steamid" with
@@ -143,11 +165,13 @@ module SteamOpenId =
                                         | true, actual when actual = steamId -> Ok ()
                                         | _ -> Error SteamProfileFormatError.Identity
                                     | _ -> Error SteamProfileFormatError.Identity
+
                                 let name () =
                                     match player.TryGetProperty "personaname" with
                                     | false, _ -> Ok ValueNone
                                     | true, value when value.ValueKind = JsonValueKind.String -> Ok (ValueSome (value.GetString()))
                                     | true, _ -> Error SteamProfileFormatError.Name
+
                                 let created () =
                                     match player.TryGetProperty "timecreated" with
                                     | false, _ -> Ok ValueNone
@@ -157,11 +181,17 @@ module SteamOpenId =
                                             Ok (ValueSome (DateTimeOffset.FromUnixTimeSeconds seconds))
                                         | _ -> Error SteamProfileFormatError.Timestamp
                                     | true, _ -> Error SteamProfileFormatError.Timestamp
+
                                 match identity with
                                 | Error error -> Error error
                                 | Ok () ->
                                     match name (), created () with
-                                    | Ok name, Ok created -> Ok { unknown with PersonaName = name; Created = created }
+                                    | Ok name, Ok created ->
+                                        Ok {
+                                            unknown with
+                                                PersonaName = name
+                                                Created = created
+                                        }
                                     | Error error, _ | _, Error error -> Error error
                     | _ -> Error SteamProfileFormatError.Envelope
                 | _ -> Error SteamProfileFormatError.Envelope

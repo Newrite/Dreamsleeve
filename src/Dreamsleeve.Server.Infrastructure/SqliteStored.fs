@@ -25,9 +25,17 @@ module internal SqliteStored =
     let rec private accepts column (value: obj) =
         match column with
         | Column.Nullable required ->
-            match value with :? DBNull -> true | _ -> accepts required value
-        | Column.Integer -> match value with :? int64 -> true | _ -> false
-        | Column.PositiveInteger -> match value with :? int64 as number -> number > 0L | _ -> false
+            match value with
+            | :? DBNull -> true
+            | _ -> accepts required value
+        | Column.Integer ->
+            match value with
+            | :? int64 -> true
+            | _ -> false
+        | Column.PositiveInteger ->
+            match value with
+            | :? int64 as number -> number > 0L
+            | _ -> false
         | Column.Int32 ->
             match value with
             | :? int64 as number -> number >= int64 Int32.MinValue && number <= int64 Int32.MaxValue
@@ -36,10 +44,19 @@ module internal SqliteStored =
             match value with
             | :? int64 as number -> number >= earliest && number <= latest
             | _ -> false
-        | Column.Text -> match value with :? string -> true | _ -> false
-        | Column.Blob -> match value with :? (byte array) -> true | _ -> false
+        | Column.Text ->
+            match value with
+            | :? string -> true
+            | _ -> false
+        | Column.Blob ->
+            match value with
+            | :? (byte array) -> true
+            | _ -> false
         // A REAL-affinity field may legitimately retain a SQLite INTEGER.
-        | Column.Number -> match value with :? double | :? int64 -> true | _ -> false
+        | Column.Number ->
+            match value with
+            | :? double | :? int64 -> true
+            | _ -> false
 
     let validate (reader: DbDataReader) first (columns: Column array) =
         let mutable failure = None
@@ -49,6 +66,7 @@ module internal SqliteStored =
             if not (accepts columns[index] (reader.GetValue ordinal)) then
                 failure <- Some(InvalidDataException($"Stored column '{reader.GetName ordinal}' has an invalid SQLite representation."))
             index <- index + 1
+
         match failure with
         | Some error -> Error error
         | None -> Ok ()

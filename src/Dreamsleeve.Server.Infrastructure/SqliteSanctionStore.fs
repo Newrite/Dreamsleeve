@@ -83,7 +83,11 @@ module SqliteSanctionStore =
            (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds) |]
 
     let private TargetProjection =
-        [| SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Integer |]
+        [|
+            SqliteStored.Column.Text
+            SqliteStored.Column.Text
+            SqliteStored.Column.Integer
+        |]
 
     // The columns of Columns, in their order. Only an actual SQLite integer
     // can name a kind; its full stored width is checked before the domain lookup.
@@ -93,12 +97,21 @@ module SqliteSanctionStore =
                 match reader.GetValue 2 with
                 | :? int64 as value -> storedInt32 value |> ValueOption.bind SanctionKind.ofInt
                 | _ -> ValueNone
+
             match SanctionId.create (reader.GetInt64 0), storedPlayer (reader.GetInt64 1), kind,
                   SanctionReason.create (reader.GetString 3), issuer reader,
                   time (reader.GetInt64 6), optionalTime reader 7 with
             | Ok id, Ok target, ValueSome kind, Ok reason, Ok issuedBy, Ok issuedAt, Ok expires ->
-                Ok { Id = id; Target = target; Kind = kind; Scope = SanctionScope.Server; Reason = reason; IssuedBy = issuedBy
-                     IssuedAt = issuedAt; Expires = expires }
+                Ok {
+                    Id = id
+                    Target = target
+                    Kind = kind
+                    Scope = SanctionScope.Server
+                    Reason = reason
+                    IssuedBy = issuedBy
+                    IssuedAt = issuedAt
+                    Expires = expires
+                }
             | _ -> invalidData ())
 
     let private readAll (reader: DbDataReader) row =
@@ -173,6 +186,7 @@ module SqliteSanctionStore =
                     let at = box (milliseconds now)
                     execute context $"UPDATE sanctions SET lifted_at=@now WHERE player_id=@player AND kind=@kind AND {InForce}"
                         [ "@player", player order.Target; "@kind", box (SanctionKind.toInt order.Kind); "@now", at ] |> ignore
+
                     let admin, moderator =
                         match order.IssuedBy with
                         | SanctionIssuer.Admin id -> box (AdminId.value id), box DBNull.Value
@@ -195,6 +209,7 @@ module SqliteSanctionStore =
                                         [ "@id", box (SanctionId.value id); "@player", player order.Target ]
                                 $", devices: {count}"
                             else ""
+
                         audit context order.IssuedBy AdminAction.SanctionedPlayer order.Target
                             $"{SanctionKind.key sanction.Kind} until {term sanction}{devices}: {SanctionReason.value sanction.Reason}" now
                         Ok(SanctionOutcome.Applied sanction)
@@ -209,7 +224,10 @@ module SqliteSanctionStore =
                     $"SELECT {Columns} FROM device_bans d JOIN sanctions s ON s.id=d.sanction_id WHERE d.device=@device AND {InForce} ORDER BY s.issued_at DESC LIMIT 1"
                     [ "@device", box (DeviceId.value device); "@now", box (milliseconds now) ]
             use reader = statement.ExecuteReader()
-            readAll reader read |> Result.map (function [] -> ValueNone | ban :: _ -> ValueSome ban))
+            readAll reader read
+            |> Result.map (function
+                | [] -> ValueNone
+                | ban :: _ -> ValueSome ban))
 
     /// Lifts the sanction of kind in force on target at now.
     let lift config target kind issuer now token =
@@ -224,6 +242,7 @@ module SqliteSanctionStore =
                         | ValueSome sanction ->
                             execute context "UPDATE sanctions SET lifted_at=@now WHERE id=@id"
                                 [ "@id", box (SanctionId.value sanction.Id); "@now", box (milliseconds now) ] |> ignore
+
                             audit context issuer AdminAction.LiftedSanction target (SanctionKind.key kind) now
                             Ok(SanctionOutcome.Applied sanction))))
 
@@ -250,5 +269,9 @@ module SqliteSanctionStore =
                 SqliteAccountStore.storedRow reader 8 TargetProjection (fun () ->
                     match read reader, Username.create Int32.MaxValue (reader.GetString 8), DisplayName.create Int32.MaxValue (reader.GetString 9),
                           nameColor (reader.GetInt64 10) with
-                    | Ok sanction, Ok username, Ok name, Ok color -> Ok { Sanction = sanction; Target = PlayerData.create sanction.Target username name color }
+                    | Ok sanction, Ok username, Ok name, Ok color ->
+                        Ok {
+                            Sanction = sanction
+                            Target = PlayerData.create sanction.Target username name color
+                        }
                     | _ -> invalidData ())))

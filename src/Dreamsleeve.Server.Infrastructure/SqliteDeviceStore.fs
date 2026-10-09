@@ -20,7 +20,12 @@ module SqliteDeviceStore =
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
 
     let private DeviceProjection =
-        [| SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.Integer |]
+        [|
+            SqliteStored.Column.Text
+            SqliteStored.Column.UnixMilliseconds
+            SqliteStored.Column.UnixMilliseconds
+            SqliteStored.Column.Integer
+        |]
 
     /// One more sign-in of the player from device at now. Rows not seen for
     /// keepDays go in the same transaction.
@@ -29,6 +34,7 @@ module SqliteDeviceStore =
             transaction context (fun () ->
                 execute context "INSERT INTO player_devices(player_id, device, first_seen, last_seen, sign_ins) VALUES (@player, @device, @now, @now, 1) ON CONFLICT(player_id, device) DO UPDATE SET last_seen=excluded.last_seen, sign_ins=sign_ins + 1"
                     [ "@player", player playerId; "@device", box (DeviceId.value device); "@now", box (milliseconds now) ] |> ignore
+
                 execute context "DELETE FROM player_devices WHERE last_seen < @cutoff"
                     [ "@cutoff", box (milliseconds (now - TimeSpan.FromDays(float keepDays))) ] |> ignore
                 Ok()))
@@ -45,9 +51,14 @@ module SqliteDeviceStore =
                     let stored = SqliteAccountStore.storedRow reader 0 DeviceProjection (fun () ->
                         match DeviceId.create (reader.GetString 0) with
                         | Ok device ->
-                            Ok { Device = device; FirstSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 1)
-                                 LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 2); SignIns = reader.GetInt64 3 }
+                            Ok {
+                                Device = device
+                                FirstSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 1)
+                                LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64 2)
+                                SignIns = reader.GetInt64 3
+                            }
                         | Error _ -> Error(AccountStoreError.Failed(InvalidDataException "A stored device is invalid.")))
+
                     match stored with
                     | Ok entry -> next (entry :: rows)
                     | Error error -> Error error

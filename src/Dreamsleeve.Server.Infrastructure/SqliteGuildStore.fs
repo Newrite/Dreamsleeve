@@ -56,10 +56,19 @@ module SqliteGuildStore =
            SqliteStored.Column.UnixMilliseconds |]
 
     let private GuildProjection =
-        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.UnixMilliseconds |]
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+            SqliteStored.Column.UnixMilliseconds
+        |]
 
     let private ProfileProjection =
-        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text; SqliteStored.Column.Integer |]
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+            SqliteStored.Column.Text
+            SqliteStored.Column.Integer
+        |]
 
     let private memberOf (reader: DbDataReader) =
         SqliteAccountStore.storedRow reader 0 MemberProjection (fun () ->
@@ -71,19 +80,38 @@ module SqliteGuildStore =
                 | ValueSome reason, ValueSome by, ValueSome at ->
                     match SanctionReason.create reason, PlayerId.create (uint64 by) with
                     | Ok reason, Ok by ->
-                        Ok(ValueSome { Reason = reason; IssuedBy = by; IssuedAt = time at; Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time })
+                        Ok(
+                            ValueSome {
+                                Reason = reason
+                                IssuedBy = by
+                                IssuedAt = time at
+                                Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time
+                            })
                     | _ -> Error()
                 | ValueNone, ValueNone, ValueNone -> Ok ValueNone
                 | _ -> Error()
+
             match guild, player, role, mute with
-            | Ok guild, Ok player, ValueSome role, Ok mute -> Ok(guild, { Player = player; Role = role; JoinedAt = time (reader.GetInt64 3); Mute = mute })
+            | Ok guild, Ok player, ValueSome role, Ok mute ->
+                Ok(guild, {
+                    Player = player
+                    Role = role
+                    JoinedAt = time (reader.GetInt64 3)
+                    Mute = mute
+                })
             | _ -> invalidData "A stored guild member is invalid.")
 
     let private inviteOf (reader: DbDataReader) =
         SqliteAccountStore.storedRow reader 0 InviteProjection (fun () ->
             match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)), PlayerId.create (uint64 (reader.GetInt64 2)) with
             | Ok guild, Ok player, Ok by ->
-                Ok { Guild = guild; Player = player; InvitedBy = by; CreatedAt = time (reader.GetInt64 3); Expires = time (reader.GetInt64 4) }
+                Ok {
+                    Guild = guild
+                    Player = player
+                    InvitedBy = by
+                    CreatedAt = time (reader.GetInt64 3)
+                    Expires = time (reader.GetInt64 4)
+                }
             | _ -> invalidData "A stored guild invitation is invalid.")
 
     /// Every guild with its members and invitations, the profiles they name and
@@ -111,27 +139,37 @@ module SqliteGuildStore =
                                   DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
                             | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
                             | _ -> invalidData "A stored profile is invalid."))
+
             match guilds, members, invites, profiles with
             | Ok guilds, Ok members, Ok invites, Ok profiles ->
                 let membersOf = members |> List.groupBy fst |> Map.ofList
                 let invitesOf = invites |> List.groupBy _.Guild |> Map.ofList
                 let stored =
-                    guilds |> List.map (fun (id, name, createdAt) ->
-                        { Id = id
-                          Name = name
-                          CreatedAt = createdAt
-                          Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
-                          Invites = invitesOf |> Map.tryFind id |> Option.defaultValue [] })
+                    guilds |> List.map (fun (id, name, createdAt) -> {
+                        Id = id
+                        Name = name
+                        CreatedAt = createdAt
+                        Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
+                        Invites = invitesOf |> Map.tryFind id |> Option.defaultValue []
+                    })
+
                 // sqlite_sequence is not a schema table; the sequence outlives deleted rows.
                 match scalar context "SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'guilds'), 0), COALESCE((SELECT MAX(id) FROM guilds), 0))" [] with
                 | :? int64 as highest when highest >= 0L && uint64 highest < GuildId.MaxValue - 1UL ->
-                    Ok { Guilds = stored; Profiles = profiles; NextId = uint64 highest + 1UL }
+                    Ok {
+                        Guilds = stored
+                        Profiles = profiles
+                        NextId = uint64 highest + 1UL
+                    }
                 | _ -> invalidData "The guild ID sequence is invalid or exhausted."
             | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error)
 
     let private guild (id: GuildId) = box (int64 (GuildId.value id))
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
-    let private nullable (value: 'T voption) = match value with ValueSome value -> box value | ValueNone -> box DBNull.Value
+    let private nullable (value: 'T voption) =
+        match value with
+        | ValueSome value -> box value
+        | ValueNone -> box DBNull.Value
 
     let private putMember context id (membership: GuildMember) =
         let mute = membership.Mute
@@ -154,6 +192,7 @@ module SqliteGuildStore =
                 execute context "INSERT INTO guilds(id, name, name_key, created_at) VALUES (@guild, @name, @key, @at)"
                     [ "@guild", guild id; "@name", box (GuildName.value name); "@key", box (GuildName.key name); "@at", box (milliseconds createdAt) ]
                 |> ignore
+
                 putMember context id master
                 Ok())
         | GuildWrite.Delete id ->
@@ -183,6 +222,7 @@ module SqliteGuildStore =
             transaction context (fun () ->
                 execute context "DELETE FROM guild_invites WHERE guild_id=@guild AND player_id=@player"
                     [ "@guild", guild id; "@player", player membership.Player ] |> ignore
+
                 putMember context id membership
                 Ok())
         | GuildWrite.TransferMaster(id, previous, master) ->
@@ -202,6 +242,7 @@ module SqliteGuildStore =
             | AccountStoreError.Failed exn -> logger.LogError(exn, "Guild storage write failed: {Write}", change)
             | AccountStoreError.UsernameTaken | AccountStoreError.InvalidCredential | AccountStoreError.Canceled ->
                 logger.LogError("Guild storage write failed: {Error} ({Write})", error, change)
+
             // Memory went ahead of storage: the writer stops, the runtime fails
             // and the supervisor restarts the game from what storage holds.
             context.Abort()
@@ -210,7 +251,10 @@ module SqliteGuildStore =
     /// One sequential writer keeps the order of a guild's changes. capacity is
     /// Guilds.MaxPendingWrites, checked with the configuration.
     let tryPrepareWriter config (logger: ILogger) capacity =
-        let options = { AgentOptions.create "guild-writer" with Mailbox = AgentMailbox.boundedWait capacity }
+        let options = {
+            AgentOptions.create "guild-writer" with
+                Mailbox = AgentMailbox.boundedWait capacity
+        }
         Agent.TryPrepareReliable(options, handle config logger)
 
     let startWriter config logger capacity =

@@ -63,27 +63,31 @@ module SqliteGroundMarkStore =
             | Error _, _ -> invalidData "A stored ground mark has an invalid author pseudonym."
             | _, Error _ -> invalidData "A stored ground mark has an invalid game date."
             | Ok pseudonym, Ok gameDate ->
-            match GroundMarkId.create (uint64 mark.id), PlayerId.create (uint64 mark.author_id), body, characterName,
-                  PluginName.create Int32.MaxValue mark.plugin_name, LocalFormId.create (uint32 mark.local_form_id),
-                  Position.create (float32 mark.x) (float32 mark.y) (float32 mark.z), Radian.create (float32 mark.heading),
-                  Username.create Int32.MaxValue account.username, DisplayName.create Int32.MaxValue profile.display_name,
-                  SqliteStatements.nameColor profile.name_color with
-            | Ok markId, Ok author, Ok body, Ok characterName, Ok plugin, Ok localId, Ok position, Ok heading, Ok username, Ok displayName, Ok color
-                when PluginName.value plugin = mark.plugin_name && DisplayName.value displayName = profile.display_name ->
-                let placement = GroundMarkPlacement.create (FormKey.create plugin localId) position heading
-                let createdAt =
-                    try Ok (DateTimeOffset.FromUnixTimeMilliseconds mark.created_at)
-                    with :? ArgumentOutOfRangeException -> Error ()
-                match createdAt with
-                | Error () -> invalidData "A stored ground mark has a creation time outside the supported range."
-                | Ok createdAt ->
-                    Ok { Mark =
-                            GroundMark.create markId author body placement createdAt
-                            |> GroundMark.withCharacterName characterName
-                            |> GroundMark.withPseudonym pseudonym
-                            |> GroundMark.withGameDate gameDate
-                         Author = PlayerData.create author username displayName color }
-            | _ -> invalidData "A stored ground mark or its author profile is invalid."
+                match GroundMarkId.create (uint64 mark.id), PlayerId.create (uint64 mark.author_id), body, characterName,
+                      PluginName.create Int32.MaxValue mark.plugin_name, LocalFormId.create (uint32 mark.local_form_id),
+                      Position.create (float32 mark.x) (float32 mark.y) (float32 mark.z), Radian.create (float32 mark.heading),
+                      Username.create Int32.MaxValue account.username, DisplayName.create Int32.MaxValue profile.display_name,
+                      SqliteStatements.nameColor profile.name_color with
+                | Ok markId, Ok author, Ok body, Ok characterName, Ok plugin, Ok localId, Ok position, Ok heading, Ok username, Ok displayName, Ok color
+                    when PluginName.value plugin = mark.plugin_name && DisplayName.value displayName = profile.display_name ->
+                    let placement = GroundMarkPlacement.create (FormKey.create plugin localId) position heading
+                    let createdAt =
+                        try
+                            Ok (DateTimeOffset.FromUnixTimeMilliseconds mark.created_at)
+                        with :? ArgumentOutOfRangeException -> Error ()
+
+                    match createdAt with
+                    | Error () -> invalidData "A stored ground mark has a creation time outside the supported range."
+                    | Ok createdAt ->
+                        Ok {
+                            Mark =
+                                GroundMark.create markId author body placement createdAt
+                                |> GroundMark.withCharacterName characterName
+                                |> GroundMark.withPseudonym pseudonym
+                                |> GroundMark.withGameDate gameDate
+                            Author = PlayerData.create author username displayName color
+                        }
+                | _ -> invalidData "A stored ground mark or its author profile is invalid."
 
     let private MarkProjection =
         [| SqliteStored.Column.PositiveInteger
@@ -127,22 +131,47 @@ module SqliteGroundMarkStore =
                 else
                     let decoded = SqliteAccountStore.storedRow reader 0 MarkProjection (fun () ->
                         let mark: main.ground_marks = {
-                            id = reader.GetInt64 0; author_id = reader.GetInt64 1; character_name = optional 2 reader.GetString
-                            kind = reader.GetInt64 3; text = reader.GetString 4; plugin_name = reader.GetString 5; local_form_id = reader.GetInt64 6
-                            x = reader.GetDouble 7; y = reader.GetDouble 8; z = reader.GetDouble 9; heading = reader.GetDouble 10
-                            created_at = reader.GetInt64 11; author_pseudonym = optional 12 reader.GetString
-                            game_era = optional 13 reader.GetInt64; game_year = optional 14 reader.GetInt64; game_month = optional 15 reader.GetInt64
-                            game_day = optional 16 reader.GetInt64; game_day_of_week = optional 17 reader.GetInt64
-                            game_hour = optional 18 reader.GetInt64; game_minute = optional 19 reader.GetInt64 }
-                        let profile: main.profiles = { player_id = reader.GetInt64 20; account_id = reader.GetInt64 21
-                                                       display_name = reader.GetString 22; name_color = reader.GetInt64 23 }
-                        let account: main.accounts = { id = reader.GetInt64 24; username = reader.GetString 25 }
+                            id = reader.GetInt64 0
+                            author_id = reader.GetInt64 1
+                            character_name = optional 2 reader.GetString
+
+                            kind = reader.GetInt64 3
+                            text = reader.GetString 4
+                            plugin_name = reader.GetString 5
+                            local_form_id = reader.GetInt64 6
+                            x = reader.GetDouble 7
+                            y = reader.GetDouble 8
+                            z = reader.GetDouble 9
+                            heading = reader.GetDouble 10
+
+                            created_at = reader.GetInt64 11
+                            author_pseudonym = optional 12 reader.GetString
+                            game_era = optional 13 reader.GetInt64
+                            game_year = optional 14 reader.GetInt64
+                            game_month = optional 15 reader.GetInt64
+                            game_day = optional 16 reader.GetInt64
+                            game_day_of_week = optional 17 reader.GetInt64
+                            game_hour = optional 18 reader.GetInt64
+                            game_minute = optional 19 reader.GetInt64
+                        }
+                        let profile: main.profiles = {
+                            player_id = reader.GetInt64 20
+                            account_id = reader.GetInt64 21
+                            display_name = reader.GetString 22
+                            name_color = reader.GetInt64 23
+                        }
+                        let account: main.accounts = {
+                            id = reader.GetInt64 24
+                            username = reader.GetString 25
+                        }
                         toRecord mark profile account)
+
                     match decoded with
                     | Ok record -> next (record :: records)
                     | Error error -> Error error
             let records = next []
             reader.Close()
+
             match records with
             | Error error -> Error error
             | Ok reversed ->
@@ -152,7 +181,10 @@ module SqliteGroundMarkStore =
                     "SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'ground_marks'), 0), COALESCE((SELECT MAX(id) FROM ground_marks), 0))"
                 match sequence.ExecuteScalar() with
                 | :? int64 as highest when highest >= 0L && highest < Int64.MaxValue ->
-                    Ok { Marks = List.rev reversed; NextId = uint64 highest + 1UL }
+                    Ok {
+                        Marks = List.rev reversed
+                        NextId = uint64 highest + 1UL
+                    }
                 | _ -> invalidData "The ground mark ID sequence is invalid or exhausted.")
 
     let private insertInto (context: QueryContext) (mark: GroundMark) =
@@ -220,6 +252,7 @@ module SqliteGroundMarkStore =
             | GroundMarkWrite.Insert mark -> insert config mark context.CancellationToken
             | GroundMarkWrite.Replace(evicted, mark) -> replace config evicted mark context.CancellationToken
             | GroundMarkWrite.Delete ids -> delete config ids context.CancellationToken
+
         match result with
         | Ok () -> ()
         | Error (AccountStoreError.Failed error) -> logger.LogError(error, "Ground mark storage write failed: {Write}", request)
@@ -231,7 +264,10 @@ module SqliteGroundMarkStore =
     /// for the running server and the next successful write is unaffected.
     /// capacity is GroundMarks.MaxPendingWrites, checked with the configuration.
     let tryPrepareWriter config (logger: ILogger) capacity =
-        let options = { AgentOptions.create "ground-mark-writer" with Mailbox = AgentMailbox.boundedWait capacity }
+        let options = {
+            AgentOptions.create "ground-mark-writer" with
+                Mailbox = AgentMailbox.boundedWait capacity
+        }
         Agent.TryPrepareReliable(options, write config logger)
 
     let startWriter config logger capacity =

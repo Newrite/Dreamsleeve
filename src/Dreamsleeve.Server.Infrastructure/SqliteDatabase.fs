@@ -16,7 +16,10 @@ module SqliteAccountStoreConfig =
     [<Literal>]
     let MaxBusyTimeoutSeconds = 30
 
-    let defaults = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
+    let defaults = {
+        DatabasePath = "data/dreamsleeve.db"
+        BusyTimeoutSeconds = 5
+    }
 
     /// [Database], checked once with the rest of the configuration.
     let validate config = [
@@ -98,8 +101,11 @@ module internal SqliteDatabase =
             let migrations = Path.GetFullPath migrationsDirectory
             Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
             let attributes = File.GetAttributes migrations
-            if attributes.HasFlag FileAttributes.Directory then Ok migrations
-            else Error $"Account migrations path is not a directory: {migrations}"
+
+            if attributes.HasFlag FileAttributes.Directory then
+                Ok migrations
+            else
+                Error $"Account migrations path is not a directory: {migrations}"
         with
         | :? IOException as error -> startupFailure error
         | :? UnauthorizedAccessException as error -> startupFailure error
@@ -116,7 +122,9 @@ module internal SqliteDatabase =
     // Migrondi 1.3.0 aggregates malformed migration sources. A mixed aggregate
     // containing an unexpected application/runtime fault must still escape.
     let internal migrate action =
-        try action (); Ok ()
+        try
+            action ()
+            Ok ()
         with
         | error when knownMigrationFailure error -> startupFailure error
         | :? AggregateException as error when
@@ -145,6 +153,7 @@ module internal SqliteDatabase =
                             connection = connection.ConnectionString
                             migrations = migrationsDirectory
                     }
+
                     match migrate (fun () ->
                         let migrations = Migrondi.MigrondiFactory(migrationConfig, AppContext.BaseDirectory, NullLogger.Instance)
                         migrations.Initialize()
@@ -155,6 +164,8 @@ module internal SqliteDatabase =
                         | Error error -> Error error
                         | Ok () ->
                             let mode = scalar connection "PRAGMA journal_mode=WAL" :?> string
-                            if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then Ok ()
-                            else Error $"SQLite did not enable WAL mode (returned {mode})."
+                            if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then
+                                Ok ()
+                            else
+                                Error $"SQLite did not enable WAL mode (returned {mode})."
             with :? SqliteException as error -> startupFailure error

@@ -59,10 +59,19 @@ module SqliteAddressStore =
            (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds) |]
 
     let private AddressProjection =
-        [| SqliteStored.Column.Blob; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.UnixMilliseconds; SqliteStored.Column.Integer |]
+        [|
+            SqliteStored.Column.Blob
+            SqliteStored.Column.UnixMilliseconds
+            SqliteStored.Column.UnixMilliseconds
+            SqliteStored.Column.Integer
+        |]
 
     let private MatchProjection =
-        [| SqliteStored.Column.PositiveInteger; SqliteStored.Column.Text; SqliteStored.Column.Text |]
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+            SqliteStored.Column.Text
+        |]
 
     let private ColorProjection =
         [| SqliteStored.Column.Integer |]
@@ -74,17 +83,30 @@ module SqliteAddressStore =
                 match optional reader 4 with
                 | ValueSome admin -> AdminId.create admin |> Result.map ValueSome
                 | ValueNone -> Ok ValueNone
+
             match AddressRange.ofStored (bytes reader 1) (int (reader.GetInt64 2)), SanctionReason.create (reader.GetString 3), issuer with
             | Some range, Ok reason, Ok issuedBy when reader.GetInt64 0 > 0L ->
-                Ok { Id = reader.GetInt64 0; Range = range; Reason = reason; IssuedBy = issuedBy; IssuedAt = time reader 5
-                     Expires = optional reader 6 |> ValueOption.map DateTimeOffset.FromUnixTimeMilliseconds }
+                Ok {
+                    Id = reader.GetInt64 0
+                    Range = range
+                    Reason = reason
+                    IssuedBy = issuedBy
+                    IssuedAt = time reader 5
+                    Expires = optional reader 6 |> ValueOption.map DateTimeOffset.FromUnixTimeMilliseconds
+                }
             | _ -> invalidData ())
 
     // address, first_seen, last_seen, sign_ins from index on.
     let private readAddress (reader: DbDataReader) index =
         SqliteAccountStore.storedRow reader index AddressProjection (fun () ->
             match ClientAddress.ofBytes (bytes reader index) with
-            | Some address -> Ok { Address = address; FirstSeen = time reader (index + 1); LastSeen = time reader (index + 2); SignIns = reader.GetInt64(index + 3) }
+            | Some address ->
+                Ok {
+                    Address = address
+                    FirstSeen = time reader (index + 1)
+                    LastSeen = time reader (index + 2)
+                    SignIns = reader.GetInt64(index + 3)
+                }
             | None -> invalidData ())
 
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
@@ -97,6 +119,7 @@ module SqliteAddressStore =
                 let at = box (milliseconds now)
                 execute context "INSERT INTO sign_in_addresses(player_id, address, first_seen, last_seen, sign_ins) VALUES (@player, @address, @now, @now, 1) ON CONFLICT(player_id, address) DO UPDATE SET last_seen=excluded.last_seen, sign_ins=sign_ins + 1"
                     [ "@player", player playerId; "@address", box (ClientAddress.bytes address); "@now", at ] |> ignore
+
                 execute context "DELETE FROM sign_in_addresses WHERE last_seen < @cutoff"
                     [ "@cutoff", box (milliseconds (now - TimeSpan.FromDays(float keepDays))) ] |> ignore
                 Ok()))
@@ -123,7 +146,11 @@ module SqliteAddressStore =
                     SqliteAccountStore.storedRow reader 7 ColorProjection (fun () ->
                         match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
                               DisplayName.create Int32.MaxValue (reader.GetString 2), readAddress reader 3, nameColor (reader.GetInt64 7) with
-                        | Ok id, Ok username, Ok name, Ok address, Ok color -> Ok { Player = PlayerData.create id username name color; Address = address }
+                        | Ok id, Ok username, Ok name, Ok address, Ok color ->
+                            Ok {
+                                Player = PlayerData.create id username name color
+                                Address = address
+                            }
                         | _ -> invalidData ()))))
 
     /// The bans in force at now, newest first.
@@ -152,7 +179,15 @@ module SqliteAddressStore =
                         [ "@network", box (AddressRange.network range); "@prefix", box (AddressRange.prefix range)
                           "@reason", box (SanctionReason.value reason); "@admin", box (AdminId.value admin); "@now", box (milliseconds now)
                           "@expires", (match expires with ValueSome value -> box (milliseconds value) | ValueNone -> box DBNull.Value) ]
-                let ban = { Id = id :?> int64; Range = range; Reason = reason; IssuedBy = ValueSome admin; IssuedAt = now; Expires = expires }
+                let ban = {
+                    Id = id :?> int64
+                    Range = range
+                    Reason = reason
+                    IssuedBy = ValueSome admin
+                    IssuedAt = now
+                    Expires = expires
+                }
+
                 let record = AuditRecord.create AdminAction.BannedAddresses (AuditTarget.Range(AddressRange.key range)) $"until {term ban}: {SanctionReason.value reason}"
                 SqliteAdminStore.audit context (AuditActor.Admin admin) record now
                 Ok ban))
@@ -169,7 +204,9 @@ module SqliteAddressStore =
                 | Ok [] -> Ok None
                 | Ok (ban :: _) ->
                     reader.Close()
+
                     execute context "UPDATE address_bans SET lifted_at=@now WHERE id=@id" [ "@id", box banId; "@now", box (milliseconds now) ] |> ignore
+
                     let record = AuditRecord.create AdminAction.LiftedAddressBan (AuditTarget.Range(AddressRange.key ban.Range)) ""
                     SqliteAdminStore.audit context (AuditActor.Admin admin) record now
                     Ok(Some ban)))
