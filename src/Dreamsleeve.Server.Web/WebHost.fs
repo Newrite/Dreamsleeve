@@ -65,7 +65,10 @@ module Forwarding =
             | (ValueSome _ | ValueNone) :: _ | [] ->
                 // A proxy that names no client leaves the client unknown.
                 let client = if isProxy current then ValueNone else ValueSome current
-                { Client = client; Proxy = proxy }
+                {
+                    Client = client
+                    Proxy = proxy
+                }
         walk (plain peer) ValueNone hops
 
 
@@ -90,7 +93,12 @@ module WebHost =
 
     /// The one error shape of both hosts: {code, message}.
     let error (status: int) (code: string) (message: string) : IResult =
-        Results.Json({| code = code; message = message |}, statusCode = status)
+        Results.Json(
+            {|
+                code = code
+                message = message
+            |},
+            statusCode = status)
 
     let write (context: HttpContext) (result: IResult) = result.ExecuteAsync context
 
@@ -105,7 +113,10 @@ module WebHost =
         | true, (:? ForwardedClient as value) -> value
         | true, _ | false, _ ->
             let remote = context.Connection.RemoteIpAddress
-            { Client = (if isNull remote then ValueNone else ValueSome remote); Proxy = ValueNone }
+            {
+                Client = (if isNull remote then ValueNone else ValueSome remote)
+                Proxy = ValueNone
+            }
 
     // Trusted hops speak for the client: the connection takes its address
     // (rate limits, sign-in history and bans follow the player) and the scheme
@@ -172,6 +183,7 @@ module WebHost =
                 | Error error -> failure <- Some error
                 | Ok 0 -> ended <- true
                 | Ok received -> count <- count + received
+
             match failure with
             | Some error -> return Error error
             | None when count > maxBytes -> return Error BodyError.TooLarge
@@ -228,6 +240,7 @@ module WebHost =
         builder.Host.UseSerilog(logger, dispose = false) |> ignore
         builder.WebHost.ConfigureKestrel(Action<KestrelServerOptions>(configureServer listener limits)) |> ignore
         builder.Services.AddRateLimiter(Action<RateLimiterOptions>(configureRate rule rejected)) |> ignore
+
         let app = builder.Build()
         if listener.TrustForwardedHeaders || not listener.TrustedProxies.IsEmpty then
             // Only a proxy on this machine or a proxy of the server may speak for the client.

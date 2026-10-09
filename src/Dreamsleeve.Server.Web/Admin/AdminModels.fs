@@ -231,8 +231,14 @@ type TokenModel = {
 [<RequireQualifiedAccess>]
 module AdminModels =
     let status (snapshot: ServerRuntimeSnapshot) : StatusModel =
-        { Connections = snapshot.Connections; Guests = snapshot.Guests; Ready = snapshot.Ready; Reservations = snapshot.Reservations
-          Closing = snapshot.Closing; Stopping = snapshot.Stopping }
+        {
+            Connections = snapshot.Connections
+            Guests = snapshot.Guests
+            Ready = snapshot.Ready
+            Reservations = snapshot.Reservations
+            Closing = snapshot.Closing
+            Stopping = snapshot.Stopping
+        }
 
     let phase = function
         | RuntimeSessionPhase.Waiting -> "waiting"
@@ -254,13 +260,17 @@ module AdminModels =
     ]
 
     let sanction (value: Sanction) : SanctionModel =
-        { Kind = SanctionKind.key value.Kind; Reason = SanctionReason.value value.Reason; IssuedAt = value.IssuedAt
-          Expires = value.Expires |> ValueOption.toNullable
-          IssuedBy =
-            match value.IssuedBy with
-            | ValueSome(SanctionIssuer.Admin admin) -> AuditTarget.key (AuditTarget.Admin admin)
-            | ValueSome(SanctionIssuer.Moderator moderator) -> AuditTarget.key (AuditTarget.Player moderator)
-            | ValueNone -> null }
+        {
+            Kind = SanctionKind.key value.Kind
+            Reason = SanctionReason.value value.Reason
+            IssuedAt = value.IssuedAt
+            Expires = value.Expires |> ValueOption.toNullable
+            IssuedBy =
+                match value.IssuedBy with
+                | ValueSome(SanctionIssuer.Admin admin) -> AuditTarget.key (AuditTarget.Admin admin)
+                | ValueSome(SanctionIssuer.Moderator moderator) -> AuditTarget.key (AuditTarget.Player moderator)
+                | ValueNone -> null
+        }
 
     /// Who did an audited action, as the page names them.
     let actor (entry: AuditEntry) =
@@ -271,8 +281,12 @@ module AdminModels =
         | ValueNone -> "удалённый модератор"
 
     let sanctionEntry (record: SanctionRecord) : SanctionEntryModel =
-        { PlayerId = PlayerId.value record.Target.PlayerId; Username = Username.value record.Target.Username
-          DisplayName = DisplayName.value record.Target.DisplayName; Sanction = sanction record.Sanction }
+        {
+            PlayerId = PlayerId.value record.Target.PlayerId
+            Username = Username.value record.Target.Username
+            DisplayName = DisplayName.value record.Target.DisplayName
+            Sanction = sanction record.Sanction
+        }
 
     let hidden = function
         | HiddenIdentity.Shown -> "none"
@@ -298,85 +312,185 @@ module AdminModels =
         let playerId = row.PlayerId |> Option.map PlayerId.value |> Option.toNullable
         match view with
         | Ok None | Error _ ->
-            let status = match view with Ok None -> "not_open" | Error _ -> "unavailable" | Ok (Some _) -> "available"
-            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row; PlayerId = playerId; Phase = phase row.Phase
-              ConnectedAt = row.ConnectedAt; Described = false; DescriptionStatus = status; Username = null; DisplayName = null; CharacterName = null; CharacterWithheld = false
-              Hidden = null; Pseudonym = null; Role = null; Location = null; Level = Nullable() }
+            let status =
+                match view with
+                | Ok None -> "not_open"
+                | Error _ -> "unavailable"
+                | Ok (Some _) -> "available"
+            {
+                ConnectionId = string row.ConnectionId
+                Address = ClientAddress.text row.Address
+                Proxy = proxy row
+                PlayerId = playerId
+                Phase = phase row.Phase
+                ConnectedAt = row.ConnectedAt
+
+                Described = false
+                DescriptionStatus = status
+                Username = null
+                DisplayName = null
+                CharacterName = null
+                CharacterWithheld = false
+                Hidden = null
+                Pseudonym = null
+                Role = null
+                Location = null
+                Level = Nullable()
+            }
         | Ok (Some view) ->
-            { ConnectionId = string row.ConnectionId; Address = ClientAddress.text row.Address; Proxy = proxy row
-              PlayerId = Nullable(PlayerId.value view.PlayerId); Phase = phase row.Phase
-              ConnectedAt = row.ConnectedAt; Described = true; DescriptionStatus = "available"
-              Username = Username.value view.Username; DisplayName = DisplayName.value view.DisplayName
-              CharacterName = view.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.defaultValue null
-              CharacterWithheld = view.CharacterWithheld
-              Hidden = hidden view.Hiding
-              Pseudonym = view.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.defaultValue null
-              Role = PlayerRole.key view.Role
-              Location = location view.Location
-              Level = view.Details.Level |> ValueOption.toNullable }
+            {
+                ConnectionId = string row.ConnectionId
+                Address = ClientAddress.text row.Address
+                Proxy = proxy row
+                PlayerId = Nullable(PlayerId.value view.PlayerId)
+                Phase = phase row.Phase
+                ConnectedAt = row.ConnectedAt
+
+                Described = true
+                DescriptionStatus = "available"
+                Username = Username.value view.Username
+                DisplayName = DisplayName.value view.DisplayName
+                CharacterName = view.CharacterName |> ValueOption.map CharacterName.value |> ValueOption.defaultValue null
+                CharacterWithheld = view.CharacterWithheld
+                Hidden = hidden view.Hiding
+                Pseudonym = view.Pseudonym |> ValueOption.map Pseudonym.value |> ValueOption.defaultValue null
+                Role = PlayerRole.key view.Role
+                Location = location view.Location
+                Level = view.Details.Level |> ValueOption.toNullable
+            }
 
     let player online (record: PlayerRecord) : PlayerModel =
-        { PlayerId = PlayerId.value record.Profile.PlayerId; Username = Username.value record.Profile.Username
-          DisplayName = DisplayName.value record.Profile.DisplayName; Role = PlayerRole.key record.Role
-          Online = online record.Profile.PlayerId }
+        {
+            PlayerId = PlayerId.value record.Profile.PlayerId
+            Username = Username.value record.Profile.Username
+            DisplayName = DisplayName.value record.Profile.DisplayName
+            Role = PlayerRole.key record.Role
+            Online = online record.Profile.PlayerId
+        }
 
     let page query (online: PlayerId -> bool) (page: PlayerPage) : PlayerPageModel =
-        { Query = query; Page = page.Page; PageSize = SqliteAdminStore.PageSize; Total = page.Total
-          Players = page.Players |> List.map (player online) }
+        {
+            Query = query
+            Page = page.Page
+            PageSize = SqliteAdminStore.PageSize
+            Total = page.Total
+            Players = page.Players |> List.map (player online)
+        }
 
     let nameChange (change: NameChange) : NameChangeModel =
-        { OldName = change.OldName; NewName = change.NewName
-          ChangedBy = change.ChangedBy |> Option.map Username.value |> Option.defaultValue null; At = change.At }
+        {
+            OldName = change.OldName
+            NewName = change.NewName
+            ChangedBy = change.ChangedBy |> Option.map Username.value |> Option.defaultValue null
+            At = change.At
+        }
 
     let audit (entry: AuditEntry) : AuditModel =
-        { Actor = actor entry; Action = AdminAction.key entry.Action; Target = entry.Target
-          Details = entry.Details; At = entry.At }
+        {
+            Actor = actor entry
+            Action = AdminAction.key entry.Action
+            Target = entry.Target
+            Details = entry.Details
+            At = entry.At
+        }
 
     let signInAddress (entry: SignInAddress) : SignInAddressModel =
-        { Address = ClientAddress.text entry.Address; FirstSeen = entry.FirstSeen; LastSeen = entry.LastSeen; SignIns = entry.SignIns
-          Range = AddressRange.key (AddressRange.around entry.Address) }
+        {
+            Address = ClientAddress.text entry.Address
+            FirstSeen = entry.FirstSeen
+            LastSeen = entry.LastSeen
+            SignIns = entry.SignIns
+            Range = AddressRange.key (AddressRange.around entry.Address)
+        }
 
     let signInDevice (entry: SignInDevice) : SignInDeviceModel =
-        { Device = DeviceId.short entry.Device; FirstSeen = entry.FirstSeen; LastSeen = entry.LastSeen; SignIns = entry.SignIns }
+        {
+            Device = DeviceId.short entry.Device
+            FirstSeen = entry.FirstSeen
+            LastSeen = entry.LastSeen
+            SignIns = entry.SignIns
+        }
 
     let addressBan (ban: AddressBan) : AddressBanModel =
-        { Id = ban.Id; Range = AddressRange.key ban.Range; Reason = SanctionReason.value ban.Reason; IssuedAt = ban.IssuedAt
-          Expires = ban.Expires |> ValueOption.toNullable
-          IssuedBy = ban.IssuedBy |> ValueOption.map (fun admin -> AuditTarget.key (AuditTarget.Admin admin)) |> ValueOption.defaultValue null }
+        {
+            Id = ban.Id
+            Range = AddressRange.key ban.Range
+            Reason = SanctionReason.value ban.Reason
+            IssuedAt = ban.IssuedAt
+            Expires = ban.Expires |> ValueOption.toNullable
+            IssuedBy = ban.IssuedBy |> ValueOption.map (fun admin -> AuditTarget.key (AuditTarget.Admin admin)) |> ValueOption.defaultValue null
+        }
 
     let addressMatch (entry: AddressMatch) : AddressMatchModel =
-        { PlayerId = PlayerId.value entry.Player.PlayerId; Username = Username.value entry.Player.Username
-          DisplayName = DisplayName.value entry.Player.DisplayName; Address = ClientAddress.text entry.Address.Address
-          LastSeen = entry.Address.LastSeen }
+        {
+            PlayerId = PlayerId.value entry.Player.PlayerId
+            Username = Username.value entry.Player.Username
+            DisplayName = DisplayName.value entry.Player.DisplayName
+            Address = ClientAddress.text entry.Address.Address
+            LastSeen = entry.Address.LastSeen
+        }
 
     let guild (summary: GuildSummary) : GuildModel =
-        { GuildId = GuildId.value summary.Guild; Name = GuildName.value summary.Name; CreatedAt = summary.CreatedAt; Members = summary.Members
-          MasterId = summary.Master |> ValueOption.map (fun master -> PlayerId.value master.PlayerId) |> ValueOption.toNullable
-          Master = summary.Master |> ValueOption.map (fun master -> DisplayName.value master.DisplayName) |> ValueOption.defaultValue null }
+        {
+            GuildId = GuildId.value summary.Guild
+            Name = GuildName.value summary.Name
+            CreatedAt = summary.CreatedAt
+            Members = summary.Members
+            MasterId = summary.Master |> ValueOption.map (fun master -> PlayerId.value master.PlayerId) |> ValueOption.toNullable
+            Master = summary.Master |> ValueOption.map (fun master -> DisplayName.value master.DisplayName) |> ValueOption.defaultValue null
+        }
 
     let guildPage query (page: GuildPage) : GuildPageModel =
-        { Query = query; Page = page.Page; PageSize = GuildPage.Size; Total = page.Total; Guilds = page.Guilds |> List.map guild }
+        {
+            Query = query
+            Page = page.Page
+            PageSize = GuildPage.Size
+            Total = page.Total
+            Guilds = page.Guilds |> List.map guild
+        }
 
     let private guildMember (view: GuildMemberView) : GuildMemberModel =
-        { PlayerId = PlayerId.value view.Profile.PlayerId; Username = Username.value view.Profile.Username
-          DisplayName = DisplayName.value view.Profile.DisplayName; Role = GuildRole.key view.Membership.Role; Online = view.Online
-          JoinedAt = view.Membership.JoinedAt
-          Muted = view.Membership.Mute.IsSome
-          MuteReason = view.Membership.Mute |> ValueOption.map (fun mute -> SanctionReason.value mute.Reason) |> ValueOption.defaultValue null
-          MuteExpires = view.Membership.Mute |> ValueOption.bind _.Expires |> ValueOption.toNullable
-          MutedBy = view.Membership.Mute |> ValueOption.map (fun mute -> AuditTarget.key (AuditTarget.Player mute.IssuedBy)) |> ValueOption.defaultValue null }
+        {
+            PlayerId = PlayerId.value view.Profile.PlayerId
+            Username = Username.value view.Profile.Username
+            DisplayName = DisplayName.value view.Profile.DisplayName
+            Role = GuildRole.key view.Membership.Role
+            Online = view.Online
+            JoinedAt = view.Membership.JoinedAt
+
+            Muted = view.Membership.Mute.IsSome
+            MuteReason = view.Membership.Mute |> ValueOption.map (fun mute -> SanctionReason.value mute.Reason) |> ValueOption.defaultValue null
+            MuteExpires = view.Membership.Mute |> ValueOption.bind _.Expires |> ValueOption.toNullable
+            MutedBy = view.Membership.Mute |> ValueOption.map (fun mute -> AuditTarget.key (AuditTarget.Player mute.IssuedBy)) |> ValueOption.defaultValue null
+        }
 
     let private guildInvite (invite: GuildInvite, profile: PlayerData voption) : GuildInviteModel =
-        { PlayerId = PlayerId.value invite.Player
-          Username = profile |> ValueOption.map (fun profile -> Username.value profile.Username) |> ValueOption.defaultValue null
-          DisplayName = profile |> ValueOption.map (fun profile -> DisplayName.value profile.DisplayName) |> ValueOption.defaultValue null
-          InvitedBy = AuditTarget.key (AuditTarget.Player invite.InvitedBy); CreatedAt = invite.CreatedAt; Expires = invite.Expires }
+        {
+            PlayerId = PlayerId.value invite.Player
+            Username = profile |> ValueOption.map (fun profile -> Username.value profile.Username) |> ValueOption.defaultValue null
+            DisplayName = profile |> ValueOption.map (fun profile -> DisplayName.value profile.DisplayName) |> ValueOption.defaultValue null
+            InvitedBy = AuditTarget.key (AuditTarget.Player invite.InvitedBy)
+            CreatedAt = invite.CreatedAt
+            Expires = invite.Expires
+        }
 
     let guildCard (card: GuildCard) : GuildCardModel =
-        { Guild = guild card.Summary; Members = card.Members |> List.map guildMember; Invites = card.Invites |> List.map guildInvite }
+        {
+            Guild = guild card.Summary
+            Members = card.Members |> List.map guildMember
+            Invites = card.Invites |> List.map guildInvite
+        }
 
-    let playerGuild (summary: GuildSummary, role: GuildRole) : PlayerGuildModel = { Guild = guild summary; Role = GuildRole.key role }
+    let playerGuild (summary: GuildSummary, role: GuildRole) : PlayerGuildModel = {
+        Guild = guild summary
+        Role = GuildRole.key role
+    }
 
     let token (info: ApiTokenInfo) : TokenModel =
-        { Id = info.TokenHash; Prefix = info.TokenHash.Substring(0, min 8 info.TokenHash.Length); Label = ApiTokenLabel.value info.Label
-          Owner = Username.value info.Owner; CreatedAt = info.CreatedAt }
+        {
+            Id = info.TokenHash
+            Prefix = info.TokenHash.Substring(0, min 8 info.TokenHash.Length)
+            Label = ApiTokenLabel.value info.Label
+            Owner = Username.value info.Owner
+            CreatedAt = info.CreatedAt
+        }

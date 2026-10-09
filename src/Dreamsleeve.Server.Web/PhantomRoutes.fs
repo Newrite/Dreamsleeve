@@ -24,7 +24,8 @@ module PhantomRoutes =
                 let limit = context.Features.Get<IHttpMaxRequestBodySizeFeature>()
                 if not (isNull limit) && not limit.IsReadOnly then limit.MaxRequestBodySize <- Nullable(int64 PhantomOptions.defaults.Limits.CompressedBytes)
                 let request = {
-                    Token = token; Upload = upload
+                    Token = token
+                    Upload = upload
                     Length = if context.Request.ContentLength.HasValue then Some context.Request.ContentLength.Value else None
                     Body = if upload then context.Request.Body else context.Response.Body
                     BeginResponse = fun size ->
@@ -34,6 +35,7 @@ module PhantomRoutes =
                     Cancellation = context.RequestAborted
                 }
                 let! result = port.Serve request
+
                 match result with
                 | Ok () -> if upload then context.Response.StatusCode <- 204
                 | Error reason when not context.Response.HasStarted ->
@@ -47,4 +49,7 @@ module PhantomRoutes =
                         | PhantomHttpError.StorageCompletion | PhantomHttpError.StorageLength | PhantomHttpError.Storage _ -> 503
                 | Error _ -> context.Abort()
     }
-    let endpoints current = [ put "/phantoms/content" (handle current true); get "/phantoms/content" (handle current false) ]
+    let endpoints current = [
+        put "/phantoms/content" (handle current true)
+        get "/phantoms/content" (handle current false)
+    ]
