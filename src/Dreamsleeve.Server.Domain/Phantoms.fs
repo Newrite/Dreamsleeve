@@ -294,7 +294,13 @@ module PhantomPolicy =
 
     /// Candidates are already authorized by Presence. Keep selected sources until a
     /// newcomer is materially nearer, preventing churn at the count boundary.
-    let select (preferences: PhantomPreferences) (selected: Set<PlayerId>) (candidates: seq<PlayerId * double>) =
+    /// A source whose model download is in flight sorts first: a newcomer cannot
+    /// interrupt that transfer while the source stays within range.
+    let select
+        (preferences: PhantomPreferences)
+        (selected: Set<PlayerId>)
+        (transferring: Set<PlayerId>)
+        (candidates: seq<PlayerId * double>) =
         if not preferences.Receive || preferences.Maximum = 0 then
             Set.empty
         else
@@ -302,7 +308,8 @@ module PhantomPolicy =
 
             candidates
             |> Seq.filter (fun (_, squared) -> squared <= radius)
-            |> Seq.sortBy (fun (id, squared) -> (if selected.Contains id then squared * 0.81 else squared), id)
+            |> Seq.sortBy (fun (id, squared) ->
+                not (transferring.Contains id), (if selected.Contains id then squared * 0.81 else squared), id)
             |> Seq.truncate preferences.Maximum
             |> Seq.map fst
             |> Set.ofSeq

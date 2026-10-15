@@ -556,8 +556,9 @@ public:
                                                                                 : 0;
       const bool  admitted =
         Reservation(offer.asset) + sceneBytes + priorBytes <= settings.memoryBytes - std::min(settings.memoryBytes, Reserved(offer.player));
-      if (!admitted && found == remotes.end()) return false;
 
+      // The server offers each subscription once. A new remote that does not fit
+      // yet is kept as Deferred metadata and retried, never forgotten.
       auto& remote = remotes[offer.player];
       if (remote.view != offer.view || remote.descriptor != offer.asset)
       {
@@ -581,6 +582,15 @@ public:
       std::lock_guard lock(mutex);
       const auto      found = remotes.find(remove.player);
       if (found != remotes.end() && remove.view >= found->second.view) remotes.erase(found);
+    }
+
+    // The server restarted this client's phantom session: it will offer every
+    // current subscription again, and earlier offers have no Remove to follow.
+    void ClearRemotes()
+    {
+      std::lock_guard lock(mutex);
+      remotes.clear();
+      displayed.clear();
     }
 
     void Loaded(std::uint64_t workEpoch, const Wire::Offer& offer, std::shared_ptr<const ValidatedAsset> asset, bool cached)

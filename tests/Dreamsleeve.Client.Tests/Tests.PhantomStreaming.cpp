@@ -388,6 +388,72 @@ TEST_CASE("Phantom replacement waits for RAM without losing its view or old pose
   CHECK(exchange.Find(1)->previous);
 }
 
+TEST_CASE("A new phantom offer over the RAM budget waits for memory instead of being forgotten")
+{
+  P::Exchange exchange;
+  exchange.Context(1, true);
+  const auto     model = Model();
+  P::Wire::Offer first{1, 1, Describe(model)};
+  REQUIRE(exchange.Offer(first));
+  REQUIRE(exchange.SceneMemory(1, exchange.RemainingMemory()));
+
+  P::Streaming stream(exchange, {});
+  Policy(stream, 2);
+  P::Wire::Offer second{2, 1, Describe(model)};
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* o = p.mutable_offer();
+    o->set_player_id(second.player);
+    o->set_view_revision(second.view);
+    Set(second.asset, o->mutable_asset());
+  })));
+  // The server never repeats this Offer; the client must retain it.
+  const auto waiting = exchange.Find(2);
+  REQUIRE(waiting);
+  CHECK(waiting->WaitingBudget());
+  CHECK(waiting->State() == P::Representation::Loading);
+  CHECK(std::ranges::none_of(Models(stream.Poll()), [](const auto& p) { return p.has_download() && p.download().player_id() == 2; }));
+
+  exchange.Remove({1, 1});
+  // The planner retries a waiting offer once per second.
+  const auto retried = [&] {
+    return std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_download() && p.download().player_id() == 2; });
+  };
+  const auto end = Clock::now() + std::chrono::seconds(4);
+  bool       requested{};
+  while (!requested && Clock::now() < end)
+  {
+    requested = retried();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  CHECK(requested);
+  CHECK_FALSE(exchange.Find(2)->WaitingBudget());
+}
+
+TEST_CASE("A repeated phantom policy restarts the server session without stale remotes or admissions")
+{
+  P::Exchange exchange;
+  auto        model = std::make_shared<const P::PreparedAsset>(Model());
+  PreparePublication(exchange, model);
+  P::Streaming stream(exchange, {});
+  Policy(stream, 2);
+  REQUIRE(std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_publish() && p.publish().request_id() == 1; }));
+  const auto descriptor = Describe(*model);
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* o = p.mutable_offer();
+    o->set_player_id(9);
+    o->set_view_revision(1);
+    Set(descriptor, o->mutable_asset());
+  })));
+  REQUIRE(exchange.Find(9));
+
+  // The server lost the Publish reply and this Offer's Remove with its old session.
+  Policy(stream, 2);
+  CHECK_FALSE(exchange.Find(9));
+  CHECK(exchange.Read().remotes.empty());
+  // The unanswered publication is admitted again in the new session.
+  CHECK(std::ranges::any_of(Models(stream.Poll()), [](const auto& p) { return p.has_publish() && p.publish().request_id() == 2; }));
+}
+
 TEST_CASE("Terminal phantom rejection retains the usable bridge and permits a later appearance")
 {
   P::Exchange exchange;

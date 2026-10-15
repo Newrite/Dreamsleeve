@@ -190,8 +190,29 @@ export namespace Dreamsleeve::Client::Phantom
         local->state = Awaiting{id, now + Timeout};
     }
 
+    // A repeated Policy starts a new server phantom session after the server
+    // lost queued responses. Its offers, transfers and pending publication
+    // admission are gone; the server offers the current selection again.
+    void Resynchronize()
+    {
+      for (const auto& [id, download] : downloads)
+        http.Cancel(TransferId{id});
+      downloads.clear();
+      plans.clear();
+      // Preferences and Withdraw still describe this client; the rest name old offers or transfers.
+      std::erase_if(requests, [](const auto& request) {
+        return !std::holds_alternative<Wire::Preferences>(request) && !std::holds_alternative<Wire::Withdraw>(request);
+      });
+      exchange.ClearRemotes();
+      if (!local) return;
+      if (const auto* upload = std::get_if<Upload>(&local->state)) http.Cancel(upload->transfer.transfer);
+      if (std::holds_alternative<Upload>(local->state) || std::holds_alternative<Awaiting>(local->state))
+        local->state = Pending{Clock::now()};
+    }
+
     void Receive(const Wire::Policy& value)
     {
+      if (policy) Resynchronize();
       policy = value;
       exchange.SampleRate(value.sampleRate);
       Preferences();

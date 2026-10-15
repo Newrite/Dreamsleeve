@@ -4,7 +4,12 @@ param(
     [switch]$NoBuild,
     [string]$Nginx,
     [string]$Artifacts,
-    [ValidateRange(30, 300)][int]$TimeoutSeconds = 120
+    [ValidateRange(30, 300)][int]$TimeoutSeconds = 120,
+    # Pair: the two-party contract smoke. Mutual: N players publish and receive at once.
+    [ValidateSet('Pair', 'Mutual')][string]$Scenario = 'Pair',
+    [ValidateRange(2, 16)][int]$Players = 6,
+    [ValidateRange(0, 4096)][int]$HeavyVertices = 0,
+    [int]$ModelBytesPerSecond = 0
 )
 $ErrorActionPreference = 'Stop'
 $repoPath = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -44,6 +49,7 @@ $stopRequested = $false
 $proxy = $null
 try {
     $serverInfo = New-ChildInfo 'dotnet' @($fixtureDll, '--port', [string]$port, '--state-dir', $artifactPath, '--ready-file', $readyPath)
+    if ($ModelBytesPerSecond -gt 0) { $serverInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_MODEL_BPS'] = [string]$ModelBytesPerSecond }
     $server = [Diagnostics.Process]::Start($serverInfo)
     $serverOut = $server.StandardOutput.ReadToEndAsync()
     $serverErr = $server.StandardError.ReadToEndAsync()
@@ -106,7 +112,11 @@ try {
             $response.Dispose()
         } finally { $probe.Dispose() }
     }
-    $nativeInfo = New-ChildInfo $nativePath @('--test-case=Phantom production Streaming real UDP smoke', '--no-colors=true')
+    $testName = if ($Scenario -eq 'Mutual') { 'Phantom production Streaming concurrent mutual smoke' } else { 'Phantom production Streaming real UDP smoke' }
+    $sentinel = if ($Scenario -eq 'Mutual') { 'PHANTOM_MUTUAL_UDP_PASS' } else { 'PHANTOM_NATIVE_(ASSET_)?UDP_PASS' }
+    $nativeInfo = New-ChildInfo $nativePath @("--test-case=$testName", '--no-colors=true')
+    $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_PLAYERS'] = [string]$Players
+    $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_HEAVY_VERTICES'] = [string]$HeavyVertices
     if ($Nginx) { $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_HTTP'] = "http://127.0.0.1:$outerPort" }
     # Per-child environment; invoking shell and normal native tests stay unchanged.
     $nativeInfo.Environment['DREAMSLEEVE_PHANTOM_SMOKE_PORT'] = [string]$port
@@ -124,8 +134,8 @@ try {
     [IO.File]::WriteAllText((Join-Path $artifactPath 'native.stderr.log'), $nativeErr.GetAwaiter().GetResult())
     Write-Output $output
     if ($native.ExitCode -ne 0) { throw "Native smoke failed with exit code $($native.ExitCode). See $artifactPath" }
-    if ($output -notmatch 'PHANTOM_NATIVE_(ASSET_)?UDP_PASS') { throw 'Selected binary did not execute the opt-in native smoke (missing success sentinel).' }
-    if ($Nginx -and ($output -notmatch 'PHANTOM_DELTA_PASS' -or $output -notmatch 'PHANTOM_CONTEXT_DELTA_PASS')) {
+    if ($output -notmatch $sentinel) { throw 'Selected binary did not execute the opt-in native smoke (missing success sentinel).' }
+    if ($Nginx -and $Scenario -eq 'Pair' -and ($output -notmatch 'PHANTOM_DELTA_PASS' -or $output -notmatch 'PHANTOM_CONTEXT_DELTA_PASS')) {
         throw 'Proxy smoke must execute both native delta and context-transition coverage.'
     }
     if ($server.HasExited) { throw 'Server exited before graceful smoke shutdown.' }
@@ -136,7 +146,7 @@ try {
     if ($server.ExitCode -ne 0) { throw "Server fixture failed with exit code $($server.ExitCode)." }
     [IO.File]::WriteAllText((Join-Path $artifactPath 'result.json'), (@{
         status = 'passed'; nginx = $Nginx; protocolVersion = $ready.protocolVersion; nativeBinary = $nativePath; utc = [DateTime]::UtcNow.ToString('O');
-        test = 'Phantom production Streaming real UDP smoke'; artifacts = $artifactPath
+        test = $testName; artifacts = $artifactPath
     } | ConvertTo-Json))
     Write-Output "Cross-language smoke passed; artifacts: $artifactPath"
 }

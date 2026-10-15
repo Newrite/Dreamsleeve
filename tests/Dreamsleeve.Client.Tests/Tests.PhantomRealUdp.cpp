@@ -620,3 +620,473 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   std::cout << "PHANTOM_NATIVE_UDP_PASS coldBytes=" << downloaded << " windowChunks=" << alice.windowChunks
             << " fragmentedPoseBytes=" << bob.largestPose << " requestIds=positive loss=discarded rollover=unreliable warmChunks=0\n";
 }
+
+namespace
+{
+
+  // Game traffic beside model transfers: players stand on a circle beyond the
+  // server's near-protection radius, walk, turn their cameras (server frustum)
+  // and stream poses. A display is acknowledged only once a pose plays.
+  struct Traffic
+  {
+    static constexpr float Radius        = 800;
+    static constexpr float Walk          = 40;
+    static constexpr auto  MovementEvery = std::chrono::milliseconds(100);
+    static constexpr auto  PoseEvery     = std::chrono::milliseconds(100);
+    // A full camera turn every three seconds repeatedly leaves and enters the frustum.
+    static constexpr float SpinRadiansPerSecond = 2 * std::numbers::pi_v<float> / 3;
+
+    bool enabled{};
+    bool spinning{};
+  };
+
+  // Every participant publishes and receives at once, as players do when they
+  // meet in one place. Without traffic each peer acknowledges display as soon
+  // as its model is ready, the earliest point the game scene could attach it.
+  struct MutualPeer
+  {
+    std::uint64_t                                           number{};
+    const Traffic&                                          traffic;
+    float                                                   bearing{};
+    P::Exchange                                             exchange;
+    P::Streaming                                            stream;
+    std::unique_ptr<ENetHost, decltype(&enet_host_destroy)> host{nullptr, &enet_host_destroy};
+    ENetPeer*                                               peer{};
+
+    bool connected{};
+    bool welcomed{};
+    bool policy{};
+    bool located{};
+
+    std::uint64_t readyGeneration{};
+    // Source player -> first Offer of the current phase; (player, generation) -> load time.
+    std::unordered_map<std::uint64_t, Clock::time_point>                 offered;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, Clock::time_point> loaded;
+    std::set<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>    acknowledged;
+
+    // Own publication shape for generated poses.
+    std::uint64_t     generation{};
+    std::size_t       channels{};
+    std::size_t       bounds{};
+    std::uint64_t     movementSequence{};
+    std::uint64_t     poseSequence{};
+    Clock::time_point started{Clock::now()};
+    Clock::time_point nextMovement{};
+    Clock::time_point nextPose{};
+
+    std::uint32_t offers{};
+    std::uint32_t removes{};
+    std::uint32_t abandonedDownloads{};
+
+    MutualPeer(std::uint64_t id, int players, const Traffic& traffic, std::uint16_t port, const std::filesystem::path& cache)
+        : number(id),
+          traffic(traffic),
+          bearing(2 * std::numbers::pi_v<float> * static_cast<float>(id - 1) / static_cast<float>(players)),
+          stream(exchange, cache)
+    {
+      stream.ConfigureHttp(Environment("DREAMSLEEVE_PHANTOM_SMOKE_HTTP").value_or("http://127.0.0.1:" + std::to_string(port)), false);
+      exchange.Configure(P::ViewSettings{});
+      host.reset(enet_host_create(nullptr, 1, 5, 0, 0));
+      REQUIRE(host);
+      ENetAddress address{};
+      REQUIRE(enet_address_set_host_ip(&address, "127.0.0.1") == 0);
+      address.port = port;
+      peer         = enet_host_connect(host.get(), &address, 5, 0);
+      REQUIRE(peer);
+    }
+
+    void Send(std::uint8_t lane, std::span<const std::uint8_t> bytes, enet_uint32 flags)
+    {
+      auto wrapped = DreamNetPeer::TryFromNative(peer);
+      REQUIRE(wrapped);
+      REQUIRE(wrapped->PushSpan(bytes, lane, static_cast<PacketFlag>(flags)));
+    }
+
+    template <class F>
+    void Command(std::uint64_t id, F fill)
+    {
+      Chat::ClientPacket packet;
+      packet.set_protocol_version(Dreamsleeve::Client::Wire::Version);
+      packet.set_request_id(id);
+      fill(packet);
+      P::Bytes bytes(packet.ByteSizeLong());
+      REQUIRE(packet.SerializeToArray(bytes.data(), static_cast<int>(bytes.size())));
+      Send(0, bytes, ENET_PACKET_FLAG_RELIABLE);
+    }
+
+    void Open()
+    {
+      auto name = "p" + std::to_string(number);
+      name.resize(43, '_');
+      Command(1, [&](auto& packet) { packet.mutable_open_session()->set_session_ticket(name); });
+    }
+
+    std::array<float, 2> Spot(float seconds) const
+    {
+      if (!traffic.enabled) return {0, 0};
+      const auto radius = Traffic::Radius + Traffic::Walk * std::sin(seconds);
+      return {radius * std::cos(bearing), radius * std::sin(bearing)};
+    }
+
+    // Toward the circle centre, where every other player stands in view.
+    std::array<float, 2> Camera(float seconds) const
+    {
+      if (!traffic.enabled) return {0, 0};
+      const auto angle = traffic.spinning ? bearing + Traffic::SpinRadiansPerSecond * seconds : bearing + std::numbers::pi_v<float>;
+      return {std::cos(angle), std::sin(angle)};
+    }
+
+    // Without traffic all peers stand at one point of one location, so Presence
+    // authorizes every pair and the server selects by its normal maximum.
+    void Locate()
+    {
+      Command(2, [](auto& packet) { packet.mutable_update_player()->mutable_begin_character()->set_name("Mutual UDP"); });
+      stream.Context(10, false);
+      const auto [x, y]   = Spot(0);
+      const auto [cx, cy] = Camera(0);
+      Command(10, [&](auto& packet) {
+        auto* update = packet.mutable_update_player()->mutable_set_location();
+        update->set_context_revision(10);
+        auto* location = update->mutable_location();
+        auto* space    = location->mutable_location();
+        space->mutable_location_id()->set_plugin_name("Skyrim.esm");
+        space->mutable_location_id()->set_local_form_id(60);
+        space->set_location_name("Whiterun");
+        location->mutable_position()->set_x(x);
+        location->mutable_position()->set_y(y);
+        location->mutable_camera_direction()->set_x(cx);
+        location->mutable_camera_direction()->set_y(cy);
+      });
+    }
+
+    void Publish(std::uint64_t value, P::ValidatedAsset model)
+    {
+      generation = value;
+      channels   = model.Layout().requiredChannels.size();
+      bounds     = model.Layout().bounds.size();
+      REQUIRE(exchange.Submit(10, P::Generation{value}, std::move(model)));
+    }
+
+    // Movement and camera go on the realtime lane like ClientRuntime::SendMovement.
+    void SendTraffic(Clock::time_point now)
+    {
+      if (!traffic.enabled || !located) return;
+      const auto seconds = std::chrono::duration<float>(now - started).count();
+      if (now >= nextMovement)
+      {
+        nextMovement        = now + Traffic::MovementEvery;
+        const auto [x, y]   = Spot(seconds);
+        const auto [cx, cy] = Camera(seconds);
+        Chat::ClientMovementPacket packet;
+        packet.set_protocol_version(Dreamsleeve::Client::Wire::Version);
+        auto* sample = packet.mutable_sample();
+        sample->set_context_revision(10);
+        sample->set_sequence(++movementSequence);
+        auto* pose = sample->mutable_pose();
+        pose->mutable_position()->set_x(x);
+        pose->mutable_position()->set_y(y);
+        pose->mutable_camera_direction()->set_x(cx);
+        pose->mutable_camera_direction()->set_y(cy);
+        pose->set_sampled_at_us(NowUs());
+        P::Bytes bytes(packet.ByteSizeLong());
+        REQUIRE(packet.SerializeToArray(bytes.data(), static_cast<int>(bytes.size())));
+        Send(2, bytes, 0);
+      }
+      if (generation && now >= nextPose)
+      {
+        nextPose = now + Traffic::PoseEvery;
+        P::Snapshot pose;
+        pose.generation  = {generation};
+        pose.sequence    = {++poseSequence};
+        pose.context     = 10;
+        pose.sampledAtUs = NowUs();
+        pose.channels.resize(channels);
+        pose.bounds.resize(
+          bounds,
+          {
+              {0, 0, 0},
+              4
+        });
+        exchange.Submit(std::make_shared<const P::Snapshot>(std::move(pose)));
+      }
+    }
+
+    // The game attaches a scene only after a pose of its generation plays.
+    bool Displayable(const P::Remote& remote) const
+    {
+      if (!remote.Asset()) return false;
+      if (!traffic.enabled) return true;
+      const auto pose = remote.playback.At(NowUs(), exchange.Settings());
+      return pose && pose->generation == remote.descriptor.generation;
+    }
+
+    void Receive(const ENetEvent& event)
+    {
+      auto packet = std::unique_ptr<ENetPacket, decltype(&enet_packet_destroy)>(event.packet, &enet_packet_destroy);
+      const std::span<const std::uint8_t> bytes(packet->data, packet->dataLength);
+      if (event.channelID == P::Wire::PosesLane)
+      {
+        if (!bytes.empty()) REQUIRE(stream.ReceivePose(bytes, NowUs()));
+      }
+      else if (event.channelID == P::Wire::ModelsLane)
+      {
+        Models::ServerAssetPacket value;
+        REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+        if (value.has_policy()) policy = true;
+        if (value.has_offer())
+        {
+          ++offers;
+          offered.try_emplace(value.offer().player_id(), Clock::now());
+        }
+        if (value.has_remove()) ++removes;
+        if (value.has_complete() && value.complete().accepted() && value.complete().upload())
+          readyGeneration = value.complete().generation();
+        if (value.has_complete() && !value.complete().accepted() && !value.complete().upload() && value.complete().transfer_id())
+          ++abandonedDownloads;
+        REQUIRE(stream.ReceiveAsset(bytes));
+      }
+      else if (event.channelID <= 1)
+      {
+        Chat::ServerPacket value;
+        REQUIRE(value.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())));
+        if (value.has_session_opened())
+        {
+          welcomed = true;
+          REQUIRE(value.session_opened().self_player_id() == number);
+        }
+        if (value.request_id() == 10 && value.has_player_update_accepted())
+        {
+          located = true;
+          stream.Context(10, true);
+        }
+      }
+    }
+
+    void Pump()
+    {
+      ENetEvent event{};
+      for (int count = 0; count < 128; ++count)
+      {
+        const auto result = enet_host_service(host.get(), &event, 0);
+        REQUIRE(result >= 0);
+        if (result == 0) break;
+        if (event.type == ENET_EVENT_TYPE_CONNECT) connected = true;
+        if (event.type == ENET_EVENT_TYPE_DISCONNECT) FAIL("Server disconnected mutual smoke peer ", number);
+        if (event.type == ENET_EVENT_TYPE_RECEIVE) Receive(event);
+      }
+
+      for (const auto& remote : exchange.Read().remotes)
+      {
+        if (!Displayable(remote)) continue;
+        loaded.try_emplace({remote.player, remote.descriptor.generation.value}, Clock::now());
+        if (acknowledged.emplace(remote.player, remote.view, remote.descriptor.generation.value).second)
+          exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
+      }
+
+      SendTraffic(Clock::now());
+      if (welcomed && policy)
+        for (const auto& value : stream.Poll())
+        {
+          if (value.lane == P::Wire::ModelsLane)
+            Send(value.lane, value.bytes, ENET_PACKET_FLAG_RELIABLE);
+          else
+          {
+            auto wrapped = DreamNetPeer::TryFromNative(peer);
+            REQUIRE(wrapped);
+            REQUIRE(wrapped->RotateUnreliableSequence(value.lane));
+            Send(value.lane, value.bytes, ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+          }
+        }
+      enet_host_flush(host.get());
+    }
+
+    std::size_t Loaded(std::uint64_t generation) const
+    {
+      const auto remotes = exchange.Read().remotes;
+      return std::ranges::count_if(remotes, [&](const auto& remote) {
+        return Displayable(remote) && remote.descriptor.generation.value == generation;
+      });
+    }
+  };
+
+  // The bound is far below the 30 s request/transfer timeouts: a request that
+  // is silently lost and retried after a timeout cannot pass.
+  template <class F>
+  double AwaitAll(std::vector<std::unique_ptr<MutualPeer>>& peers, std::string_view phase, std::chrono::seconds limit, F ready)
+  {
+    const auto started  = Clock::now();
+    const auto deadline = started + limit;
+    while (!ready() && Clock::now() < deadline)
+    {
+      for (auto& peer : peers)
+        peer->Pump();
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const auto ms = std::chrono::duration<double, std::milli>(Clock::now() - started).count();
+    std::cout << "PHANTOM_MUTUAL_PHASE phase=" << phase << " ms=" << ms << '\n';
+    std::string state;
+    for (const auto& peer : peers)
+      state += std::format(
+        "\n  p{}: ready={} loaded g1={} g2={} canReplace={} error='{}'",
+        peer->number,
+        peer->readyGeneration,
+        peer->Loaded(1),
+        peer->Loaded(2),
+        peer->exchange.CanReplace(),
+        peer->exchange.Stats().error);
+    INFO("phase ", phase, state);
+    REQUIRE(ready());
+    return ms;
+  }
+
+  // Light models are reported separately: they must not wait for a heavy one.
+  void ReportLatency(
+    const std::vector<std::unique_ptr<MutualPeer>>& peers,
+    std::uint64_t                                   generation,
+    Clock::time_point                               submitted,
+    std::optional<std::uint64_t>                    heavy)
+  {
+    double        worstLight{}, worstHeavy{};
+    std::uint32_t heavyLoads{};
+    for (const auto& peer : peers)
+      for (const auto& [key, at] : peer->loaded)
+        if (key.second == generation)
+        {
+          const auto ms = std::chrono::duration<double, std::milli>(at - submitted).count();
+          if (key.first == heavy)
+          {
+            worstHeavy = std::max(worstHeavy, ms);
+            ++heavyLoads;
+          }
+          else
+            worstLight = std::max(worstLight, ms);
+        }
+    std::cout << "PHANTOM_MUTUAL_LATENCY generation=" << generation << " worstLightModelMs=" << worstLight << " heavyLoads=" << heavyLoads
+              << " worstHeavyModelMs=" << worstHeavy << '\n';
+  }
+
+}
+
+// Opt-in with the same controlled-auth server as the two-party smoke.
+TEST_CASE("Phantom production Streaming concurrent mutual smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
+{
+  const auto port = std::stoul(*Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5));
+  REQUIRE(port > 0);
+  REQUIRE(port <= 65535);
+  const auto statePath = Environment("DREAMSLEEVE_PHANTOM_SMOKE_STATE");
+  REQUIRE(statePath);
+  const auto playersText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PLAYERS", 2);
+  const auto players     = playersText ? std::clamp(std::atoi(playersText->c_str()), 2, 16) : 6;
+  const auto limitText   = Environment("DREAMSLEEVE_PHANTOM_SMOKE_MUTUAL_SECONDS", 3);
+  const auto limit       = std::chrono::seconds(limitText ? std::clamp(std::atoi(limitText->c_str()), 1, 600) : 15);
+  // Optional: p1 publishes a large character, as a heavily modded player does.
+  const auto heavyText     = Environment("DREAMSLEEVE_PHANTOM_SMOKE_HEAVY_VERTICES", 5);
+  const auto heavyVertices = heavyText ? std::clamp(std::atoi(heavyText->c_str()), 0, 4096) : 0;
+  const auto heavy         = heavyVertices ? std::optional<std::uint64_t>{1} : std::nullopt;
+  // Optional: movement, camera turns and poses run beside the transfers. The
+  // first generation is published while cameras spin for this many seconds.
+  Traffic    traffic;
+  const auto spinText    = Environment("DREAMSLEEVE_PHANTOM_SMOKE_SPIN_SECONDS", 3);
+  const auto spinSeconds = spinText ? std::clamp(std::atoi(spinText->c_str()), 0, 120) : 0;
+  traffic.enabled        = Environment("DREAMSLEEVE_PHANTOM_SMOKE_TRAFFIC", 1) == "1";
+  traffic.spinning       = traffic.enabled && spinSeconds > 0;
+
+  struct Network
+  {
+    Network()
+    {
+      REQUIRE(enet_initialize() == 0);
+    }
+
+    ~Network()
+    {
+      enet_deinitialize();
+    }
+  } network;
+
+  const std::filesystem::path              directory(*statePath);
+  std::vector<std::unique_ptr<MutualPeer>> peers;
+  for (int index = 1; index <= players; ++index)
+    peers.push_back(
+      std::make_unique<MutualPeer>(
+        index,
+        players,
+        traffic,
+        static_cast<std::uint16_t>(port),
+        directory / ("mutual-p" + std::to_string(index))));
+
+  const auto all = [&](auto predicate) {
+    return std::ranges::all_of(peers, [&](const auto& peer) { return predicate(*peer); });
+  };
+  AwaitAll(peers, "connect", std::chrono::seconds(30), [&] { return all([](auto& p) { return p.connected; }); });
+  for (auto& peer : peers)
+    peer->Open();
+  AwaitAll(peers, "auth/policy", std::chrono::seconds(30), [&] { return all([](auto& p) { return p.welcomed && p.policy; }); });
+  for (auto& peer : peers)
+    peer->Locate();
+  AwaitAll(peers, "movement authority", std::chrono::seconds(30), [&] { return all([](auto& p) { return p.located; }); });
+
+  const auto visible = std::min<std::size_t>(players - 1, P::ViewSettings{}.maximum);
+  // Distinct vertex counts give every player a different content hash.
+  const auto submitAll = [&](std::uint64_t generation) {
+    for (auto& peer : peers)
+    {
+      const auto heavyPeer = heavy == peer->number;
+      auto       model     = P::ValidatedAsset::Parse(
+        PhantomFixture::Model(
+          heavyPeer ? 1024 : 256,
+          static_cast<std::uint16_t>(heavyPeer ? heavyVertices + generation : 16 * generation + peer->number)));
+      REQUIRE(model);
+      if (heavyPeer)
+        std::cout << "PHANTOM_MUTUAL_HEAVY generation=" << generation << " compressedBytes=" << P::Prepare(*model)->compressed->size()
+                  << '\n';
+      peer->Publish(generation, std::move(*model));
+    }
+    return Clock::now();
+  };
+
+  const auto first = submitAll(1);
+  if (traffic.spinning)
+  {
+    // Transfers start while the server frustum keeps revoking and restoring views.
+    const auto spinUntil = Clock::now() + std::chrono::seconds(spinSeconds);
+    while (Clock::now() < spinUntil)
+    {
+      for (auto& peer : peers)
+        peer->Pump();
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    std::uint32_t offers{}, removes{}, abandoned{};
+    for (const auto& peer : peers)
+    {
+      offers    += peer->offers;
+      removes   += peer->removes;
+      abandoned += peer->abandonedDownloads;
+    }
+    std::cout << "PHANTOM_MUTUAL_SPIN seconds=" << spinSeconds << " offers=" << offers << " removes=" << removes
+              << " abandonedDownloads=" << abandoned << '\n';
+    // The frustum still revokes idle subscriptions, but never a model in flight.
+    REQUIRE(removes > 0);
+    CHECK(abandoned == 0);
+    traffic.spinning = false;
+  }
+  const auto facing = Clock::now();
+  AwaitAll(peers, "simultaneous cold publish and mutual download", limit, [&] {
+    return all([&](auto& p) { return p.readyGeneration == 1 && p.Loaded(1) == visible; });
+  });
+  // Settlement also waits for every later subscription, including a heavy model.
+  AwaitAll(peers, "every subscriber display settles every source", limit, [&] {
+    return all([](auto& p) { return p.exchange.CanReplace(); });
+  });
+  ReportLatency(peers, 1, first, heavy);
+  if (spinSeconds && traffic.enabled) ReportLatency(peers, 1, facing, heavy);
+
+  const auto second = submitAll(2);
+  AwaitAll(peers, "simultaneous replacement publish and mutual download", limit, [&] {
+    return all([&](auto& p) { return p.readyGeneration == 2 && p.Loaded(2) == visible; });
+  });
+  ReportLatency(peers, 2, second, heavy);
+  for (const auto& peer : peers)
+    CHECK(peer->exchange.Stats().rejected == 0);
+  std::cout << "PHANTOM_MUTUAL_UDP_PASS players=" << players << " visible=" << visible << " traffic=" << traffic.enabled << '\n';
+}

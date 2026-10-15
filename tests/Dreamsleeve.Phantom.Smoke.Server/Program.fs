@@ -23,6 +23,18 @@ let private profile number name =
     PlayerData.create (PlayerId.create number |> ok) (Username.create 32 name |> ok)
         (DisplayName.create 64 name |> ok) NameColor.unknown
 
+// alice/bob drive the two-party smoke; p1..pN drive the concurrent mutual smoke.
+// Both sets map to the same small loopback identity range.
+let private maxSmokePlayers = 16
+
+let private identity (requestTicket: string) =
+    if requestTicket = ticket "alice" then Some(1UL, "alice")
+    elif requestTicket = ticket "bob" then Some(2UL, "bob")
+    else
+        seq { 1 .. maxSmokePlayers }
+        |> Seq.tryFind (fun number -> requestTicket = ticket $"p{number}")
+        |> Option.map (fun number -> uint64 number, $"p{number}")
+
 [<RequireQualifiedAccess>]
 type private SmokeStartError =
     | Agent of AgentStartError
@@ -95,37 +107,39 @@ let private run (arguments: string array) = task {
                 else { new IDisposable with member _.Dispose() = () }
             own (fun () -> task { diagnostics.Dispose() } :> Task)
             if ProtocolCodec.Version <> 26u then failwith "Smoke fixture requires protocol26."
+            // Optional A/B of the server-wide model budget; per-peer stays at its default.
+            let modelBytesPerSecond =
+                match Environment.GetEnvironmentVariable "DREAMSLEEVE_PHANTOM_SMOKE_MODEL_BPS" with
+                | null | "" -> PhantomOptions.defaults.ModelBytesPerSecond
+                | text -> Int32.Parse text
             let phantoms =
                 { PhantomOptions.defaults with
                     StoragePath = Path.Combine(directory, "server-cache")
-                    DiskBytes = 128L * 1025L * 1025L
+                    DiskBytes = 512L * 1025L * 1025L
                     RamBytes = 4L * 1025L * 1025L
                     PublishCooldownMs = 100
-                    ReplicationIntervalMs = 10 }
+                    ReplicationIntervalMs = 10
+                    ModelBytesPerSecond = modelBytesPerSecond }
             let server =
                 { ServerConfig.defaults with
                     BindAddress = IPAddress.Loopback
                     Port = port
-                    PeerLimit = 8 }
+                    PeerLimit = maxSmokePlayers }
             let options =
                 { ServerRuntimeOptions.defaults with
-                    MaxSessions = 8
+                    MaxSessions = maxSmokePlayers
                     Presence = { ServerRuntimeOptions.defaults.Presence with ReplicationIntervalMs = 10 } }
             let settings = GameSettings.create server options IdentityOptions.defaults AnnouncementOptions.defaults
                                GroundMarkOptions.defaults GuildOptions.defaults |> ok |> GameSettings.withPhantoms phantoms |> ok
             let auth = authConfiguration.Start(fun _ (request: SessionAuthenticationRequest) -> task {
                 let result =
-                    if request.Ticket = ticket "alice" then
-                        Ok { Profile = profile 1UL "alice"
+                    match identity request.Ticket with
+                    | Some(number, name) ->
+                        Ok { Profile = profile number name
                              Role = PlayerRole.Player
                              Mute = ValueNone
                              SignedInFrom = ValueSome IPAddress.Loopback }
-                    elif request.Ticket = ticket "bob" then
-                        Ok { Profile = profile 2UL "bob"
-                             Role = PlayerRole.Player
-                             Mute = ValueNone
-                             SignedInFrom = ValueSome IPAddress.Loopback }
-                    else Error SessionAuthenticationError.InvalidTicket
+                    | None -> Error SessionAuthenticationError.InvalidTicket
                 request.ReplyTo.TryPost
                     { OperationId = request.OperationId
                       Result = result }

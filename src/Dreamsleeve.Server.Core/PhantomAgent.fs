@@ -82,6 +82,9 @@ module PhantomAgent =
         ReplicationCredit: Credit
         OutgoingPoseCredit: Credit
         Commands: Credit
+        // Reliable requests wait here, in arrival order, while responses are
+        // backlogged or the command rate is spent; they are never dropped.
+        PendingCommands: Queue<PhantomRequest>
         Outbox: Queue<TransportPacket>
     }
     type private Phase =
@@ -302,7 +305,16 @@ module PhantomAgent =
             for player in observer.Selected.Keys do
                 let count = match subscribers.TryGetValue player with true, count -> count | _ -> 0
                 subscribers[player] <- count + 1
+        // Camera culling chooses what to start, never what to abandon: a model
+        // download in flight keeps its subscription while the source stays in
+        // the observer's AOI and range. A restarted download begins at zero.
+        let downloading = Dictionary<Guid, Set<PlayerId>>()
+        for transfer in state.Transfers.Values do
+            if not transfer.Upload then
+                let current = match downloading.TryGetValue transfer.Owner with true, sources -> sources | _ -> Set.empty
+                downloading[transfer.Owner] <- current.Add transfer.Source
         for KeyValue(id, observer) in state.Members do
+            let transferring = match downloading.TryGetValue id with true, sources -> sources | _ -> Set.empty
             let candidates = seq {
                 if observer.Active && observer.Preferences.Receive && observer.Preferences.Maximum > 0 then
                     for KeyValue(player, view) in observer.Views do
@@ -310,12 +322,15 @@ module PhantomAgent =
                         | ValueSome current when current.Active && current.Located && current.Preferences.Publish && current.Ready.IsSome ->
                             let count = match subscribers.TryGetValue player with true, count -> count | _ -> 0
                             let retained = observer.Selected.ContainsKey player
-                            if (retained || count < state.Options.MaxSubscribers)
-                               && (not state.Options.CameraCulling || PhantomPolicy.inView retained view.Distance view.Facing) then
+                            let culled =
+                                state.Options.CameraCulling
+                                && not (retained && transferring.Contains player)
+                                && not (PhantomPolicy.inView retained view.Distance view.Facing)
+                            if (retained || count < state.Options.MaxSubscribers) && not culled then
                                 yield player, view.Distance
                         | _ -> ()
             }
-            let selection = PhantomPolicy.select observer.Preferences (observer.Selected.Keys |> Set.ofSeq) candidates
+            let selection = PhantomPolicy.select observer.Preferences (observer.Selected.Keys |> Set.ofSeq) transferring candidates
             for player in observer.Selected.Keys |> Seq.toArray do
                 let selected = observer.Selected[player]
                 let retained =
@@ -444,9 +459,26 @@ module PhantomAgent =
                     observer.Views.Remove memberState.Player |> ignore
             refresh state
         | _ -> ()
+    // A member deactivated by an outbox overflow lost queued Offer/Remove and
+    // transfer responses. Policy starts a new phantom session on the client, so
+    // retire everything it may not know about while responses are still muted;
+    // the following refresh offers the current selection again.
+    let private resetSession state id (memberState: Member) =
+        memberState.PendingCommands.Clear()
+        for transfer in state.Transfers.Values |> Seq.filter (fun item -> item.Owner = id) |> Seq.toArray do
+            cancel state transfer.Id Disconnected
+        for player in memberState.Selected.Keys do
+            match state.Audiences.TryGetValue player with
+            | true, audience ->
+                audience.Remove id |> ignore
+                if audience.Count = 0 then state.Audiences.Remove player |> ignore
+            | _ -> ()
+        memberState.Selected.Clear()
+
     let activate state id =
         match state.Members.TryGetValue id with
         | true, memberState when not memberState.Active ->
+            resetSession state id memberState
             memberState.Active <- true
             emit state id (PhantomResponse.Policy(PhantomOptions.policy state.Options))
             refresh state
@@ -525,6 +557,7 @@ module PhantomAgent =
                     PoseSamples = credit 0L 2
                     ReplicationCredit = credit 0L 2
                     Commands = credit 0L options.CommandsPerSecond
+                    PendingCommands = Queue()
                     Outbox = Queue()
                 }
                 state.Players[value.Identity.PlayerId] <- id
@@ -684,6 +717,26 @@ module PhantomAgent =
                 | _ -> deny()
         | _ -> deny()
 
+    // A command runs only while its responses can join a short reliable backlog
+    // and the per-member command rate allows it.
+    let private commandResponseBacklog = 8
+
+    let private commandReady state at (memberState: Member) =
+        memberState.Outbox.Count < commandResponseBacklog && takeCommand at state.Options.CommandsPerSecond memberState.Commands
+
+    // Reliable requests are deferred, not dropped: a client waits up to its
+    // request timeout for a lost Download/Publish and a source cannot settle
+    // without Displayed. One second of the configured command rate bounds the
+    // wait; only a peer outside the request/response contract exceeds it.
+    let private admitCommand state at id (memberState: Member) request =
+        if memberState.PendingCommands.Count = 0 && commandReady state at memberState then handle state at id request
+        elif memberState.PendingCommands.Count < state.Options.CommandsPerSecond then memberState.PendingCommands.Enqueue request
+        else deny()
+
+    let private drainCommands state at id (memberState: Member) =
+        while memberState.Active && memberState.PendingCommands.Count > 0 && commandReady state at memberState do
+            handle state at id (memberState.PendingCommands.Dequeue())
+
     /// Large poses are admitted before protobuf allocation. Model data uses the
     /// admitted transfer window; control requests have a separate burst budget.
     let receive state at id lane (bytes: byte array) =
@@ -726,8 +779,7 @@ module PhantomAgent =
                 else deny()
             elif lane = DeliveryLane.Models then
                 match PhantomCodec.decodeAsset state.Options bytes with
-                | Ok request when memberState.Outbox.Count < 8 && takeCommand at state.Options.CommandsPerSecond memberState.Commands -> handle state at id request
-                | Ok _ -> deny()
+                | Ok request -> admitCommand state at id memberState request
                 | Error _ -> deny()
             else deny()
         | _ -> deny()
@@ -827,7 +879,11 @@ module PhantomAgent =
                 | _ -> ()
         // Reliable control/ACKs follow IO completion, not the pose cadence.
         // At 10 Hz, gating a 64 KiB window here limited uploads to 640 KiB/s.
-        for KeyValue(id, memberState) in state.Members do flushOutbox state id memberState
+        // Deferred commands follow once their backlog has drained; their responses
+        // leave on the next turn.
+        for KeyValue(id, memberState) in state.Members do
+            flushOutbox state id memberState
+            drainCommands state at id memberState
         // Small turns avoid resampling all sources on one 100 ms grid.
         // Source credit preserves the configured rate with a two-snapshot burst;
         // Shared send credit preserves aggregate throughput; each turn still has a

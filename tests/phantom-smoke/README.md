@@ -34,6 +34,33 @@ The host registers each acquired resource immediately. On startup failure or shu
 
 A winning stdin task is observed for failures. A pending Console.In read is process-scoped because cancellation is not guaranteed; the runner owns stdin and process exit. Optional continuous diagnostics retain their existing failure and shutdown policy.
 
+## Concurrent mutual scenario
+
+```powershell
+pwsh -NoProfile -File tests/phantom-smoke/run.ps1 -NativeTests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe -NoBuild -Scenario Mutual -Players 8
+```
+
+The same controlled-auth host serves `p1`..`p16`. Every client publishes at once and
+downloads everybody it is offered (server `Maximum` = 4). Phases: simultaneous cold
+publication, display settlement of every source, simultaneous replacement (delta).
+Each phase must finish within `DREAMSLEEVE_PHANTOM_SMOKE_MUTUAL_SECONDS` (default 15),
+far below the 30 s request/transfer timeouts, so a lost request cannot pass.
+Sentinel: `PHANTOM_MUTUAL_UDP_PASS`. Per-phase times are printed as `PHANTOM_MUTUAL_PHASE`.
+
+Options:
+
+- `-HeavyVertices 1100` gives `p1` a ~12.6 MB compressed model; `PHANTOM_MUTUAL_LATENCY`
+  reports light and heavy models separately.
+- `-ModelBytesPerSecond <n>` overrides the server-wide `ModelBytesPerSecond` for A/B runs.
+- `DREAMSLEEVE_PHANTOM_SMOKE_TRAFFIC=1` places players on a circle beyond the frustum
+  near-protection radius, sends movement/camera on the realtime lane and 10 Hz poses,
+  and acknowledges display only once a pose plays. `DREAMSLEEVE_PHANTOM_SMOKE_SPIN_SECONDS`
+  spins cameras (one turn per 3 s) while the first generation transfers;
+  `PHANTOM_MUTUAL_SPIN` counts Offer/Remove and downloads abandoned by the frustum.
+
+Loopback has no TCP loss or WAN RTT; results are a lower bound. Measurements:
+[docs/benchmarks/phantom-mutual-2026-10-15.md](../../docs/benchmarks/phantom-mutual-2026-10-15.md).
+
 ## WAN delay, loss and real local assets
 
 Build the Release smoke server, then run the relay (Python standard library only):

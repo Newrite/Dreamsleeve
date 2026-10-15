@@ -80,12 +80,15 @@ let private readChunk (storage: PhantomStoragePort) (id, offset, count) = task {
     return read |> Result.map (fun count -> bytes[..count-1])
 }
 
-let private setup config storage count =
+// blocked models a transport that refuses reliable admission for now.
+let private setupWith config storage count (blocked: unit -> bool) =
     let output = ResizeArray<Guid * TransportPacket>()
     let http, live = fakeHttp()
     let state = PhantomAgent.create config storage http (fun (id, packet) ->
-        output.Add(id, packet)
-        Ok ())
+        if blocked () then Error(TransportSendError.BudgetExceeded "test backlog")
+        else
+            output.Add(id, packet)
+            Ok ())
     leases.Add(state, live)
     let members = Array.init count (fun index -> Guid.NewGuid(), player (uint64 index + 1UL) 10UL)
     for id, value in members do
@@ -94,6 +97,16 @@ let private setup config storage count =
     PhantomAgent.tick state 1L
     output.Clear()
     state, members, output
+
+let private setup config storage count = setupWith config storage count (fun () -> false)
+
+// Wire-encoded client requests exercise the reliable command admission path.
+let private downloadRequest (source: PlayerId) generation request =
+    Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
+        Download = Dreamsleeve.Protocol.Phantom.Download(PlayerId = PlayerId.value source, Generation = generation, RequestId = request)).ToByteArray()
+let private cancelRequest transfer =
+    Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = ProtocolCodec.Version,
+        Cancel = Dreamsleeve.Protocol.Phantom.Cancel(TransferId = transfer)).ToByteArray()
 
 let private models (output: ResizeArray<Guid * TransportPacket>) =
     output |> Seq.choose (fun (_, packet) -> if packet.Lane = DeliveryLane.Models then Some(Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes) else None) |> Seq.toArray
@@ -213,6 +226,70 @@ let tests = testList "Phantoms" [
         look 1.0
         PhantomAgent.tick state 8L
         Expect.isTrue (demand true) "Source resumes from retained asset."
+        PhantomAgent.stop state
+
+    testCase "camera turn keeps an in-flight model download; AOI departure still cancels it" <| fun _ ->
+        let state, members, output = setup options memoryStorage 2
+        let sourceId, sourcePlayer = members[0]
+        let observerId, _ = members[1]
+        let manifest = asset 1UL [|1uy..8uy|]
+        ready state members[0] manifest
+        let look revision cosine =
+            PhantomAgent.observe state (PhantomObservation.View(observerId, sourceId, sourcePlayer.Identity.PlayerId, revision, 1000000.0, Some cosine))
+        let download at =
+            output.Clear()
+            PhantomAgent.handle state at observerId (PhantomRequest.Download(sourcePlayer.Identity.PlayerId, manifest.Generation, requestId(), None))
+            for tick in at .. at + 3L do PhantomAgent.tick state tick
+            transfer output
+        look 1UL 1.0
+        PhantomAgent.tick state 4L
+        let first = download 5L
+        advance state first 4 10L
+        look 1UL -1.0
+        PhantomAgent.tick state 11L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Turning away keeps the subscription of a model in flight."
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Turning away does not restart the download from zero."
+        Expect.isFalse (models output |> Array.exists (fun p -> not (isNull p.Remove))) "No Remove while the download continues."
+        let live = leases.GetValue(state, fun _ -> failwith "fixture missing")
+        live[first].Advance 8
+        live[first].Finish(Ok ())
+        PhantomAgent.tick state 12L
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "The download completes behind the camera."
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.Accepted)) "Completion reaches the observer."
+        PhantomAgent.tick state 13L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Without a transfer the camera culls the subscription again."
+
+        look 2UL 1.0
+        PhantomAgent.tick state 14L
+        let second = download 15L
+        advance state second 4 19L
+        PhantomAgent.observe state (PhantomObservation.Hidden(observerId, sourcePlayer.Identity.PlayerId, 3UL))
+        PhantomAgent.tick state 20L
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Leaving the AOI removes the subscription."
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "Leaving the AOI cancels the download."
+        PhantomAgent.stop state
+
+    testCase "an in-flight download keeps its slot against nearer newcomers" <| fun _ ->
+        let state, members, output = setup { options with Maximum = 1 } memoryStorage 3
+        let farId, far = members[0]
+        let nearId, near = members[1]
+        let observerId, _ = members[2]
+        let manifest = asset 1UL [|1uy..8uy|]
+        ready state members[0] manifest
+        PhantomAgent.handle state 3L nearId (PhantomRequest.Publish(asset 1UL [|9uy..16uy|], near.MovementContext, requestId(), None))
+        PhantomAgent.tick state 3L
+        PhantomAgent.observe state (PhantomObservation.View(observerId, farId, far.Identity.PlayerId, 1UL, 1000000.0, Some 1.0))
+        PhantomAgent.tick state 4L
+        output.Clear()
+        PhantomAgent.handle state 5L observerId (PhantomRequest.Download(far.Identity.PlayerId, manifest.Generation, requestId(), None))
+        for at in 5L .. 8L do PhantomAgent.tick state at
+        // A much nearer source enters the frustum while the far one turns out of it.
+        PhantomAgent.observe state (PhantomObservation.View(observerId, nearId, near.Identity.PlayerId, 2UL, 1000.0, Some 1.0))
+        PhantomAgent.observe state (PhantomObservation.View(observerId, farId, far.Identity.PlayerId, 1UL, 1000000.0, Some -1.0))
+        PhantomAgent.tick state 9L
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "The far download continues."
+        let offered = models output |> Array.choose (fun p -> if isNull p.Offer then None else Some p.Offer.PlayerId)
+        Expect.isFalse (offered |> Array.contains (PlayerId.value near.Identity.PlayerId)) "The only slot stays with the transfer."
         PhantomAgent.stop state
 
     testCase "native asset policy bounds bytes and pose channels without geometry schema" <| fun _ ->
@@ -546,6 +623,79 @@ let tests = testList "Phantoms" [
         let at = 7L + int64 options.TransferTimeoutMs
         PhantomAgent.handle state at (fst members[0]) (PhantomRequest.Publish(asset 2UL [|2uy;3uy|],10UL,requestId(),None))
         Expect.equal (PhantomAgent.snapshot state).Transfers 2 "Replacement admitted after inactivity timeout"
+        PhantomAgent.stop state
+
+    testCase "a command burst beyond the rate burst is deferred in order instead of dropped" <| fun _ ->
+        let state, members, _ = setup options memoryStorage 2
+        let manifest = asset 1UL [|1uy;2uy|]
+        ready state members[0] manifest
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        let observer = fst members[1]
+        let source = (snd members[0]).Identity.PlayerId
+        // One transport batch: eleven harmless Cancels exhaust the burst before the Download.
+        for transfer in 1UL .. 11UL do
+            PhantomAgent.receive state 5L observer DeliveryLane.Models (cancelRequest transfer)
+        PhantomAgent.receive state 5L observer DeliveryLane.Models (downloadRequest source 1UL 900UL)
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "The Download waits behind the spent command burst."
+        for at in 6L .. 100L do
+            PhantomAgent.tick state at
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "The deferred Download runs once command credit refills."
+        PhantomAgent.stop state
+
+    testCase "requests behind a blocked response backlog are deferred instead of dropped" <| fun _ ->
+        let mutable blocked = false
+        let state, members, output = setupWith options memoryStorage 2 (fun () -> blocked)
+        let manifest = asset 1UL [|1uy;2uy|]
+        ready state members[0] manifest
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        let observer = fst members[1]
+        let source = (snd members[0]).Identity.PlayerId
+        blocked <- true
+        // Refused downloads leave eight undeliverable replies in the observer's backlog.
+        for at in 5L .. 12L do
+            PhantomAgent.receive state (at * 10L) observer DeliveryLane.Models (downloadRequest source 9UL (uint64 at))
+            PhantomAgent.tick state (at * 10L)
+        PhantomAgent.receive state 130L observer DeliveryLane.Models (downloadRequest source 1UL 901UL)
+        Expect.equal (PhantomAgent.snapshot state).Transfers 0 "The Download waits behind the response backlog."
+        blocked <- false
+        for at in 131L .. 140L do
+            PhantomAgent.tick state at
+        Expect.equal (PhantomAgent.snapshot state).Transfers 1 "The Download runs after the backlog drains."
+        let transfer = models output |> Array.tryPick (fun p -> if isNull p.Transfer then None else Some p.Transfer)
+        Expect.equal (transfer |> Option.map _.RequestId) (Some 901UL) "Its Transfer answers the deferred request."
+        PhantomAgent.stop state
+
+    testCase "outbox overflow restarts the observer session with policy and a fresh offer" <| fun _ ->
+        let mutable blocked = false
+        let state, members, output = setupWith options memoryStorage 2 (fun () -> blocked)
+        ready state members[0] (asset 1UL [|1uy;2uy|])
+        view state members[1] members[0] 1UL 1.0
+        PhantomAgent.tick state 4L
+        let observer = fst members[1]
+        let offers () = models output |> Array.choose (fun p -> if isNull p.Offer then None else Some p.Offer.ViewRevision)
+        let firstOffer = offers () |> Array.max
+        blocked <- true
+        // Each new Presence authority replaces the subscription: Remove plus Offer.
+        // Undeliverable replies overflow the bounded lifecycle backlog.
+        for revision in 2UL .. 40UL do
+            view state members[1] members[0] revision 1.0
+            PhantomAgent.tick state (int64 revision * 10L)
+        blocked <- false
+        for at in 500L .. 510L do
+            PhantomAgent.tick state at
+        output.Clear()
+        PhantomAgent.activate state observer
+        PhantomAgent.tick state 511L
+        let restarted =
+            output
+            |> Seq.filter (fun (id, packet) -> id = observer && packet.Lane = DeliveryLane.Models)
+            |> Seq.map (fun (_, packet) -> Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser.ParseFrom packet.Bytes)
+            |> Seq.toArray
+        Expect.isTrue (restarted.Length > 0 && not (isNull restarted[0].Policy)) "Policy opens the new client session."
+        Expect.isTrue (offers () |> Array.exists (fun revision -> revision > firstOffer)) "The current selection is offered again."
+        Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "One live subscription after the restart."
         PhantomAgent.stop state
 
     testCase "context retains appearance but clears poses and source/observer subscriptions" <| fun _ ->
