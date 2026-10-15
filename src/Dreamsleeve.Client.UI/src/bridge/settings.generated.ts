@@ -39,6 +39,7 @@ export interface Settings {
   combatHideFireflies: boolean;
   combatHideNames: boolean;
   combatHideBubbles: boolean;
+  raceMenuHidePlayers: boolean;
   announcementChannels: "tab" | "all" | "current";
   announcementsServer: boolean;
   announcementsTrustedClient: boolean;
@@ -129,6 +130,7 @@ export const defaults: Settings = {
   combatHideFireflies: false,
   combatHideNames: false,
   combatHideBubbles: false,
+  raceMenuHidePlayers: true,
   announcementChannels: "all",
   announcementsServer: true,
   announcementsTrustedClient: true,

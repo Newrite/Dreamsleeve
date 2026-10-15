@@ -68,6 +68,9 @@ export namespace Dreamsleeve::Host
     bool combatHideFireflies{false};
     bool combatHideNames{false};
     bool combatHideBubbles{false};
+    // Other players (phantoms, fireflies, their names and bubbles) while the
+    // character creation menu is open: a new game starts everyone in one place.
+    bool raceMenuHidePlayers{true};
 
     // System channel: tab (only its own tab) | all (also the "all" view) | current (every tab).
     std::string announcementChannels{"all"};

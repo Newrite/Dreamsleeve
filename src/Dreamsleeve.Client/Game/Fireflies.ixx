@@ -71,8 +71,10 @@ namespace Fireflies
     // Combat hiding per surface. Hidden fireflies take names and bubbles with
     // them, there is no other anchor; bubble timers keep running meanwhile.
     const bool combat = player && player->IsInCombat();
+    // Character creation hides other players with their names and bubbles.
+    const bool creating = ui.raceMenuHidePlayers && World::CharacterCreationOpen();
     if (
-      !settings.showFireflies || (combat && ui.combatHideFireflies) || runtime.context != Runtime::GameContext::Playing ||
+      !settings.showFireflies || (combat && ui.combatHideFireflies) || creating || runtime.context != Runtime::GameContext::Playing ||
       !World::PlayerReady() || !player)
     {
       ClearAll();

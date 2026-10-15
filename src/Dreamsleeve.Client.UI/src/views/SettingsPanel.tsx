@@ -756,6 +756,25 @@ export function SettingsPanel({
           ещё не вышло. Применяется после сохранения.
         </p>
       </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Создание персонажа</legend>
+        <label>
+          <span>Скрывать других игроков</span>
+          <input
+            type="checkbox"
+            checked={s.raceMenuHidePlayers}
+            onChange={(e) =>
+              chat.configure({ raceMenuHidePlayers: e.target.checked })
+            }
+          />
+        </label>
+        <p className={styles.muted}>
+          Пока открыто меню создания персонажа (RaceMenu): фантомы, светлячки,
+          имена и сообщения других игроков не показываются. В новой игре все
+          начинают в одном месте и иначе стоят друг в друге. Применяется после
+          сохранения.
+        </p>
+      </fieldset>
       <button className={styles.primary} onClick={chat.save}>
         Сохранить настройки
       </button>

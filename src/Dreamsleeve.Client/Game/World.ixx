@@ -73,6 +73,13 @@ export namespace World
            !ui->IsMenuOpen(RE::TitleSequenceMenu::MENU_NAME);
   }
 
+  // Character creation: the vanilla RaceSex menu, which RaceMenu replaces under the same name.
+  bool CharacterCreationOpen()
+  {
+    auto* ui = RE::UI::GetSingleton();
+    return ui && ui->IsMenuOpen(RE::RaceSexMenu::MENU_NAME);
+  }
+
   // Where fireflies and marks are measured from: the player's space and position.
   struct Observer
   {

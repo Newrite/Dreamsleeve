@@ -52,6 +52,9 @@ combatHideFireflies = false
 combatHideNames = false
 # Chat bubbles.
 combatHideBubbles = false
+# Hide other players (phantoms, fireflies, names, bubbles) while the character
+# creation menu (RaceMenu) is open: a new game starts everyone in one place.
+raceMenuHidePlayers = true
 # Online tab layout: cards | list.
 onlineView = "cards"
 # Fade each message out a while after it arrives; nothing fades while the chat is open.

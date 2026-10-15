@@ -660,6 +660,8 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   CHECK_FALSE(loaded->ui.chat.combatHideFireflies);
   CHECK_FALSE(loaded->ui.chat.combatHideNames);
   CHECK_FALSE(loaded->ui.chat.combatHideBubbles);
+  // Shared new-game starts: an older file still hides others in character creation.
+  CHECK(loaded->ui.chat.raceMenuHidePlayers);
   CHECK_FALSE(loaded->ui.chat.showFireflyNames);
 
   UiFile edited;
@@ -674,6 +676,7 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   edited.ui.chat.combatHideFireflies = true;
   edited.ui.chat.combatHideNames     = true;
   edited.ui.chat.combatHideBubbles   = true;
+  edited.ui.chat.raceMenuHidePlayers = false;
   REQUIRE(SaveUiFile(file.path, edited));
   auto saved = LoadUiFile(file.path);
   REQUIRE(saved);

@@ -604,6 +604,14 @@ namespace Phantoms
     const auto observer = World::Observe(player);
     if (!observer) return;
     const auto&                          ui = runtime.ui.ui.chat;
+    // Players who start in one place must not stand inside each other's character
+    // creation. Scenes stay loaded and reappear when the menu closes.
+    if (ui.raceMenuHidePlayers && World::CharacterCreationOpen())
+    {
+      for (auto& [id, visual] : state.visuals)
+        Hide(visual, now);
+      return;
+    }
     std::unordered_set<Domain::PlayerId> retained;
     std::ranges::sort(display.remotes, {}, &P::Remote::player);
     const auto first = std::ranges::upper_bound(display.remotes, state.cursor, {}, &P::Remote::player);
