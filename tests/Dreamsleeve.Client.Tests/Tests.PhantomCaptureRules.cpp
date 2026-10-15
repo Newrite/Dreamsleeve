@@ -22,13 +22,18 @@ TEST_CASE("Neutral capture retains the body and clothing with projected or decal
   CHECK_FALSE(C::Surface{true, true, true, false}.Auxiliary());
 }
 
-TEST_CASE("Initial capture excludes hidden geometry but ignores first-person camera suppression")
+TEST_CASE("A capture opened in first person starts from authored visibility")
 {
-  CHECK_FALSE(C::Visibility::Capture(true, false, false));
-  CHECK(C::Visibility::Capture(false, false, false));
-  CHECK(C::Visibility::Capture(true, false, true));
-  CHECK_FALSE(C::Visibility::Capture(false, true, false));
-  CHECK_FALSE(C::Visibility::Capture(true, true, true));
+  // An SMP virtual ground/legs collider is authored hidden; it must not be
+  // published visible because the source has not entered third person yet.
+  C::Visibility collider;
+  CHECK(collider.Sample(true, true, true));
+  CHECK(collider.Sample(true, false, true));
+  CHECK_FALSE(collider.Sample(true, false, false));
+
+  C::Visibility body;
+  CHECK_FALSE(body.Sample(true, false, true));
+  CHECK_FALSE(body.Sample(true, true, true));
 }
 
 TEST_CASE("Cached visibility survives first person and resumes authored visibility in third person")

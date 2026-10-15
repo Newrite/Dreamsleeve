@@ -39,13 +39,17 @@ export namespace Dreamsleeve::Game::PhantomCapture
     bool present{}, hidden{};
   };
 
+  // The first-person camera hides the third-person character through the root
+  // (vanilla) or the FaceGen node (body-in-first-person cameras). Neither flag
+  // is appearance. Helmet-covered head parts carry their own kHidden, which the
+  // game sets on that geometry (TESNPC head part update) and which is retained.
   inline Attachment Locate(RE::NiAVObject* root, RE::NiAVObject* object)
   {
     bool hidden = false;
     for (unsigned i = 0; object && i < 4096; ++i, object = object->parent)
     {
       if (object == root) return {true, hidden};
-      hidden |= object->GetFlags().all(Flag::kHidden);
+      if (!netimmerse_cast<RE::BSFaceGenNiNode*>(object)) hidden |= object->GetFlags().all(Flag::kHidden);
     }
     return {};
   }

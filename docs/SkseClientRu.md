@@ -786,6 +786,14 @@ NiStream Save/Load, alpha factory и нормализацию cloned flattened b
 Все собственные runtime IDs/offsets/ABI adapters находятся в Hooks.
 
 Game/PhantomCapture читает третьеличное дерево даже при первом лице.
+Камерное скрытие — это kHidden корня (vanilla) или `BSFaceGenNiNode` (камеры
+с телом в первом лице); оба флага в видимость фантома не входят. kHidden
+отдельной части головы (волосы под шлемом, `TESNPC` head part update) и
+авторски скрытые меши (SMP virtual ground/legs, коллайдеры) передаются.
+Первое наблюдение геометрии задаёт её видимость и в первом лице; далее первое
+лицо сохраняет последнее третьеличное состояние. Видимость dismember-партиций
+(`editorVisible`, броня и расчленение) сохраняется в NIF при захвате; камера
+её не меняет.
 PhantomNative подготавливает clone; PhantomScene загружает проверенный NIF и
 применяет transforms/bounds к native nodes. Один NiStream Load за frame build
 turn; сама native операция атомарна и остаётся на игровом потоке. Phantoms

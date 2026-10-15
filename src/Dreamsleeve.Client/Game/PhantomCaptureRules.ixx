@@ -193,20 +193,22 @@ private:
     }
   };
 
+  // `culled` already excludes camera-owned flags. A body-in-first-person camera
+  // may still hide gear for the local view, so first person keeps the last
+  // third-person state. The first observation is authored state either way:
+  // SMP collision meshes stay hidden in a capture opened in first person.
   struct Visibility
   {
     bool hidden{};
-
-    static constexpr bool Capture(bool culled, bool partitionsHidden, bool firstPerson) noexcept
-    {
-      // Camera suppression must not remove the third-person character.
-      // Dismember partitions have their own authored visibility.
-      return !partitionsHidden && (firstPerson || !culled);
-    }
+    bool observed{};
 
     constexpr bool Sample(bool present, bool culled, bool firstPerson) noexcept
     {
-      if (present && !firstPerson) hidden = culled;
+      if (present && (!firstPerson || !observed))
+      {
+        hidden   = culled;
+        observed = true;
+      }
       return !present || hidden;
     }
   };
