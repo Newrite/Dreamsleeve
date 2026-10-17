@@ -1,7 +1,8 @@
 # Документация Dreamsleeve
 
 Начать с [CurrentStateRu.md](CurrentStateRu.md): что реализовано, принятые решения и открытые
-вопросы. Владельцу сервера — сразу [DeploymentRu.md](DeploymentRu.md).
+вопросы. Владельцу сервера — сразу [DeploymentRu.md](DeploymentRu.md). Что запланировано —
+[PlannedWorkRu.md](PlannedWorkRu.md).
 
 ## Развёртывание и эксплуатация
 
