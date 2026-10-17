@@ -84,6 +84,7 @@ namespace
       std::ofstream output{path, std::ios::binary | std::ios::trunc};
       output << expected;
     }
+
     const auto stale = path.filename().string() + " is stale; set DREAMSLEEVE_WRITE_GENERATED=1 and run the tests";
     CHECK_MESSAGE(ReadText(path) == expected, stale);
   }
@@ -163,14 +164,15 @@ namespace
 
     return {
         Bridge::SnapshotEvent{
-                              .channels             = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
-                              .messages             = messages,
-                              .players              = {player},
-                              .selfId               = "1",
-                              .serverName           = "Tamriel",
-                              .groundMarksSupported = true,
-                              .groundMarks          = {own},
-                              .nearbyMarks          = {nearby}},
+            .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
+            .messages = messages,
+            .players  = {player},
+            .selfId   = "1",
+            .serverName = "Tamriel",
+            .groundMarksSupported = true,
+            .groundMarks = {own},
+            .nearbyMarks = {nearby}
+        },
         Bridge::MessagesEvent{.messages = messages},
         Bridge::PlayersEvent{.players = {player}},
         Bridge::ConnectionState(signedIn),
@@ -193,23 +195,28 @@ namespace
         Bridge::MessagesRemovedEvent{.channelId = "1", .messageIds = {"11"}},
         Bridge::ModerationResultEvent{.requestId = "m1", .sanctions = SampleSanctions()},
         Bridge::GuildsEvent{
-                              .guilds  = {{"4",
-                         "Вороны",
-                         "4294967300",
-                         1700000000000,
-                         {Bridge::ToUiGuildMember({{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000}, names, settings),
-                          Bridge::ToUiGuildMember(
-                            {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
-                            names,
-                            settings)}}},
-                              .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
-                              .limits  = {3, 64, 3, 24},
-                              .removed = {{"6", "Изгнанники", "excluded"}}},
+            .guilds = {{
+                "4",
+                "Вороны",
+                "4294967300",
+                1700000000000,
+                {Bridge::ToUiGuildMember(
+                   {{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000}, names, settings),
+                  Bridge::ToUiGuildMember(
+                    {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
+                    names,
+                    settings)}
+            }},
+            .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
+            .limits  = {3, 64, 3, 24},
+            .removed = {{"6", "Изгнанники", "excluded"}}
+        },
         Bridge::GuildResultEvent{.requestId = "g1", .guildId = "4"},
         Bridge::ChannelsEvent{
-                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
-                         Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
-                         Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}},
+            .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
+              Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
+              Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}
+        },
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
@@ -234,10 +241,12 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   CHECK(Strings(Bridge::RegistrationNames) == EnumeratorNames<Auth::RegistrationMode>());
   CHECK(Strings(Bridge::GuildRoleNames) == EnumeratorNames<Domain::GuildRole>());
   CHECK(Strings(Bridge::GuildRemovalNames) == EnumeratorNames<Domain::GuildRemovalReason>());
+
   // "off" is the ui.toml word for None; the others follow the enumerators.
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";
   CHECK(Strings(HidingNames) == hiding);
+
   // Out of range: the least trust, a plain announcement.
   CHECK(Bridge::OriginName(Domain::AnnouncementSource::Unspecified) == "thirdParty");
   CHECK(Bridge::KindName(static_cast<Domain::AnnouncementKind>(99)) == "announcement");
@@ -249,6 +258,7 @@ TEST_CASE("Host events carry their type and commands parse by theirs")
   const auto result = Parse(Bridge::SettingsResultEvent{.revision = 2});
   CHECK(result["type"].get<std::string>() == "settingsResult");
   CHECK(result["revision"].get<double>() == 2);
+
   for (std::size_t index = 0; index < Bridge::CommandNames.size(); ++index)
   {
     // Every command is known by name; one without values parses from its type alone.

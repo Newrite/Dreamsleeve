@@ -19,10 +19,57 @@ type ProtocolCodecError = {
     Failure: ProtocolCodecFailure
 }
 
-type DeliveryLane = Dreamsleeve.Protocol.Network.DeliveryLane
+/// Trusted transport channels are closed; numeric values belong to Protocol/*.proto.
+[<Struct; RequireQualifiedAccess>]
+type DeliveryLane =
+    | Control
+    | Chat
+    | Realtime
+    | Models
+    | Poses
+
+[<RequireQualifiedAccess>]
+type DeliveryLaneError = UnknownChannel of byte
+
+[<RequireQualifiedAccess>]
+module DeliveryLane =
+    let toChannel = function
+        | DeliveryLane.Control -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Control
+        | DeliveryLane.Chat -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Chat
+        | DeliveryLane.Realtime -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Realtime
+        | DeliveryLane.Models -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Models
+        | DeliveryLane.Poses -> byte Dreamsleeve.Protocol.Network.DeliveryLane.Poses
+
+    /// Parse only at the native/wire boundary; internal owners use the closed lane.
+    let fromChannel channel =
+        match enum<Dreamsleeve.Protocol.Network.DeliveryLane>(int channel) with
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Control -> Ok DeliveryLane.Control
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Chat -> Ok DeliveryLane.Chat
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Realtime -> Ok DeliveryLane.Realtime
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Models -> Ok DeliveryLane.Models
+        | Dreamsleeve.Protocol.Network.DeliveryLane.Poses -> Ok DeliveryLane.Poses
+        | _ -> Error(DeliveryLaneError.UnknownChannel channel)
 
 /// A detached encoded packet. Only the transport adapter chooses native flags.
-type TransportPacket = { Lane: DeliveryLane; Bytes: byte array }
+// Local handoff scheduling, never serialized or interpreted by native ENet.
+[<RequireQualifiedAccess>]
+type PacketSchedule =
+    | Ordered
+    | ModelNotice of source: uint64
+    | LatestPose of source: uint64
+
+type TransportPacket =
+    {
+        Lane: DeliveryLane
+        Bytes: byte array
+        Schedule: PacketSchedule
+    }
+
+    member this.PoseStream =
+        match this.Schedule with
+        | PacketSchedule.LatestPose source -> ValueSome source
+        | _ -> ValueNone
+
 
 /// A client request to publish into the system channel. The requested
 /// origin cannot be Server; kind admission belongs to the codec.
@@ -149,18 +196,57 @@ type ClientRequest = {
 
 /// A server-assigned number for one key and label of actor values. It lives
 /// while some online player publishes that pair and is never given to another.
-type ActorValueKind = { Id: uint64; Key: ActorValueKey; DisplayName: ActorValueName }
+type ActorValueKind = {
+    Id: uint64
+    Key: ActorValueKey
+    DisplayName: ActorValueName
+}
+
+/// A detached lookup shared by events until the actor changes its kind registry.
+/// Typed dictionary lookup avoids FSharpMap's boxed struct-key comparisons.
+[<Sealed>]
+type ActorValueKindIndex private (ids: Collections.Generic.Dictionary<struct (ActorValueKey * ActorValueName), uint64>) =
+    static let empty = ActorValueKindIndex(Collections.Generic.Dictionary())
+    static member Empty = empty
+    static member Create(kinds: ActorValueKind seq) =
+        let ids = Collections.Generic.Dictionary<struct (ActorValueKey * ActorValueName), uint64>()
+        for kind in kinds do
+            ids[struct (kind.Key, kind.DisplayName)] <- kind.Id
+
+        ActorValueKindIndex(ids)
+    member _.ContainsKey key = ids.ContainsKey key
+    member _.Item with get key = ids[key]
+    // Preserve value equality for immutable event snapshots, independently of order.
+    member private _.Entries = ids
+    override this.Equals other =
+        match other with
+        | :? ActorValueKindIndex as value ->
+            Object.ReferenceEquals(this, value) ||
+            (ids.Count = value.Entries.Count &&
+             (ids |> Seq.forall (fun pair ->
+                 match value.Entries.TryGetValue pair.Key with
+                 | true, id -> id = pair.Value
+                 | _ -> false)))
+        | _ -> false
+    override _.GetHashCode() =
+        let mutable hash = 0
+        for KeyValue(struct (key, name), id) in ids do
+            hash <- hash ^^^ HashCode.Combine(key, name, id)
+        hash
 
 /// The kind numbers of one presence event, fixed when presence builds it, and
 /// the kinds its recipient has not been told yet, ascending.
 type ActorValueKinds = {
-    Ids: Map<struct (ActorValueKey * ActorValueName), uint64>
+    Ids: ActorValueKindIndex
     Defined: ActorValueKind list
 }
 
 [<RequireQualifiedAccess>]
 module ActorValueKinds =
-    let none = { Ids = Map.empty; Defined = [] }
+    let none = {
+        Ids = ActorValueKindIndex.Empty
+        Defined = []
+    }
 
 /// What changed in one player's actor values and details since the last tick.
 type MetadataPatch = {
@@ -184,11 +270,21 @@ type PresenceChange = {
 
 [<RequireQualifiedAccess>]
 module PresenceChange =
-    let empty = { Joined = []; Updated = []; Metadata = []; Space = ValueNone; Visibility = []; Left = [] }
+    let empty = {
+        Joined = []
+        Updated = []
+        Metadata = []
+        Space = ValueNone
+        Visibility = []
+        Left = []
+    }
 
     let isEmpty change =
-        change.Joined.IsEmpty && change.Updated.IsEmpty && change.Metadata.IsEmpty
-        && change.Visibility.IsEmpty && change.Left.IsEmpty
+        change.Joined.IsEmpty
+        && change.Updated.IsEmpty
+        && change.Metadata.IsEmpty
+        && change.Visibility.IsEmpty
+        && change.Left.IsEmpty
 
 /// A channel of the session with its retained tail, ascending message ID.
 type WelcomeChannel = {

@@ -12,9 +12,13 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 20u
+    let Version = 26u
 
-    let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
+    let private fail requestId failure =
+        Error {
+            RequestId = requestId
+            Failure = failure
+        }
 
     /// The settings come checked by GameSettings.create.
     let create (config: ServerConfig) = { Config = config }
@@ -57,8 +61,14 @@ module ProtocolCodec =
                 Error(ProtocolCodecFailure.InvalidPayload "payload")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "payload")
         decoded
-        |> Result.map (fun command -> { RequestId = packet.RequestId; Command = command })
-        |> Result.mapError (fun failure -> { RequestId = Some packet.RequestId; Failure = failure })
+        |> Result.map (fun command -> {
+            RequestId = packet.RequestId
+            Command = command
+        })
+        |> Result.mapError (fun failure -> {
+            RequestId = Some packet.RequestId
+            Failure = failure
+        })
 
     // Parse/validate before entering any stateful owner. Domain failures retain
     // correlation so the runtime can send a rejection without applying anything.
@@ -93,7 +103,11 @@ module ProtocolCodec =
     /// What the client hears for a request this codec refused: the wire field
     /// that was wrong and why, worded for the player.
     let rejection failure : RequestRejection =
-        let invalid field message = { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = field }
+        let invalid field message = {
+            Code = RequestRejectionCode.InvalidRequest
+            Message = message
+            Field = field
+        }
         match failure with
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("ChatMessageText", TextError.TooLong maximum)) ->
             invalid "text" $"Message exceeds {maximum} characters."
@@ -121,16 +135,30 @@ module ProtocolCodec =
 
     /// The refusal of a request, sent back on the lane the request came by.
     let refusal lane requestId rejection =
-        if lane = DeliveryLane.Chat then ServerResponse.ChatRejected(requestId, rejection)
-        else ServerResponse.RequestRejected(requestId, rejection)
+        if lane = DeliveryLane.Chat then
+            ServerResponse.ChatRejected(requestId, rejection)
+        else
+            ServerResponse.RequestRejected(requestId, rejection)
 
-    let private settles lane requestId = { Lane = lane; RequestId = ValueSome requestId; WhileOpening = false }
-    let private notifies lane = { Lane = lane; RequestId = ValueNone; WhileOpening = false }
+    let private settles lane requestId = {
+        Lane = lane
+        RequestId = ValueSome requestId
+        WhileOpening = false
+    }
+
+    let private notifies lane = {
+        Lane = lane
+        RequestId = ValueNone
+        WhileOpening = false
+    }
 
     // A guild's chat travels with its GuildChanged on the control lane: no
     // message overtakes the guild that holds it or trails the guild's removal.
     let private chatLane channelId =
-        if ChatChannels.kindOf channelId = ValueSome ChatChannelKind.Guild then DeliveryLane.Control else DeliveryLane.Chat
+        if ChatChannels.kindOf channelId = ValueSome ChatChannelKind.Guild then
+            DeliveryLane.Control
+        else
+            DeliveryLane.Chat
 
     /// The one table of how each response travels. Only the refusal of the
     /// opening request may leave before SessionOpened.
@@ -158,13 +186,21 @@ module ProtocolCodec =
         | ServerResponse.SessionEnded _ -> { notifies DeliveryLane.Control with WhileOpening = true }
 
     let decodeMovement (codec: ProtocolCodec) (bytes: byte array) =
-        if isNull bytes || bytes.Length = 0 then fail None ProtocolCodecFailure.EmptyPacket
-        elif bytes.Length > codec.Config.MaxPacketBytes then fail None ProtocolCodecFailure.PacketTooLarge
+        if isNull bytes || bytes.Length = 0 then
+            fail None ProtocolCodecFailure.EmptyPacket
+        elif bytes.Length > codec.Config.MaxPacketBytes then
+            fail None ProtocolCodecFailure.PacketTooLarge
         else
             try
                 let packet = Dreamsleeve.Protocol.Chat.ClientMovementPacket.Parser.ParseFrom(bytes)
-                if packet.ProtocolVersion <> Version then fail None (ProtocolCodecFailure.UnsupportedVersion packet.ProtocolVersion)
-                else PlayerCodec.decodeMovement packet.Sample |> Result.mapError (fun error -> { RequestId = None; Failure = error })
+                if packet.ProtocolVersion <> Version then
+                    fail None (ProtocolCodecFailure.UnsupportedVersion packet.ProtocolVersion)
+                else
+                    PlayerCodec.decodeMovement packet.Sample
+                    |> Result.mapError (fun error -> {
+                        RequestId = None
+                        Failure = error
+                    })
             with :? InvalidProtocolBufferException -> fail None ProtocolCodecFailure.MalformedPacket
 
     /// Each realtime packet fits the negotiated payload budget. Entries are
@@ -184,7 +220,10 @@ module ProtocolCodec =
         let envelopeSize size = headerSize + CodedOutputStream.ComputeLengthSize(size) + size
         let flush () =
             if batch.Players.Count > 0 then
-                let packet = Dreamsleeve.Protocol.Chat.ServerMovementPacket(ProtocolVersion = Version, Movements = batch)
+                let packet =
+                    Dreamsleeve.Protocol.Chat.ServerMovementPacket(
+                        ProtocolVersion = Version,
+                        Movements = batch)
                 packets.Add(packet.ToByteArray())
                 batch <- Dreamsleeve.Protocol.Chat.PlayersMoved()
                 payloadSize <- 0
@@ -199,16 +238,23 @@ module ProtocolCodec =
                 if envelopeSize (payloadSize + size) > target then flush()
                 batch.Players.Add item
                 payloadSize <- payloadSize + size
+
         flush()
 
-        if maxUnfragmentedPayloadBytes < 1 then fail None (ProtocolCodecFailure.InvalidPayload "transport_payload_budget")
-        elif tooLarge then fail None ProtocolCodecFailure.PacketTooLarge
-        elif packets.Count = 0 then fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
-        else Ok (List.ofSeq packets)
+        if maxUnfragmentedPayloadBytes < 1 then
+            fail None (ProtocolCodecFailure.InvalidPayload "transport_payload_budget")
+        elif tooLarge then
+            fail None ProtocolCodecFailure.PacketTooLarge
+        elif packets.Count = 0 then
+            fail None (ProtocolCodecFailure.InvalidPayload "players_moved")
+        else
+            Ok (List.ofSeq packets)
 
     let private packed (config: ServerConfig) requestId (message: IMessage) =
-        if message.CalculateSize() > config.MaxPacketBytes then fail requestId ProtocolCodecFailure.PacketTooLarge
-        else Ok [ message.ToByteArray() ]
+        if message.CalculateSize() > config.MaxPacketBytes then
+            fail requestId ProtocolCodecFailure.PacketTooLarge
+        else
+            Ok [ message.ToByteArray() ]
 
     /// The packets that carry a response to one peer. Inputs are validated
     /// domain values; the owner decides IDs, times, recipient correlation,
@@ -222,7 +268,8 @@ module ProtocolCodec =
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket(ProtocolVersion = Version)
         let envelope () = packed config requestId packet
 
-        if requestId = Some 0UL then fail requestId (ProtocolCodecFailure.InvalidEnvelope "request_id")
+        if requestId = Some 0UL then
+            fail requestId (ProtocolCodecFailure.InvalidEnvelope "request_id")
         else
             requestId |> Option.iter (fun id -> packet.RequestId <- id)
             match response with
@@ -240,7 +287,11 @@ module ProtocolCodec =
                 if value.Code = RequestRejectionCode.Unspecified || not (Enum.IsDefined value.Code) then invalid "code"
                 elif isNull value.Message || isNull value.Field then invalid "rejection"
                 else
-                    packet.RequestRejected <- Dreamsleeve.Protocol.Chat.RequestRejected(Code = value.Code, Message = value.Message, Field = value.Field)
+                    packet.RequestRejected <-
+                        Dreamsleeve.Protocol.Chat.RequestRejected(
+                            Code = value.Code,
+                            Message = value.Message,
+                            Field = value.Field)
                     envelope ()
             | ServerResponse.PresenceChanged(change, kinds) ->
                 if not (PlayerCodec.validPresence kinds change) then invalid "presence_changed"
@@ -296,7 +347,10 @@ module ProtocolCodec =
                 packet.SanctionIssued <- Dreamsleeve.Protocol.Chat.SanctionIssued(Sanction = ModerationCodec.entry sanction)
                 envelope ()
             | ServerResponse.SanctionLifted(_, target, kind) ->
-                packet.SanctionLifted <- Dreamsleeve.Protocol.Chat.SanctionLifted(PlayerId = PlayerId.value target, Kind = ModerationCodec.kind kind)
+                packet.SanctionLifted <-
+                    Dreamsleeve.Protocol.Chat.SanctionLifted(
+                        PlayerId = PlayerId.value target,
+                        Kind = ModerationCodec.kind kind)
                 envelope ()
             | ServerResponse.PlayerKicked(_, target) ->
                 packet.PlayerKicked <- Dreamsleeve.Protocol.Chat.PlayerKicked(PlayerId = PlayerId.value target)
@@ -310,11 +364,16 @@ module ProtocolCodec =
                     packet.PlayerMarks <- ModerationCodec.marks author records
                     envelope ()
             | ServerResponse.PlayerMarksCleared(_, target, removed) ->
-                packet.PlayerMarksCleared <- Dreamsleeve.Protocol.Chat.PlayerMarksCleared(PlayerId = PlayerId.value target, Removed = uint32 removed)
+                packet.PlayerMarksCleared <-
+                    Dreamsleeve.Protocol.Chat.PlayerMarksCleared(
+                        PlayerId = PlayerId.value target,
+                        Removed = uint32 removed)
                 envelope ()
             | ServerResponse.ChatMessageRemoved(_, channel, message) ->
                 packet.ChatMessageRemoved <-
-                    Dreamsleeve.Protocol.Chat.ChatMessageRemoved(ChannelId = ChatChannelId.value channel, MessageId = ChatMessageId.value message)
+                    Dreamsleeve.Protocol.Chat.ChatMessageRemoved(
+                        ChannelId = ChatChannelId.value channel,
+                        MessageId = ChatMessageId.value message)
                 envelope ()
             | ServerResponse.GuildsSnapshot state ->
                 if not (GuildCodec.validSnapshot config state) then invalid "guilds_snapshot"

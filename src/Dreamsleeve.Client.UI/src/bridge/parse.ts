@@ -290,15 +290,37 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
   activate: bare,
   deactivate: bare,
 };
-export function parseHostEvent(source: string): HostEvent {
-  if (source.length > 8 * 1024 * 1024)
-    throw new Error("UI payload exceeds limit");
-  const v: unknown = JSON.parse(source);
-  if (!object(v)) throw new Error("Expected UI event");
-  const type = String(v.type);
-  const check = Object.hasOwn(events, type)
-    ? events[type as HostEvent["type"]]
+
+export type HostEventParseResult =
+  | { ok: true; event: HostEvent }
+  | { ok: false; error: "size" | "json" | "schema" };
+
+// The existing host payload limit is measured in UTF-16 string code units.
+const maxPayloadLength = 8 * 1024 * 1024;
+
+function parseJson(
+  source: string,
+): { ok: true; value: unknown } | { ok: false; error: "json" } {
+  // JSON.parse(string), without a reviver, uses SyntaxError for malformed JSON.
+  // Only that dependency call is inside the ordinary-failure adapter.
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    return { ok: false, error: "json" };
+  }
+  return { ok: true, value };
+}
+
+export function parseHostEvent(source: string): HostEventParseResult {
+  if (source.length > maxPayloadLength) return { ok: false, error: "size" };
+  const parsed = parseJson(source);
+  if (!parsed.ok) return parsed;
+  const v = parsed.value;
+  if (!object(v) || !text(v.type)) return { ok: false, error: "schema" };
+  const check = Object.hasOwn(events, v.type)
+    ? events[v.type as HostEvent["type"]]
     : undefined;
-  if (!check || !check(v)) throw new Error("Invalid UI event");
-  return v as unknown as HostEvent;
+  if (!check || !check(v)) return { ok: false, error: "schema" };
+  return { ok: true, event: v as unknown as HostEvent };
 }

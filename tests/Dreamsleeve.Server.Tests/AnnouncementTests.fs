@@ -27,10 +27,15 @@ type private WireClientSource = Dreamsleeve.Protocol.Chat.ClientAnnouncementSour
 
 let private post text kind source signature : Result<ClientRequest, ProtocolCodecError> =
     Dreamsleeve.Protocol.Chat.ClientPacket(
-        ProtocolVersion = ProtocolCodec.Version, RequestId = 5UL,
+        ProtocolVersion = ProtocolCodec.Version,
+        RequestId = 5UL,
         PostAnnouncement =
             Dreamsleeve.Protocol.Chat.PostAnnouncement(
-                ChannelId = ChatChannelId.value channel, Text = text, Kind = kind, Source = source, Signature = signature))
+                ChannelId = ChatChannelId.value channel,
+                Text = text,
+                Kind = kind,
+                Source = source,
+                Signature = signature))
     |> fun packet -> ProtocolCodec.decodeClient codec (packet.ToByteArray())
 
 let private request (result: Result<ClientRequest, ProtocolCodecError>) =
@@ -146,8 +151,14 @@ let tests = testList "Announcements" [
         Expect.equal serverWire.ChatPublished.Message.Announcement.Source Dreamsleeve.Protocol.Chat.AnnouncementSource.Server "server origin"
 
         let welcome = {
-            SelfPlayerId = pid 7UL; Players = [Player.create profile |> Player.snapshot]; Kinds = ActorValueKinds.none
-            Channels = [ { ChannelId = channel; Kind = ChatChannelKind.System; Messages = [server] } ]
+            SelfPlayerId = pid 7UL
+            Players = [Player.create profile |> Player.snapshot]
+            Kinds = ActorValueKinds.none
+            Channels = [ {
+                ChannelId = channel
+                Kind = ChatChannelKind.System
+                Messages = [server]
+            } ]
             AnnouncementSources = [ClientAnnouncementSource.TrustedClient]
             OwnPseudonym = ValueNone
             Hiding = HiddenIdentity.Shown
@@ -161,7 +172,13 @@ let tests = testList "Announcements" [
         Expect.equal policy.MaxSignatureLength (uint32 config.ChatInput.AnnouncementSignature) "label limit"
 
     testCase "admission follows the per-source switches" <| fun _ ->
-        let requestFrom source : AnnouncementRequest = { ChannelId = channel; Text = text "x"; Kind = AnnouncementKind.Event; Source = source; Signature = ValueNone }
+        let requestFrom source : AnnouncementRequest = {
+            ChannelId = channel
+            Text = text "x"
+            Kind = AnnouncementKind.Event
+            Source = source
+            Signature = ValueNone
+        }
         let options = { AnnouncementOptions.defaults with ThirdParty = { Enabled = false } }
         Expect.equal (AnnouncementOptions.allowedSources AnnouncementOptions.defaults)
             [ClientAnnouncementSource.TrustedClient; ClientAnnouncementSource.ThirdParty] "all by default"
@@ -172,7 +189,12 @@ let tests = testList "Announcements" [
         Expect.equal refusal.Field "source" "field"
 
     testCase "schedule publishes once-off and periodic entries without replaying missed periods" <| fun _ ->
-        let entry kind delay interval = { Text = $"{kind} text"; Kind = kind; DelaySeconds = delay; IntervalSeconds = interval }
+        let entry kind delay interval = {
+            Text = $"{kind} text"
+            Kind = kind
+            DelaySeconds = delay
+            IntervalSeconds = interval
+        }
         let resolved =
             AnnouncementOptions.resolve config.ChatInput
                 { AnnouncementOptions.defaults with Scheduled = [entry "Admin" 0 0; entry "periodic" 5 10] }
@@ -209,8 +231,19 @@ let tests = testList "Announcements" [
         Expect.isTrue loaded.TrustedClient.Enabled "unset source keeps default"
         Expect.isFalse loaded.ThirdParty.Enabled "switched off"
         Expect.equal loaded.Scheduled [
-            { Text = "Добро пожаловать"; Kind = "Periodic"; DelaySeconds = 0; IntervalSeconds = 600 }
-            { Text = "Рестарт в полночь"; Kind = "Announcement"; DelaySeconds = 0; IntervalSeconds = 0 } ] "table array with defaults"
+            {
+                Text = "Добро пожаловать"
+                Kind = "Periodic"
+                DelaySeconds = 0
+                IntervalSeconds = 600
+            }
+            {
+                Text = "Рестарт в полночь"
+                Kind = "Announcement"
+                DelaySeconds = 0
+                IntervalSeconds = 0
+            }
+        ] "table array with defaults"
         for invalid in ["[Announcements]\nTypo = 1\n"
                         "[[Announcements.Scheduled]]\nText = 'x'\nColor = 'red'\n"; "[Announcements]\nScheduled = 'x'\n"
                         "[Announcements.ThirdParty]\nEnabled = 'yes'\n"; "[Server.ChatInput]\nAnnouncementSignature = 129\n"] do

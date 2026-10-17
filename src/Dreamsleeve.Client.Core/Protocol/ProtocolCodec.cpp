@@ -154,6 +154,24 @@ namespace Dreamsleeve::Client::Wire
       }
     };
 
+    Result<ServerResponse> DecodeMovements(std::span<const std::byte> bytes)
+    {
+      P::ServerMovementPacket packet;
+      if (!packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()))) return Failure(ErrorCode::MalformedPacket, "movement");
+      if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
+      if (packet.movements().players().empty()) return Invalid("movements");
+
+      PlayersMoved batch;
+      batch.players.reserve(packet.movements().players_size());
+      for (const auto& value : packet.movements().players())
+      {
+        auto sample = ReadMovement(value);
+        if (!sample) return std::unexpected{sample.error()};
+        batch.players.push_back(std::move(*sample));
+      }
+      return batch;
+    }
+
     // The first string field, nested ones included, that is not well-formed
     // UTF-8. The server's parser refuses such a packet whole and closes the
     // connection, so it never leaves; a new string field is covered as it is.
@@ -217,8 +235,10 @@ namespace Dreamsleeve::Client::Wire
     packet.mutable_sample()->set_context_revision(sample.contextRevision);
     packet.mutable_sample()->set_sequence(sample.sequence);
     WritePose(*packet.mutable_sample()->mutable_pose(), sample.pose);
+
     const auto size = packet.ByteSizeLong();
     if (size > std::min(maxPayloadBytes, config.network.maxPacketBytes)) return Failure(ErrorCode::PacketTooLarge, "movement");
+
     auto result = DreamNetPacket::TryAllocateWith(
       size,
       [&](std::span<std::byte> buffer) { return packet.SerializeToArray(buffer.data(), static_cast<int>(buffer.size())); },
@@ -232,22 +252,7 @@ namespace Dreamsleeve::Client::Wire
     if (bytes.empty()) return Failure(ErrorCode::EmptyPacket, "packet");
     if (bytes.size() > config.network.maxPacketBytes) return Failure(ErrorCode::PacketTooLarge, "packet");
 
-    if (channel == Channel::Realtime)
-    {
-      P::ServerMovementPacket packet;
-      if (!packet.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()))) return Failure(ErrorCode::MalformedPacket, "movement");
-      if (packet.protocol_version() != Version) return Failure(ErrorCode::UnsupportedVersion, "protocol_version");
-      if (packet.movements().players().empty()) return Invalid("movements");
-      PlayersMoved batch;
-      batch.players.reserve(packet.movements().players_size());
-      for (const auto& value : packet.movements().players())
-      {
-        auto sample = ReadMovement(value);
-        if (!sample) return std::unexpected{sample.error()};
-        batch.players.push_back(std::move(*sample));
-      }
-      return batch;
-    }
+    if (channel == Channel::Realtime) return DecodeMovements(bytes);
     if (channel != Channel::Control && channel != Channel::Chat) return Failure(ErrorCode::InvalidEnvelope, "channel");
 
     P::ServerPacket packet;
@@ -304,7 +309,11 @@ namespace Dreamsleeve::Client::Wire
 
         return RequestRejected{
             packet.request_id(),
-            {static_cast<RequestRejectionCode>(rejection.code()), rejection.message(), rejection.field()}
+            {
+                static_cast<RequestRejectionCode>(rejection.code()),
+                rejection.message(),
+                rejection.field()
+            }
         };
       }
       case P::ServerPacket::kPresenceChanged: {

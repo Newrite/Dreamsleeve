@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 import {
   makeChat,
   visible,
@@ -72,7 +73,7 @@ function ready(now = () => Date.now()) {
   chat.receive(snapshot);
   return { chat, send };
 }
-const parse = (value: unknown) => parseHostEvent(JSON.stringify(value));
+const parse = (value: unknown) => expectHostEvent(JSON.stringify(value));
 
 describe("announcement bridge", () => {
   it("accepts every origin and kind, a signature and a posting author", () => {
@@ -136,7 +137,11 @@ describe("announcement bridge", () => {
       { ...valid, author: { id: "2", name: "Мира" } },
       { ...chatLine("9"), announcement: { origin: "server", kind: "event" } },
     ])
-      expect(() => parse({ type: "messages", messages: [broken] })).toThrow();
+      expect(
+        parseHostEvent(
+          JSON.stringify({ type: "messages", messages: [broken] }),
+        ),
+      ).toEqual({ ok: false, error: "schema" });
     expect(
       parse({
         type: "messages",
@@ -172,7 +177,10 @@ describe("announcement bridge", () => {
       { ...event, error: undefined },
       { ...event, error: "x".repeat(513) },
     ])
-      expect(() => parse(broken)).toThrow();
+      expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+        ok: false,
+        error: "schema",
+      });
   });
 });
 

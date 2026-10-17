@@ -52,6 +52,9 @@ combatHideFireflies = false
 combatHideNames = false
 # Chat bubbles.
 combatHideBubbles = false
+# Hide other players (phantoms, fireflies, names, bubbles) while the character
+# creation menu (RaceMenu) is open: a new game starts everyone in one place.
+raceMenuHidePlayers = true
 # Online tab layout: cards | list.
 onlineView = "cards"
 # Fade each message out a while after it arrives; nothing fades while the chat is open.
@@ -169,6 +172,31 @@ deathDateHeader = true
 noteDateHeader = false
 # Colour of that date line.
 markDateColor = "#A9A69B"
+
+# Live phantom publication and reception are independent.
+publishPhantoms = true
+showPhantoms = true
+phantomFallback = true
+combatHidePhantoms = false
+# Maximum simultaneously visible phantoms, 0..16.
+maxVisiblePhantoms = 4
+# Visibility distance in world units, 0..16384.
+phantomDrawDistance = 4096
+phantomOpacity = 0.6
+phantomColor = "#8CCCCC"
+# Pose sampling rate in Hz, 1..50; 10 by default, 20 for a denser stream.
+# The server may impose a lower rate (Phantoms.PoseIntervalMs).
+phantomSampleRate = 10
+# Minimum playback delay (adaptive jitter margin), bounded extrapolation and stale-pose timeout in ms.
+phantomDelayMs = 100
+phantomExtrapolationMs = 100
+phantomTimeoutMs = 1000
+# Total working-memory budget and compressed disk cache size in MiB.
+phantomMemoryMiB = 512
+phantomCacheMiB = 1024
+# Model transfer limits in KiB/s; 5120 = 5 MiB/s in each direction.
+phantomUploadKiB = 5120
+phantomDownloadKiB = 5120
 
 # Written by the plugin, never sent to the server. IDs are scoped by the
 # server address "ip:port": an account ID is unique only within its server.

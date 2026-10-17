@@ -20,8 +20,8 @@ Port = 8778
 # ENet connection slots, 1..4095, at least Runtime.MaxSessions. A few spare slots let a full
 # server answer "full" instead of ENet silently dropping the attempt.
 PeerLimit = 544
-# ENet channels per connection, 3..255; the protocol uses 3 (control, chat, realtime).
-ChannelLimit = 3
+# ENet channels per connection, 5..255: control, chat, realtime, models, poses.
+ChannelLimit = 5
 # Must be 0: the transport thread waits on its own wake-up, never inside ENet.
 ServiceTimeoutMs = 0
 # Network events handed from the transport thread to the runtime per pass, >= 1.
@@ -175,8 +175,8 @@ MailboxCapacity = 4096
 ControlReserve = 128
 # Control messages the owner may have in flight to the runtime, >= 1.
 MaxControlDeliveries = 512
-# Period of pose replication, milliseconds, >= 1: 50 = 20 Hz.
-ReplicationIntervalMs = 50
+# Movement replication period in ms, >= 1: 100 = 10 Hz; 50 = 20 Hz.
+ReplicationIntervalMs = 100
 # Players within this many world units (same worldspace or interior cell) get each
 # other's poses, >= 0. Clients cannot draw fireflies farther than this.
 VisibilityDistance = 8192
@@ -325,6 +325,9 @@ MaxTrackedLogins = 1024
 
 # Serilog output. Logs never contain passwords, codes, tokens or chat text.
 [Logging]
+# Continuous tick/transport/GC/resource samples and phantom lifecycle; segmented sessions (no automatic deletion).
+DiagnosticsEnabled = false
+DiagnosticsFilePath = "diagnostics/server.jsonl"
 # Verbose | Debug | Information | Warning | Error | Fatal (case-insensitive).
 MinimumLevel = "Information"
 # Human-readable lines on the console (stdout; journald under systemd).
@@ -498,3 +501,55 @@ InviteCheckIntervalMs = 60000
 # ["203.0.113.7", "2001:db8::/48"]. Read at startup.
 [Proxies]
 Trusted = []
+
+# Replicated phantom admission, traffic and opaque compressed asset cache.
+# Models = reliable channel 3, fixed 16384-byte chunks, acknowledged per transfer window.
+# Poses = sequenced unreliable fragments on channel 4; old samples are discarded.
+# At ENet sequence FFFF, only an empty reliable epoch marker precedes the pose.
+# The transport swallows that marker; a pose payload is always unreliable.
+[Phantoms]
+# Broad horizontal camera sector; near players and unavailable camera remain visible.
+CameraCulling = true
+Enabled = true
+StoragePath = "phantoms"
+DiskBytes = 4294967296
+RamBytes = 67108864
+CacheEntries = 1024
+CacheTtlSeconds = 86400
+Maximum = 4
+Distance = 4096.0
+MaxSources = 512
+MaxSubscribers = 64
+MaxTransfers = 64
+TransfersPerPlayer = 2
+# Reusable HTTP/file I/O buffer, independent of TCP congestion window.
+ChunkBytes = 16384
+# HTTP inactivity timeout; complete file duration is not capped at this value.
+TransferTimeoutMs = 30000
+PublishCooldownMs = 1000
+# Pose capture/admission period in ms: 100 = 10 Hz; 50 = 20 Hz.
+PoseIntervalMs = 100
+PoseTimeoutMs = 1000
+# Target per-source replication period; two snapshots of jitter headroom.
+# Dispatch uses turns up to 25 ms, without increasing this average rate.
+ReplicationIntervalMs = 100
+# Shared upload/download model budgets, bytes/s: 5 MiB/s total and per player.
+ModelBytesPerSecond = 5242880
+PlayerModelBytesPerSecond = 5242880
+PoseBytesPerSecond = 2097152
+# Shared pose fanout budget: 128 MiB/s. At 512 sources x 4 recipients x 10 Hz
+# the measured native poses need about 77 MiB/s before transport overhead.
+TotalPoseBytesPerSecond = 134217728
+CommandsPerSecond = 128
+# HTTP-запросы моделей в минуту на IP; отдельно от скорости передачи байтов.
+HttpRequestsPerMinute = 128
+# Inspection ceiling per dispatch turn, also the shared send-credit capacity.
+# Send credits refill at MaxPoseFanoutPerTick / ReplicationIntervalMs.
+MaxPoseFanoutPerTick = 2048
+
+[Phantoms.Limits]
+CompressedBytes = 67108864
+RawBytes = 134217728
+Channels = 4096
+PoseBytes = 131072
+RawPoseBytes = 262144

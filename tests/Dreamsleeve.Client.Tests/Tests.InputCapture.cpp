@@ -44,6 +44,7 @@ TEST_CASE("Input filter delivers only the release of a key held before capture")
 {
   Filter filter;
   REQUIRE(filter.Admit(Key(KeyW, true)));
+
   filter.Begin();
   CHECK_FALSE(filter.Admit(Key(KeyW, true)));  // held repeat
   CHECK(filter.Admit(Key(KeyW, false)));       // the game must see the release
@@ -78,6 +79,7 @@ TEST_CASE("Input filter ends capture without leaving keys stuck")
   REQUIRE(filter.Admit(Key(KeyW, true)));
   filter.Begin();
   CHECK_FALSE(filter.Admit(Key(KeyE, true)));
+
   filter.End();
   CHECK_FALSE(filter.Capturing());
   CHECK(filter.Admit(Key(KeyW, false)));  // still held through the whole chat
@@ -96,6 +98,7 @@ TEST_CASE("Input filter capture is idempotent")
   REQUIRE(filter.Admit(Key(KeyW, true)));
   filter.Begin();
   CHECK_FALSE(filter.Admit(Key(KeyE, true)));
+
   filter.Begin();
   CHECK(filter.Capturing());
   CHECK_FALSE(filter.Admit(Key(KeyE, false)));  // the second Begin did not admit it

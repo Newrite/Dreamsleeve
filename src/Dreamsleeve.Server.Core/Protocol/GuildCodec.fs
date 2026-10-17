@@ -43,29 +43,40 @@ module internal GuildCodec =
         let action =
             match source.ActionCase with
             | WireAction.Create -> Ok(GuildAction.Create source.Create.Name)
-            | WireAction.Invite -> pair source.Invite.GuildId source.Invite.PlayerId (fun guild player -> GuildAction.Invite(guild, player))
-            | WireAction.Answer -> guild source.Answer.GuildId |> Result.map (fun guild -> GuildAction.Answer(guild, source.Answer.Accept))
+            | WireAction.Invite ->
+                pair source.Invite.GuildId source.Invite.PlayerId (fun guild player -> GuildAction.Invite(guild, player))
+            | WireAction.Answer ->
+                guild source.Answer.GuildId
+                |> Result.map (fun guild -> GuildAction.Answer(guild, source.Answer.Accept))
             | WireAction.Leave -> guild source.Leave.GuildId |> Result.map GuildAction.Leave
-            | WireAction.Exclude -> pair source.Exclude.GuildId source.Exclude.PlayerId (fun guild player -> GuildAction.Exclude(guild, player))
+            | WireAction.Exclude ->
+                pair source.Exclude.GuildId source.Exclude.PlayerId (fun guild player -> GuildAction.Exclude(guild, player))
             | WireAction.SetRole ->
                 pair source.SetRole.GuildId source.SetRole.PlayerId (fun guild player -> struct (guild, player))
                 |> Result.bind (fun (struct (guild, player)) ->
                     decodeRole source.SetRole.Role |> Result.map (fun role -> GuildAction.SetRole(guild, player, role)))
-            | WireAction.Transfer -> pair source.Transfer.GuildId source.Transfer.PlayerId (fun guild player -> GuildAction.Transfer(guild, player))
+            | WireAction.Transfer ->
+                pair source.Transfer.GuildId source.Transfer.PlayerId (fun guild player -> GuildAction.Transfer(guild, player))
             | WireAction.Mute ->
                 let mute = source.Mute
                 let minutes =
-                    if not mute.HasMinutes then Ok ValueNone
-                    elif mute.Minutes > uint32 Int32.MaxValue then Error(ProtocolCodecFailure.InvalidPayload "minutes")
-                    else Ok(ValueSome(int mute.Minutes))
+                    if not mute.HasMinutes then
+                        Ok ValueNone
+                    elif mute.Minutes > uint32 Int32.MaxValue then
+                        Error(ProtocolCodecFailure.InvalidPayload "minutes")
+                    else
+                        Ok(ValueSome(int mute.Minutes))
                 match pair mute.GuildId mute.PlayerId (fun guild player -> struct (guild, player)), minutes,
                       SanctionReason.create mute.Reason |> Result.mapError ProtocolCodecFailure.InvalidDomain with
                 | Ok(struct (guild, player)), Ok minutes, Ok reason ->
                     SanctionTerm.create minutes
                     |> Result.mapError ProtocolCodecFailure.InvalidDomain
                     |> Result.map (fun term -> GuildAction.Mute(guild, player, term, reason))
-                | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
-            | WireAction.Unmute -> pair source.Unmute.GuildId source.Unmute.PlayerId (fun guild player -> GuildAction.Unmute(guild, player))
+                | Error error, _, _
+                | _, Error error, _
+                | _, _, Error error -> Error error
+            | WireAction.Unmute ->
+                pair source.Unmute.GuildId source.Unmute.PlayerId (fun guild player -> GuildAction.Unmute(guild, player))
             | WireAction.Disband -> guild source.Disband.GuildId |> Result.map GuildAction.Disband
             | WireAction.None -> Error(ProtocolCodecFailure.InvalidPayload "action")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "action")
@@ -80,10 +91,12 @@ module internal GuildCodec =
                 Role = role view.Membership.Role,
                 Online = view.Online,
                 JoinedAtUnixMs = unixMs view.Membership.JoinedAt)
+
         view.Membership.Mute |> ValueOption.iter (fun mute ->
             let state = Dreamsleeve.Protocol.Chat.MuteState(Reason = SanctionReason.value mute.Reason)
             mute.Expires |> ValueOption.iter (fun until -> state.UntilUnixMs <- unixMs until)
             result.Mute <- state)
+
         result
 
     let guildOf (view: GuildView) =
@@ -93,6 +106,7 @@ module internal GuildCodec =
                 Name = GuildName.value view.Name,
                 ChannelId = ChatChannelId.value view.ChannelId,
                 CreatedAtUnixMs = unixMs view.CreatedAt)
+
         result.Members.AddRange(view.Members |> Seq.map memberOf)
         result.RecentMessages.AddRange(view.Messages |> Seq.map ChatCodec.message)
         result
@@ -121,12 +135,21 @@ module internal GuildCodec =
         match change with
         | GuildChange.Added view -> result.Added <- guildOf view
         | GuildChange.Removed(guild, reason) ->
-            result.Removed <- Dreamsleeve.Protocol.Chat.GuildRemoved(GuildId = GuildId.value guild, Reason = removal reason)
+            result.Removed <-
+                Dreamsleeve.Protocol.Chat.GuildRemoved(
+                    GuildId = GuildId.value guild,
+                    Reason = removal reason)
         | GuildChange.MemberChanged(guild, view) ->
-            result.Member <- Dreamsleeve.Protocol.Chat.GuildMemberUpdate(GuildId = GuildId.value guild, Member = memberOf view)
+            result.Member <-
+                Dreamsleeve.Protocol.Chat.GuildMemberUpdate(
+                    GuildId = GuildId.value guild,
+                    Member = memberOf view)
         | GuildChange.MemberRemoved(guild, player, reason) ->
             result.MemberRemoved <-
-                Dreamsleeve.Protocol.Chat.GuildMemberRemoved(GuildId = GuildId.value guild, PlayerId = PlayerId.value player, Reason = removal reason)
+                Dreamsleeve.Protocol.Chat.GuildMemberRemoved(
+                    GuildId = GuildId.value guild,
+                    PlayerId = PlayerId.value player,
+                    Reason = removal reason)
         | GuildChange.Invited view -> result.Invited <- inviteOf view
         | GuildChange.InviteRemoved guild -> result.InviteRemoved <- GuildId.value guild
         result

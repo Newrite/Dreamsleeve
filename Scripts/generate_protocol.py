@@ -170,6 +170,7 @@ def generate_native_enum_module(native_out: Path) -> None:
     """
     selections = [
         ("network.pb.h", "Network", "DisconnectReason", "", "std::uint32_t"),
+        ("network.pb.h", "Network", "DeliveryLane", "", "std::uint8_t"),
         ("protocol.pb.h", "Chat", "RequestRejectionCode", "REQUEST_REJECTION_CODE_", "std::int32_t"),
         ("player.pb.h", "Chat", "ActivityKind", "ACTIVITY_KIND_", "std::int32_t"),
         ("player.pb.h", "Chat", "LockDifficulty", "LOCK_DIFFICULTY_", "std::int32_t"),

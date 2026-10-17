@@ -28,6 +28,7 @@ namespace
         std::ofstream file{path, std::ios::binary};
         file << source;
       }
+
       return LoadClientSettings(path);
     }
 
@@ -57,8 +58,11 @@ TEST_CASE("Configuration path is caller-owned and partial TOML preserves default
   CHECK_FALSE(LoadClientSettings(fixture.path));
   auto defaults = fixture.Load("# defaults\n");
   REQUIRE(defaults);
-  CHECK(defaults->client.playerSampleIntervalMs == 50);
-  CHECK(defaults->client.network.channelLimit == 3);
+  CHECK(defaults->client.playerSampleIntervalMs == 100);
+  CHECK(defaults->client.network.channelLimit == MinChannels);
+  auto previous = fixture.Load("[client.network]\nchannelLimit = 3\n");
+  REQUIRE(previous);
+  CHECK(previous->client.network.channelLimit == MinChannels);
 
   auto loaded = fixture.Load(R"(serverHost = "127.0.0.2"
 serverPort = 9000
@@ -86,7 +90,7 @@ historyCapacity = 16
   CHECK_FALSE(loaded->client.showFireflies);
   CHECK(loaded->client.playerSampleIntervalMs == 25);
   CHECK(loaded->client.network.maxPacketBytes == 2048);
-  CHECK(loaded->client.network.channelLimit == 3);
+  CHECK(loaded->client.network.channelLimit == MinChannels);
   CHECK(loaded->client.movement.delay == std::chrono::milliseconds{75});
   CHECK(loaded->client.movement.historyCapacity == 16);
 }
@@ -99,12 +103,23 @@ TEST_CASE("Firefly base form settings use plugin-local IDs and preserve defaults
   CHECK(defaults->client.fireflyPlugin == "Skyrim.esm");
   CHECK(defaults->client.fireflyFormId == 0x02EB0F);
   CHECK(defaults->client.fireflyScale == doctest::Approx(0.25f));
+
   auto custom = fixture.Load("[client]\nfireflyPlugin = \"MyGlow.esl\"\nfireflyFormId = 0xABC\nfireflyScale = 1.5\n");
   REQUIRE(custom);
   CHECK(custom->client.fireflyPlugin == "MyGlow.esl");
   CHECK(custom->client.fireflyFormId == 0xABC);
   CHECK(custom->client.fireflyScale == doctest::Approx(1.5f));
-  for (auto bad : {"fireflyScale = 0", "fireflyScale = -1", "fireflyScale = 10.1", "fireflyScale = nan", "fireflyScale = inf", "fireflyFormId = 0", "fireflyFormId = 0xFE000ABC", "fireflyFormId = -1", "fireflyPlugin = ''", "fireflyPlugin = 'dir/MyGlow.esp'"})
+
+  for (auto bad : {"fireflyScale = 0",
+                   "fireflyScale = -1",
+                   "fireflyScale = 10.1",
+                   "fireflyScale = nan",
+                   "fireflyScale = inf",
+                   "fireflyFormId = 0",
+                   "fireflyFormId = 0xFE000ABC",
+                   "fireflyFormId = -1",
+                   "fireflyPlugin = ''",
+                   "fireflyPlugin = 'dir/MyGlow.esp'"})
     CHECK_FALSE(fixture.Accepts(std::string{"[client]\n"} + bad));
 }
 
@@ -140,6 +155,7 @@ TEST_CASE("Keyboard capture is on by default and can be switched off")
   auto            defaults = fixture.Load("version = 1\n");
   REQUIRE(defaults);
   CHECK(defaults->client.captureKeyboard);
+
   auto custom = fixture.Load("[client]\ncaptureKeyboard = false\n");
   REQUIRE(custom);
   CHECK_FALSE(custom->client.captureKeyboard);
@@ -341,6 +357,7 @@ TEST_CASE("Authentication errors are observable and a subsequent explicit login 
   REQUIRE(WaitIdle(**app));
   CHECK_FALSE((*app)->Status().error.empty());
   CHECK((*app)->Status().phase == SessionPhase::Disconnected);
+
   REQUIRE((*app)->Connect({"player", "short"}));
   REQUIRE(WaitIdle(**app));
   (*app)->Stop();
@@ -464,6 +481,7 @@ TEST_CASE("The first run writes the example and never rewrites an existing file"
     std::erase(text, '\r');
     return text;
   }());
+
   {
     std::ofstream file{fixture.path, std::ios::binary | std::ios::trunc};
     file << "serverPort = 9000\n";
@@ -480,6 +498,148 @@ TEST_CASE("Programmatic startup uses the same validation as file configuration")
   settings.client.playerSampleIntervalMs = 50;
   settings.authUrl                       = "http://remote.example.test";
   CHECK_FALSE(ClientApplication::TryCreate(settings));
+}
+
+TEST_CASE("Delayed methods replies cannot publish across a route change or ABA")
+{
+  bool returnToOriginal{};
+  SUBCASE("another route") {}
+  SUBCASE("original index selected again")
+  {
+    returnToOriginal = true;
+  }
+
+  struct Gates
+  {
+    std::promise<void>        firstEntered;
+    std::promise<void>        firstRelease;
+    std::promise<std::string> nextEntered;
+    std::promise<void>        nextRelease;
+    std::atomic_bool          firstReleased{};
+    std::atomic_bool          nextReleased{};
+    std::atomic_int           calls{};
+
+    void Release()
+    {
+      if (!firstReleased.exchange(true)) firstRelease.set_value();
+      if (!nextReleased.exchange(true)) nextRelease.set_value();
+    }
+  };
+
+  auto             gates        = std::make_shared<Gates>();
+  auto             firstEntered = gates->firstEntered.get_future();
+  auto             nextEntered  = gates->nextEntered.get_future();
+  auto             firstRelease = gates->firstRelease.get_future().share();
+  auto             nextRelease  = gates->nextRelease.get_future().share();
+  ApplicationPorts ports;
+  ports.readMethods = [gates, firstRelease, nextRelease](std::string_view url, bool) -> std::expected<Auth::Methods, Auth::Failure> {
+    if (++gates->calls == 1)
+    {
+      gates->firstEntered.set_value();
+      firstRelease.wait();
+      return Auth::Methods{Auth::RegistrationMode::Manual, true};
+    }
+    if (gates->calls == 2)
+    {
+      gates->nextEntered.set_value(std::string{url});
+      nextRelease.wait();
+    }
+    return Auth::Methods{Auth::RegistrationMode::Open, false};
+  };
+  ClientSettings settings;
+  settings.client.serverPort       = 1;
+  settings.client.connectTimeoutMs = 50;
+  settings.routes.push_back({"Proxy", "127.0.0.1", 2, "http://127.0.0.1:9"});
+  auto app = ClientApplication::TryCreate(settings, {0, 0}, std::move(ports));
+
+  struct ReleaseBeforeAppShutdown
+  {
+    std::shared_ptr<Gates> gates;
+
+    ~ReleaseBeforeAppShutdown()
+    {
+      gates->Release();
+    }
+  } release{gates};
+
+  REQUIRE(app);
+  REQUIRE(firstEntered.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
+  const auto waitRoute = [&](std::size_t route) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    while ((*app)->Status().route != route && std::chrono::steady_clock::now() < deadline)
+      std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    return (*app)->Status().route == route;
+  };
+  (*app)->Exchange().SetRouteChoice(1);
+  REQUIRE(waitRoute(1));
+  if (returnToOriginal)
+  {
+    (*app)->Exchange().SetRouteChoice(0);
+    REQUIRE(waitRoute(0));
+  }
+
+  gates->firstReleased = true;
+  gates->firstRelease.set_value();
+  REQUIRE(nextEntered.wait_for(std::chrono::seconds{3}) == std::future_status::ready);
+  CHECK(nextEntered.get() == (returnToOriginal ? settings.authUrl : settings.routes[0].authUrl));
+  CHECK((*app)->Status().methods == Auth::Methods{});
+
+  gates->nextReleased = true;
+  gates->nextRelease.set_value();
+  const auto          deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+  const Auth::Methods fresh{Auth::RegistrationMode::Open, false};
+  while ((*app)->Status().methods != fresh && std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  CHECK((*app)->Status().methods == fresh);
+  (*app)->Stop();
+}
+
+TEST_CASE("First-run configuration supports a bare relative filename")
+{
+  struct File
+  {
+    std::filesystem::path path =
+      L"dreamsleeve-relative-settings-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()) + L".toml";
+
+    ~File()
+    {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+    }
+  } file;
+
+  REQUIRE(file.path.parent_path().empty());
+  REQUIRE(EnsureClientSettings(file.path));
+  CHECK(LoadClientSettings(file.path));
+}
+
+TEST_CASE("Unicode configuration failures remain typed and existing files are preserved")
+{
+  struct Fixture
+  {
+    std::filesystem::path root =
+      std::filesystem::temp_directory_path() /
+      (L"dreamsleeve-settings-\U0001F984-\u4E2D-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    ~Fixture()
+    {
+      std::error_code error;
+      std::filesystem::remove_all(root, error);
+    }
+  } fixture;
+
+  std::filesystem::create_directories(fixture.root);
+  const auto blocked = fixture.root / L"\u975E\u76EE\u5F55-\U0001F984";
+  {
+    std::ofstream file{blocked, std::ios::binary};
+    file << "keep";
+  }
+  const auto result = EnsureClientSettings(blocked / L"настройки.toml");
+  CHECK_FALSE(result);
+  if (!result) CHECK_FALSE(result.error().empty());
+  CHECK(ReadText(blocked) == "keep");
+  REQUIRE(EnsureClientSettings(blocked));
+  CHECK(ReadText(blocked) == "keep");
 }
 
 TEST_SUITE_END();

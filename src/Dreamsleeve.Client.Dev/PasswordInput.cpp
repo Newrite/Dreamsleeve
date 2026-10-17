@@ -59,12 +59,14 @@ namespace Dreamsleeve::Client::Dev
     DWORD        mode{};
     if (!GetConsoleMode(input, &mode)) return std::unexpected{"Set DREAMSLEEVE_PASSWORD for redirected input"};
     if (!SetConsoleMode(input, mode & ~ENABLE_ECHO_INPUT)) return SystemError("Password prompt");
+
     std::cout << "Password: " << std::flush;
     std::wstring value(130, L'\0');
     DWORD        read{};
     const bool   readOk = ReadConsoleW(input, value.data(), static_cast<DWORD>(value.size()), &read, nullptr) != 0;
     SetConsoleMode(input, mode);
     std::cout << '\n';
+
     if (!readOk) return SystemError("Password input");
     if (read == value.size()) return std::unexpected{"Password exceeds the maximum length"};
     value.resize(read);

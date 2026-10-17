@@ -1,0 +1,103 @@
+{
+  "protocol": 26,
+  "assetVersion": 2,
+  "pairs": [
+    {
+      "sourceGeneration": 1,
+      "targetGeneration": 2,
+      "base": "0c3e4c73db8db7c8325be2d283bcb37765fbbcf94022e8e42e001d30492b7355",
+      "target": "55c2ab087bac2d4fbaa6970a6446bccb1060df72b2e94b84a1491bcad8fd3239",
+      "fullBytes": 13255556,
+      "deltaBytes": 103143,
+      "encodeMs": 121.037,
+      "applyMs": 181.325
+    },
+    {
+      "sourceGeneration": 2,
+      "targetGeneration": 3,
+      "base": "55c2ab087bac2d4fbaa6970a6446bccb1060df72b2e94b84a1491bcad8fd3239",
+      "target": "19716b59c70af5901c9419dae5d28d781ecb0697f4f3e3d8cb7be2ce23fef612",
+      "fullBytes": 13184107,
+      "deltaBytes": 114998,
+      "encodeMs": 161.6177,
+      "applyMs": 236.9538
+    },
+    {
+      "sourceGeneration": 3,
+      "targetGeneration": 4,
+      "base": "19716b59c70af5901c9419dae5d28d781ecb0697f4f3e3d8cb7be2ce23fef612",
+      "target": "792b6259214cccb1ea9d29aa95dcde5c4f99f8d0b6e5ff07de20eb6428970688",
+      "fullBytes": 13226041,
+      "deltaBytes": 143128,
+      "encodeMs": 158.9974,
+      "applyMs": 242.8782
+    },
+    {
+      "sourceGeneration": 4,
+      "targetGeneration": 5,
+      "base": "792b6259214cccb1ea9d29aa95dcde5c4f99f8d0b6e5ff07de20eb6428970688",
+      "target": "016a7e24948b52167b99ca3e5e0381ee2f12a95b39a69020e817a3c0c5f617ed",
+      "fullBytes": 13312925,
+      "deltaBytes": 195810,
+      "encodeMs": 134.8858,
+      "applyMs": 228.6235
+    },
+    {
+      "sourceGeneration": 5,
+      "targetGeneration": 6,
+      "base": "016a7e24948b52167b99ca3e5e0381ee2f12a95b39a69020e817a3c0c5f617ed",
+      "target": "a5afd2a297ec2994f3b80cc061e6294a2ed67ca24dd5d099d974ceb3adb73e5c",
+      "fullBytes": 13308817,
+      "deltaBytes": 109495,
+      "encodeMs": 148.5995,
+      "applyMs": 187.6929
+    },
+    {
+      "sourceGeneration": 6,
+      "targetGeneration": 7,
+      "base": "a5afd2a297ec2994f3b80cc061e6294a2ed67ca24dd5d099d974ceb3adb73e5c",
+      "target": "e4b48bd7294fa049ec101f58a61c0f987eaf5a269281fde77c4802b348a80ce6",
+      "fullBytes": 13311877,
+      "deltaBytes": 73951,
+      "encodeMs": 111.0569,
+      "applyMs": 194.9194
+    },
+    {
+      "sourceGeneration": 7,
+      "targetGeneration": 8,
+      "base": "e4b48bd7294fa049ec101f58a61c0f987eaf5a269281fde77c4802b348a80ce6",
+      "target": "1bd4e136d761ab04de6731853e9a122cf0b0223c1304820740ff7a7855c015e9",
+      "fullBytes": 13313497,
+      "deltaBytes": 106620,
+      "encodeMs": 130.9613,
+      "applyMs": 194.772
+    }
+  ],
+  "totalFullBytes": 92912820,
+  "totalDeltaBytes": 847145,
+  "reductionPercent": 99.0882366932787,
+  "timingCaveat": "Single C++ Stopwatch samples during concurrent build; not steady-state benchmark. Python orchestrated files/processes only.",
+  "smoke": {
+    "deltaBytes": 32465,
+    "loopbackMs": 148.115,
+    "assertions": 3334
+  },
+  "serverTests": 640,
+  "nativeTests": 399,
+  "diagnosticTests": 414,
+  "diagnosticAssertions": 50679,
+  "diagnosticSmoke": {
+    "deltaBytes": 32465,
+    "loopbackMs": 149.475,
+    "assertions": 4043
+  },
+  "deployment": {
+    "protocol": 26,
+    "server": "S:\\Dreamsleeve",
+    "client": "F:\\MO2 - Skyrim - VanillaLike\\mods\\Dreamsleeve",
+    "clientDiagnostic": true,
+    "clientSha256": "fa2bf7887783ba823be7df87078648611e5a85c24c4159e6526c918780e7fa82",
+    "serverCoreSha256": "2adabf9c7e2afc5b9ceb5e7040289019748f219ea8ef07e8ebbd03462f575aab",
+    "unchangedConfigFiles": 10
+  }
+}

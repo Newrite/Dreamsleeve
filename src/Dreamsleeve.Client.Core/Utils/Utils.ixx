@@ -29,9 +29,11 @@ export namespace Dreamsleeve::Utils::Text
   {
     if (ValidUtf8(text)) return std::string{text};
     if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) return {};
+
     const auto   size = static_cast<int>(text.size());
     std::wstring wide(static_cast<std::size_t>(MultiByteToWideChar(CP_UTF8, 0, text.data(), size, nullptr, 0)), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, text.data(), size, wide.data(), static_cast<int>(wide.size()));
+
     const auto  wideSize = static_cast<int>(wide.size());
     std::string result(
       static_cast<std::size_t>(WideCharToMultiByte(CP_UTF8, 0, wide.data(), wideSize, nullptr, 0, nullptr, nullptr)),
@@ -46,11 +48,13 @@ export namespace Dreamsleeve::Utils::Text
   {
     if (text.empty()) return std::string{};
     if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) return std::nullopt;
+
     const auto size     = static_cast<int>(text.size());
     const int  wideSize = MultiByteToWideChar(codePage, MB_ERR_INVALID_CHARS, text.data(), size, nullptr, 0);
     if (wideSize <= 0) return std::nullopt;
     std::wstring wide(static_cast<std::size_t>(wideSize), L'\0');
     MultiByteToWideChar(codePage, MB_ERR_INVALID_CHARS, text.data(), size, wide.data(), wideSize);
+
     const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), wideSize, nullptr, 0, nullptr, nullptr);
     if (bytes <= 0) return std::nullopt;
     std::string result(static_cast<std::size_t>(bytes), '\0');
@@ -194,6 +198,7 @@ export namespace Dreamsleeve::Utils::Clipboard
     const int size  = static_cast<int>(text.size());
     const int count = text.empty() ? 0 : MultiByteToWideChar(CP_UTF8, 0, text.data(), size, nullptr, 0);
     if (count == 0 && !text.empty()) return false;
+
     HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, (static_cast<std::size_t>(count) + 1) * sizeof(wchar_t));
     if (!memory) return false;
     auto* target = static_cast<wchar_t*>(GlobalLock(memory));
@@ -205,6 +210,7 @@ export namespace Dreamsleeve::Utils::Clipboard
     if (count != 0) MultiByteToWideChar(CP_UTF8, 0, text.data(), size, target, count);
     target[count] = L'\0';
     GlobalUnlock(memory);
+
     if (!OpenClipboard(nullptr))
     {
       GlobalFree(memory);
@@ -214,6 +220,7 @@ export namespace Dreamsleeve::Utils::Clipboard
     // The clipboard owns the memory once it takes it.
     const bool placed = SetClipboardData(CF_UNICODETEXT, memory) != nullptr;
     CloseClipboard();
+
     if (!placed) GlobalFree(memory);
     return placed;
   }
@@ -256,5 +263,22 @@ private:
     Clock::duration   delay;
     Clock::time_point next{};
   };
+
+}
+
+export namespace Dreamsleeve::Utils::Time
+{
+
+  // Caller has consumed one due sample (next <= now), interval is positive.
+  // Advance to the first future slot, without drift or duplicate catch-up samples.
+  template <class Rep, class Period>
+  void AdvanceSample(
+    std::chrono::steady_clock::time_point& next,
+    std::chrono::steady_clock::time_point  now,
+    std::chrono::duration<Rep, Period>     interval)
+  {
+    if (next == std::chrono::steady_clock::time_point{}) next = now;
+    next += interval * ((now - next) / interval + 1);
+  }
 
 }

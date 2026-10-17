@@ -9,6 +9,12 @@ set_allowedarchs("x64")
 set_defaultmode("releasedbg")
 set_languages("c++23")
 
+option("diagnostics")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build the opt-in local phantom recorder (DREAMSLEEVE_DIAGNOSTICS)")
+option_end()
+
 -- Enable C++20/23 modules for targets that import modules from regular .cpp files.
 set_policy("build.c++.modules", true)
 -- `build.c++.modules.std` is enabled by default, so `import std;` works without extra config.
@@ -24,6 +30,9 @@ includes(os.getenv("CommonLibSSE-NG"))
 
 -- Included projects may set their own name; restore the solution name afterwards.
 set_project("Dreamsleeve")
+if has_config("diagnostics") then
+    set_targetdir("build/diagnostics/$(plat)/$(arch)/$(mode)")
+end
 
 -- utils.bin2c ordered before the module scanner, which already reads the header
 -- a module includes; the stock rule is ordered before the builder only.
@@ -50,6 +59,7 @@ add_requires("glaze 7.0.2")
 add_requires("doctest 2.5.0")
 add_requires("magic_enum 0.9.7")
 add_requires("protobuf-cpp 33.2")
+add_requires("zstd 1.5.7")
 
 set_config("skyrim_vr", true)
 set_config("skyrim_ae", true)
@@ -119,6 +129,11 @@ target("Dreamsleeve.Client.Core")
     add_visible_headers("src/Dreamsleeve.Client.Core")
     add_module_interface_files("src/Dreamsleeve.Client.Core")
     add_cpp_files("src/Dreamsleeve.Client.Core")
+    if has_config("diagnostics") then
+        add_defines("DREAMSLEEVE_DIAGNOSTICS", {public = true})
+    else
+        remove_files("src/Dreamsleeve.Client.Core/Diagnostics/**.ixx", "src/Dreamsleeve.Client.Core/Diagnostics/**.cpp")
+    end
 
     add_deps("Dreamsleeve.Protocol.Native")
     add_syslinks("winhttp", "advapi32", "bcrypt", "ole32", "oleaut32", "uuid", "user32", {public = true})
@@ -135,6 +150,7 @@ target("Dreamsleeve.Client.Core")
     add_packages("spdlog", {public = true})
     add_packages("glaze", {public = true})
     add_packages("magic_enum", {public = true})
+    add_packages("zstd", {public = true})
 
 -- Thin client static library
 target("Dreamsleeve.Client")
@@ -190,6 +206,25 @@ target("Dreamsleeve.Client.Tests")
     -- Game-independent host modules of the SKSE adapter are compiled here too:
     -- they depend on Core only, so bridge/settings/session logic is tested without Skyrim.
     add_module_interface_files("src/Dreamsleeve.Client/Host")
+    -- Pure capture policy/byte decoding; the engine adapter still needs Skyrim.
+    add_files("src/Dreamsleeve.Client/Game/PhantomCaptureRules.ixx", {public = true})
 
     add_deps("Dreamsleeve.Client.Core")
     add_packages("doctest")
+
+-- Detached output microbenchmark; timing is C++, never the launcher/script.
+-- Excluded from the default build and distribution.
+target("Dreamsleeve.NifOutput.Benchmark")
+    set_kind("binary")
+    set_group("Tests")
+    set_default(false)
+    add_files("tests/Dreamsleeve.Client.Benchmarks/NifOutput.cpp")
+    add_deps("Dreamsleeve.Client.Core")
+
+-- Production WinHTTP body probe; excluded from default build and dist.
+target("Dreamsleeve.Http.Benchmark")
+    set_kind("binary")
+    set_group("Tests")
+    set_default(false)
+    add_files("tests/Dreamsleeve.Client.Benchmarks/Http.cpp")
+    add_deps("Dreamsleeve.Client.Core")

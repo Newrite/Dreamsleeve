@@ -40,18 +40,22 @@ module GroundMarksAgent =
         Host: AgentOutbox<SessionHostCommand>
         Logger: ILogger
         mutable NextId: uint64
+        TickInterval: AgentTickerInterval
         mutable Ticker: AgentTicker option
     }
 
     let private notifyHost state context command =
-        if not (state.Host.TrySend(context, command)) then context.Abort()
+        if not (state.Host.TrySend(context, command)) then
+            context.Abort()
 
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
-    let private persist state (context: AgentContext<GroundMarkCommand>) write =
-        if not (state.Writer.TrySend(context, write)) then
+    let private persist state (context: ReliableAgentContext<GroundMarkCommand>) write =
+        if state.Writer.TrySend(context, write) then true
+        else
             state.Logger.LogError("Ground mark persistence queue is full; stopping the owner")
             context.Abort()
+            false
 
     let private remove state connectionId =
         match state.Observers.TryGetValue connectionId with
@@ -71,7 +75,10 @@ module GroundMarksAgent =
             notifyHost state context (SessionHostCommand.SlowConsumer observer.ConnectionId)
 
     let private record state (mark: GroundMark) : GroundMarkRecord =
-        { Mark = mark; Author = GroundMark.authorIdentity state.Authors[mark.Author] mark }
+        {
+            Mark = mark
+            Author = GroundMark.authorIdentity state.Authors[mark.Author] mark
+        }
 
     /// The author's complete set, wherever the marks stand; sent whenever it changes.
     let private announceOwn state context author =
@@ -90,7 +97,12 @@ module GroundMarksAgent =
 
     let private changed state context (observer: Observer) added removed clear =
         if clear || not (List.isEmpty added) || not (List.isEmpty removed) then
-            let view = { ViewRevision = nextRevision observer; Added = added |> List.map (record state); Removed = removed; Clear = clear }
+            let view = {
+                ViewRevision = nextRevision observer
+                Added = added |> List.map (record state)
+                Removed = removed
+                Clear = clear
+            }
             deliver state context observer (GroundMarkEvent.Changed view)
 
     /// Recomputes what this observer sees from the index. A new baseline (clear)
@@ -115,14 +127,17 @@ module GroundMarksAgent =
                 |> Seq.sortBy _.Id
                 |> List.ofSeq
             candidates.Clear()
+
             let added = if clear then visible else visible |> List.filter (fun mark -> not (observer.Visible.Contains mark.Id))
             let removed =
                 if clear then []
                 else
                     let now = HashSet(visible |> Seq.map _.Id)
                     observer.Visible |> Seq.filter (fun id -> not (now.Contains id)) |> Seq.sort |> List.ofSeq
+
             observer.Visible.Clear()
-            for mark in visible do observer.Visible.Add mark.Id |> ignore
+            for mark in visible do
+                observer.Visible.Add mark.Id |> ignore
             changed state context observer added removed (clear && (hadAny || not visible.IsEmpty))
 
     let private join state context (subscription: Subscription<GroundMarkEvent>) =
@@ -133,8 +148,15 @@ module GroundMarksAgent =
             notifyHost state context (SessionHostCommand.Close(subscription.ConnectionId, "ground_marks_identity_conflict"))
         | true, _ | false, _ ->
             let observer = {
-                ConnectionId = subscription.ConnectionId; Profile = subscription.Profile; Events = subscription.Events
-                Location = ValueNone; Cell = ValueNone; Generation = 0UL; Visible = HashSet(); Revision = 0UL
+                ConnectionId = subscription.ConnectionId
+                Profile = subscription.Profile
+                Events = subscription.Events
+
+                Location = ValueNone
+                Cell = ValueNone
+                Generation = 0UL
+                Visible = HashSet()
+                Revision = 0UL
             }
             state.Observers[subscription.ConnectionId] <- observer
             state.Players[subscription.Profile.PlayerId] <- subscription.ConnectionId
@@ -162,7 +184,13 @@ module GroundMarksAgent =
                 refresh state context observer (generationChanged || spaceChanged)
 
     let private reject state context (observer: Observer) requestId code message field =
-        deliver state context observer (GroundMarkEvent.Rejected(requestId, { Code = code; Message = message; Field = field }))
+        deliver state context observer (GroundMarkEvent.Rejected(
+            requestId,
+            {
+                Code = code
+                Message = message
+                Field = field
+            }))
 
     /// Frequency per stable account: notes share a token bucket with a
     /// repeated-text memory, deaths keep a minimum interval.
@@ -198,14 +226,24 @@ module GroundMarksAgent =
 
     /// Forgets the marks, stores the removal and tells whoever saw them and
     /// their authors; one pass for expiry, a removal and a moderator's clearing.
-    let private drop state context (marks: GroundMark list) =
-        if not marks.IsEmpty then
+    let private forgetPersisted state context (marks: GroundMark list) =
+        if marks.IsEmpty then
+            true
+        elif persist state context (GroundMarkWrite.Delete(marks |> List.map _.Id)) then
             for mark in marks do forget state mark
+            true
+        else
+            false
+
+    let private announceDropped state context (marks: GroundMark list) =
+        if not marks.IsEmpty then
             let ids = marks |> List.map _.Id
-            persist state context (GroundMarkWrite.Delete ids)
             for author in marks |> List.map _.Author |> List.distinct do
                 announceOwn state context author
             announceRemoved state context ids
+
+    let private drop state context marks =
+        if forgetPersisted state context marks then announceDropped state context marks
 
     let private place state context (submission: GroundMarkSubmission) =
         match state.Observers.TryGetValue submission.ConnectionId with
@@ -238,31 +276,37 @@ module GroundMarksAgent =
                     match GroundMarkStorage.add state.Rules mark state.Marks with
                     | Error _ -> context.Abort()
                     | Ok evicted ->
-                        state.NextId <- if state.NextId = UInt64.MaxValue then 0UL else state.NextId + 1UL
+                        state.NextId <-
+                            if state.NextId = UInt64.MaxValue then
+                                0UL
+                            else
+                                state.NextId + 1UL
                         state.Authors[author] <- observer.Profile
-                        evicted |> ValueOption.iter (fun old ->
-                            SpatialIndex.remove old.Id state.Index
-                            persist state context (GroundMarkWrite.Delete [old.Id]))
-                        SpatialIndex.setCell mark.Id (ValueSome cell) state.Index
-                        persist state context (GroundMarkWrite.Insert mark)
-                        let evictedId = evicted |> ValueOption.map _.Id
-                        deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
-                        state.Logger.LogInformation("Ground mark {MarkId} ({Kind}) placed by player {PlayerId} in {Location}{Evicted}",
-                                                    GroundMarkId.value mark.Id, mark.Kind, PlayerId.value author,
-                                                    PluginName.value mark.Placement.LocationId.PluginName + ":" + (LocalFormId.value mark.Placement.LocationId.LocalFormId).ToString("X6"),
-                                                    (match evictedId with ValueSome id -> $", evicting {GroundMarkId.value id}" | ValueNone -> ""))
-                        announceOwn state context author
-                        // The author learns about the visible set through the same delta as everyone.
-                        let observers = state.Observers.Values |> Seq.toArray
-                        for recipient in observers do
-                            if state.Observers.ContainsKey recipient.ConnectionId then
-                                let gone = evictedId |> ValueOption.filter recipient.Visible.Remove |> ValueOption.toList
-                                let added =
-                                    if GroundMark.isVisibleFrom state.Rules.VisibilityDistance recipient.Location mark then
-                                        recipient.Visible.Add mark.Id |> ignore
-                                        [mark]
-                                    else []
-                                changed state context recipient added gone false
+                        let write =
+                            match evicted with
+                            | ValueSome old -> GroundMarkWrite.Replace(old.Id, mark)
+                            | ValueNone -> GroundMarkWrite.Insert mark
+                        if persist state context write then
+                            evicted |> ValueOption.iter (fun old -> SpatialIndex.remove old.Id state.Index)
+                            SpatialIndex.setCell mark.Id (ValueSome cell) state.Index
+                            let evictedId = evicted |> ValueOption.map _.Id
+                            deliver state context observer (GroundMarkEvent.Placed(submission.RequestId, record state mark, evictedId))
+                            state.Logger.LogInformation("Ground mark {MarkId} ({Kind}) placed by player {PlayerId} in {Location}{Evicted}",
+                                                        GroundMarkId.value mark.Id, mark.Kind, PlayerId.value author,
+                                                        PluginName.value mark.Placement.LocationId.PluginName + ":" + (LocalFormId.value mark.Placement.LocationId.LocalFormId).ToString("X6"),
+                                                        (match evictedId with ValueSome id -> $", evicting {GroundMarkId.value id}" | ValueNone -> ""))
+                            announceOwn state context author
+                            // The author learns about the visible set through the same delta as everyone.
+                            let observers = state.Observers.Values |> Seq.toArray
+                            for recipient in observers do
+                                if state.Observers.ContainsKey recipient.ConnectionId then
+                                    let gone = evictedId |> ValueOption.filter recipient.Visible.Remove |> ValueOption.toList
+                                    let added =
+                                        if GroundMark.isVisibleFrom state.Rules.VisibilityDistance recipient.Location mark then
+                                            recipient.Visible.Add mark.Id |> ignore
+                                            [mark]
+                                        else []
+                                    changed state context recipient added gone false
 
     let private removeMark state context connectionId requestId id anyAuthor =
         match state.Observers.TryGetValue connectionId with
@@ -270,10 +314,11 @@ module GroundMarksAgent =
         | true, observer ->
             match GroundMarkStorage.tryFind id state.Marks with
             | ValueSome mark when anyAuthor || mark.Author = observer.Profile.PlayerId ->
-                deliver state context observer (GroundMarkEvent.Removed(requestId, id, mark.Author))
-                state.Logger.LogInformation("Ground mark {MarkId} of player {PlayerId} removed by player {Remover}",
-                                            GroundMarkId.value id, PlayerId.value mark.Author, PlayerId.value observer.Profile.PlayerId)
-                drop state context [ mark ]
+                if forgetPersisted state context [ mark ] then
+                    deliver state context observer (GroundMarkEvent.Removed(requestId, id, mark.Author))
+                    state.Logger.LogInformation("Ground mark {MarkId} of player {PlayerId} removed by player {Remover}",
+                                                GroundMarkId.value id, PlayerId.value mark.Author, PlayerId.value observer.Profile.PlayerId)
+                    announceDropped state context [ mark ]
             | ValueSome _ | ValueNone ->
                 reject state context observer requestId RequestRejectionCode.GroundMarkNotFound "No such mark of yours." "mark_id"
 
@@ -290,10 +335,11 @@ module GroundMarksAgent =
         | false, _ -> ()
         | true, observer ->
             let marks = GroundMarkStorage.ofAuthor author state.Marks |> List.filter (fun mark -> List.contains mark.Kind kinds)
-            deliver state context observer (GroundMarkEvent.Cleared(requestId, author, marks |> List.map _.Id))
-            state.Logger.LogInformation("{Count} ground marks of player {PlayerId} removed by player {Remover}",
-                                        marks.Length, PlayerId.value author, PlayerId.value observer.Profile.PlayerId)
-            drop state context marks
+            if forgetPersisted state context marks then
+                deliver state context observer (GroundMarkEvent.Cleared(requestId, author, marks |> List.map _.Id))
+                state.Logger.LogInformation("{Count} ground marks of player {PlayerId} removed by player {Remover}",
+                                            marks.Length, PlayerId.value author, PlayerId.value observer.Profile.PlayerId)
+                announceDropped state context marks
 
     let private expire state context =
         let expired = GroundMarkStorage.expired state.Rules DateTimeOffset.UtcNow state.Marks
@@ -301,7 +347,7 @@ module GroundMarksAgent =
             state.Logger.LogInformation("Removed {Count} expired ground marks", expired.Length)
             drop state context expired
 
-    let private detach state (context: AgentContext<GroundMarkCommand>) (request: SessionDetach) =
+    let private detach state (context: ReliableAgentContext<GroundMarkCommand>) (request: SessionDetach) =
         remove state request.ConnectionId
         match request.ReplyTo.TryPost request.ConnectionId with
         | AgentTryDeliveryResult.Posted | AgentTryDeliveryResult.Closed -> ()
@@ -309,9 +355,9 @@ module GroundMarksAgent =
 
     let private schedule state context =
         if state.Ticker.IsNone then
-            state.Ticker <- Some (AgentTicker.start (TimeSpan.FromMilliseconds(int64 state.Options.ExpiryCheckIntervalMs)) context GroundMarkCommand.Expire)
+            state.Ticker <- Some (AgentTicker.start state.TickInterval context GroundMarkCommand.Expire)
 
-    let private handle state (context: AgentContext<GroundMarkCommand>) command = task {
+    let private handle state (context: ReliableAgentContext<GroundMarkCommand>) command = task {
         schedule state context
         match command with
         | GroundMarkCommand.Join subscription -> join state context subscription
@@ -337,43 +383,68 @@ module GroundMarksAgent =
         | GroundMarkCommand.Observe _ | GroundMarkCommand.Place _ | GroundMarkCommand.Remove _ | GroundMarkCommand.Rename _
         | GroundMarkCommand.ListOf _ | GroundMarkCommand.ClearOf _ -> false
 
+    [<RequireQualifiedAccess>]
+    type StartError =
+        | StoredData of string
+        | Agent of AgentStartError
+
     /// loaded are the stored marks with their authors' current profiles; nextId
     /// is the storage high-water mark plus one, so IDs never repeat across runs.
     /// Expired marks among them are removed at the first expiry pass.
     /// The options and their rules come checked by GameSettings.create.
     let start (options: GroundMarkOptions) (rules: GroundMarkRules) (loaded: StoredGroundMark list) (nextId: uint64)
               (writer: ReliableAgentRef<GroundMarkWrite>) (host: ReliableAgentRef<SessionHostCommand>) (logger: ILogger) =
-        let state = {
-            Options = options; Rules = rules
-            Marks = GroundMarkStorage.create (); Authors = Dictionary()
-            Index = SpatialIndex.create (double options.VisibilityDistance)
-            Observers = Dictionary(); Players = Dictionary()
-            Notes = RateLimit.create options.NoteRate
-            Deaths = Dictionary(); Candidates = HashSet()
-            Writer = AgentOutbox(options.MaxPendingWrites, writer)
-            Host = AgentOutbox(options.MaxControlDeliveries, host)
-            Logger = logger
-            NextId = max nextId 1UL
-            Ticker = None
+        let settings = {
+            AgentOptions.create "ground-marks" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
         }
-        let mutable highest = 0UL
-        let duplicates = ResizeArray<StoredGroundMark>()
-        for entry in loaded |> List.sortBy (fun entry -> entry.Mark.Id) do
-            match GroundMarkStorage.add rules entry.Mark state.Marks with
-            | Ok _ ->
-                state.Authors[entry.Mark.Author] <- entry.Author
-                SpatialIndex.setCell entry.Mark.Id
-                    (ValueSome (SpatialIndex.cellOf state.Index entry.Mark.Placement.LocationId entry.Mark.Placement.Position)) state.Index
-                highest <- max highest (GroundMarkId.value entry.Mark.Id)
-            | Error _ -> duplicates.Add entry
-        if duplicates.Count > 0 then Error (sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count)
-        elif highest >= state.NextId then Error (sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId)
-        else
-            let settings = {
-                AgentOptions.create "ground-marks" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+        match Agent<GroundMarkCommand>.TryCheckReliable(settings, isControl = isControl),
+              AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.ExpiryCheckIntervalMs)),
+              AgentOutbox<GroundMarkWrite>.TryCreate(options.MaxPendingWrites, writer),
+              AgentOutbox<SessionHostCommand>.TryCreate(options.MaxControlDeliveries, host) with
+        | Error error, _, _, _
+        | _, Error error, _, _
+        | _, _, Error error, _
+        | _, _, _, Error error -> Error (StartError.Agent error)
+        | Ok configuration, Ok interval, Ok writerOutbox, Ok hostOutbox ->
+            let state = {
+                Options = options
+                Rules = rules
+
+                Marks = GroundMarkStorage.create ()
+                Authors = Dictionary()
+                Index = SpatialIndex.create (double options.VisibilityDistance)
+                Observers = Dictionary()
+                Players = Dictionary()
+                Notes = RateLimit.create options.NoteRate
+                Deaths = Dictionary()
+                Candidates = HashSet()
+                Writer = writerOutbox
+                Host = hostOutbox
+                Logger = logger
+                NextId = max nextId 1UL
+                Ticker = None
+                TickInterval = interval
             }
-            let agent = Agent.Start(settings, handle state, isControl = isControl)
-            let now = System.Diagnostics.Stopwatch.GetTimestamp()
-            agent.TryPost(GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now }) |> ignore
-            Ok agent
+            let mutable highest = 0UL
+            let duplicates = ResizeArray<StoredGroundMark>()
+            for entry in loaded |> List.sortBy (fun entry -> entry.Mark.Id) do
+                match GroundMarkStorage.add rules entry.Mark state.Marks with
+                | Ok _ ->
+                    state.Authors[entry.Mark.Author] <- entry.Author
+                    SpatialIndex.setCell entry.Mark.Id
+                        (ValueSome (SpatialIndex.cellOf state.Index entry.Mark.Placement.LocationId entry.Mark.Placement.Position)) state.Index
+                    highest <- max highest (GroundMarkId.value entry.Mark.Id)
+                | Error _ -> duplicates.Add entry
+            if duplicates.Count > 0 then
+                Error (StartError.StoredData(sprintf "Stored ground marks contain %d duplicate IDs." duplicates.Count))
+            elif highest >= state.NextId then
+                Error (StartError.StoredData(sprintf "Stored ground mark ID %d is not below the next ID %d." highest state.NextId))
+            else
+                let agent = configuration.Start(handle state)
+                let now = System.Diagnostics.Stopwatch.GetTimestamp()
+                agent.TryPost(GroundMarkCommand.Expire {
+                    DueTimestamp = now
+                    QueuedTimestamp = now
+                }) |> ignore
+                Ok agent

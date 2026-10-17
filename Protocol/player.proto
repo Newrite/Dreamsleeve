@@ -11,13 +11,13 @@ message Location {
 
 message Position { float x = 1; float y = 2; float z = 3; }
 
-// Euler angles in radians, in the same axes as Position.
-message Rotation { float x = 1; float y = 2; float z = 3; }
+// World-space camera forward. Zero means unavailable; not actor Euler angles.
+message CameraDirection { float x = 1; float y = 2; float z = 3; }
 
 message PlayerLocation {
   Location location = 1;
   Position position = 2;
-  Rotation rotation = 3;
+  CameraDirection camera_direction = 3;
   // Sender monotonic microseconds; only differences within one character are meaningful.
   // Zero denotes an unstamped source (receive-time interpolation fallback).
   uint64 sampled_at_us = 4;
@@ -141,7 +141,7 @@ message SetPlayerLocation {
 // Repeated absolute pose; location identity is established reliably.
 message MovementPose {
   Position position = 1;
-  Rotation rotation = 2;
+  CameraDirection camera_direction = 2;
   uint64 sampled_at_us = 3;
 }
 message MovementSample {

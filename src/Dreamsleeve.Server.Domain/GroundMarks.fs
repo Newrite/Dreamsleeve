@@ -44,7 +44,11 @@ type GroundMarkPlacement = private {
 module GroundMarkPlacement =
     /// Components have already passed their own factories (finite coordinates and angle).
     let create locationId position heading : GroundMarkPlacement =
-        { locationId = locationId; position = position; heading = heading }
+        {
+            locationId = locationId
+            position = position
+            heading = heading
+        }
 
     let private withinSquared (radius: WorldUnit) (origin: Position) (target: Position) =
         let radius64 = LanguagePrimitives.FloatWithMeasure<worldUnit> (float radius)
@@ -56,7 +60,8 @@ module GroundMarkPlacement =
         match lastKnown with
         | ValueNone -> true
         | ValueSome known when known.Location.LocationId <> placement.LocationId -> false
-        | ValueSome known -> maxDistance = 0.0f<worldUnit> || withinSquared maxDistance known.Position placement.Position
+        | ValueSome known ->
+            maxDistance = 0.0f<worldUnit> || withinSquared maxDistance known.Position placement.Position
 
     /// Same space and within the radius, boundary included. Without an
     /// observer position nothing on the ground is visible.
@@ -95,7 +100,12 @@ module GameDate =
     let private monthLengths = [| 31; 28; 31; 30; 31; 30; 31; 31; 30; 31; 30; 31 |]
 
     let create era year month day dayOfWeek hour minute : Result<GameDate, DomainError> =
-        let within field low high value = if value < low || value > high then Some field else None
+        let within field low high value =
+            if value < low || value > high then
+                Some field
+            else
+                None
+
         let invalid =
             [ within "era" 1 99 era
               within "year" 1 99999 year
@@ -105,10 +115,19 @@ module GameDate =
               within "hour" 0 23 hour
               within "minute" 0 59 minute ]
             |> List.tryPick id
+
         match invalid with
         | Some field -> Error(DomainError.InvalidGameDate field)
         | None ->
-            Ok { era = era; year = year; month = month; day = day; dayOfWeek = dayOfWeek; hour = hour; minute = minute }
+            Ok {
+                era = era
+                year = year
+                month = month
+                day = day
+                dayOfWeek = dayOfWeek
+                hour = hour
+                minute = minute
+            }
 
 /// Persistent server data, unlike chat and poses: survives restarts and the
 /// author's reloads. Real names are not stored; the author's profile is looked
@@ -162,29 +181,43 @@ type GroundMarkRules = private {
 [<RequireQualifiedAccess>]
 module GroundMarkRules =
     let private radius field (raw: float32) =
-        if not (Single.IsFinite raw) || raw < 0.0f then Error (DomainError.NonFiniteNumber field)
-        else Ok (LanguagePrimitives.Float32WithMeasure<worldUnit> raw)
+        if not (Single.IsFinite raw) || raw < 0.0f then
+            Error (DomainError.NonFiniteNumber field)
+        else
+            Ok (LanguagePrimitives.Float32WithMeasure<worldUnit> raw)
 
     let private lifetime field days =
-        if days < 0 then Error (DomainError.InvalidLimit (field, days))
-        elif days = 0 then Ok ValueNone
-        else Ok (ValueSome (TimeSpan.FromDays (float days)))
+        if days < 0 then
+            Error (DomainError.InvalidLimit (field, days))
+        elif days = 0 then
+            Ok ValueNone
+        else
+            Ok (ValueSome (TimeSpan.FromDays (float days)))
 
     /// Quotas are at least one per kind; a TTL of zero days means no expiry.
     let create maxNotesPerPlayer maxDeathMarksPerPlayer noteTtlDays deathMarkTtlDays visibilityDistance maxPlacementDistance =
-        if maxNotesPerPlayer < 1 then Error (DomainError.InvalidLimit ("maxNotesPerPlayer", maxNotesPerPlayer))
-        elif maxDeathMarksPerPlayer < 1 then Error (DomainError.InvalidLimit ("maxDeathMarksPerPlayer", maxDeathMarksPerPlayer))
+        if maxNotesPerPlayer < 1 then
+            Error (DomainError.InvalidLimit ("maxNotesPerPlayer", maxNotesPerPlayer))
+        elif maxDeathMarksPerPlayer < 1 then
+            Error (DomainError.InvalidLimit ("maxDeathMarksPerPlayer", maxDeathMarksPerPlayer))
         else
-            lifetime "noteTtlDays" noteTtlDays |> Result.bind (fun note ->
-            lifetime "deathMarkTtlDays" deathMarkTtlDays |> Result.bind (fun death ->
-            radius "visibilityDistance" visibilityDistance |> Result.bind (fun visibility ->
-            radius "maxPlacementDistance" maxPlacementDistance |> Result.map (fun placement ->
-                { maxNotesPerPlayer = maxNotesPerPlayer
-                  maxDeathMarksPerPlayer = maxDeathMarksPerPlayer
-                  noteTtl = note
-                  deathMarkTtl = death
-                  visibilityDistance = visibility
-                  maxPlacementDistance = placement }))))
+            lifetime "noteTtlDays" noteTtlDays
+            |> Result.bind (fun note ->
+                lifetime "deathMarkTtlDays" deathMarkTtlDays
+                |> Result.bind (fun death ->
+                    radius "visibilityDistance" visibilityDistance
+                    |> Result.bind (fun visibility ->
+                        radius "maxPlacementDistance" maxPlacementDistance
+                        |> Result.map (fun placement -> {
+                            maxNotesPerPlayer = maxNotesPerPlayer
+                            maxDeathMarksPerPlayer = maxDeathMarksPerPlayer
+
+                            noteTtl = note
+                            deathMarkTtl = death
+
+                            visibilityDistance = visibility
+                            maxPlacementDistance = placement
+                        }))))
 
     let quota (rules: GroundMarkRules) kind =
         match kind with
@@ -201,8 +234,18 @@ module GroundMark =
     /// Components have already passed their own domain validation. The server
     /// supplies the ID and the creation time; the author is the account.
     let create id author body placement (createdAt: DateTimeOffset) : GroundMark =
-        { id = id; author = author; characterName = ValueNone; pseudonym = ValueNone; body = body; flagged = []; placement = placement
-          createdAt = createdAt.ToUniversalTime(); gameDate = ValueNone }
+        {
+            id = id
+            author = author
+            characterName = ValueNone
+            pseudonym = ValueNone
+
+            body = body
+            flagged = []
+            placement = placement
+            createdAt = createdAt.ToUniversalTime()
+            gameDate = ValueNone
+        }
 
     /// The in-game date the author's client reported at placement; never updated later.
     let withGameDate date (mark: GroundMark) = { mark with gameDate = date }
@@ -242,7 +285,10 @@ type GroundMarkStorage = private {
 
 [<RequireQualifiedAccess>]
 module GroundMarkStorage =
-    let create () : GroundMarkStorage = { marks = Dictionary(); byAuthor = Dictionary() }
+    let create () : GroundMarkStorage = {
+        marks = Dictionary()
+        byAuthor = Dictionary()
+    }
 
     let count (storage: GroundMarkStorage) = storage.marks.Count
 
@@ -274,12 +320,16 @@ module GroundMarkStorage =
         | false, _ -> ValueNone
         | true, mark ->
             storage.marks.Remove id |> ignore
+
             let key = struct (mark.Author, mark.Kind)
+
             match storage.byAuthor.TryGetValue key with
             | true, ids ->
                 ids.Remove id |> ignore
-                if ids.Count = 0 then storage.byAuthor.Remove key |> ignore
+                if ids.Count = 0 then
+                    storage.byAuthor.Remove key |> ignore
             | false, _ -> ()
+
             ValueSome mark
 
     /// Stores a mark under the per-kind quota of its author (soft rule: one
@@ -293,7 +343,9 @@ module GroundMarkStorage =
                 match evictionCandidate rules mark.Author mark.Kind storage with
                 | ValueSome oldest -> remove oldest.Id storage
                 | ValueNone -> ValueNone
+
             storage.marks.Add(mark.Id, mark)
+
             let key = struct (mark.Author, mark.Kind)
             let ids =
                 match storage.byAuthor.TryGetValue key with
@@ -302,6 +354,7 @@ module GroundMarkStorage =
                     let created = SortedSet<GroundMarkId>()
                     storage.byAuthor.Add(key, created)
                     created
+
             ids.Add mark.Id |> ignore
             Ok evicted
 
@@ -321,6 +374,9 @@ module GroundMarkStorage =
         [ GroundMarkKind.Note; GroundMarkKind.Death ]
         |> List.collect (fun kind ->
             match storage.byAuthor.TryGetValue(struct (author, kind)) with
-            | true, ids -> ids |> Seq.choose (fun id -> tryFind id storage |> ValueOption.toOption) |> List.ofSeq
+            | true, ids ->
+                ids
+                |> Seq.choose (fun id -> tryFind id storage |> ValueOption.toOption)
+                |> List.ofSeq
             | false, _ -> [])
         |> List.sortBy _.Id

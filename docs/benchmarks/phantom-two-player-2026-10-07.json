@@ -1,0 +1,146 @@
+[
+  {
+    "label": "before",
+    "modelBytes": 13288628,
+    "modelSha256": "579cbf15e84f6fff984bef84a08ff56487b25d2de0583fb573b76bc85b4dc198",
+    "requestedHz": 10,
+    "measuredMs": 65000.794000029564,
+    "uploadReadyMs": {
+      "count": 1,
+      "max": 23614.48339998722,
+      "p50": 23614.48339998722,
+      "p95": 23614.48339998722,
+      "p99": 23614.48339998722,
+      "sum": 23614.48339998722
+    },
+    "endToEndModelMs": {
+      "count": 1,
+      "max": 25742.8058000803,
+      "p50": 25742.8058000803,
+      "p95": 25742.8058000803,
+      "p99": 25742.8058000803,
+      "sum": 25742.8058000803
+    },
+    "receiveGapMs": {
+      "count": 361,
+      "max": 338.8276000022888,
+      "p50": 109.66487535304539,
+      "p95": 149.65112753215394,
+      "p99": 246.7656383360414,
+      "sum": 41193.84669995308
+    },
+    "receivedHz": 8.747016681350935,
+    "refusals": {},
+    "sentPoses": 413,
+    "receivedPoses": 362,
+    "sentBytes": 1585793,
+    "receivedBytes": 1391425,
+    "policies": [
+      {
+        "concurrentTransfers": 2,
+        "enabled": true,
+        "maximumVisible": 4,
+        "modelBytesPerSecond": 5242880,
+        "poseBytesPerSecond": 2097152,
+        "sampleRate": 10,
+        "windowChunks": 4
+      }
+    ]
+  },
+  {
+    "label": "after",
+    "modelBytes": 13288628,
+    "modelSha256": "579cbf15e84f6fff984bef84a08ff56487b25d2de0583fb573b76bc85b4dc198",
+    "requestedHz": 10,
+    "measuredMs": 65000.681200027466,
+    "uploadReadyMs": {
+      "count": 1,
+      "max": 1608.441300034523,
+      "p50": 1608.441300034523,
+      "p95": 1608.441300034523,
+      "p99": 1608.441300034523,
+      "sum": 1608.441300034523
+    },
+    "endToEndModelMs": {
+      "count": 1,
+      "max": 4120.194000005722,
+      "p50": 4120.194000005722,
+      "p95": 4120.194000005722,
+      "p99": 4120.194000005722,
+      "sum": 4120.194000005722
+    },
+    "receiveGapMs": {
+      "count": 573,
+      "max": 296.3101999759674,
+      "p50": 109.66487535304539,
+      "p95": 116.47299515100559,
+      "p99": 138.1237887239873,
+      "sum": 63204.698300004005
+    },
+    "receivedHz": 9.06749989091544,
+    "refusals": {},
+    "sentPoses": 634,
+    "receivedPoses": 574,
+    "sentBytes": 2434433,
+    "receivedBytes": 2206340,
+    "policies": [
+      {
+        "concurrentTransfers": 2,
+        "enabled": true,
+        "maximumVisible": 4,
+        "modelBytesPerSecond": 5242880,
+        "poseBytesPerSecond": 2097152,
+        "sampleRate": 10,
+        "windowChunks": 32
+      }
+    ]
+  },
+  {
+    "label": "after-cadence",
+    "modelBytes": 13288628,
+    "modelSha256": "579cbf15e84f6fff984bef84a08ff56487b25d2de0583fb573b76bc85b4dc198",
+    "requestedHz": 10,
+    "measuredMs": 64998.3409999609,
+    "uploadReadyMs": {
+      "count": 1,
+      "max": 1596.633199930191,
+      "p50": 1596.633199930191,
+      "p95": 1596.633199930191,
+      "p99": 1596.633199930191,
+      "sum": 1596.633199930191
+    },
+    "endToEndModelMs": {
+      "count": 1,
+      "max": 4124.342299938202,
+      "p50": 4124.342299938202,
+      "p95": 4124.342299938202,
+      "p99": 4124.342299938202,
+      "sum": 4124.342299938202
+    },
+    "receiveGapMs": {
+      "count": 633,
+      "max": 112.04899990558624,
+      "p50": 95.27434358996653,
+      "p95": 110.77152410657581,
+      "p99": 111.88923934764155,
+      "sum": 63290.720099925995
+    },
+    "receivedHz": 10.008333342478823,
+    "refusals": {},
+    "sentPoses": 634,
+    "receivedPoses": 634,
+    "sentBytes": 2434433,
+    "receivedBytes": 2436969,
+    "policies": [
+      {
+        "concurrentTransfers": 2,
+        "enabled": true,
+        "maximumVisible": 4,
+        "modelBytesPerSecond": 5242880,
+        "poseBytesPerSecond": 2097152,
+        "sampleRate": 10,
+        "windowChunks": 32
+      }
+    ]
+  }
+]

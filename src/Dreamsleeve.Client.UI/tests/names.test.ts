@@ -10,6 +10,7 @@ import {
 import { identityStatus } from "../src/state/identity";
 import { hueColor, hueOf, nameColorPalette } from "../src/state/nameColor";
 import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 import type { Command, HostEvent, Player } from "../src/bridge/types";
 
 const lydia: Player = {
@@ -126,7 +127,7 @@ describe("unsent messages and refresh", () => {
     chat.ignore("7");
     expect(send).toHaveBeenLastCalledWith({ type: "ignore", playerId: "7" });
     chat.receive(
-      parseHostEvent(
+      expectHostEvent(
         JSON.stringify({
           type: "ignored",
           players: [{ id: "7", name: "Страж" }],
@@ -143,18 +144,23 @@ describe("bridge contract", () => {
   it("requires the resolved name fields and validates the ignore list", () => {
     const players = (player: object) =>
       JSON.stringify({ type: "players", players: [player] });
-    expect(() => parseHostEvent(players(lydia))).not.toThrow();
-    expect(() =>
-      parseHostEvent(players({ ...lydia, name: undefined })),
-    ).toThrow();
-    expect(() =>
-      parseHostEvent(players({ ...lydia, inCharacter: "yes" })),
-    ).toThrow();
-    expect(() =>
+    expect(expectHostEvent(players(lydia))).toEqual({
+      type: "players",
+      players: [lydia],
+    });
+    expect(parseHostEvent(players({ ...lydia, name: undefined }))).toEqual({
+      ok: false,
+      error: "schema",
+    });
+    expect(parseHostEvent(players({ ...lydia, inCharacter: "yes" }))).toEqual({
+      ok: false,
+      error: "schema",
+    });
+    expect(
       parseHostEvent(JSON.stringify({ type: "ignored", players: [{ id: 7 }] })),
-    ).toThrow();
-    expect(() =>
-      parseHostEvent(
+    ).toEqual({ ok: false, error: "schema" });
+    expect(
+      expectHostEvent(
         JSON.stringify({
           type: "auth",
           authenticating: false,
@@ -169,7 +175,7 @@ describe("bridge contract", () => {
           phase: "disconnected",
         }),
       ),
-    ).not.toThrow();
+    ).toMatchObject({ type: "auth", failure: "nameNotAllowed" });
   });
 });
 
@@ -202,7 +208,7 @@ describe("author menu and text filter", () => {
       type: "displaySettings",
       settings: { ...defaults, textFilter: "mask" },
     });
-    const event = parseHostEvent(
+    const event = expectHostEvent(
       JSON.stringify({
         type: "messages",
         messages: [
@@ -212,14 +218,14 @@ describe("author menu and text filter", () => {
     );
     chat.receive(event);
     expect(chat.store.getState().messages.at(-1)?.filtered).toBe(true);
-    expect(() =>
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "messages",
           messages: [{ ...snapshot.messages[0], filtered: "yes" }],
         }),
       ),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
   });
 });
 
@@ -237,24 +243,24 @@ describe("hidden identity", () => {
     expect(realNames(hidden, defaults)).toBeUndefined();
     expect(characterLine(hidden, defaults)).toBe("Имя скрыто игроком");
     expect(realNames(lydia, defaults)?.username).toBe("lydia");
-    expect(() =>
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "players",
           players: [{ ...hidden, username: "leak" }],
         }),
       ),
-    ).toThrow();
-    expect(() =>
+    ).toEqual({ ok: false, error: "schema" });
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "players",
           players: [{ ...hidden, character: "Leak" }],
         }),
       ),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
     expect(
-      parseHostEvent(JSON.stringify({ type: "players", players: [hidden] })),
+      expectHostEvent(JSON.stringify({ type: "players", players: [hidden] })),
     ).toEqual({ type: "players", players: [hidden] });
   });
 
@@ -304,7 +310,7 @@ describe("hidden identity", () => {
     chat.setHideIdentity("off");
     expect(send).toHaveBeenCalledTimes(1);
     chat.receive(
-      parseHostEvent(
+      expectHostEvent(
         JSON.stringify({
           type: "identity",
           mode: "exceptGroundMarks",
@@ -333,11 +339,11 @@ describe("hidden identity", () => {
       error: "Слишком часто",
     });
     for (const mode of ["sometimes", true])
-      expect(() =>
+      expect(
         parseHostEvent(
           JSON.stringify({ type: "identity", mode, pending: false }),
         ),
-      ).toThrow();
+      ).toEqual({ ok: false, error: "schema" });
   });
 
   it("without a session only the next choice changes, without waiting", () => {
@@ -375,7 +381,7 @@ describe("hidden identity", () => {
     chat.changeDisplayName("Другое");
     expect(send).toHaveBeenCalledTimes(1);
     chat.receive(
-      parseHostEvent(
+      expectHostEvent(
         JSON.stringify({
           type: "displayName",
           pending: false,
@@ -396,9 +402,9 @@ describe("hidden identity", () => {
       "Имя можно сменить снова через 90 мин",
     );
     for (const pending of ["yes", undefined])
-      expect(() =>
+      expect(
         parseHostEvent(JSON.stringify({ type: "displayName", pending })),
-      ).toThrow();
+      ).toEqual({ ok: false, error: "schema" });
   });
 });
 
@@ -416,7 +422,7 @@ describe("name color", () => {
     chat.setNameColor("#4FC3F7");
     expect(send).toHaveBeenCalledTimes(1);
     chat.receive(
-      parseHostEvent(
+      expectHostEvent(
         JSON.stringify({
           type: "nameColor",
           pending: false,
@@ -429,30 +435,47 @@ describe("name color", () => {
       changed: "#E57373",
     });
     for (const changed of ["red", "#E5737", 7])
-      expect(() =>
+      expect(
         parseHostEvent(
           JSON.stringify({ type: "nameColor", pending: false, changed }),
         ),
-      ).toThrow();
+      ).toEqual({ ok: false, error: "schema" });
   });
 
   it("an author carries a #RRGGBB color; a pseudonymous one never does", () => {
     const parsePlayers = (player: object) =>
-      parseHostEvent(JSON.stringify({ type: "players", players: [player] }));
+      expectHostEvent(JSON.stringify({ type: "players", players: [player] }));
     const colored = { ...lydia, color: "#FFD54F" };
     expect(parsePlayers(colored)).toEqual({
       type: "players",
       players: [colored],
     });
-    expect(() => parsePlayers({ ...lydia, color: "gold" })).toThrow();
+    expect(
+      parseHostEvent(
+        JSON.stringify({
+          type: "players",
+          players: [{ ...lydia, color: "gold" }],
+        }),
+      ),
+    ).toEqual({ ok: false, error: "schema" });
     const hidden = {
       ...lydia,
       username: "",
       character: undefined,
       pseudonymous: true,
     };
-    expect(() => parsePlayers({ ...hidden, color: "#FFD54F" })).toThrow();
-    expect(parsePlayers(hidden)).toBeTruthy();
+    expect(
+      parseHostEvent(
+        JSON.stringify({
+          type: "players",
+          players: [{ ...hidden, color: "#FFD54F" }],
+        }),
+      ),
+    ).toEqual({ ok: false, error: "schema" });
+    expect(parsePlayers(hidden)).toEqual({
+      type: "players",
+      players: [hidden],
+    });
   });
 
   it("every offered color and every hue of the slider reads by the server's rule", () => {

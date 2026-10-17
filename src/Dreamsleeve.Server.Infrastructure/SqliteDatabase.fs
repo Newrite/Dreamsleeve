@@ -16,7 +16,10 @@ module SqliteAccountStoreConfig =
     [<Literal>]
     let MaxBusyTimeoutSeconds = 30
 
-    let defaults = { DatabasePath = "data/dreamsleeve.db"; BusyTimeoutSeconds = 5 }
+    let defaults = {
+        DatabasePath = "data/dreamsleeve.db"
+        BusyTimeoutSeconds = 5
+    }
 
     /// [Database], checked once with the rest of the configuration.
     let validate config = [
@@ -87,39 +90,82 @@ module internal SqliteDatabase =
             use guilds = command.ExecuteReader()
             Ok ()
 
+    let private startupFailure (error: exn) =
+        Error $"Could not initialize the account database: {error}"
+
+    // Only path/filesystem calls are inside this adapter. Configuration callers
+    // normally provide valid paths, but OS permission/storage errors remain data.
+    let private preparePaths config migrationsDirectory =
+        try
+            let path = Path.GetFullPath config.DatabasePath
+            let migrations = Path.GetFullPath migrationsDirectory
+            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+            let attributes = File.GetAttributes migrations
+
+            if attributes.HasFlag FileAttributes.Directory then
+                Ok migrations
+            else
+                Error $"Account migrations path is not a directory: {migrations}"
+        with
+        | :? IOException as error -> startupFailure error
+        | :? UnauthorizedAccessException as error -> startupFailure error
+        | :? ArgumentException as error -> startupFailure error
+        | :? System.Security.SecurityException as error -> startupFailure error
+
+    let private knownMigrationFailure (error: exn) =
+        match error with
+        | :? MalformedSource | :? DeserializationFailed | :? SourceNotFound
+        | :? MigrationApplicationFailed | :? MigrationRollbackFailed | :? SetupDatabaseFailed
+        | :? SqliteException | :? IOException | :? UnauthorizedAccessException -> true
+        | _ -> false
+
+    // Migrondi 1.3.0 aggregates malformed migration sources. A mixed aggregate
+    // containing an unexpected application/runtime fault must still escape.
+    let internal migrate action =
+        try
+            action ()
+            Ok ()
+        with
+        | error when knownMigrationFailure error -> startupFailure error
+        | :? AggregateException as error when
+            error.Flatten().InnerExceptions.Count > 0 && (error.Flatten().InnerExceptions |> Seq.forall knownMigrationFailure) ->
+            startupFailure error
+
     /// Called before listeners start. SQLite and Migrondi execute synchronously;
     /// the application must offload this entire operation, like ordinary store calls.
     let initialize config migrationsDirectory =
-        try
-            let path = Path.GetFullPath config.DatabasePath
-            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+        match preparePaths config migrationsDirectory with
+        | Error error -> Error error
+        | Ok migrationsDirectory ->
+            try
+                use connection = new SqliteConnection(connectionString config SqliteOpenMode.ReadWriteCreate)
+                connection.Open()
+                let version = scalar connection "PRAGMA user_version" :?> int64
+                let application = scalar connection "PRAGMA application_id" :?> int64
 
-            use connection = new SqliteConnection(connectionString config SqliteOpenMode.ReadWriteCreate)
-            connection.Open()
-            let version = scalar connection "PRAGMA user_version" :?> int64
-            let application = scalar connection "PRAGMA application_id" :?> int64
+                if version > SchemaVersion || version < 0L then
+                    Error $"Account database version {version} is not supported by schema {SchemaVersion}."
+                elif application <> 0L && application <> ApplicationId then
+                    Error $"The SQLite file belongs to a different application ({application})."
+                else
+                    let migrationConfig = {
+                        MigrondiConfig.Default with
+                            connection = connection.ConnectionString
+                            migrations = migrationsDirectory
+                    }
 
-            if version > SchemaVersion || version < 0L then
-                Error $"Account database version {version} is not supported by schema {SchemaVersion}."
-            elif application <> 0L && application <> ApplicationId then
-                Error $"The SQLite file belongs to a different application ({application})."
-            elif not (Directory.Exists migrationsDirectory) then
-                Error $"Account migrations directory is missing: {migrationsDirectory}"
-            else
-                let migrationConfig = {
-                    MigrondiConfig.Default with
-                        connection = connection.ConnectionString
-                        migrations = Path.GetFullPath migrationsDirectory
-                }
-                let migrations = Migrondi.MigrondiFactory(migrationConfig, AppContext.BaseDirectory, NullLogger.Instance)
-                migrations.Initialize()
-                migrations.RunUp() |> ignore
-
-                match verifySchema connection with
-                | Error error -> Error error
-                | Ok () ->
-                    let mode = scalar connection "PRAGMA journal_mode=WAL" :?> string
-                    if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then Ok ()
-                    else Error $"SQLite did not enable WAL mode (returned {mode})."
-        with error ->
-            Error $"Could not initialize the account database: {error}"
+                    match migrate (fun () ->
+                        let migrations = Migrondi.MigrondiFactory(migrationConfig, AppContext.BaseDirectory, NullLogger.Instance)
+                        migrations.Initialize()
+                        migrations.RunUp() |> ignore) with
+                    | Error error -> Error error
+                    | Ok () ->
+                        match verifySchema connection with
+                        | Error error -> Error error
+                        | Ok () ->
+                            let mode = scalar connection "PRAGMA journal_mode=WAL" :?> string
+                            if mode.Equals("wal", StringComparison.OrdinalIgnoreCase) then
+                                Ok ()
+                            else
+                                Error $"SQLite did not enable WAL mode (returned {mode})."
+            with :? SqliteException as error -> startupFailure error

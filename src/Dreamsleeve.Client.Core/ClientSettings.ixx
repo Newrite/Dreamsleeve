@@ -50,7 +50,12 @@ export namespace Dreamsleeve::Client
   std::vector<ConnectionRoute> RoutesOf(const ClientSettings& settings)
   {
     std::vector<ConnectionRoute> routes{
-        {std::string{MainRouteName}, settings.client.serverHost, settings.client.serverPort, settings.authUrl}
+        {
+          std::string{MainRouteName},
+          settings.client.serverHost,
+          settings.client.serverPort,
+          settings.authUrl
+        }
     };
     routes.insert(routes.end(), settings.routes.begin(), settings.routes.end());
     return routes;
@@ -120,7 +125,11 @@ struct glz::meta<Dreamsleeve::Client::Configuration>
     "deathMarkScale",
     &T::deathMarkScale,
     "maxPendingMovementSamples",
-    &T::maxPendingMovementSamples);
+    &T::maxPendingMovementSamples,
+    "phantomCacheDirectory",
+    &T::phantomCacheDirectory,
+    "phantomDiagnostics",
+    &T::phantomDiagnostics);
 };
 
 namespace Dreamsleeve::Client
@@ -225,15 +234,15 @@ namespace Dreamsleeve::Client
 
     export struct SettingsFile
     {
-      int               version{ClientSettingsVersion};
-      std::string       serverHost{Configuration{}.serverHost};
-      Port              serverPort{Configuration{}.serverPort};
-      std::string       authUrl{ClientSettings{}.authUrl};
-      Configuration     client{};
-      InterpolationFile interpolation{};
-      std::size_t       commandCapacity{ClientSettings{}.commandCapacity};
-      std::size_t       stateCapacity{ClientSettings{}.stateCapacity};
-      bool              allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
+      int                          version{ClientSettingsVersion};
+      std::string                  serverHost{Configuration{}.serverHost};
+      Port                         serverPort{Configuration{}.serverPort};
+      std::string                  authUrl{ClientSettings{}.authUrl};
+      Configuration                client{};
+      InterpolationFile            interpolation{};
+      std::size_t                  commandCapacity{ClientSettings{}.commandCapacity};
+      std::size_t                  stateCapacity{ClientSettings{}.stateCapacity};
+      bool                         allowInsecureRemoteAuth{ClientSettings{}.allowInsecureRemoteAuth};
       std::vector<ConnectionRoute> routes;
     };
 
@@ -241,14 +250,18 @@ namespace Dreamsleeve::Client
     std::optional<std::string> InvalidRoute(const ClientSettings& settings)
     {
       if (settings.routes.size() >= MaxRoutes) return "routes";
+
       std::set<std::string_view> names{MainRouteName};
       for (std::size_t index = 0; index < settings.routes.size(); ++index)
       {
         const auto& route = settings.routes[index];
-        const auto  field = [&](std::string_view key) { return std::format("routes[{}].{}", index + 1, key); };
-        const bool  control =
+        const auto  field = [&](std::string_view key) {
+          return std::format("routes[{}].{}", index + 1, key);
+        };
+        const bool control =
           std::ranges::any_of(route.name, [](char value) { return static_cast<unsigned char>(value) < 0x20 || value == 0x7F; });
-        if (route.name.empty() || route.name.size() > MaxRouteNameBytes || control || !names.insert(route.name).second) return field("name");
+        if (route.name.empty() || route.name.size() > MaxRouteNameBytes || control || !names.insert(route.name).second)
+          return field("name");
         if (!DreamNetAddress::IsHostSyntax(route.serverHost)) return field("serverHost");
         if (route.serverPort == 0) return field("serverPort");
         if (!Auth::ValidateUrl(route.authUrl, settings.allowInsecureRemoteAuth)) return field("authUrl");
@@ -267,6 +280,7 @@ namespace Dreamsleeve::Client
     if (auto field = ClientExchange::InvalidCapacity(settings.commandCapacity, settings.stateCapacity))
       return std::unexpected{"Invalid client setting: " + std::string{*field}};
     if (auto field = SettingsDetail::InvalidRoute(settings)) return std::unexpected{"Invalid client setting: " + *field};
+
     // The host is resolved per connection; the transport check covers the ENet host and the timeouts.
     if (
       auto transport = DreamNetClient::ValidateConfig(
@@ -290,11 +304,20 @@ namespace Dreamsleeve::Client
   export std::expected<void, std::string> EnsureClientSettings(const std::filesystem::path& path)
   {
     std::error_code error;
-    if (std::filesystem::exists(path, error)) return {};
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) return std::unexpected{"Cannot create " + path.parent_path().string()};
+    const bool      exists = std::filesystem::exists(path, error);
+    if (error) return std::unexpected{"Cannot inspect client configuration: " + error.message()};
+    if (exists) return {};
+
+    if (!path.parent_path().empty())
+    {
+      std::filesystem::create_directories(path.parent_path(), error);
+      if (error) return std::unexpected{"Cannot create client configuration directory: " + error.message()};
+    }
+
     std::ofstream output{path, std::ios::binary};
-    if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write " + path.string()};
+    if (!output || !(output << DefaultClientToml())) return std::unexpected{"Cannot write client configuration"};
+    output.close();
+    if (!output) return std::unexpected{"Cannot finish client configuration write"};
     return {};
   }
 
@@ -324,9 +347,17 @@ namespace Dreamsleeve::Client
 
     file.client.serverHost = std::move(file.serverHost);
     file.client.serverPort = file.serverPort;
-    const auto& view       = file.interpolation;
-    file.client.movement =
-      {std::chrono::milliseconds{view.delayMs}, std::chrono::milliseconds{view.maxGapMs}, view.historyCapacity, view.teleportDistance};
+    // The historical file default predates the two phantom lanes. This is a
+    // configuration migration; every connection still uses the current protocol.
+    if (file.client.network.channelLimit == 3) file.client.network.channelLimit = MinChannels;
+
+    const auto& view = file.interpolation;
+    file.client.movement = {
+        std::chrono::milliseconds{view.delayMs},
+        std::chrono::milliseconds{view.maxGapMs},
+        view.historyCapacity,
+        view.teleportDistance
+    };
     return ClientSettings{
         std::move(file.client),
         std::move(file.authUrl),

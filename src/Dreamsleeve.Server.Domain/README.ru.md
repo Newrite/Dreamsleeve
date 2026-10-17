@@ -25,6 +25,12 @@
 14. `Guilds.fs` — гильдии: имя, роли и права, лимиты, приглашения, гильдейский мут, книга всех гильдий с индексами для лимитов ([GuildsRu.md](../../docs/GuildsRu.md)).
 15. `Core.fs` — преобразование серверного времени в Unix milliseconds и обратно.
 
+`PhantomPose` владеет единственной отделённой копией сжатого payload, созданной при
+проверке входа. Публичный `Payload` даёт только `ReadOnlySpan<byte>`; массив не
+выдаётся потребителям. Поэтому опубликованная поза и её `Previous` могут безопасно
+разделять внутреннее хранение. Codec читает span прямо в конечный пакет; создание
+копии на каждой передаче или для каждого получателя не требуется.
+
 Production-зависимость домена: `FSharp.UMX 1.1.0`.
 
 ## Сверка с согласованным MVP
@@ -54,7 +60,7 @@ Production-зависимость домена: `FSharp.UMX 1.1.0`.
 и codec относятся к владельцу состояния и транспортным контрактам.
 В частности, `PlayerData.create` проверку глобальной занятости имени не выполняет.
 Авторизация и сохранение профиля в SQLite реализованы вне игрового домена.
-Гильдии и партии остаются дальнейшими расширениями; словарь модерации — `Moderation.fs`,
+Гильдии реализованы в `Guilds.fs`; партии остаются дальнейшим расширением. Словарь модерации — `Moderation.fs`,
 наказания — раздел «Админка».
 
 ## Создание и ошибки
@@ -147,7 +153,9 @@ Rotation.create 0.0f 0.0f 7.0f      // угол 7 радиан сохраняе�
 профиль).
 
 `Pseudonym.create` — запись словаря: одна строка, 1–48 байт UTF-8, без пробелов по краям,
-управляющих символов и `< >`, текст хранится как есть (не разметка); `Pseudonym.restore` —
+управляющих символов и `< >`, текст хранится как есть (не разметка). Конструктор также
+проверяет, что .NET может построить NFC-ключ сравнения; отказ возвращает `InvalidUnicode`,
+исходное написание не меняется. `Pseudonym.restore` —
 то же с запасом до 64 байт для номера (чтение из хранилища); `Pseudonym.numbered n`
 добавляет номер («Страж 2»). `PseudonymDictionary.create` принимает уже созданные записи,
 убирает повторы (без регистра после NFC, `PseudonymDictionary.key`) и возвращает `ValueNone`
@@ -189,8 +197,10 @@ display name других игроков (и скрывших имя «кром�
 проверяет пространство. Отрицательный/нечисловой радиус является ошибкой.
 
 Показания создаются через `ActorValueState.scalar` / `resource`.
-Для чтения есть `current`, `tryMaximum` и `fold`; для замены текущего показания —
-`withCurrent`. Максимум передаёт клиент; сервер не выводит его из base value.
+`Reading` возвращает неизменяемую struct-проекцию `ActorValueReading`, которая не создаёт
+`ActorValueState` в обход его закрытых конструкторов. `fold` — inline-помощник с
+`InlineIfLambda` для обоих обработчиков. Новое показание создаётся через ту же фабрику.
+Максимум передаёт клиент; сервер не выводит его из base value.
 
 ## Владение состоянием
 
@@ -255,8 +265,8 @@ Menu/NewGame/Loading допустимы до загрузки персонажа
 ## История чата
 
 ```fsharp
-// ChannelId выводится из вида канала. Capacity приходит из конфигурации.
-let chatResult = Chat.create ChatChannelKind.Global 100
+// ChannelId задаёт ChatChannels. Capacity приходит из конфигурации.
+let chatResult = Chat.create ChatChannels.globalId ChatChannelKind.Global 100
 // Внутри обработчика владельца:
 // Chat.join player.Data.PlayerId chat |> ignore
 // Chat.append message chat                  : Result<unit, DomainError>
@@ -286,10 +296,10 @@ ID и `SentAt`; фабрика сообщения приводит время к
 
 ### Объявления
 
-`ChatChannelKind` — вид канала: `Global` (чат игроков) и `System` (объявления); партия,
-гильдия и личные сообщения — будущие виды. У серверных видов по одному каналу, поэтому
-`ChatChannelKind.channelId` выводит ChannelId из вида (1 и 2), `tryOfChannelId` — обратно.
-`Chat.create kind capacity` создаёт канал вида; `Chat.append` требует, чтобы объявления
+`ChatChannelKind` — вид канала: `Global` (чат игроков), `System` (объявления) и `Guild`.
+`ChatChannels.globalId` и `systemId` задают серверные каналы (1 и 2), `ofGuild` — канал
+проверенного GuildId. `classify` возвращает вид и необязательный GuildId, `kindOf` — вид.
+`Chat.create channelId kind capacity` проверяет соответствие ID виду; `Chat.append` требует, чтобы объявления
 были ровно в системном канале (`carriesAnnouncements`), иначе `ChannelMismatch`.
 
 `ChatMessage.Announcement` (`voption`) отмечает сообщение системного канала:
@@ -384,3 +394,8 @@ ContextRevision и возрастающий Sequence. Устаревшие sampl
 Новый SetLocation сбрасывает sequence; BeginCharacter/LeaveGame очищают активный
 контекст, сохраняя его high-water mark на всё соединение. Downstream ViewRevision
 принадлежит проекции Presence, а не самому Player.
+
+
+### Проверенная ёмкость истории гильдии
+
+`ChatHistoryCapacity.create historyCapacity` возвращает `Result<ChatHistoryCapacity, DomainError>` и проверяет положительную ёмкость до запуска владельца. `Chat.createGuild capacity guildId` создаёт канал без повторной валидации: проверенный `GuildId` определяет и kind `Guild`, и `ChatChannels.ofGuild guildId`. Обычная `Chat.create` использует ту же проверку ёмкости и дополнительно сохраняет проверку соответствия channel/kind.

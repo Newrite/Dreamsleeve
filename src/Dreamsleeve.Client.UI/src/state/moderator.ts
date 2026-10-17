@@ -196,7 +196,18 @@ export function makeModerator(store: StoreApi<ChatState>, send: Send) {
       { action: "clear", kinds, name },
     );
   }
+  function reset(moderator = store.getState().moderator) {
+    requests.clear();
+    const panel = store.getState().panel;
+    store.setState({
+      ...idleModerator,
+      moderator,
+      panel: panel === "moderation" ? null : panel,
+    });
+  }
   return {
+    // A new session can keep the same projected role but never its requests.
+    reset,
     receive(event: Extract<HostEvent, { type: "role" | "moderationResult" }>) {
       if (event.type === "moderationResult") {
         result(event);
@@ -207,12 +218,7 @@ export function makeModerator(store: StoreApi<ChatState>, send: Send) {
         return;
       }
       // The tools go with the role; open answers are no longer shown.
-      requests.clear();
-      const panel = store.getState().panel;
-      store.setState({
-        ...idleModerator,
-        panel: panel === "moderation" ? null : panel,
-      });
+      reset(false);
     },
     // Opens the dialog of an action; removing marks asks which kinds.
     openDialog(

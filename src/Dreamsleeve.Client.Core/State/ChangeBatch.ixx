@@ -100,8 +100,10 @@ export namespace Dreamsleeve::Client
 
     bool Empty() const noexcept
     {
-      return !requiresSnapshot && !selfPlayerChanged && !playersReplaced && players.empty() && chats.empty() && resetChats.empty() &&
-             chatContent.empty() && movement.empty() && groundMarks.empty() && !ownGroundMarksReplaced;
+      return !requiresSnapshot && !selfPlayerChanged && !playersReplaced &&
+             players.empty() && chats.empty() && resetChats.empty() &&
+             chatContent.empty() && movement.empty() && groundMarks.empty() &&
+             !ownGroundMarksReplaced;
     }
 
     // Keep allocated top-level storage for the next owner iteration. Nested
@@ -113,12 +115,14 @@ export namespace Dreamsleeve::Client
       requiresSnapshot  = false;
       selfPlayerChanged = false;
       playersReplaced   = false;
+
       players.clear();
       chats.clear();
       resetChats.clear();
       chatContent.clear();
       movement.clear();
       groundMarks.clear();
+
       ownGroundMarksReplaced = false;
     }
   };

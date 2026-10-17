@@ -5,6 +5,7 @@ open System.Net
 open Falco.Markup
 open Falco.Htmx
 open Dreamsleeve.Server.Domain
+open Dreamsleeve.Server.Infrastructure
 
 /// Every page of the panel as Falco.Markup nodes. Falco.Markup encodes text
 /// only through Text.enc and writes attribute values as given, so this module
@@ -103,6 +104,19 @@ module AdminViews =
         | Some SanctionKind.Ban -> "бан"
         | None -> key
 
+    /// Preset durations and the custom-duration choice used by both sanction forms.
+    let private sanctionTermOptions () = [
+        for label, minutes in AdminModels.sanctionTerms do
+            Elem.option [
+                attr "value" (
+                    match minutes with
+                    | ValueSome minutes -> string minutes
+                    | ValueNone -> "")
+            ] [ text label ]
+
+        Elem.option [ attr "value" "custom" ] [ text "Своё число минут" ]
+    ]
+
     let private until (sanction: SanctionModel) =
         if sanction.Expires.HasValue then time sanction.Expires.Value else "бессрочно"
 
@@ -119,7 +133,12 @@ module AdminViews =
         | None -> Text.empty
 
     let errorPage status (message: string) admin =
-        page $"Ошибка {status}" Outside admin None [ Elem.p [ css "error" ] [ text message ]; Elem.p [] [ Elem.a [ attr "href" "/" ] [ text "На главную" ] ] ]
+        page $"Ошибка {status}" Outside admin None [
+            Elem.p [ css "error" ] [ text message ]
+            Elem.p [] [
+                Elem.a [ attr "href" "/" ] [ text "На главную" ]
+            ]
+        ]
 
     let login (failure: string option) (username: string) =
         page "Вход" Outside None None [
@@ -141,7 +160,10 @@ module AdminViews =
     let setup (configured: bool) (failure: string option) (username: string) =
         page "Первичная настройка" Outside None None [
             if configured then
-                Elem.p [] [ text "Администратор уже создан. " ; Elem.a [ attr "href" "/login" ] [ text "Войти" ] ]
+                Elem.p [] [
+                    text "Администратор уже создан. "
+                    Elem.a [ attr "href" "/login" ] [ text "Войти" ]
+                ]
             else
                 Elem.p [ css "hint" ] [ text "Код настройки печатается в консоли сервера при запуске и командой admin-setup. Он одноразовый и действует ограниченное время." ]
                 error failure
@@ -170,7 +192,10 @@ module AdminViews =
         match row.Hidden, row.Pseudonym with
         | ("everywhere" | "except_ground_marks") as hidden, pseudonym when not (isNull pseudonym) ->
             let where = if hidden = "everywhere" then "везде" else "кроме меток"
-            [ Elem.span [ css "pseudonym" ] [ text $"~{pseudonym}" ]; Elem.small [] [ text $" ({where})" ] ]
+            [
+                Elem.span [ css "pseudonym" ] [ text $"~{pseudonym}" ]
+                Elem.small [] [ text $" ({where})" ]
+            ]
         | _ -> [ Elem.small [] [ text "показано" ] ]
 
     let private playerLink (playerId: Nullable<uint64>) =
@@ -179,10 +204,15 @@ module AdminViews =
 
     /// The online table; htmx replaces the whole section every 5 seconds.
     /// Falco.Htmx writes the constant hx-* attributes; nothing dynamic goes through it.
-    let online (rows: OnlineModel list) (available: bool) =
+    let online (result: Result<OnlineModel list, AdminServiceError>) =
+        let rows, available =
+            match result with
+            | Ok rows -> rows, true
+            | Error _ -> [], false
+
         Elem.section [ attr "id" "online"; Hx.get "/partials/online"; Hx.trigger "every 5s"; Hx.swapOuterHtml ] [
             let guests = rows |> List.filter (fun row -> row.Phase = AdminModels.guestPhase) |> List.length
-            Elem.h2 [] [ text (if guests = 0 then $"Онлайн ({rows.Length})" else $"Онлайн ({rows.Length}, из них гостей {guests})") ]
+            Elem.h2 [] [ text (if not available then "Онлайн (недоступно)" elif guests = 0 then $"Онлайн ({rows.Length})" else $"Онлайн ({rows.Length}, из них гостей {guests})") ]
             if not available then Elem.p [ css "error" ] [ text "Рантайм не ответил; данные устарели." ]
             Elem.table [] [
                 Elem.thead [] [
@@ -213,7 +243,13 @@ module AdminViews =
                                 Elem.td [] [ text (if isNull row.Location then "—" else row.Location) ]
                             else
                                 // A guest has not signed in: there is nothing to describe.
-                                let note = if row.Phase = AdminModels.guestPhase then "гость" else "нет данных"
+                                let note =
+                                    if row.DescriptionStatus = "unavailable" then
+                                        "недоступно"
+                                    elif row.Phase = AdminModels.guestPhase then
+                                        "гость"
+                                    else
+                                        "ещё не открыта"
                                 Elem.td [ attr "colspan" "6"; css "muted" ] [ text note ]
                             Elem.td [] [ text row.Phase ]
                             Elem.td [] [ text (time row.ConnectedAt) ]
@@ -222,22 +258,27 @@ module AdminViews =
             ]
         ]
 
-    let overview admin (status: StatusModel option) (rows: OnlineModel list) available =
+    let overview admin (status: Result<StatusModel, AdminServiceError>) (rows: Result<OnlineModel list, AdminServiceError>) =
         page "Обзор" Overview (Some admin) None [
             Elem.section [] [
                 Elem.h2 [] [ text "Сервер" ]
                 match status with
-                | Some status ->
+                | Ok status ->
                     Elem.dl [] [
-                        for label, value in [ "Соединения", string status.Connections; "Гости", string status.Guests; "Готовы", string status.Ready
-                                              "Резервы PlayerId", string status.Reservations; "Закрываются", string status.Closing
-                                              "Остановка", (if status.Stopping then "да" else "нет") ] do
+                        for label, value in [
+                            "Соединения", string status.Connections
+                            "Гости", string status.Guests
+                            "Готовы", string status.Ready
+                            "Резервы PlayerId", string status.Reservations
+                            "Закрываются", string status.Closing
+                            "Остановка", (if status.Stopping then "да" else "нет")
+                        ] do
                             Elem.dt [] [ text label ]
                             Elem.dd [] [ text value ]
                     ]
-                | None -> Elem.p [ css "error" ] [ text "Рантайм не ответил." ]
+                | Error _ -> Elem.p [ css "error" ] [ text "Рантайм не ответил." ]
             ]
-            online rows available
+            online rows
         ]
 
     let players admin (model: PlayerPageModel) =
@@ -251,7 +292,12 @@ module AdminViews =
             ]
             Elem.p [ css "muted" ] [ text $"Найдено: {model.Total}. Страница {model.Page} из {pages}." ]
             Elem.table [] [
-                Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "Роль"; "Онлайн" ] do Elem.th [] [ text heading ] ] ]
+                Elem.thead [] [
+                    Elem.tr [] [
+                        for heading in [ "PlayerId"; "Username"; "Display name"; "Роль"; "Онлайн" ] do
+                            Elem.th [] [ text heading ]
+                    ]
+                ]
                 Elem.tbody [] [
                     for player in model.Players do
                         Elem.tr [] [
@@ -293,7 +339,12 @@ module AdminViews =
             ]
             Elem.p [ css "muted" ] [ text $"Найдено: {model.Total}. Страница {model.Page} из {pages}." ]
             Elem.table [] [
-                Elem.thead [] [ Elem.tr [] [ for heading in [ "ID"; "Название"; "Глава"; "Участников"; "Создана" ] do Elem.th [] [ text heading ] ] ]
+                Elem.thead [] [
+                    Elem.tr [] [
+                        for heading in [ "ID"; "Название"; "Глава"; "Участников"; "Создана" ] do
+                            Elem.th [] [ text heading ]
+                    ]
+                ]
                 Elem.tbody [] [
                     for guild in model.Guilds do
                         Elem.tr [] [
@@ -331,7 +382,10 @@ module AdminViews =
                 Elem.p [ css "muted" ] [ text "Настоящие имена: в гильдии псевдонимы не действуют." ]
                 Elem.table [] [
                     Elem.thead [] [
-                        Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "Роль"; "Онлайн"; "В гильдии с"; "Мут в гильдии" ] do Elem.th [] [ text heading ] ]
+                        Elem.tr [] [
+                            for heading in [ "PlayerId"; "Username"; "Display name"; "Роль"; "Онлайн"; "В гильдии с"; "Мут в гильдии" ] do
+                                Elem.th [] [ text heading ]
+                        ]
                     ]
                     Elem.tbody [] [
                         for entry in card.Members do
@@ -357,7 +411,12 @@ module AdminViews =
                 if card.Invites.IsEmpty then Elem.p [ css "muted" ] [ text "Ожидающих приглашений нет." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Пригласил"; "Отправлено"; "Истекает" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "PlayerId"; "Username"; "Пригласил"; "Отправлено"; "Истекает" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for invite in card.Invites do
                                 Elem.tr [] [
@@ -413,18 +472,28 @@ module AdminViews =
                 ]
             | None -> ()
             Elem.dl [] [
-                for label, value in [ "PlayerId", string id; "Username", card.Player.Username; "Display name", card.Player.DisplayName
-                                      "Роль", card.Player.Role; "Онлайн", (if card.Player.Online then "да" else "нет") ] do
+                for label, value in [
+                    "PlayerId", string id
+                    "Username", card.Player.Username
+                    "Display name", card.Player.DisplayName
+                    "Роль", card.Player.Role
+                    "Онлайн", (if card.Player.Online then "да" else "нет")
+                ] do
                     Elem.dt [] [ text label ]
                     Elem.dd [] [ text value ]
             ]
-            if not card.Sessions.IsEmpty then online card.Sessions true
+            if not card.Sessions.IsEmpty then online (Ok card.Sessions)
             Elem.section [] [
                 Elem.h2 [] [ text "Гильдии" ]
                 if card.Guilds.IsEmpty then Elem.p [ css "muted" ] [ text "Не состоит в гильдиях." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Гильдия"; "Роль"; "Глава"; "Участников" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "Гильдия"; "Роль"; "Глава"; "Участников" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for entry in card.Guilds do
                                 Elem.tr [] [
@@ -441,7 +510,12 @@ module AdminViews =
                 if card.Sanctions.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих наказаний нет." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Вид"; "До"; "Причина"; "Выдал"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "Вид"; "До"; "Причина"; "Выдал"; "" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for sanction in card.Sanctions do
                                 Elem.tr [] [
@@ -465,7 +539,12 @@ module AdminViews =
                 if card.Addresses.IsEmpty then Elem.p [ css "muted" ] [ text "Входов с записанным адресом нет." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "IP"; "Первый вход"; "Последний вход"; "Входов"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "IP"; "Первый вход"; "Последний вход"; "Входов"; "" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for address in card.Addresses do
                                 Elem.tr [] [
@@ -483,7 +562,12 @@ module AdminViews =
                 if card.Devices.IsEmpty then Elem.p [ css "muted" ] [ text "Входов с известным устройством нет." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Устройство"; "Первый вход"; "Последний вход"; "Входов" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "Устройство"; "Первый вход"; "Последний вход"; "Входов" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for device in card.Devices do
                                 Elem.tr [] [
@@ -500,7 +584,12 @@ module AdminViews =
                 if card.Names.IsEmpty then Elem.p [ css "muted" ] [ text "Display name не менялось." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Когда"; "Было"; "Стало"; "Кто" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "Когда"; "Было"; "Стало"; "Кто" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for change in card.Names do
                                 Elem.tr [] [
@@ -556,11 +645,7 @@ module AdminViews =
                     ]
                     Elem.label [] [
                         Elem.span [] [ text "Срок" ]
-                        Elem.select [ attr "name" "term" ] [
-                            for label, minutes in AdminModels.sanctionTerms do
-                                Elem.option [ attr "value" (match minutes with ValueSome minutes -> string minutes | ValueNone -> "") ] [ text label ]
-                            Elem.option [ attr "value" "custom" ] [ text "Своё число минут" ]
-                        ]
+                        Elem.select [ attr "name" "term" ] (sanctionTermOptions ())
                     ]
                     field "Минут (для своего срока)" "minutes" "number" "" [ attr "min" "1"; attr "max" (string SanctionTerm.MaxMinutes) ]
                     field "Причина (видна игроку)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
@@ -587,7 +672,10 @@ module AdminViews =
         | "custom" -> $"{minutes} мин"
         | preset ->
             AdminModels.sanctionTerms
-            |> List.tryPick (fun (label, value) -> match value with ValueSome value when string value = preset -> Some label | _ -> None)
+            |> List.tryPick (fun (label, value) ->
+                match value with
+                | ValueSome value when string value = preset -> Some label
+                | _ -> None)
             |> Option.defaultValue $"{preset} мин"
 
     let addressBans admin (bans: AddressBanModel list) (notice: string option) (failure: string option) (range: string)
@@ -604,7 +692,12 @@ module AdminViews =
                     ]
                     if not check.Online.IsEmpty then
                         Elem.table [] [
-                            Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "IP"; "Username"; "Фаза" ] do Elem.th [] [ text heading ] ] ]
+                            Elem.thead [] [
+                                Elem.tr [] [
+                                    for heading in [ "PlayerId"; "IP"; "Username"; "Фаза" ] do
+                                        Elem.th [] [ text heading ]
+                                ]
+                            ]
                             Elem.tbody [] [
                                 for row in check.Online do
                                     Elem.tr [] [
@@ -617,7 +710,12 @@ module AdminViews =
                         ]
                     if not check.Players.IsEmpty then
                         Elem.table [] [
-                            Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "IP"; "Последний вход" ] do Elem.th [] [ text heading ] ] ]
+                            Elem.thead [] [
+                                Elem.tr [] [
+                                    for heading in [ "PlayerId"; "Username"; "Display name"; "IP"; "Последний вход" ] do
+                                        Elem.th [] [ text heading ]
+                                ]
+                            ]
                             Elem.tbody [] [
                                 for player in check.Players do
                                     Elem.tr [] [
@@ -651,11 +749,7 @@ module AdminViews =
                     field "Диапазон" "range" "text" range [ flag "required"; attr "placeholder" "203.0.113.0/24"; attr "autocomplete" "off" ]
                     Elem.label [] [
                         Elem.span [] [ text "Срок" ]
-                        Elem.select [ attr "name" "term" ] [
-                            for label, minutes in AdminModels.sanctionTerms do
-                                Elem.option [ attr "value" (match minutes with ValueSome minutes -> string minutes | ValueNone -> "") ] [ text label ]
-                            Elem.option [ attr "value" "custom" ] [ text "Своё число минут" ]
-                        ]
+                        Elem.select [ attr "name" "term" ] (sanctionTermOptions ())
                     ]
                     field "Минут (для своего срока)" "minutes" "number" "" [ attr "min" "1"; attr "max" (string SanctionTerm.MaxMinutes) ]
                     field "Причина (видна игроку при попытке входа)" "reason" "text" "" [ flag "required"; attr "maxlength" (string SanctionReason.MaxLength) ]
@@ -667,7 +761,12 @@ module AdminViews =
                 if bans.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих банов диапазонов нет." ]
                 else
                     Elem.table [] [
-                        Elem.thead [] [ Elem.tr [] [ for heading in [ "Диапазон"; "До"; "Причина"; "Выдано"; "Выдал"; "" ] do Elem.th [] [ text heading ] ] ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                for heading in [ "Диапазон"; "До"; "Причина"; "Выдано"; "Выдал"; "" ] do
+                                    Elem.th [] [ text heading ]
+                            ]
+                        ]
                         Elem.tbody [] [
                             for ban in bans do
                                 Elem.tr [] [
@@ -694,7 +793,12 @@ module AdminViews =
             if entries.IsEmpty then Elem.p [ css "muted" ] [ text "Действующих наказаний нет." ]
             else
                 Elem.table [] [
-                    Elem.thead [] [ Elem.tr [] [ for heading in [ "PlayerId"; "Username"; "Display name"; "Вид"; "До"; "Причина"; "Выдано"; "Выдал" ] do Elem.th [] [ text heading ] ] ]
+                    Elem.thead [] [
+                        Elem.tr [] [
+                            for heading in [ "PlayerId"; "Username"; "Display name"; "Вид"; "До"; "Причина"; "Выдано"; "Выдал" ] do
+                                Elem.th [] [ text heading ]
+                        ]
+                    ]
                     Elem.tbody [] [
                         for entry in entries do
                             Elem.tr [] [
@@ -792,7 +896,12 @@ module AdminViews =
         page "Аудит" Audit (Some admin) None [
             Elem.p [ css "muted" ] [ text "Последние 200 действий администраторов и модераторов." ]
             Elem.table [] [
-                Elem.thead [] [ Elem.tr [] [ for heading in [ "Когда"; "Кто"; "Действие"; "Цель"; "Подробности" ] do Elem.th [] [ text heading ] ] ]
+                Elem.thead [] [
+                    Elem.tr [] [
+                        for heading in [ "Когда"; "Кто"; "Действие"; "Цель"; "Подробности" ] do
+                            Elem.th [] [ text heading ]
+                    ]
+                ]
                 Elem.tbody [] [
                     for entry in entries do
                         Elem.tr [] [
@@ -822,7 +931,12 @@ module AdminViews =
                 submit "Создать токен"
             ]
             Elem.table [] [
-                Elem.thead [] [ Elem.tr [] [ for heading in [ "Метка"; "Префикс хеша"; "Создал"; "Когда"; "" ] do Elem.th [] [ text heading ] ] ]
+                Elem.thead [] [
+                    Elem.tr [] [
+                        for heading in [ "Метка"; "Префикс хеша"; "Создал"; "Когда"; "" ] do
+                            Elem.th [] [ text heading ]
+                    ]
+                ]
                 Elem.tbody [] [
                     for token in models do
                         Elem.tr [] [

@@ -4,7 +4,10 @@ open System
 open Expecto
 open Dreamsleeve.Server.Domain
 
-let private ok = function Ok value -> value | Error error -> failtestf "Expected success, got %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Expected success, got %A" error
+
 let private refused expected result =
     match result with
     | Error error -> Expect.equal error expected "refusal"
@@ -107,10 +110,22 @@ let tests = testList "Guild domain" [
         GuildBook.invite (pid 1UL) (gid 1UL) (pid 4UL) (at 3) lowered |> ok |> ignore
         let restored =
             GuildBook.restore (limits 1 1 2 1)
-                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []
-                    Members = [ for player in 1UL .. 5UL ->
-                                    { Player = pid player; JoinedAt = at 0; Mute = ValueNone
-                                      Role = if player = 1UL then GuildRole.Master else GuildRole.Member } ] } ]
+                [
+                    {
+                        Id = gid 1UL
+                        Name = name "Стражи"
+                        CreatedAt = at 0
+                        Invites = []
+                        Members = [
+                            for player in 1UL .. 5UL -> {
+                                Player = pid player
+                                JoinedAt = at 0
+                                Mute = ValueNone
+                                Role = if player = 1UL then GuildRole.Master else GuildRole.Member
+                            }
+                        ]
+                    }
+                ]
         Expect.equal (GuildBook.tryFind (gid 1UL) restored).Value.MemberCount 5 "stored guilds come back whole"
 
     testCase "discipline follows the role above the target; the master hands over and only then leaves" <| fun _ ->

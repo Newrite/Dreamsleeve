@@ -1,6 +1,7 @@
 export module Dreamsleeve.Client.Config;
 
 import std;
+import Dreamsleeve.Client.ProtocolChannels;
 export import DreamNet.Host;
 export import DreamNet.Address;
 export import DreamNet.Core;
@@ -17,7 +18,7 @@ export namespace Dreamsleeve::Client
   constexpr float MaxFormScale = 10.0f;
   // One connection to one server, and at least the control, chat and movement channels.
   constexpr std::size_t ClientPeers        = 1;
-  constexpr std::size_t MinChannels        = 3;
+  constexpr std::size_t MinChannels        = Wire::ChannelCount;
   constexpr auto        MaxMovementGap     = std::chrono::hours{1};
   constexpr std::size_t MinMovementHistory = 2;
   constexpr Port        DefaultServerPort  = 8778;
@@ -45,34 +46,44 @@ export namespace Dreamsleeve::Client
     }()};
     std::size_t maxInitialPlayers{4096};
     std::size_t maxRecentMessages{512};
+
     // An IPv4 literal or a DNS name, resolved again on every connection attempt.
     std::string serverHost{DreamNetAddress::LoopbackIp};
     Port        serverPort{DefaultServerPort};
     TimeOutMs   connectTimeoutMs{5000};
     TimeOutMs   disconnectTimeoutMs{2000};
     TimeOutMs   sessionTimeoutMs{5000};
+
     std::size_t chatCapacity{512};
     std::size_t maxPendingChatRequests{32};
     std::size_t maxPendingPlayerUpdates{32};
     std::size_t maxActorValues{64};
-    TimeOutMs   playerSampleIntervalMs{50};
+    TimeOutMs   playerSampleIntervalMs{100};
+
     // Local game view; it does not change server subscriptions.
     double        visibilityDistance{8192.0};
     bool          showFireflies{true};
     std::string   fireflyPlugin{"Skyrim.esm"};
     std::uint32_t fireflyFormId{0x02EB0F};
     float         fireflyScale{0.25f};
+
     // Withhold keyboard events from the game and other SKSE mods while the chat is open.
     bool captureKeyboard{true};
+
     // Ground mark visuals: STAT base forms without collision (plugin-local IDs).
     std::string      groundNotePlugin{"Skyrim.esm"};
     std::uint32_t    groundNoteFormId{0x075DDB};  // FXGlowFlatRndBrt
     float            groundNoteScale{0.5f};
+
     std::string      deathMarkPlugin{"Skyrim.esm"};
     std::uint32_t    deathMarkFormId{0x075DD9};  // FXGlowFlatRndDim
     float            deathMarkScale{0.5f};
+
     MovementSettings movement{};
     std::size_t      maxPendingMovementSamples{16384};
+
+    std::string      phantomCacheDirectory{"phantom-cache"};
+    bool             phantomDiagnostics{false};
 
     // The first invalid setting of the client itself, named as in client.toml;
     // the ENet bounds of network and the timeouts are DreamNetClient::ValidateConfig's.
@@ -95,6 +106,7 @@ export namespace Dreamsleeve::Client
       if (network.maxPacketBytes > MaxProtobufCount) return "network.maxPacketBytes";
       if (!DreamNetAddress::IsHostSyntax(serverHost)) return "serverHost";
       if (serverPort == 0) return "serverPort";
+
       if (!count(maxInitialPlayers)) return "maxInitialPlayers";
       if (maxRecentMessages > MaxProtobufCount) return "maxRecentMessages";
       if (!count(maxActorValues)) return "maxActorValues";
@@ -103,21 +115,27 @@ export namespace Dreamsleeve::Client
       if (maxPendingPlayerUpdates == 0) return "maxPendingPlayerUpdates";
       if (playerSampleIntervalMs == 0) return "playerSampleIntervalMs";
       if (sessionTimeoutMs == 0) return "sessionTimeoutMs";
+
       if (!std::isfinite(visibilityDistance) || visibilityDistance < 0) return "visibilityDistance";
       if (!plugin(fireflyPlugin)) return "fireflyPlugin";
       if (!formId(fireflyFormId)) return "fireflyFormId";
       if (!scale(fireflyScale)) return "fireflyScale";
+
       if (!plugin(groundNotePlugin)) return "groundNotePlugin";
       if (!formId(groundNoteFormId)) return "groundNoteFormId";
       if (!scale(groundNoteScale)) return "groundNoteScale";
+
       if (!plugin(deathMarkPlugin)) return "deathMarkPlugin";
       if (!formId(deathMarkFormId)) return "deathMarkFormId";
       if (!scale(deathMarkScale)) return "deathMarkScale";
+
       if (maxPendingMovementSamples == 0) return "maxPendingMovementSamples";
+      if (phantomCacheDirectory.size() > 32760 || phantomCacheDirectory.find('\0') != std::string::npos) return "phantomCacheDirectory";
       if (movement.delay.count() < 0) return "interpolation.delayMs";
       if (movement.maxGap <= movement.delay || movement.maxGap > MaxMovementGap) return "interpolation.maxGapMs";
       if (movement.historyCapacity < MinMovementHistory) return "interpolation.historyCapacity";
       if (!std::isfinite(movement.teleportDistance) || movement.teleportDistance <= 0) return "interpolation.teleportDistance";
+
       return std::nullopt;
     }
   };

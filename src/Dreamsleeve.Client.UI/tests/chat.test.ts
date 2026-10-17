@@ -810,6 +810,34 @@ describe("ground marks", () => {
     });
     expect(chat.store.getState().notice).toContain("не удалена");
   });
+  it("a new session releases mark removal correlation and ignores its late reply", () => {
+    const { chat, send } = ready();
+    chat.receive(marked);
+    chat.removeMark("10");
+    chat.receive({ ...marked, serverName: "Another server" });
+    chat.removeMark("10");
+    expect(
+      send.mock.calls.filter(([c]) => c.type === "removeGroundMark"),
+    ).toHaveLength(2);
+    const waiting = chat.store.getState().notice;
+    chat.receive({ type: "markResult", requestId: "1", removed: true });
+    expect(chat.store.getState().notice).toBe(waiting);
+    expect(chat.store.getState().groundMarks).toHaveLength(1);
+    chat.receive({ type: "markResult", requestId: "2", removed: true });
+    expect(chat.store.getState().notice).toBe("Метка удалена");
+  });
+  it("a refresh keeps the current mark removal pending and its reply valid", () => {
+    const { chat, send } = ready();
+    chat.receive(marked);
+    chat.removeMark("10");
+    chat.receive({ ...marked, refresh: true });
+    chat.removeMark("10");
+    expect(
+      send.mock.calls.filter(([c]) => c.type === "removeGroundMark"),
+    ).toHaveLength(1);
+    chat.receive({ type: "markResult", requestId: "1", removed: true });
+    expect(chat.store.getState().notice).toBe("Метка удалена");
+  });
   it("a snapshot without mark support disables placing", () => {
     const send = vi.fn((_command: Command) => true);
     const chat = makeChat(send);

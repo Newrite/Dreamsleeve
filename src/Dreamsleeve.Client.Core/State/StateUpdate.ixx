@@ -20,18 +20,23 @@ export namespace Dreamsleeve::Client
   {
     std::uint64_t                   generation{};
     std::uint64_t                   revision{};
+
     bool                            selfPlayerChanged{};
     std::optional<Domain::PlayerId> selfPlayerId;
+
     // Clear the recipient's online list before upserting players when true.
     bool                          playersReplaced{};
     std::vector<Domain::Player>   players;
     std::vector<Domain::PlayerId> removedPlayers;
+
     // Reconcile channel existence/resets before replaying ordered content.
     std::vector<ChatStateChange>     chats;
     std::vector<ChatContentChange>   chatContent;
     std::vector<MovementObservation> movement;
+
     // Ordered transitions of the visible ground marks; a clear starts over.
     std::vector<GroundMarkChange> groundMarks;
+
     // Present when the server replaced the player's own list; the complete list.
     std::optional<std::vector<Domain::GroundMark>> ownGroundMarks;
     MovementClock::time_point                      observedAt{};

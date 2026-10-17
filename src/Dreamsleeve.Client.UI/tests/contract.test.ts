@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 import { commandTypes, eventTypes } from "../src/bridge/bridge.generated";
 import { defaults } from "../src/bridge/settings.generated";
 import type { Command } from "../src/bridge/types";
@@ -114,7 +114,7 @@ describe("bridge contract with the host", () => {
   it("parses every event sample the host writes", () => {
     const samples: unknown[] = JSON.parse(read("events.json"));
     const types = samples.map(
-      (sample) => parseHostEvent(JSON.stringify(sample)).type,
+      (sample) => expectHostEvent(JSON.stringify(sample)).type,
     );
     expect(types).toEqual([...eventTypes]);
   });

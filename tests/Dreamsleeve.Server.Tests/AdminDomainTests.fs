@@ -5,7 +5,10 @@ open Dreamsleeve.Server.Domain
 open Expecto
 open AgentTests
 
-let private ok = function Ok value -> value | Error error -> failwithf "%A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failwithf "%A" error
+
 let private profile id username display =
     PlayerData.create (PlayerId.create id |> ok) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
 let private now = DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero)
@@ -68,7 +71,14 @@ let tests = testList "Admin domain" [
     testCase "an address ban covers its range only while in force" <| fun _ ->
         let reason = SanctionReason.create "Рейд" |> ok
         let ban id range expires =
-            { Id = id; Range = AddressRange.parse range |> ok; Reason = reason; IssuedBy = ValueNone; IssuedAt = now; Expires = expires }
+            {
+                Id = id
+                Range = AddressRange.parse range |> ok
+                Reason = reason
+                IssuedBy = ValueNone
+                IssuedAt = now
+                Expires = expires
+            }
         let bans = [ ban 1L "203.0.113.0/24" (ValueSome (now.AddMinutes -1.)); ban 2L "198.51.100.0/24" ValueNone ]
         equal ValueNone (AddressBan.find now (Net.IPAddress.Parse "203.0.113.9") bans)
         equal (ValueSome 2L) (AddressBan.find now (Net.IPAddress.Parse "198.51.100.9") bans |> ValueOption.map _.Id)
@@ -83,7 +93,9 @@ let tests = testList "Admin domain" [
 
     testCase "a one-time code opens its purpose once, expires and is replaced by the next one" <| fun _ ->
         let lifetime = TimeSpan.FromMinutes 15.
-        let setup = function AdminCodePurpose.Setup -> true | AdminCodePurpose.ResetPassword _ -> false
+        let setup = function
+            | AdminCodePurpose.Setup -> true
+            | AdminCodePurpose.ResetPassword _ -> false
         let codes = AdminCodes.issue AdminCodePurpose.Setup "hash-1" now lifetime AdminCodes.empty
         // A reset page does not accept the setup code; the attempt does not spend it.
         let refused, codes = AdminCodes.redeem (setup >> not) "hash-1" now codes

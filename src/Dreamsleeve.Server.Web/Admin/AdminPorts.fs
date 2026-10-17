@@ -26,8 +26,8 @@ type AdminPorts = {
     /// The guild owner: lists, cards, a new master, dissolution.
     Guilds: GuildAdminCommand -> TimeSpan -> CancellationToken -> Task<AgentAskResult<GuildAdminResult>>
     Sessions: TimeSpan -> CancellationToken -> Task<AgentAskResult<RuntimeSessionRow list>>
-    /// Asks one session for its view; None when it did not answer within the timeout.
-    Describe: TimeSpan -> RuntimeSessionRow -> Task<AdminPlayerView option>
+    /// Ok None means the profile is not known; unavailable is an explicit error.
+    Describe: TimeSpan -> RuntimeSessionRow -> Task<Result<AdminPlayerView option, SessionDescribeError>>
     /// False when the runtime did not take it.
     Announce: ServerAnnouncement -> bool
     ApplyRole: PlayerId -> PlayerRole -> bool

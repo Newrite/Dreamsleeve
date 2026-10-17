@@ -10,79 +10,123 @@ open FSharp.UMX
 module DomainUMX =
     [<Measure>]
     type playerId
+
     [<Measure>]
     type chatMessageId
+
     [<Measure>]
     type chatChannelId
+
     [<Measure>]
     type username
+
     [<Measure>]
     type displayName
+
     [<Measure>]
     type characterName
+
     [<Measure>]
     type pseudonym
+
     [<Measure>]
     type chatMessageText
+
     [<Measure>]
     type chatChannelName
+
     [<Measure>]
     type announcementSignature
+
     [<Measure>]
     type locationName
+
     [<Measure>]
     type worldUnit
+
     [<Measure>]
     type radian
+
     [<Measure>]
     type actorValue
+
     [<Measure>]
     type actorValueName
+
     [<Measure>]
     type actorValueKey
+
     [<Measure>]
     type pluginName
+
     [<Measure>]
     type localFormId
+
     [<Measure>]
     type groundMarkId
+
     [<Measure>]
     type groundNoteText
+
     [<Measure>]
     type deathMarkText
+
     [<Measure>]
     type guildId
+
     [<Measure>]
     type nameColor
 
 type PluginName = string<pluginName>
+
 type LocalFormId = uint32<localFormId>
+
 type LocationName = string<locationName>
+
 type WorldUnit = float32<worldUnit>
+
 type Radian = float32<radian>
+
 type ActorValueKey = string<actorValueKey>
+
 type ActorValue = float32<actorValue>
+
 type ActorValueName = string<actorValueName>
+
 type PlayerId = uint64<playerId>
+
 type Username = string<username>
+
 type DisplayName = string<displayName>
+
 type CharacterName = string<characterName>
+
 /// A name from the server dictionary, shown to other players instead of the
 /// real names of a player who hides them; never derived from a real name.
 type Pseudonym = string<pseudonym>
+
 type ChatMessageId = uint64<chatMessageId>
+
 type ChatMessageText = string<chatMessageText>
+
 type ChatChannelId = uint64<chatChannelId>
+
 type ChatChannelName = string<chatChannelName>
+
 type AnnouncementSignature = string<announcementSignature>
+
 /// Server-issued, monotonic, never zero; survives restarts through storage.
 type GroundMarkId = uint64<groundMarkId>
+
 /// A note a player wrote on the ground; the chat text pipeline applies.
 type GroundNoteText = string<groundNoteText>
+
 /// The killer's name or one word of cause, as the author's client saw it.
 type DeathMarkText = string<deathMarkText>
+
 /// Storage-issued and never reused, so a guild's chat channel never names another guild.
 type GuildId = uint64<guildId>
+
 /// 0xRRGGBB: how the player's name is drawn in chat.
 type NameColor = uint32<nameColor>
 
@@ -176,7 +220,8 @@ module internal PrimitiveValidation =
                         if Object.ReferenceEquals(source, canonical) then sourceLength
                         else scalarCount canonical
 
-                    if length > maxLength then fail (TextError.TooLong maxLength)
+                    if length > maxLength then
+                        fail (TextError.TooLong maxLength)
                     else
                         match validate canonical with
                         | ValueSome error -> fail error
@@ -231,10 +276,16 @@ module internal PrimitiveValidation =
                 ValueNone
 
     let identifier field (raw: uint64) =
-        if raw = 0UL then Error(DomainError.InvalidId field) else Ok raw
+        if raw = 0UL then
+            Error(DomainError.InvalidId field)
+        else
+            Ok raw
 
     let finite field (raw: float32) =
-        if Single.IsFinite raw then Ok raw else Error(DomainError.NonFiniteNumber field)
+        if Single.IsFinite raw then
+            Ok raw
+        else
+            Error(DomainError.NonFiniteNumber field)
 
 [<RequireQualifiedAccess>]
 module PluginName =
@@ -347,17 +398,27 @@ module NameColor =
     /// (readable), not for stored ones: a stricter rule later never makes a
     /// stored profile fail to load.
     let create (raw: uint32) : Result<NameColor, DomainError> =
-        if raw > 0xFFFFFFu then Error(DomainError.InvalidColor "NameColor") else Ok(tag raw)
+        if raw > 0xFFFFFFu then
+            Error(DomainError.InvalidColor "NameColor")
+        else
+            Ok(tag raw)
 
     // WCAG: an sRGB channel in linear light.
     let private linear (channel: uint32) =
         let share = float channel / 255.0
-        if share <= 0.04045 then share / 12.92 else Math.Pow((share + 0.055) / 1.055, 2.4)
+
+        if share <= 0.04045 then
+            share / 12.92
+        else
+            Math.Pow((share + 0.055) / 1.055, 2.4)
 
     /// WCAG relative luminance, 0 (black) to 1 (white).
     let luminance (color: NameColor) =
         let rgb = value color
-        0.2126 * linear ((rgb >>> 16) &&& 0xFFu) + 0.7152 * linear ((rgb >>> 8) &&& 0xFFu) + 0.0722 * linear (rgb &&& 0xFFu)
+
+        0.2126 * linear ((rgb >>> 16) &&& 0xFFu)
+        + 0.7152 * linear ((rgb >>> 8) &&& 0xFFu)
+        + 0.0722 * linear (rgb &&& 0xFFu)
 
     /// A contrast of 4:1 against black, so the name reads on the dark chat background.
     [<Literal>]
@@ -405,20 +466,32 @@ module Pseudonym =
         elif Encoding.UTF8.GetByteCount source > limit then ValueSome (TextError.TooLong limit)
         else ValueNone
 
+    // The dictionary compares NFC keys. Validate that dependency operation at
+    // construction, inside PrimitiveValidation's narrow ArgumentException adapter,
+    // while retaining the exact original spelling for display.
+    let private comparable (source: string) =
+        source.Normalize(NormalizationForm.FormC) |> ignore
+        source
+
     /// A dictionary entry: one line of plain text, 1..48 UTF-8 bytes, no
     /// leading or trailing space, no control characters and no angle brackets.
     /// Kept exactly as written; it is display text, never markup.
     let create raw : Result<Pseudonym, DomainError> =
-        PrimitiveValidation.text "Pseudonym" MaxEntryBytes id false (plain MaxEntryBytes) raw |> Result.map UMX.tag
+        PrimitiveValidation.text "Pseudonym" MaxEntryBytes comparable false (plain MaxEntryBytes) raw
+        |> Result.map UMX.tag
 
     /// A pseudonym read back from storage, numbered or not: the same rules
     /// with room for the number.
     let restore raw : Result<Pseudonym, DomainError> =
-        PrimitiveValidation.text "Pseudonym" MaxBytes id false (plain MaxBytes) raw |> Result.map UMX.tag
+        PrimitiveValidation.text "Pseudonym" MaxBytes comparable false (plain MaxBytes) raw
+        |> Result.map UMX.tag
 
     /// "Страж 2": the short number that tells equal picks apart.
     let numbered (number: int) (name: Pseudonym) : Pseudonym =
-        if number < 2 then name else UMX.tag $"{UMX.untag name} {number}"
+        if number < 2 then
+            name
+        else
+            UMX.tag $"{UMX.untag name} {number}"
 
 [<RequireQualifiedAccess>]
 module ChatMessageId =
@@ -476,7 +549,10 @@ module GuildId =
     let value (id: GuildId) : uint64 = UMX.untag id
 
     let create raw : Result<GuildId, DomainError> =
-        if raw = 0UL || raw >= MaxValue then Error(DomainError.InvalidId "GuildId") else Ok(UMX.tag<guildId> raw)
+        if raw = 0UL || raw >= MaxValue then
+            Error(DomainError.InvalidId "GuildId")
+        else
+            Ok(UMX.tag<guildId> raw)
 
 [<RequireQualifiedAccess>]
 module GroundMarkId =

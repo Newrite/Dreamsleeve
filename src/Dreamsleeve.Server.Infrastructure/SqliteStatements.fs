@@ -11,7 +11,10 @@ module internal SqliteStatements =
         let command = context.Connection.CreateCommand()
         context.Transaction |> Option.iter (fun transaction -> command.Transaction <- transaction)
         command.CommandText <- sql
-        for name, value in parameters do command.Parameters.Add(SqliteParameter(name, value)) |> ignore
+
+        for name, value in parameters do
+            command.Parameters.Add(SqliteParameter(name, value)) |> ignore
+
         command
 
     let execute context sql parameters =
@@ -31,8 +34,10 @@ module internal SqliteStatements =
     let transaction (context: QueryContext) action =
         use transaction = context.Connection.BeginTransaction()
         context.Transaction <- Some transaction
+
         let result = action ()
         match result with
         | Ok _ -> transaction.Commit()
         | Error _ -> ()
+
         result

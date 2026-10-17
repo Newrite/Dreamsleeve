@@ -16,7 +16,10 @@ open Dreamsleeve.Server.Infrastructure
 open AgentTests
 open BackgroundTests
 
-let private ok = function Ok value -> value | Error error -> failtestf "Expected success, got %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Expected success, got %A" error
+
 let private pid raw = PlayerId.create raw |> ok
 let private profile number =
     PlayerData.create (pid number) (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok) NameColor.unknown
@@ -26,7 +29,7 @@ let private riften = formKey "Skyrim.esm" 0x16BB4u
 let private position x = Position.create x 0.0f 0.0f |> ok
 let private placement space x = GroundMarkPlacement.create space (position x) (Radian.create 1.5f |> ok)
 let private located space x =
-    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) Rotation.zero)
+    ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) CameraDirection.zero)
 let private note text = GroundMarkBody.Note (GroundNoteText.create 200 text |> ok)
 let private death label = GroundMarkBody.Death (DeathMarkText.create 64 label |> ok)
 let private markId value = GroundMarkId.create value |> ok
@@ -38,11 +41,14 @@ let private wireDate () =
 let private collect (output: Channel<'T>) (_: AgentContext<'T>) value = task {
     check (output.Writer.TryWrite value) "Test output closed."
 }
+
 let private receive (output: Channel<'T>) = output.Reader.ReadAsync().AsTask().WaitAsync guard
+
 let private post (agent: Agent<'T>) value = task {
     let! result = agent.PostAsync value
     equal AgentPostResult.Posted result
 }
+
 let private stop (agent: Agent<'T>) = task {
     agent.Complete() |> ignore
     do! awaitUnit agent.Completion
@@ -51,9 +57,18 @@ let private stop (agent: Agent<'T>) = task {
 // Fast expiry checks and a small radius, so cells and distances are easy to reason about.
 let private options = {
     GroundMarkOptions.defaults with
-        VisibilityDistance = 100.0f; MaxPlacementDistance = 0.0f; ExpiryCheckIntervalMs = 3600000
-        MaxNotesPerPlayer = 2; MaxDeathMarksPerPlayer = 2; MaxPerIndexCell = 3
-        NoteRate = { Burst = 10; RefillMs = 1000; DuplicateWindowMs = 0 }; DeathMinIntervalMs = 0
+        VisibilityDistance = 100.0f
+        MaxPlacementDistance = 0.0f
+        ExpiryCheckIntervalMs = 3600000
+        MaxNotesPerPlayer = 2
+        MaxDeathMarksPerPlayer = 2
+        MaxPerIndexCell = 3
+        NoteRate = {
+            Burst = 10
+            RefillMs = 1000
+            DuplicateWindowMs = 0
+        }
+        DeathMinIntervalMs = 0
 }
 
 type private Observer = {
@@ -75,19 +90,34 @@ let private withMarksUsing settings (loaded: StoredGroundMark list) nextId run =
     let writes, hostEvents, aliceEvents, bobEvents, acknowledgments =
         Channel.CreateUnbounded<GroundMarkWrite>(), Channel.CreateUnbounded<SessionHostCommand>(),
         Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<GroundMarkEvent>(), Channel.CreateUnbounded<Guid>()
-    use writer = Agent.Start(AgentOptions.create "writer", collect writes)
-    use host = Agent.Start(AgentOptions.create "host", collect hostEvents)
-    use alice = Agent.Start(AgentOptions.create "alice", collect aliceEvents)
-    use bob = Agent.Start(AgentOptions.create "bob", collect bobEvents)
-    use cleanup = Agent.Start(AgentOptions.create "cleanup", collect acknowledgments)
+    use writer = TestAgent.Start(AgentOptions.create "writer", collect writes)
+    use host = TestAgent.Start(AgentOptions.create "host", collect hostEvents)
+    use alice = TestAgent.Start(AgentOptions.create "alice", collect aliceEvents)
+    use bob = TestAgent.Start(AgentOptions.create "bob", collect bobEvents)
+    use cleanup = TestAgent.Start(AgentOptions.create "cleanup", collect acknowledgments)
     let rules = GroundMarkOptions.rules settings |> ok
-    use marks = GroundMarksAgent.start settings rules loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok
+    use marks = GroundMarksAgent.start settings rules loaded nextId (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
     let observer number (agent: Agent<GroundMarkEvent>) events =
-        { Subscription = { ConnectionId = Guid.NewGuid(); Profile = profile number; Events = agent.Ref.TryReliable().Value }; Events = events }
+        {
+            Subscription = {
+                ConnectionId = Guid.NewGuid()
+                Profile = profile number
+                Events = agent.Ref.TryReliable().Value
+            }
+            Events = events
+        }
     let a, b = observer 1UL alice aliceEvents, observer 2UL bob bobEvents
     do! post marks (GroundMarkCommand.Join a.Subscription)
     do! post marks (GroundMarkCommand.Join b.Subscription)
-    do! run { Marks = marks; Writes = writes; Host = hostEvents; Alice = a; Bob = b; Cleanup = cleanup.Ref.TryReliable().Value; Acknowledgments = acknowledgments }
+    do! run {
+        Marks = marks
+        Writes = writes
+        Host = hostEvents
+        Alice = a
+        Bob = b
+        Cleanup = cleanup.Ref.TryReliable().Value
+        Acknowledgments = acknowledgments
+    }
     do! stop marks
     do! stop writer
 }
@@ -99,9 +129,16 @@ let private observe fixture (observer: Observer) generation location =
 
 let private submit fixture (observer: Observer) requestId body place =
     post fixture.Marks (GroundMarkCommand.Place {
-        ConnectionId = observer.Subscription.ConnectionId; RequestId = requestId; Body = body; Placement = place
-        GameDate = gameDate; CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok); Pseudonym = ValueNone
-        Fingerprint = Moderation.normalize (GroundMarkBody.text body); Flagged = [] })
+        ConnectionId = observer.Subscription.ConnectionId
+        RequestId = requestId
+        Body = body
+        Placement = place
+        GameDate = gameDate
+        CharacterName = ValueSome (CharacterName.create 128 "Nerevar" |> ok)
+        Pseudonym = ValueNone
+        Fingerprint = Moderation.normalize (GroundMarkBody.text body)
+        Flagged = []
+    })
 
 let private placed requestId = function
     | GroundMarkEvent.Placed(actual, record, evicted) ->
@@ -138,7 +175,10 @@ let private own = function
 // queued. Counts everything but own lists (the Join itself sends one).
 let private settled fixture (observer: Observer) = task {
     do! post fixture.Marks (GroundMarkCommand.Join observer.Subscription)
-    do! post fixture.Marks (GroundMarkCommand.Detach { ConnectionId = Guid.NewGuid(); ReplyTo = fixture.Cleanup })
+    do! post fixture.Marks (GroundMarkCommand.Detach {
+        ConnectionId = Guid.NewGuid()
+        ReplyTo = fixture.Cleanup
+    })
     let! _ = receive fixture.Acknowledgments
     let mutable count = 0
     let mutable event = Unchecked.defaultof<GroundMarkEvent>
@@ -154,9 +194,76 @@ let private stored id author kind x (createdAt: DateTimeOffset) : StoredGroundMa
         match kind with
         | GroundMarkKind.Note -> note $"stored {id}"
         | GroundMarkKind.Death -> death "wolf"
-    { Mark = GroundMark.create (markId id) (pid author) body (placement whiterun x) createdAt; Author = profile author }
+    {
+        Mark = GroundMark.create (markId id) (pid author) body (placement whiterun x) createdAt
+        Author = profile author
+    }
+
+let private rejectsSaturatedWrite operation = task {
+    let entered, release = gate<unit>(), gate<unit>()
+    use writer = TestAgent.Start({ AgentOptions.create "blocked-marks-writer" with Mailbox = AgentMailbox.boundedWait 1 },
+        fun _ _ -> task {
+            entered.TrySetResult() |> ignore
+            do! release.Task
+        })
+    use host = TestAgent.Start(AgentOptions.create "host", fun _ _ -> Task.FromResult())
+    let events = Channel.CreateUnbounded<GroundMarkEvent>()
+    use receiver = TestAgent.Start(AgentOptions.create "mark-events", collect events)
+    let settings = { options with MaxPendingWrites = 1 }
+    let initial = stored 1UL 1UL GroundMarkKind.Note 0.0f DateTimeOffset.UtcNow
+    use marks = GroundMarksAgent.start settings (GroundMarkOptions.rules settings |> ok) [initial] 2UL
+                    (writer.Ref.TryReliable().Value) (host.Ref.TryReliable().Value) NullLogger.Instance |> ok |> fun owner -> owner.Owner
+    let subscription = {
+        ConnectionId = Guid.NewGuid()
+        Profile = profile 1UL
+        Events = receiver.Ref.TryReliable().Value
+    }
+    let submit requestId = GroundMarkCommand.Place {
+        ConnectionId = subscription.ConnectionId
+        RequestId = requestId
+        Body = note $"new {requestId}"
+        Placement = placement whiterun 0.0f
+        GameDate = gameDate
+        CharacterName = ValueNone
+        Pseudonym = ValueNone
+        Fingerprint = $"new {requestId}"
+        Flagged = []
+    }
+    try
+        equal AgentPostResult.Posted (writer.TryPost(GroundMarkWrite.Delete []))
+        do! awaitUnit entered.Task
+        equal AgentPostResult.Posted (writer.TryPost(GroundMarkWrite.Delete []))
+        do! post marks (GroundMarkCommand.Join subscription)
+        let! _ = receive events
+        do! post marks (submit 1UL)
+        let! accepted = receive events
+        let _, evicted = placed 1UL accepted
+        equal ValueNone evicted
+        let! ownEvent = receive events
+        equal [1UL; 2UL] (ids (own ownEvent))
+        let failed =
+            match operation with
+            | 0 -> GroundMarkCommand.Remove(subscription.ConnectionId, 2UL, markId 1UL, false)
+            | 1 -> GroundMarkCommand.ClearOf(subscription.ConnectionId, 2UL, pid 1UL, [GroundMarkKind.Note])
+            | _ -> submit 2UL
+        do! post marks failed
+        let! ended = Task.WhenAny(marks.Completion, Task.Delay guard)
+        check (Object.ReferenceEquals(ended, marks.Completion)) "Owner did not expose its stop to supervision."
+        check marks.Completion.IsCanceled "Rejected write admission must stop the owner."
+        equal (Some AgentStopReason.Aborted) marks.StopReason
+        equal AgentPostResult.Closed (marks.TryPost(GroundMarkCommand.Join subscription))
+        do! stop receiver
+        check (not (events.Reader.TryPeek() |> fst)) "Known failed write published a confirmation or observer change."
+    finally
+        release.TrySetResult() |> ignore
+    do! stop writer
+}
 
 let private agentTests = testList "GroundMarksAgent" [
+    case "known full write admission cannot confirm removal" (fun () -> rejectsSaturatedWrite 0)
+    case "known full write admission cannot confirm clearing" (fun () -> rejectsSaturatedWrite 1)
+    case "known full write admission cannot confirm an eviction replacement" (fun () -> rejectsSaturatedWrite 2)
+
     case "the own list is sent on join and again after placing, evicting, removing and expiring" (fun () ->
         let settings = { options with MaxNotesPerPlayer = 1 }
         // The death mark outlives the first expiry pass by two seconds.
@@ -187,7 +294,10 @@ let private agentTests = testList "GroundMarksAgent" [
             // Expiry of a far mark reaches the author only through the own list.
             do! Task.Delay 2500
             let now = System.Diagnostics.Stopwatch.GetTimestamp()
-            do! post fixture.Marks (GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now })
+            do! post fixture.Marks (GroundMarkCommand.Expire {
+                DueTimestamp = now
+                QueuedTimestamp = now
+            })
             let! expired = receive fixture.Alice.Events
             equal [] (ids (own expired))
             let! count = settled fixture fixture.Bob
@@ -351,12 +461,12 @@ let private agentTests = testList "GroundMarksAgent" [
             let! seen = next fixture.Bob
             equal [4UL] (ids (changed seen).Added)
             equal [1UL] (removedIds (changed seen))
-            let! first = receive fixture.Writes
-            let! second = receive fixture.Writes
-            equal (GroundMarkWrite.Delete [markId 1UL]) first
-            match second with
-            | GroundMarkWrite.Insert mark -> equal (markId 4UL) mark.Id
-            | other -> failwithf "Expected insert: %A" other
+            let! write = receive fixture.Writes
+            match write with
+            | GroundMarkWrite.Replace(evicted, mark) ->
+                equal (markId 1UL) evicted
+                equal (markId 4UL) mark.Id
+            | other -> failtestf "Expected one admitted replacement: %A" other
             // The author without a position of their own sees no delta.
             let! count = settled fixture fixture.Alice
             equal 0 count
@@ -387,7 +497,15 @@ let private agentTests = testList "GroundMarksAgent" [
         }))
 
     case "notes are rate limited per account and deaths keep a minimum interval" (fun () ->
-        withMarksUsing { options with NoteRate = { Burst = 1; RefillMs = 60000; DuplicateWindowMs = 60000 }; DeathMinIntervalMs = 60000 } [] 1UL (fun fixture -> task {
+        withMarksUsing {
+            options with
+                NoteRate = {
+                    Burst = 1
+                    RefillMs = 60000
+                    DuplicateWindowMs = 60000
+                }
+                DeathMinIntervalMs = 60000
+        } [] 1UL (fun fixture -> task {
             do! submit fixture fixture.Alice 1UL (note "first") (placement whiterun 0.0f)
             let! _ = next fixture.Alice
             do! submit fixture fixture.Alice 2UL (note "second") (placement whiterun 0.0f)
@@ -430,7 +548,10 @@ let private agentTests = testList "GroundMarksAgent" [
             equal [3UL] (ids (changed baseline).Added)
             // Nothing expired yet.
             let now = System.Diagnostics.Stopwatch.GetTimestamp()
-            do! post fixture.Marks (GroundMarkCommand.Expire { DueTimestamp = now; QueuedTimestamp = now })
+            do! post fixture.Marks (GroundMarkCommand.Expire {
+                DueTimestamp = now
+                QueuedTimestamp = now
+            })
             let! count = settled fixture fixture.Bob
             equal 0 count
             equal 0 fixture.Writes.Reader.Count
@@ -453,7 +574,10 @@ let private agentTests = testList "GroundMarksAgent" [
             let! refused = receive fixture.Host
             equal (SessionHostCommand.Close(intruder.ConnectionId, "ground_marks_identity_conflict")) refused
             do! observe fixture fixture.Bob 1UL (located whiterun 0.0f)
-            do! post fixture.Marks (GroundMarkCommand.Detach { ConnectionId = fixture.Bob.Subscription.ConnectionId; ReplyTo = fixture.Cleanup })
+            do! post fixture.Marks (GroundMarkCommand.Detach {
+                ConnectionId = fixture.Bob.Subscription.ConnectionId
+                ReplyTo = fixture.Cleanup
+            })
             let! ack = receive fixture.Acknowledgments
             equal fixture.Bob.Subscription.ConnectionId ack
             do! submit fixture fixture.Alice 1UL (note "quiet") (placement whiterun 0.0f)
@@ -469,19 +593,30 @@ let private agentTests = testList "GroundMarksAgent" [
 
 let private config = ServerConfig.defaults
 let private codec = ProtocolCodec.create config
+
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
+
 let private wirePlacement x =
     Dreamsleeve.Protocol.Chat.GroundMarkPlacement(
         LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.ESM", LocalFormId = 0x1A26Fu),
-        Position = Dreamsleeve.Protocol.Chat.Position(X = x, Y = 2.0f, Z = 3.0f), Heading = 1.5f)
+        Position = Dreamsleeve.Protocol.Chat.Position(X = x, Y = 2.0f, Z = 3.0f),
+        Heading = 1.5f)
+
 let private client requestId (fill: Dreamsleeve.Protocol.Chat.ClientPacket -> unit) =
     let packet = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = ProtocolCodec.Version, RequestId = requestId)
     fill packet
     ProtocolCodec.decodeClient codec (packet.ToByteArray())
+
 let private record id x : GroundMarkRecord =
-    { Mark = GroundMark.create (markId id) (pid 7UL) (note "hi\nthere") (placement whiterun x) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
-             |> GroundMark.withFlagged [ { Start = 0; Length = 2 } ]
-      Author = PublicIdentity.Profile (profile 7UL) }
+    {
+        Mark =
+            GroundMark.create (markId id) (pid 7UL) (note "hi\nthere") (placement whiterun x) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
+            |> GroundMark.withFlagged [ {
+                Start = 0
+                Length = 2
+            } ]
+        Author = PublicIdentity.Profile (profile 7UL)
+    }
 
 let private codecTests = testList "GroundMarkCodec" [
     testCase "placement commands decode through the domain factories with their limits" <| fun _ ->
@@ -512,7 +647,9 @@ let private codecTests = testList "GroundMarkCodec" [
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "era")) (dated (fun date -> date.Era <- 0u))
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "year")) (dated (fun date -> date.Year <- 4000000000u))
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "month")) (dated (fun date -> date.Month <- 13u))
-        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "day")) (dated (fun date -> date.Month <- 2u; date.Day <- 29u))
+        equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "day")) (dated (fun date ->
+            date.Month <- 2u
+            date.Day <- 29u))
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "day_of_week")) (dated (fun date -> date.DayOfWeek <- 7u))
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "hour")) (dated (fun date -> date.Hour <- 24u))
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidGameDate "minute")) (dated (fun date -> date.Minute <- 60u))
@@ -520,7 +657,10 @@ let private codecTests = testList "GroundMarkCodec" [
         Expect.isOk (GameDate.create 99 99999 2 28 0 0 0) "the widest era and year"
         let removal = client 5UL (fun packet -> packet.RemoveGroundMark <- Dreamsleeve.Protocol.Chat.RemoveGroundMark(MarkId = 9UL)) |> ok
         equal (ClientCommand.RemoveGroundMark(markId 9UL)) removal.Command
-        let failure result = match result with Error (error: ProtocolCodecError) -> error.Failure | Ok _ -> failtest "Expected failure"
+        let failure result =
+            match result with
+            | Error (error: ProtocolCodecError) -> error.Failure
+            | Ok _ -> failtest "Expected failure"
         equal (ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("GroundNoteText", TextError.TooLong 200)))
             (failure (client 6UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = String('a', 201), Placement = wirePlacement 1.0f, GameDate = wireDate ()))))
         Expect.isError (client 7UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x", Placement = wirePlacement Single.NaN))) "non-finite position"
@@ -529,7 +669,12 @@ let private codecTests = testList "GroundMarkCodec" [
         Expect.isError (client 10UL (fun packet -> packet.RemoveGroundMark <- Dreamsleeve.Protocol.Chat.RemoveGroundMark(MarkId = 0UL))) "zero id"
 
     testCase "visible deltas, placements and removals encode on the control lane with correlation where required" <| fun _ ->
-        let view = { ViewRevision = 3UL; Added = [ record 1UL 1.0f; record 2UL 2.0f ]; Removed = [ markId 5UL ]; Clear = true }
+        let view = {
+            ViewRevision = 3UL
+            Added = [ record 1UL 1.0f; record 2UL 2.0f ]
+            Removed = [ markId 5UL ]
+            Clear = true
+        }
         let packet = Packets.single codec (ServerResponse.GroundMarksChanged view) |> ok |> parse
         Expect.isFalse packet.HasRequestId "notification"
         equal 3UL packet.GroundMarksChanged.ViewRevision
@@ -611,9 +756,12 @@ let private configurationTests = testList "GroundMarks configuration" [
     testCase "the bundled example equals the defaults" <| fun _ ->
         let rec find (directory: DirectoryInfo) =
             let candidate = Path.Combine(directory.FullName, "src", "Dreamsleeve.Server", "server.example.toml")
-            if File.Exists candidate then candidate
-            elif isNull directory.Parent then failtest "server.example.toml not found"
-            else find directory.Parent
+            if File.Exists candidate then
+                candidate
+            elif isNull directory.Parent then
+                failtest "server.example.toml not found"
+            else
+                find directory.Parent
         let settings = load (File.ReadAllText(find (DirectoryInfo AppContext.BaseDirectory))) |> ok
         equal GroundMarkOptions.defaults settings.GroundMarks
         equal ServerConfig.defaults.ChatInput settings.Server.ChatInput
@@ -623,7 +771,10 @@ let private token = CancellationToken.None
 
 type private Database() =
     let directory = Path.Combine(Path.GetTempPath(), "Dreamsleeve.GroundMarkStoreTests", Guid.NewGuid().ToString("N"))
-    let config = { DatabasePath = Path.Combine(directory, "marks.db"); BusyTimeoutSeconds = 1 }
+    let config = {
+        DatabasePath = Path.Combine(directory, "marks.db")
+        BusyTimeoutSeconds = 1
+    }
     member _.Config = config
     member _.Connect() =
         let builder = Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(
@@ -659,6 +810,23 @@ let private register (database: Database) name =
     SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok
 
 let private storeTests = testList "SQLite ground marks" [
+    testCase "replacement insert failure restores evicted row and successful reload contains the replacement" (fun () ->
+        use database = new Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let alice = SqliteAccountStore.create database.Config (Username.create 32 "alice" |> ok) (DisplayName.create 64 "Alice" |> ok) "hash" token |> ok
+        let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UtcNow
+        SqliteGroundMarkStore.insert database.Config (mark 1UL) token |> ok
+        database.Execute "CREATE TRIGGER fail_replacement BEFORE INSERT ON ground_marks WHEN NEW.id=2 BEGIN SELECT RAISE(FAIL,'test replacement'); END"
+        match SqliteGroundMarkStore.replace database.Config (markId 1UL) (mark 2UL) token with
+        | Error(AccountStoreError.Failed _) -> ()
+        | other -> failtestf "Expected failed replacement: %A" other
+        let rejected = SqliteGroundMarkStore.loadAll database.Config token |> ok
+        equal [1UL] (rejected.Marks |> List.map (fun row -> GroundMarkId.value row.Mark.Id))
+        database.Execute "DROP TRIGGER fail_replacement"
+        SqliteGroundMarkStore.replace database.Config (markId 1UL) (mark 2UL) token |> ok
+        let restored = SqliteGroundMarkStore.loadAll database.Config token |> ok
+        equal [2UL] (restored.Marks |> List.map (fun row -> GroundMarkId.value row.Mark.Id)))
+
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
@@ -739,7 +907,7 @@ let private storeTests = testList "SQLite ground marks" [
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = register database "writer"
-        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8
+        use writer = SqliteGroundMarkStore.startWriter database.Config NullLogger.Instance 8 |> expectStarted |> fun writer -> writer.Owner
         let mark id = GroundMark.create (markId id) alice.PlayerId (note $"n{id}") (placement whiterun 0.0f) DateTimeOffset.UnixEpoch
         for id in 1UL .. 3UL do
             let! posted = writer.PostAsync(GroundMarkWrite.Insert (mark id))

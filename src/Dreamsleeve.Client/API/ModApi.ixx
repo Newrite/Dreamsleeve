@@ -77,6 +77,7 @@ export namespace ModApi
         logger::warn("Announcement refused locally: invalid kind, text or source label");
         return Api::Result::Rejected;
       }
+
       const auto label = Dreamsleeve::Host::Bridge::ModLabel(*utf8Source);
       const auto result =
         Runtime::RequestAnnouncement({std::move(*utf8Text), *mapped, Domain::ClientAnnouncementSource::ThirdParty, std::move(*utf8Source)});
@@ -197,6 +198,7 @@ export namespace ModApi
       for (const auto& [plugin, callback] : callbacks.byPlugin)
         targets.push_back(callback);
     }
+
     // The strings live in outcome for the whole loop.
     const DreamsleeveAPI::AnnouncementResult result{
         static_cast<DreamsleeveAPI::APIResult>(outcome.result),

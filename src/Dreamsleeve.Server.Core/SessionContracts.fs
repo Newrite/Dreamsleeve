@@ -21,6 +21,18 @@ type PlayerStateError =
     | Closed
     | Busy
 
+/// Failure to obtain a session description; None in a successful reply means
+/// the profile is not known yet, never a failure or an elapsed deadline.
+[<RequireQualifiedAccess>]
+type SessionDescribeError =
+    | InvalidRequest of AgentRequestError
+    | Full
+    | Closed
+    | Canceled
+    | Dropped
+    | TimedOut
+    | Faulted of exn
+
 /// Managed events handed off by the transport owner.
 [<RequireQualifiedAccess>]
 type ServerTransportEvent =
@@ -30,13 +42,29 @@ type ServerTransportEvent =
     | Disconnected of Guid
     | Failed of Guid * reason: string
 
+/// Classify admission where it fails; diagnostic wording never controls retry.
+[<RequireQualifiedAccess>]
+type TransportSendError =
+    | Closed of string
+    | InvalidPacket of string
+    | BudgetExceeded of string
+    | PeerRejected of string
+    | Faulted of string
+
+[<RequireQualifiedAccess>]
+module TransportSendError =
+    let message = function
+        | TransportSendError.Closed text | TransportSendError.InvalidPacket text
+        | TransportSendError.BudgetExceeded text | TransportSendError.PeerRejected text
+        | TransportSendError.Faulted text -> text
+
 type ServerTransport = {
     Poll: unit -> Result<ServerTransportEvent list, string>
     /// Nonblocking wakeup; false means consumer admission failed and notification must be retried.
     SetReadyHandler: (unit -> bool) -> unit
     /// Success transfers immutable payload ownership to the handoff queue; callers
     /// must not mutate/reuse Bytes. Admission is not acknowledgement of delivery.
-    Send: Guid * TransportPacket -> Result<unit, string>
+    Send: Guid * TransportPacket -> Result<unit, TransportSendError>
     /// Current transport payload budget before fragmentation; zero for unavailable connections.
     MaxUnfragmentedPayloadBytes: Guid -> int
     /// Stop new sends and drain accepted reliable packets; Poll eventually reports Disconnected.
@@ -44,6 +72,144 @@ type ServerTransport = {
     /// Force local removal on the runtime deadline; no Disconnected event is required.
     Reset: Guid -> unit
     Dispose: unit -> unit
+}
+
+/// Expected storage failures; diagnostic text never decides retry policy.
+[<RequireQualifiedAccess>]
+type PhantomStorageError =
+    | Closed
+    | QueueFull
+    | TransferLimit
+    | CacheHashMismatch
+    | DeltaBaseUnavailable
+    | AssetUnavailable
+    | DiskQuota
+    | HashMismatch
+    | HashSizeConflict
+    | DeltaHashMismatch
+    | DeltaReconstruction
+    | DeltaTargetHash
+    | UnknownUpload
+    | UploadClosed
+    | ChunkOffsetOrSize
+    | ReadBounds
+    | UnknownDownload
+    | DownloadClosed
+    | CacheSizeChanged
+    | CacheTruncated
+    | Io of exn
+
+[<RequireQualifiedAccess>]
+module PhantomStorageError =
+    let message = function
+        | PhantomStorageError.Closed -> "storage closed"
+        | PhantomStorageError.QueueFull -> "storage queue full"
+        | PhantomStorageError.TransferLimit -> "transfer limit"
+        | PhantomStorageError.CacheHashMismatch -> "cache hash mismatch"
+        | PhantomStorageError.DeltaBaseUnavailable -> "delta base unavailable"
+        | PhantomStorageError.AssetUnavailable -> "asset unavailable"
+        | PhantomStorageError.DiskQuota -> "disk quota"
+        | PhantomStorageError.HashMismatch -> "hash mismatch"
+        | PhantomStorageError.HashSizeConflict -> "hash size conflict"
+        | PhantomStorageError.DeltaHashMismatch -> "delta hash mismatch"
+        | PhantomStorageError.DeltaReconstruction -> "delta reconstruction"
+        | PhantomStorageError.DeltaTargetHash -> "delta target hash"
+        | PhantomStorageError.UnknownUpload -> "unknown upload"
+        | PhantomStorageError.UploadClosed -> "upload closed"
+        | PhantomStorageError.ChunkOffsetOrSize -> "chunk offset/size"
+        | PhantomStorageError.ReadBounds -> "read bounds"
+        | PhantomStorageError.UnknownDownload -> "unknown download"
+        | PhantomStorageError.DownloadClosed -> "download closed"
+        | PhantomStorageError.CacheSizeChanged -> "cache size changed"
+        | PhantomStorageError.CacheTruncated -> "cache truncated"
+        | PhantomStorageError.Io error -> error.Message
+
+    let retryable = function
+        | PhantomStorageError.HashMismatch | PhantomStorageError.ChunkOffsetOrSize
+        | PhantomStorageError.ReadBounds -> false
+        | PhantomStorageError.Closed | PhantomStorageError.QueueFull | PhantomStorageError.TransferLimit
+        | PhantomStorageError.CacheHashMismatch | PhantomStorageError.DeltaBaseUnavailable
+        | PhantomStorageError.AssetUnavailable | PhantomStorageError.DiskQuota | PhantomStorageError.HashSizeConflict | PhantomStorageError.DeltaHashMismatch
+        | PhantomStorageError.DeltaReconstruction | PhantomStorageError.DeltaTargetHash
+        | PhantomStorageError.UnknownUpload | PhantomStorageError.UploadClosed
+        | PhantomStorageError.UnknownDownload | PhantomStorageError.DownloadClosed
+        | PhantomStorageError.CacheSizeChanged | PhantomStorageError.CacheTruncated | PhantomStorageError.Io _ -> true
+
+[<RequireQualifiedAccess>]
+type PhantomHttpError =
+    | Closed
+    | Capability
+    | Length
+    | Truncated
+    | Canceled
+    | Io
+    | StorageCompletion
+    | StorageLength
+    | Storage of PhantomStorageError
+
+[<RequireQualifiedAccess>]
+module PhantomHttpError =
+    let message = function
+        | PhantomHttpError.Closed -> "HTTP closed"
+        | PhantomHttpError.Capability -> "HTTP capability"
+        | PhantomHttpError.Length -> "HTTP length"
+        | PhantomHttpError.Truncated -> "HTTP truncated"
+        | PhantomHttpError.Canceled -> "HTTP canceled"
+        | PhantomHttpError.Io -> "HTTP I/O"
+        | PhantomHttpError.StorageCompletion -> "HTTP storage completion"
+        | PhantomHttpError.StorageLength -> "HTTP storage length"
+        | PhantomHttpError.Storage error -> PhantomStorageError.message error
+
+    let retryable = function
+        | PhantomHttpError.Storage error -> PhantomStorageError.retryable error
+        | PhantomHttpError.Closed | PhantomHttpError.Capability | PhantomHttpError.Length
+        | PhantomHttpError.Truncated | PhantomHttpError.Canceled | PhantomHttpError.Io
+        | PhantomHttpError.StorageCompletion | PhantomHttpError.StorageLength -> true
+
+/// One admitted HTTP body. The actor owns admission/cancellation; the HTTP
+/// operation owns bytes and publishes monotonic progress plus one completion.
+/// Unexpected faults fault Completion and also stop the owning HTTP registry.
+type PhantomHttpLease(token: string, size: int) =
+    let mutable progress = 0
+    let completion = TaskCompletionSource<Result<unit, PhantomHttpError>>(TaskCreationOptions.RunContinuationsAsynchronously)
+    member _.Token = token
+    member _.Size = size
+    member _.Progress = Threading.Volatile.Read(&progress)
+    member _.Completion = completion.Task
+    member _.Advance(count) = Threading.Volatile.Write(&progress, count)
+    member _.Finish(result) = completion.TrySetResult result |> ignore
+    member _.Fault(error: exn) = completion.TrySetException error |> ignore
+
+type PhantomHttpRequest = {
+    Token: string
+    Upload: bool
+    Length: int64 option
+    Body: IO.Stream
+    BeginResponse: int -> unit
+    Cancellation: Threading.CancellationToken
+}
+
+/// Failure completes only for an unexpected owner fault. Admission closes;
+/// ServerRuntime must stop/reconstruct the subsystem, never retry its mutation.
+type PhantomHttpPort = {
+    Admit: Guid * PhantomTransferId * PhantomManifest * bool * PhantomDelta option -> PhantomHttpLease
+    Cancel: PhantomTransferId -> Task<unit>
+    Serve: PhantomHttpRequest -> Task<Result<unit, PhantomHttpError>>
+    Dispose: unit -> Task<unit>
+    OwnerFailure: Task<exn>
+}
+
+/// Metadata is worker-owned; body I/O is serialized by each admitted lease.
+/// true is a verified canonical file; false requires more body bytes. Buffers
+/// remain borrowed until the returned task completes. Cancel awaits cleanup.
+type PhantomStoragePort = {
+    StartUpload: PhantomTransferId * PhantomManifest * PhantomDelta option -> Task<Result<bool, PhantomStorageError>>
+    WriteChunk: PhantomTransferId * int * byte array -> Task<Result<bool, PhantomStorageError>>
+    StartDownload: PhantomTransferId * PhantomManifest * AssetHash option -> Task<Result<PhantomDelta option, PhantomStorageError>>
+    ReadChunk: PhantomTransferId * int * Memory<byte> -> Task<Result<int, PhantomStorageError>>
+    Cancel: PhantomTransferId -> Task<unit>
+    Dispose: unit -> Task<unit>
+    OwnerFailure: Task<exn>
 }
 
 [<RequireQualifiedAccess>]
@@ -70,6 +236,7 @@ type SessionHostCommand =
     | Send of Guid * ServerResponse
     | Close of Guid * reason: string
     | SlowConsumer of Guid
+    | ObservePhantoms of PhantomObservation
 
 type Subscription<'Event> = {
     ConnectionId: Guid
@@ -164,6 +331,8 @@ type PresenceSubscription = {
 [<RequireQualifiedAccess>]
 type GroundMarkWrite =
     | Insert of GroundMark
+    /// Eviction and its replacement form one admitted unit of work.
+    | Replace of evicted: GroundMarkId * replacement: GroundMark
     | Delete of GroundMarkId list
 
 [<RequireQualifiedAccess>]
@@ -311,12 +480,23 @@ module GroundMarkOptions =
     let MinExpiryCheckIntervalMs = 1000
 
     let defaults = {
-        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 256
+        MailboxCapacity = 2048
+        ControlReserve = 64
+        MaxControlDeliveries = 128
+        MaxPendingWrites = 256
+
         VisibilityDistance = Visibility.DefaultDistance
-        MaxNotesPerPlayer = 5; MaxDeathMarksPerPlayer = 10
-        NoteTtlDays = 30; DeathMarkTtlDays = 7
+        MaxNotesPerPlayer = 5
+        MaxDeathMarksPerPlayer = 10
+        NoteTtlDays = 30
+        DeathMarkTtlDays = 7
         MaxPerIndexCell = 64
-        NoteRate = { Burst = 3; RefillMs = 20000; DuplicateWindowMs = 300000 }
+
+        NoteRate = {
+            Burst = 3
+            RefillMs = 20000
+            DuplicateWindowMs = 300000
+        }
         DeathMinIntervalMs = 5000
         MaxPlacementDistance = 2048.0f
         ExpiryCheckIntervalMs = 60000
@@ -384,9 +564,20 @@ module GuildOptions =
     let MaxNameLength = 64
 
     let defaults = {
-        MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
-        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; HistoryCapacity = 200
-        MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
+        MaxGuilds = 10000
+        MaxGuildsPerPlayer = 3
+        MaxMembers = 64
+        MaxInvites = 32
+
+        NameMinLength = 3
+        NameMaxLength = 24
+        InviteDays = 7
+        HistoryCapacity = 200
+
+        MailboxCapacity = 2048
+        ControlReserve = 64
+        MaxControlDeliveries = 128
+        MaxPendingWrites = 1024
         InviteCheckIntervalMs = 60000
     }
 
@@ -495,6 +686,10 @@ type GuildWrite =
     | RemoveMember of GuildId * PlayerId
     | PutInvite of GuildInvite
     | RemoveInvite of GuildId * PlayerId
+    /// Consumes the invitation and stores its new member atomically.
+    | AcceptInvite of GuildId * GuildMember
+    /// Both roles change in the same admitted unit of work.
+    | TransferMaster of GuildId * previous: GuildMember voption * master: GuildMember
 
 /// Stored guilds, the profiles their members and invited players have now,
 /// the storage high-water mark and the writer; supplied at runtime start.
@@ -566,8 +761,13 @@ module IdentityOptions =
     let MaxDisplayNameChangeIntervalMinutes = 525600
 
     let defaults = {
-        AllowHiddenIdentity = true; ToggleIntervalMs = 30000; PseudonymsPath = "pseudonyms.toml"
-        AllowDisplayNameChange = true; DisplayNameChangeIntervalMinutes = 1; NameColorIntervalMs = 10000
+        AllowHiddenIdentity = true
+        ToggleIntervalMs = 30000
+        PseudonymsPath = "pseudonyms.toml"
+
+        AllowDisplayNameChange = true
+        DisplayNameChangeIntervalMinutes = 1
+        NameColorIntervalMs = 10000
     }
 
     let validate options = [
@@ -600,10 +800,30 @@ module ServerRuntimeOptions =
         OpenTimeoutMs = 10000
         ShutdownTimeoutMs = 5000
         PollIntervalMs = 1
-        Player = { MailboxCapacity = 1152; ControlReserve = 32; MaxPendingChat = 16; MaxPendingUpdates = 16;
-                   MaxBootstrapEvents = 512; MaxPendingOutput = 1152 }
-        Chat = { MailboxCapacity = 1024; ControlReserve = 64; HistoryCapacity = 512; MaxControlDeliveries = 128
-                 Rate = { Burst = 5; RefillMs = 2000; DuplicateWindowMs = 30000 } }
-        Presence = { MailboxCapacity = 4096; ControlReserve = 128; MaxControlDeliveries = 512; ReplicationIntervalMs = 50
-                     VisibilityDistance = Visibility.DefaultDistance }
+        Player = {
+            MailboxCapacity = 1152
+            ControlReserve = 32
+            MaxPendingChat = 16
+            MaxPendingUpdates = 16
+            MaxBootstrapEvents = 512
+            MaxPendingOutput = 1152
+        }
+        Chat = {
+            MailboxCapacity = 1024
+            ControlReserve = 64
+            HistoryCapacity = 512
+            MaxControlDeliveries = 128
+            Rate = {
+                Burst = 5
+                RefillMs = 2000
+                DuplicateWindowMs = 30000
+            }
+        }
+        Presence = {
+            MailboxCapacity = 4096
+            ControlReserve = 128
+            MaxControlDeliveries = 512
+            ReplicationIntervalMs = 100
+            VisibilityDistance = Visibility.DefaultDistance
+        }
     }

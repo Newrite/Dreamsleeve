@@ -111,7 +111,11 @@ private:
           if (const auto* chat = std::get_if<SendChat>(&queued.command))
           {
             const ServerRejection stale{RequestRejectionCode::SessionNotReady, "Stale outgoing generation", "generation"};
-            ok = exchange.PublishResult({model.Generation(), chat->requestId, stale}) && ok;
+            ok = exchange.PublishResult({
+                model.Generation(),
+                chat->requestId,
+                stale
+            }) && ok;
           }
           else
           {
@@ -136,6 +140,7 @@ private:
 
     ClientExchange&                  exchange;
     ClientModel                      model;
+
     std::vector<QueuedClientCommand> commands;
     std::deque<SendChat>             awaitingServer;
     Domain::ChatMessageId            nextMessage{1};
@@ -292,7 +297,10 @@ int RunStateConsole(bool demo)
   if (!demo) return RunCommands(std::cin, false);
 
   std::istringstream script{
-      "send First\nread\naccept\nread\n" "send Refused\nreject\nread\n" "receive Second\nreceive Third\nreceive Fourth\nread\n" "receive Fifth\nread\nsnapshot\nread\nsample\nreset\nread\nquit\n"
+      "send First\nread\naccept\nread\n"
+      "send Refused\nreject\nread\n"
+      "receive Second\nreceive Third\nreceive Fourth\nread\n"
+      "receive Fifth\nread\nsnapshot\nread\nsample\nreset\nread\nquit\n"
   };
 
   return RunCommands(script, true);

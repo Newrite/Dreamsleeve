@@ -51,9 +51,11 @@ namespace
       fields += std::format("  {}: {};\n", key, TypeOf<Field>(key));
       values += std::format("  {}: {},\n", key, LiteralOf(value));
     });
+
     std::string limits;
     for (const auto& rule : NumberRules)
       limits += std::format("  {}: {{ min: {}, max: {} }},\n", rule.key, rule.min, rule.max);
+
     std::string instant;
     for (const auto key : InstantKeys)
       instant += std::format("  \"{}\",\n", key);
@@ -126,9 +128,13 @@ TEST_CASE("Instant settings are copied and compared alone")
   UiSettings edited;
   edited.fontSize   = 20;
   edited.textFilter = "mask";
+  edited.showPhantoms = false;
+  edited.publishPhantoms = false;
   CHECK(InstantChanged(saved, edited));
   ApplyInstant(saved, edited);
   CHECK(saved.textFilter == "mask");
+  CHECK_FALSE(saved.showPhantoms);
+  CHECK_FALSE(saved.publishPhantoms);
   CHECK(saved.fontSize == UiSettings{}.fontSize);
   CHECK_FALSE(InstantChanged(saved, edited));
 }
@@ -159,6 +165,96 @@ TEST_CASE("The bundled ui.example.toml names every setting with its default valu
   ForEachSettingPair(defaults, defaults, [&](std::string_view key, const auto&, const auto&) {
     CHECK_MESSAGE(text.contains(std::format("\n{} = ", key)), std::string{key});
   });
+}
+
+TEST_CASE("Filesystem probe failure is distinct from a legitimately missing UI file")
+{
+  const std::filesystem::path path{"ui-probe.toml"};
+  unsigned                    probes{};
+  const auto                  unavailable = std::make_error_code(std::errc::permission_denied);
+  const auto rejected = Testing::LoadUiFileWithProbe(path, [&](const std::filesystem::path& value, std::error_code& error) {
+    CHECK(value == path);
+    ++probes;
+    error = unavailable;
+    return false;
+  });
+  REQUIRE_FALSE(rejected);
+  CHECK(rejected.error() == "Cannot inspect UI settings: " + unavailable.message());
+
+  const auto missing = Testing::LoadUiFileWithProbe(path, [&](const std::filesystem::path& value, std::error_code& error) {
+    CHECK(value == path);
+    ++probes;
+    error.clear();
+    return false;
+  });
+  REQUIRE(missing);
+  CHECK(*missing == UiFile{});
+  CHECK(probes == 2);
+}
+
+TEST_CASE("UI saves preserve foreign temporary paths and clean only their own rejected file")
+{
+  struct Fixture
+  {
+    std::filesystem::path root =
+      std::filesystem::temp_directory_path() /
+      (L"dreamsleeve-ui-owned-\U0001F984-" + std::to_wstring(std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    ~Fixture()
+    {
+      std::error_code error;
+      std::filesystem::remove_all(root, error);
+    }
+  } fixture;
+
+  std::filesystem::create_directories(fixture.root);
+  const auto path       = fixture.root / L"\u4E2D.toml";
+  auto       temporary  = path;
+  temporary            += ".tmp";
+  {
+    std::ofstream destination{path, std::ios::binary};
+    destination << "preserve destination";
+    std::ofstream foreign{temporary, std::ios::binary};
+    foreign << "preserve foreign temporary";
+  }
+  CHECK_FALSE(SaveUiFile(path, {}));
+  CHECK(ReadText(path) == "preserve destination");
+  CHECK(ReadText(temporary) == "preserve foreign temporary");
+
+  std::filesystem::remove(temporary);
+  std::filesystem::create_directory(temporary);
+  {
+    std::ofstream foreign{temporary / "foreign"};
+    foreign << "keep";
+  }
+  CHECK_FALSE(SaveUiFile(path, {}));
+  CHECK(ReadText(path) == "preserve destination");
+  CHECK(ReadText(temporary / "foreign") == "keep");
+
+  // This temporary file is created by SaveUiFile, but a directory blocks rename.
+  const auto blocked = fixture.root / "blocked.toml";
+  std::filesystem::create_directory(blocked);
+  {
+    std::ofstream original{blocked / "foreign"};
+    original << "keep";
+  }
+  const auto rejected = SaveUiFile(blocked, {});
+  CHECK_FALSE(rejected);
+  if (!rejected) CHECK_FALSE(rejected.error().empty());
+  auto partial  = blocked;
+  partial      += ".tmp";
+  CHECK_FALSE(std::filesystem::exists(partial));
+  CHECK(ReadText(blocked / "foreign") == "keep");
+
+  std::filesystem::remove(temporary / "foreign");
+  std::filesystem::remove(temporary);
+  UiFile edited;
+  edited.ui.hideUi = true;
+  REQUIRE(SaveUiFile(path, edited));
+  const auto loaded = LoadUiFile(path);
+  REQUIRE(loaded);
+  CHECK(*loaded == edited);
+  CHECK_FALSE(std::filesystem::exists(temporary));
 }
 
 TEST_SUITE_END();

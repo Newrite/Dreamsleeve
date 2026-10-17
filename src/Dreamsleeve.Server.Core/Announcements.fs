@@ -36,7 +36,11 @@ type AnnouncementOptions = {
 module AnnouncementOptions =
     let defaults = {
         HistoryCapacity = 128
-        Rate = { Burst = 3; RefillMs = 20000; DuplicateWindowMs = 300000 }
+        Rate = {
+            Burst = 3
+            RefillMs = 20000
+            DuplicateWindowMs = 300000
+        }
         TrustedClient = { Enabled = true }
         ThirdParty = { Enabled = true }
         Scheduled = []
@@ -44,7 +48,10 @@ module AnnouncementOptions =
 
     /// Mailbox limits follow the chat channel; history and admission are the channel's own.
     let channelOptions (chat: ChatRoomOptions) options =
-        { chat with HistoryCapacity = options.HistoryCapacity; Rate = options.Rate }
+        { chat with
+            HistoryCapacity = options.HistoryCapacity
+            Rate = options.Rate
+        }
 
     let private rules options = function
         | ClientAnnouncementSource.TrustedClient -> options.TrustedClient
@@ -58,8 +65,14 @@ module AnnouncementOptions =
     /// The single admission decision for a requested origin. Rate, repetition
     /// and word lists are applied afterwards by their own owners.
     let admit options (request: AnnouncementRequest) : Result<unit, RequestRejection> =
-        if (rules options request.Source).Enabled then Ok ()
-        else Error { Code = RequestRejectionCode.AnnouncementNotAllowed; Message = "This server does not accept announcements from this source."; Field = "source" }
+        if (rules options request.Source).Enabled then
+            Ok ()
+        else
+            Error {
+                Code = RequestRejectionCode.AnnouncementNotAllowed
+                Message = "This server does not accept announcements from this source."
+                Field = "source"
+            }
 
     let parseKind (text: string) =
         match (if isNull text then "" else text.Trim().ToLowerInvariant()) with
@@ -86,10 +99,28 @@ module AnnouncementOptions =
                     Error $"{name} delay and interval must be nonnegative."
                 | Ok _, Some _ when entry.IntervalSeconds > 0 && entry.IntervalSeconds < MinIntervalSeconds ->
                     Error $"{name}.IntervalSeconds must be 0 (once) or at least {MinIntervalSeconds}."
-                | Ok text, Some kind -> Ok({ Text = text; Kind = kind }, entry))
-        let errors = entries |> List.choose (function Error error -> Some error | Ok _ -> None)
-        if errors.IsEmpty then Ok(entries |> List.choose (function Ok entry -> Some entry | Error _ -> None))
-        else Error errors
+                | Ok text, Some kind ->
+                    Ok(
+                        {
+                            Text = text
+                            Kind = kind
+                        },
+                        entry))
+
+        let errors =
+            entries
+            |> List.choose (function
+                | Error error -> Some error
+                | Ok _ -> None)
+
+        if errors.IsEmpty then
+            Ok(
+                entries
+                |> List.choose (function
+                    | Ok entry -> Some entry
+                    | Error _ -> None))
+        else
+            Error errors
 
 /// Owned by the runtime. Due times are milliseconds of Environment.TickCount64.
 type AnnouncementSchedule = private {
@@ -117,5 +148,8 @@ module AnnouncementSchedule =
                 if schedule.Next[index] <> Int64.MaxValue && nowMs >= schedule.Next[index] then
                     yield schedule.Items[index]
                     schedule.Next[index] <-
-                        if schedule.Intervals[index] > 0L then nowMs + schedule.Intervals[index] else Int64.MaxValue
+                        if schedule.Intervals[index] > 0L then
+                            nowMs + schedule.Intervals[index]
+                        else
+                            Int64.MaxValue
         ]

@@ -4,7 +4,13 @@ Dreamsleeve — социальный слой для Skyrim: общий чат �
 игровыми показаниями, светлячки других игроков с именами и облачками сообщений, метки на
 земле, модерация и веб-админка. Сервер — F# на .NET 10; клиент — C++23 (MSVC modules):
 переносимое ядро `Client.Core`, SKSE-плагин `Dreamsleeve.Client` и консольный `Client.Dev`;
-интерфейс — TypeScript/React в PrismaUI.
+интерфейс — TypeScript/React в PrismaUI. В ветке `codex/phantom-native-nif`
+модель фантома снова использует native clone/NiStream/NIF и native scene;
+neutral geometry/material pipeline и CPU skinning удалены. Reliable model
+streaming, independent unreliable poses, AOI, файловое хранилище и кеш
+переиспользуются. Контракт protocol26: [PhantomsRu.md](PhantomsRu.md).
+Автоматические проверки, результаты benchmarks и остающийся игровой QA
+SE/AE/VR приведены в [отчёте выпуска](PhantomReleaseValidationRu.md).
 
 Сверено 1 октября 2026 года с кодом. Это описание решений и состояния, а не поручение агенту.
 Поздние явные решения и контракты кода (README рядом с кодом,
