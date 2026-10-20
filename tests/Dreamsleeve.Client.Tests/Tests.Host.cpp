@@ -272,21 +272,24 @@ TEST_CASE("Session tells the page of a mute and its lift, and of each end of a s
 
 TEST_CASE("Bridge parses each command into its own checked type")
 {
-  const auto chat = CommandOf<Bridge::Commands::SendChat>(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");
+  const auto chat =
+    CommandOf<Bridge::Commands::SendChat>(R"({"type":"sendChat","requestId":"3","channelId":"1","text":"Привет","extra":1})");
   CHECK(chat.text == "Привет");
   CHECK(chat.channelId.value == 1);
   // The host owns the page's correlation and the size of page input; the
   // content of what travels on (empty text, ID 0) is Core's to refuse.
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","channelId":"1","text":"x"})"));
-  CHECK_FALSE(Bridge::ParseCommand(
-    std::format(R"({{"type":"sendChat","requestId":"3","channelId":"1","text":"{}"}})", std::string(Bridge::MaxChatText + 1, 'x'))));
+  CHECK_FALSE(
+    Bridge::ParseCommand(
+      std::format(R"({{"type":"sendChat","requestId":"3","channelId":"1","text":"{}"}})", std::string(Bridge::MaxChatText + 1, 'x'))));
   CHECK(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"0","text":""})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"sendChat","requestId":"3","channelId":"one","text":"x"})"));
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"jump"})"));
   CHECK_FALSE(Bridge::ParseCommand("not json"));
   // A registration name only when there is one.
   CHECK_FALSE(CommandOf<Bridge::Commands::SignIn>(R"({"type":"signIn","username":"a","password":"b","displayName":""})").displayName);
-  const auto save = CommandOf<Bridge::Commands::SaveSettings>(R"({"type":"saveSettings","revision":4,"settings":{"scale":5,"theme":"skyrim"}})");
+  const auto save =
+    CommandOf<Bridge::Commands::SaveSettings>(R"({"type":"saveSettings","revision":4,"settings":{"scale":5,"theme":"skyrim"}})");
   CHECK(save.settings.scale == 1.5);
   CHECK(save.revision == 4);
   CommandOf<Bridge::Commands::Close>(R"({"type":"close"})");
@@ -304,7 +307,9 @@ TEST_CASE("Bridge parses each command into its own checked type")
   CHECK(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":true})").remember);
   CHECK_FALSE(CommandOf<Bridge::Commands::SignInSteam>(R"({"type":"signInSteam","remember":false})").remember);
   CommandOf<Bridge::Commands::CopySteamLink>(R"({"type":"copySteamLink"})");
-  CHECK(CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value == 18446744073709551615ull);
+  CHECK(
+    CommandOf<Bridge::Commands::Ignore>(R"({"type":"ignore","playerId":"18446744073709551615"})").playerId.value ==
+    18446744073709551615ull);
 }
 
 TEST_CASE("Session publishes snapshots only for a ready session and correlates chat requests")
@@ -322,9 +327,7 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(Type(frame.events[1]) == "auth");
   CHECK(Type(frame.events[2]) == "identity");
   CHECK_FALSE(session.Ready());
-  CHECK(
-    session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {1}, .text = "x"}).has_value() ==
-    false);
+  CHECK(session.SendChat(*exchange, Bridge::Commands::SendChat{.requestId = "u1", .channelId = {1}, .text = "x"}).has_value() == false);
 
   REQUIRE(model.Apply(
     model.Generation(),
@@ -358,7 +361,8 @@ TEST_CASE("Session publishes snapshots only for a ready session and correlates c
   CHECK(session.PendingChatCount() == 1);
 
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{1, {MakeMessage(11, 1, "hello")}}));
-  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), requestId, MessagePublished{11}}));
+  REQUIRE(
+    exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), requestId, MessagePublished{11}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -425,12 +429,14 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
         true
     };
   };
-  auto book = GuildBook::TryCreate(
+  auto treasurer    = member(2, "Bob", Domain::GuildRole::Officer);
+  treasurer.titleId = 3;
+  auto book         = GuildBook::TryCreate(
     {
-        {4, "Вороны", channel, 1000, {member(1, "Alice", Domain::GuildRole::Master), member(2, "Bob", Domain::GuildRole::Officer)}}
+        {4, "Вороны", channel, 1000, {member(1, "Alice", Domain::GuildRole::Master), treasurer}, {{3, "Казначей"}}, "О нас"}
   },
     {{5, "Соратники", 2, 2000}},
-    {3, 64, 3, 24});
+    {3, 64, 3, 24, 10, 500});
   REQUIRE(book);
   REQUIRE(model.RegisterChannel(channel, 16, Domain::ChatChannelKind::Guild));
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{channel, {MakeMessage(1, channel, "в гильдии")}}));
@@ -455,6 +461,13 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   auto guilds = Parse(frame.events[2]);
   CHECK(guilds["guilds"][0]["channelId"].get<std::string>() == std::to_string(channel));
   CHECK(guilds["guilds"][0]["members"][1]["role"].get<std::string>() == "officer");
+  CHECK(guilds["guilds"][0]["members"][1]["title"].get<std::string>() == "3");
+  CHECK_FALSE(guilds["guilds"][0]["members"][0].contains("title"));
+  CHECK(guilds["guilds"][0]["titles"][0]["id"].get<std::string>() == "3");
+  CHECK(guilds["guilds"][0]["titles"][0]["name"].get<std::string>() == "Казначей");
+  CHECK(guilds["limits"]["titles"].get<double>() == 10);
+  CHECK(guilds["limits"]["infoMax"].get<double>() == 500);
+  CHECK(guilds["guilds"][0]["info"].get<std::string>() == "О нас");
   CHECK(guilds["invites"][0]["guildName"].get<std::string>() == "Соратники");
   CHECK(guilds["invites"][0].contains("inviter"));
   CHECK(guilds["limits"]["members"].get<double>() == 64);
@@ -486,6 +499,23 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   publish(shared, CommandResult{model.Generation(), std::get<GuildRequest>(commands[0].command).requestId, GuildDone{4}});
   REQUIRE(frame.events.size() == 1);
   CHECK(Parse(frame.events[0])["guildId"].get<std::string>() == "4");
+
+  // A catalog page answers with its own event.
+  REQUIRE(session.GuildCatalog(*exchange, "c1", {.search = "сов"}));
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto catalog = std::get<GuildCatalogRequest>(commands[0].command);
+  CHECK(catalog.query.search == "сов");
+  publish(
+    shared,
+    CommandResult{model.Generation(), catalog.requestId, GuildCatalogListed{{{{7, "Совы", "Ночные дозоры", 12, 1000}}, true, 31}}});
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Type(frame.events[0]) == "guildCatalog");
+  auto page = Parse(frame.events[0]);
+  CHECK(page["requestId"].get<std::string>() == "c1");
+  CHECK(page["guilds"][0]["name"].get<std::string>() == "Совы");
+  CHECK(page["more"].get<bool>());
+  CHECK(page["total"].get<double>() == 31);
 
   // Excluded: the channel goes, and the page hears why exactly once.
   auto next = *shared;
@@ -1303,12 +1333,20 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
   REQUIRE(model.Apply(
     model.Generation(),
     GroundMarksChanged{
-        1, {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), MakeMark(11, 7, Domain::GroundMarkKind::Death, "Bear")}, {}, true}));
+        1,
+        {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), MakeMark(11, 7, Domain::GroundMarkKind::Death, "Bear")},
+        {},
+        true
+  }));
   // The server lists every own mark, the far one included.
-  auto far = MakeMark(9, 1, Domain::GroundMarkKind::Death, "Dragon");
+  auto far                 = MakeMark(9, 1, Domain::GroundMarkKind::Death, "Dragon");
   far.placement.locationId = {"skyrim.esm", 0x16BB4};
   far.characterName        = "Nerevar";
-  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), far}}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OwnGroundMarksReplaced{
+        {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"), far}
+  }));
   Session        session;
   Session::Frame frame;
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
@@ -1356,10 +1394,21 @@ TEST_CASE("Session projects visible marks for the game and the server's own list
 
   // Ignored authors leave the nearby list; a hidden foreign text is empty and a hidden own text a placeholder.
   auto flagged    = MakeMark(14, 7, Domain::GroundMarkKind::Note, "bad word");
-  flagged.flagged = {{0, 3}};
+  flagged.flagged = {
+      {0, 3}
+  };
   auto ownFlagged    = MakeMark(15, 1, Domain::GroundMarkKind::Note, "bad word");
-  ownFlagged.flagged = {{0, 3}};
-  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{3, {flagged, ownFlagged}, {}, false}));
+  ownFlagged.flagged = {
+      {0, 3}
+  };
+  REQUIRE(model.Apply(
+    model.Generation(),
+    GroundMarksChanged{
+        3,
+        {flagged, ownFlagged},
+        {},
+        false
+  }));
   UiSettings hide;
   hide.textFilter = "hide";
   frame           = {};
@@ -1417,7 +1466,16 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(removal->markId == 77);
 
   // Placed with an eviction: the UI row settles and learns the evicted id.
-  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), note->requestId, MarkPlaced{41, 40}}));
+  REQUIRE(exchange->Publish(
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    CommandResult{
+        model.Generation(),
+        note->requestId,
+        MarkPlaced{41, 40}
+  }));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1431,7 +1489,8 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(session.PendingMarkCount() == 2);
 
   // A death report settles without any UI event, a note in the log only.
-  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), death->requestId, MarkPlaced{42}}));
+  REQUIRE(
+    exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), death->requestId, MarkPlaced{42}}));
   exchange->Drain(output);
   frame = {};
   session.Process(*exchange, output, UiSettings{}, Domain::HiddenIdentity::None, frame);
@@ -1440,7 +1499,11 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   CHECK(frame.notes[0].find("42") != std::string::npos);
 
   // A refused removal becomes a readable error for its UI row, never a chat sendResult.
-  REQUIRE(exchange->PublishResult({model.Generation(), removal->requestId, ServerRejection{RequestRejectionCode::GroundMarkNotFound, "", ""}}));
+  REQUIRE(exchange->PublishResult({
+      model.Generation(),
+      removal->requestId,
+      ServerRejection{RequestRejectionCode::GroundMarkNotFound, "", ""}
+  }));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
   REQUIRE(frame.events.size() == 1);
@@ -1452,17 +1515,19 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
 
   CHECK(Bridge::RejectionText(RequestRejectionCode::GroundMarkAreaFull, "") == "Здесь уже слишком много меток");
   CHECK(Bridge::RejectionText(RequestRejectionCode::InvalidRequest, "Note exceeds 200 characters.") == "Текст метки слишком длинный");
-  CHECK(Bridge::RejectionText(RequestRejectionCode::InvalidRequest, "The mark is not where the player is.") == "Метку нельзя оставить здесь");
+  CHECK(
+    Bridge::RejectionText(RequestRejectionCode::InvalidRequest, "The mark is not where the player is.") == "Метку нельзя оставить здесь");
 }
 
 TEST_CASE("Bridge validates ground mark commands")
 {
-  CHECK(CommandOf<Bridge::Commands::PlaceGroundNote>(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})").text ==
-        "Осторожно, тролль");
+  CHECK(
+    CommandOf<Bridge::Commands::PlaceGroundNote>(R"({"type":"placeGroundNote","requestId":"5","text":"Осторожно, тролль"})").text ==
+    "Осторожно, тролль");
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"placeGroundNote","text":"x"})"));
   CHECK(
-    CommandOf<Bridge::Commands::RemoveGroundMark>(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})").markId.value ==
-    18446744073709551615ull);
+    CommandOf<Bridge::Commands::RemoveGroundMark>(R"({"type":"removeGroundMark","requestId":"6","markId":"18446744073709551615"})")
+      .markId.value == 18446744073709551615ull);
   CHECK_FALSE(Bridge::ParseCommand(R"({"type":"removeGroundMark","markId":"6"})"));
   auto mark = Bridge::ToUiGroundMark(MakeMark(3, 1, Domain::GroundMarkKind::Death, "Wolf"), UiSettings{}, true);
   CHECK(mark.id == "3");
@@ -1601,7 +1666,11 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
 
   exchange->PublishIdentity("Страж", HiddenIdentity::ExceptGroundMarks);
   REQUIRE(exchange->Publish(
-    model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), request.requestId, IdentityChanged{HiddenIdentity::ExceptGroundMarks}}));
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    CommandResult{model.Generation(), request.requestId, IdentityChanged{HiddenIdentity::ExceptGroundMarks}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1619,7 +1688,11 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   REQUIRE(session.SetIdentityVisibility(*exchange, HiddenIdentity::None));
   exchange->TakeCommands(commands);
   const auto second = std::get<SetIdentityVisibility>(commands[0].command).requestId;
-  REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "too soon", "hidden"}}));
+  REQUIRE(exchange->PublishResult({
+      model.Generation(),
+      second,
+      ServerRejection{RequestRejectionCode::RateLimited, "too soon", "hidden"}
+  }));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, hiding, frame);
   CHECK_FALSE(frame.hideIdentity);
@@ -1630,7 +1703,11 @@ TEST_CASE("The hide-my-name switch waits for the server and keeps the preference
   CHECK((*refused)["error"].get<std::string>().starts_with("Слишком часто"));
 
   // An opening refused for hidden names stops automatic reconnects.
-  REQUIRE(exchange->PublishResult({model.Generation(), 77, ServerRejection{RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}}));
+  REQUIRE(exchange->PublishResult({
+      model.Generation(),
+      77,
+      ServerRejection{RequestRejectionCode::HiddenIdentityNotAllowed, "", ""}
+  }));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Disconnected), settings, hiding, frame);
   CHECK(frame.identityRefused);
@@ -1709,7 +1786,11 @@ TEST_CASE("A name color change waits for the server; authors carry their color, 
   REQUIRE(session.SetNameColor(*exchange, 0x101010));
   exchange->TakeCommands(commands);
   const auto dark = std::get<SetNameColor>(commands[0].command).requestId;
-  REQUIRE(exchange->PublishResult({model.Generation(), dark, ServerRejection{RequestRejectionCode::NameColorUnreadable, "", "name_color"}}));
+  REQUIRE(exchange->PublishResult({
+      model.Generation(),
+      dark,
+      ServerRejection{RequestRejectionCode::NameColorUnreadable, "", "name_color"}
+  }));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   auto refused = colorOf(frame);
@@ -1743,10 +1824,11 @@ TEST_CASE("Guildmates only: others' marks leave the nearby list and come back wi
     GroundMarksChanged{
         1,
         {MakeMark(10, 1, Domain::GroundMarkKind::Note, "mine"),
-         MakeMark(11, 2, Domain::GroundMarkKind::Death, "Bear"),
-         MakeMark(12, 7, Domain::GroundMarkKind::Death, "Wolf")},
+          MakeMark(11, 2, Domain::GroundMarkKind::Death, "Bear"),
+          MakeMark(12, 7, Domain::GroundMarkKind::Death, "Wolf")},
         {},
-        true}));
+        true
+  }));
   UiSettings settings;
   settings.markGuildmatesOnly = true;
   Session        session;
@@ -1768,7 +1850,7 @@ TEST_CASE("Guildmates only: others' marks leave the nearby list and come back wi
         {4,
          "Вороны", channel,
          1000, {Domain::GuildMember{{1, "user1", "Alice"}, Domain::GuildRole::Master, true},
-                Domain::GuildMember{{2, "user2", "Bob"}, Domain::GuildRole::Member, false}}}
+          Domain::GuildMember{{2, "user2", "Bob"}, Domain::GuildRole::Member, false}}}
   },
     {},
     {3, 64, 3, 24});
@@ -1824,7 +1906,12 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(pending);
   CHECK((*pending)["pending"].get<bool>());
 
-  REQUIRE(exchange->Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{model.Generation(), request.requestId, NameChanged{"Новое Имя"}}));
+  REQUIRE(exchange->Publish(
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    CommandResult{model.Generation(), request.requestId, NameChanged{"Новое Имя"}}));
   ClientOutput output;
   exchange->Drain(output);
   frame = {};
@@ -1844,7 +1931,11 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(session.ChangeDisplayName(*exchange, "Третье"));
   exchange->TakeCommands(commands);
   const auto second = std::get<ChangeDisplayName>(commands[0].command).requestId;
-  REQUIRE(exchange->PublishResult({model.Generation(), second, ServerRejection{RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}}));
+  REQUIRE(exchange->PublishResult({
+      model.Generation(),
+      second,
+      ServerRejection{RequestRejectionCode::RateLimited, "The display name can be changed again in 90 min.", "display_name"}
+  }));
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);
   auto refused = nameOf(frame);
@@ -1869,7 +1960,8 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
 
   CHECK(CommandOf<Bridge::Commands::ChangeDisplayName>(R"({"type":"changeDisplayName","displayName":"Имя"})").displayName == "Имя");
   CHECK_FALSE(
-    Bridge::ParseCommand(std::format(R"({{"type":"changeDisplayName","displayName":"{}"}})", std::string(Bridge::MaxDisplayName + 1, 'x'))));
+    Bridge::ParseCommand(
+      std::format(R"({{"type":"changeDisplayName","displayName":"{}"}})", std::string(Bridge::MaxDisplayName + 1, 'x'))));
 }
 
 TEST_SUITE_END();

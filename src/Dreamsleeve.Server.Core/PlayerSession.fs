@@ -943,6 +943,11 @@ module PlayerSession =
             | Active _ when state.Pending.Remove requestId -> send options request state context (ServerResponse.GuildCommandDone(requestId, guild))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild reply."
+        | GuildEvent.CatalogPage(requestId, page) ->
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId -> send options request state context (ServerResponse.GuildCatalogPage(requestId, page))
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild catalog page."
         | GuildEvent.Refused(requestId, rejection) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId -> sendRefusal options request state context DeliveryLane.Control requestId rejection
@@ -1110,7 +1115,7 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.GuildsDetached _
         | PlayerSessionMessage.Stop -> true
         // The guild owner must be able to settle a request and open the session's guilds.
-        | PlayerSessionMessage.GuildEvent (GuildEvent.Done _ | GuildEvent.Refused _ | GuildEvent.Snapshot _)
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Done _ | GuildEvent.CatalogPage _ | GuildEvent.Refused _ | GuildEvent.Snapshot _)
         | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Accepted _ | ChatRoomEvent.Rejected _ | ChatRoomEvent.Removed(ValueSome _, _))) -> true
         | PlayerSessionMessage.GuildEvent (GuildEvent.Changed _)
         | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Published _ | ChatRoomEvent.Removed(ValueNone, _)))

@@ -8,6 +8,7 @@ import {
   channelKinds,
   connectionPhases,
   groundMarkKinds,
+  guildApplicationEnds,
   guildRemovalReasons,
   guildRoles,
   hidingModes,
@@ -154,9 +155,31 @@ function guildMember(v: unknown): boolean {
     time(v.joinedAt) &&
     optional((m) => object(m) && label(m.reason) && optional(time)(m.until))(
       v.mute,
-    )
+    ) &&
+    optional(id)(v.title)
   );
 }
+const guildTitle = (v: unknown) => object(v) && id(v.id) && label(v.name);
+const guildJoinRequest = (v: unknown) =>
+  object(v) &&
+  id(v.id) &&
+  label(v.name) &&
+  time(v.createdAt) &&
+  time(v.expires);
+const guildApplication = (v: unknown) =>
+  object(v) && id(v.guildId) && label(v.guildName) && time(v.expires);
+const guildApplicationEnd = (v: unknown) =>
+  object(v) &&
+  id(v.guildId) &&
+  label(v.name) &&
+  oneOf(guildApplicationEnds)(v.reason);
+const catalogGuild = (v: unknown) =>
+  object(v) &&
+  id(v.id) &&
+  label(v.name) &&
+  body(v.info) &&
+  count(v.members) &&
+  time(v.createdAt);
 function guild(v: unknown): boolean {
   return (
     object(v) &&
@@ -164,7 +187,11 @@ function guild(v: unknown): boolean {
     label(v.name) &&
     id(v.channelId) &&
     time(v.createdAt) &&
-    list(v.members, guildMember, 4096)
+    list(v.members, guildMember, 4096) &&
+    list(v.titles, guildTitle, 128) &&
+    body(v.info) &&
+    flag(v.listed) &&
+    list(v.joinRequests, guildJoinRequest, 10000)
   );
 }
 function guildInvite(v: unknown): boolean {
@@ -182,7 +209,11 @@ const guildLimits = (v: unknown) =>
   count(v.perPlayer) &&
   count(v.members) &&
   count(v.nameMin) &&
-  count(v.nameMax);
+  count(v.nameMax) &&
+  count(v.titles) &&
+  count(v.infoMax) &&
+  count(v.joinRequests) &&
+  count(v.applications);
 const guildRemoval = (v: unknown) =>
   object(v) &&
   id(v.guildId) &&
@@ -278,12 +309,22 @@ const events: { [K in HostEvent["type"]]: (v: ObjectValue) => boolean } = {
     list(v.guilds, guild, 128) &&
     list(v.invites, guildInvite, 1024) &&
     guildLimits(v.limits) &&
-    list(v.removed, guildRemoval, 128),
+    list(v.removed, guildRemoval, 128) &&
+    list(v.applications, guildApplication, 128) &&
+    list(v.applicationsEnded, guildApplicationEnd, 128),
   guildResult: (v) =>
     id(v.requestId) &&
     optional(id)(v.guildId) &&
     optional(error)(v.error) &&
     (v.error === undefined) !== (v.guildId === undefined),
+  guildCatalog: (v) =>
+    id(v.requestId) &&
+    optional(error)(v.error) &&
+    (v.error === undefined
+      ? list(v.guilds, catalogGuild, 100) && flag(v.more) && count(v.total)
+      : v.guilds === undefined &&
+        v.more === undefined &&
+        v.total === undefined),
   channels: (v) => list(v.channels, channel, 128),
   show: bare,
   hide: bare,

@@ -304,6 +304,31 @@ Control-канале ENet.
   `guild_changed = 39`. `CHAT_CHANNEL_KIND_GUILD = 3`. `ChatPublished`, принятие `SendChat` и
   `ChatMessageRemoved` в канале гильдии идут по Control, а не по Chat. Коды отказа
   `GUILD_NAME_TAKEN = 19` … `GUILD_MASTER_STAYS = 26`.
+- v21: кастомные роли гильдии ([GuildsRu](../docs/GuildsRu.md#правила)). `Guild.titles = 7`
+  (`GuildTitle{title_id, name}`, старые первыми), `GuildMember.title_id = 6` (optional: роли нет),
+  `GuildLimits.max_titles = 5`, изменение `GuildChanged.titles = 7` (`GuildTitles{guild_id,
+  titles}` — полный список; обладатели удаленной роли приходят раньше него). Действия
+  `GuildCommand`: `create_title = 11`, `rename_title = 12`, `delete_title = 13`,
+  `set_title = 14` (`SetGuildMemberTitle`, без `title_id` — снять). Коды отказа
+  `GUILD_TITLE_NAME_TAKEN = 28`, `GUILD_TITLES_FULL = 29`; нет такой роли — `TARGET_NOT_FOUND` с
+  полем `title_id`. Клиент отвергает роль с нулевым ID, без имени и повтор ID в списке.
+  Информация о гильдии: `Guild.info = 8` (пусто — нет), `GuildLimits.info_max_length = 6`,
+  действие `set_info = 15` (`SetGuildInfo{guild_id, info}`, только глава, пусто — убрать; длина и
+  управляющие символы — `INVALID_REQUEST` с полем `info`, словарь — `TEXT_NOT_ALLOWED`),
+  изменение `GuildChanged.info = 8` (`GuildInfoChanged{guild_id, info}`).
+  Каталог и заявки: `Guild.listed = 9`, `Guild.join_requests = 10` (`GuildJoinRequest{profile,
+  created_at_unix_ms, expires_at_unix_ms}` — только главе и офицерам, профиль настоящий),
+  `GuildsSnapshot.applications = 4` (`GuildApplication{guild_id, guild_name, expires_at_unix_ms}`),
+  `GuildLimits.max_join_requests = 7`, `max_applications = 8`; изменения `GuildChanged.join_requests = 9`
+  (полный список; пониженному — пустой), `applied = 10`, `application_removed = 11`
+  (`GuildApplicationEnd`: `WITHDRAWN`, `ACCEPTED` — следом `added`, `REJECTED`, `EXPIRED`, `DISBANDED`),
+  `listed = 12`. Действия `set_listed = 16`, `apply = 17`, `withdraw = 18`, `answer_request = 19` и
+  `catalog = 20` (`QueryGuildCatalog{search, min_members, optional max_members, open_only, sort,
+  after}`; `after` — последняя полученная запись, без него — первая страница; поиск длиннее имени
+  гильдии и `max_members < min_members` — `INVALID_REQUEST`). На `catalog` отвечает
+  `ServerPacket.guild_catalog_page = 42` (`GuildCatalogPage{guilds, more, total}`, Control,
+  RequestId); размер страницы задаёт сервер (`[Guilds] CatalogPageSize`). Коды отказа
+  `GUILD_REQUESTS_FULL = 30`, `GUILD_ALREADY_APPLIED = 31`, `GUILD_APPLICATION_LIMIT = 32`.
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

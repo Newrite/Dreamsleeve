@@ -104,10 +104,13 @@ type SignInDeviceModel = {
 }
 
 /// A guild in a list. The master is null when the guild has none (the account
-/// is gone): the panel appoints one from the members.
+/// is gone): the panel appoints one from the members. Info is the master's
+/// text about the guild, null when there is none; Listed: the public catalog shows it.
 type GuildModel = {
     GuildId: uint64
     Name: string
+    Info: string
+    Listed: bool
     CreatedAt: DateTimeOffset
     Members: int
     MasterId: Nullable<uint64>
@@ -347,7 +350,10 @@ module AdminModels =
           LastSeen = entry.Address.LastSeen }
 
     let guild (summary: GuildSummary) : GuildModel =
-        { GuildId = GuildId.value summary.Guild; Name = GuildName.value summary.Name; CreatedAt = summary.CreatedAt; Members = summary.Members
+        { GuildId = GuildId.value summary.Guild; Name = GuildName.value summary.Name
+          Info = summary.Info |> ValueOption.map GuildInfo.value |> ValueOption.defaultValue null
+          Listed = summary.Listed
+          CreatedAt = summary.CreatedAt; Members = summary.Members
           MasterId = summary.Master |> ValueOption.map (fun master -> PlayerId.value master.PlayerId) |> ValueOption.toNullable
           Master = summary.Master |> ValueOption.map (fun master -> DisplayName.value master.DisplayName) |> ValueOption.defaultValue null }
 

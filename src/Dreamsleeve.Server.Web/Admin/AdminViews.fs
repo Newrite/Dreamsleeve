@@ -325,6 +325,10 @@ module AdminViews =
                 Elem.dd [] [ text (string card.Guild.Members) ]
                 Elem.dt [] [ text "Создана" ]
                 Elem.dd [] [ text (time card.Guild.CreatedAt) ]
+                Elem.dt [] [ text "В каталоге" ]
+                Elem.dd [] [ text (if card.Guild.Listed then "да" else "нет, глава скрыл") ]
+                Elem.dt [] [ text "О гильдии" ]
+                Elem.dd [] [ (if isNull card.Guild.Info then text "—" else Elem.pre [] [ text card.Guild.Info ]) ]
             ]
             Elem.section [] [
                 Elem.h2 [] [ text "Участники" ]

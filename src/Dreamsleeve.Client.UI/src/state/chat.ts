@@ -30,6 +30,11 @@ import {
   makeGuilds,
   type GuildsState,
 } from "./guilds";
+import {
+  idleCatalog,
+  makeGuildCatalog,
+  type GuildCatalogState,
+} from "./guildCatalog";
 import { defaults, instantKeys } from "../bridge/settings.generated";
 // Lines kept per channel: a busy channel never pushes another one out.
 export const HISTORY_LIMIT = 500;
@@ -95,7 +100,8 @@ function makeRoom(pending: Record<string, PendingMessage>) {
 // unknown row leaves the passive HUD after the same time, while an active chat
 // keeps it until the player retries or dismisses.
 export const PENDING_TIMEOUT = 15000;
-export interface ChatState extends ModeratorState, GuildsState {
+export interface ChatState
+  extends ModeratorState, GuildsState, GuildCatalogState {
   channels: Channel[];
   messages: Message[];
   receivedAt: Record<string, number>;
@@ -244,9 +250,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
     nearbyMarks: [],
     ...idleModerator,
     ...idleGuilds,
+    catalog: idleCatalog,
   }));
   const moderator = makeModerator(store, send);
   const guilds = makeGuilds(store, send);
+  const catalog = makeGuildCatalog(store, send);
   let sequence = 0;
   let refusals = 0;
   // Removal requests in flight: request id -> mark id, for the result notice.
@@ -294,10 +302,19 @@ export function makeChat(send: Send, now = () => Date.now()) {
           const receivedAt = Object.fromEntries(
             Object.entries(state.receivedAt).filter(([id]) => retained.has(id)),
           );
+          // The message of the day follows its line: a new filter or name.
+          const lines = new Map(messages.map((m) => [keyOf(m), m]));
+          const guildMotd = Object.fromEntries(
+            Object.entries(state.guildMotd).flatMap(([id, line]) => {
+              const shown = lines.get(keyOf(line));
+              return shown?.source === "player" ? [[id, shown]] : [];
+            }),
+          );
           store.setState({
             channels,
             messages,
             receivedAt,
+            guildMotd,
             players: event.players,
             groundMarksSupported: event.groundMarksSupported ?? false,
             groundMarks: event.groundMarks ?? state.groundMarks,
@@ -308,6 +325,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
         const shown = new Set(event.messages.map(keyOf));
         // A new session: its guilds come after the snapshot.
         guilds.reset();
+        catalog.reset();
         store.setState({
           channels,
           messages: chronological(event.messages),
@@ -392,6 +410,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({
           messages: state.messages.filter((m) => !gone.has(keyOf(m))),
           receivedAt,
+          guildMotd: Object.fromEntries(
+            Object.entries(state.guildMotd).filter(
+              ([, line]) => !gone.has(keyOf(line)),
+            ),
+          ),
           pending: Object.fromEntries(
             Object.entries(state.pending).filter(
               ([, p]) => !gone.has(confirmedKey(p) ?? ""),
@@ -410,6 +433,9 @@ export function makeChat(send: Send, now = () => Date.now()) {
       case "guilds":
       case "guildResult":
         guilds.receive(event);
+        break;
+      case "guildCatalog":
+        catalog.receive(event);
         break;
       case "channels": {
         // A guild came or went: its lines, unread count and draft go with it.
@@ -885,6 +911,7 @@ export function makeChat(send: Send, now = () => Date.now()) {
     placeNote,
     moderator,
     guilds,
+    catalog,
     // The author's own marks, or any for a moderator; the result is a notice.
     removeMark(markId: string) {
       const s = store.getState();

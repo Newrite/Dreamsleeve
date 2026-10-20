@@ -84,7 +84,7 @@ let private persistence (writer: Agent<GroundMarkWrite>) : GroundMarkPersistence
     { Loaded = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value }
 let private discard (_: AgentContext<GroundMarkWrite>) (_: GroundMarkWrite) = task { () }
 let private guildStorage (writer: Agent<GuildWrite>) : GuildPersistence =
-    { Loaded = []; Profiles = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+    { Loaded = []; Profiles = []; NextId = 1UL; NextTitleId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
 let private discardGuilds (_: AgentContext<GuildWrite>) (_: GuildWrite) = task { () }
 let private chat requestId text = packet requestId (fun packet -> packet.SendChat <- SendChat(ChannelId = 1UL, Text = text))
 

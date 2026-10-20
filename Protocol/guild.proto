@@ -6,7 +6,9 @@ import "common.proto";
 import "chat.proto";
 import "session.proto";
 
-// Guilds (version 19; docs/GuildsRu.md, docs/DomainSpecRu.MD §4.7). A guild has
+// Guilds (version 19; custom roles, information, the catalog and join
+// requests since 21; docs/GuildsRu.md,
+// docs/DomainSpecRu.MD §4.7). A guild has
 // one chat channel (ChatChannelKind GUILD): members write in it with SendChat
 // and receive ChatPublished like in any channel; the master and officers remove
 // messages with DeleteChatMessage. Members see each other's real names, even a
@@ -29,6 +31,22 @@ message GuildMember {
   bool online = 3;
   MuteState mute = 4; // Present while muted in this guild: reading only.
   int64 joined_at_unix_ms = 5;
+  optional uint64 title_id = 6; // One of the guild's custom roles; absent: none.
+}
+
+// A player's request to join, as the master and officers see it: the real
+// profile, like a member's. Nobody else receives them.
+message GuildJoinRequest {
+  PlayerProfile profile = 1;
+  int64 created_at_unix_ms = 2;
+  int64 expires_at_unix_ms = 3;
+}
+
+// A custom role of a guild, such as "Treasurer": cosmetic, no rights. The
+// master creates and assigns it; a member holds at most one.
+message GuildTitle {
+  uint64 title_id = 1; // Unique across guilds.
+  string name = 2; // The rules of a guild name; unique in the guild regardless of case.
 }
 
 message Guild {
@@ -38,6 +56,17 @@ message Guild {
   int64 created_at_unix_ms = 4;
   repeated GuildMember members = 5;
   repeated ChatMessage recent_messages = 6; // Retained history, oldest first.
+  repeated GuildTitle titles = 7; // Oldest first.
+  string info = 8; // What the master tells about the guild; empty: nothing.
+  bool listed = 9; // Shown in the public catalog.
+  repeated GuildJoinRequest join_requests = 10; // Oldest first; only to the master and officers.
+}
+
+// A join request of this player, waiting for the guild's answer.
+message GuildApplication {
+  uint64 guild_id = 1;
+  string guild_name = 2;
+  int64 expires_at_unix_ms = 3;
 }
 
 message GuildInvite {
@@ -53,6 +82,10 @@ message GuildLimits {
   uint32 max_members = 2;
   uint32 name_min_length = 3; // Unicode scalar values.
   uint32 name_max_length = 4;
+  uint32 max_titles = 5; // Custom roles of one guild; their names follow name_*_length.
+  uint32 info_max_length = 6; // Unicode scalar values of the guild information.
+  uint32 max_join_requests = 7; // Pending join requests of one guild.
+  uint32 max_applications = 8; // Pending join requests of one player.
 }
 
 // After SessionOpened: every guild of the player and their invitations; it
@@ -61,6 +94,7 @@ message GuildsSnapshot {
   repeated Guild guilds = 1;
   repeated GuildInvite invites = 2;
   GuildLimits limits = 3;
+  repeated GuildApplication applications = 4;
 }
 
 enum GuildRemovalReason {
@@ -87,6 +121,46 @@ message GuildMemberRemoved {
   GuildRemovalReason reason = 3;
 }
 
+// The guild's custom roles after one was created, renamed or deleted: the
+// complete list. A deleted role's holders arrive before it as GuildMemberUpdate.
+message GuildTitles {
+  uint64 guild_id = 1;
+  repeated GuildTitle titles = 2;
+}
+
+// Why a join request of this player ended.
+enum GuildApplicationEnd {
+  GUILD_APPLICATION_END_UNSPECIFIED = 0;
+  GUILD_APPLICATION_END_WITHDRAWN = 1;
+  GUILD_APPLICATION_END_ACCEPTED = 2; // GuildChanged.added follows.
+  GUILD_APPLICATION_END_REJECTED = 3;
+  GUILD_APPLICATION_END_EXPIRED = 4;
+  GUILD_APPLICATION_END_DISBANDED = 5;
+}
+
+message GuildApplicationRemoved {
+  uint64 guild_id = 1;
+  GuildApplicationEnd reason = 2;
+}
+
+// The guild's pending join requests, complete: to the master and officers on
+// every change, and empty to a member who stops being one of them.
+message GuildJoinRequests {
+  uint64 guild_id = 1;
+  repeated GuildJoinRequest requests = 2;
+}
+
+message GuildListedChanged {
+  uint64 guild_id = 1;
+  bool listed = 2;
+}
+
+// The master wrote or cleared the guild information.
+message GuildInfoChanged {
+  uint64 guild_id = 1;
+  string info = 2; // Empty: none.
+}
+
 message GuildChanged {
   oneof change {
     Guild added = 1; // The player created or joined it.
@@ -95,6 +169,12 @@ message GuildChanged {
     GuildMemberRemoved member_removed = 4;
     GuildInvite invited = 5;
     uint64 invite_removed = 6; // Guild ID: accepted, declined, expired or disbanded.
+    GuildTitles titles = 7;
+    GuildInfoChanged info = 8;
+    GuildJoinRequests join_requests = 9;
+    GuildApplication applied = 10; // This player asked to join.
+    GuildApplicationRemoved application_removed = 11;
+    GuildListedChanged listed = 12;
   }
 }
 
@@ -113,6 +193,60 @@ message MuteGuildMember {
 }
 message UnmuteGuildMember { uint64 guild_id = 1; uint64 player_id = 2; }
 message DisbandGuild { uint64 guild_id = 1; }
+// Custom roles: the master only.
+message CreateGuildTitle { uint64 guild_id = 1; string name = 2; }
+message RenameGuildTitle { uint64 guild_id = 1; uint64 title_id = 2; string name = 3; }
+message DeleteGuildTitle { uint64 guild_id = 1; uint64 title_id = 2; } // Its holders lose it.
+message SetGuildMemberTitle {
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  optional uint64 title_id = 3; // Absent: the member holds none.
+}
+// The master only: the chat text rules and the word list; empty clears it.
+message SetGuildInfo { uint64 guild_id = 1; string info = 2; }
+message SetGuildListed { uint64 guild_id = 1; bool listed = 2; } // The master only.
+// A listed guild the player is not in; the master and officers answer.
+message ApplyToGuild { uint64 guild_id = 1; }
+message WithdrawGuildApplication { uint64 guild_id = 1; }
+message AnswerGuildJoinRequest { uint64 guild_id = 1; uint64 player_id = 2; bool accept = 3; }
+
+enum GuildCatalogSort {
+  GUILD_CATALOG_SORT_UNSPECIFIED = 0;
+  GUILD_CATALOG_SORT_NAME = 1; // Regardless of case.
+  GUILD_CATALOG_SORT_MEMBERS = 2; // The largest first, then by name.
+}
+
+// The last entry of the previous page, as received: the next page follows it.
+message GuildCatalogAfter {
+  uint64 guild_id = 1;
+  string name = 2;
+  uint32 members = 3;
+}
+
+// One page of listed guilds; the server decides the page size. Answered by
+// ServerPacket.guild_catalog_page instead of GuildCommandDone.
+message QueryGuildCatalog {
+  string search = 1; // Part of the name, regardless of case; empty: any.
+  uint32 min_members = 2;
+  optional uint32 max_members = 3; // Absent: no upper bound.
+  bool open_only = 4; // Only guilds with free places.
+  GuildCatalogSort sort = 5;
+  GuildCatalogAfter after = 6; // Absent: the first page.
+}
+
+message GuildCatalogEntry {
+  uint64 guild_id = 1;
+  string name = 2;
+  string info = 3; // Empty: nothing.
+  uint32 members = 4;
+  int64 created_at_unix_ms = 5;
+}
+
+message GuildCatalogPage {
+  repeated GuildCatalogEntry guilds = 1;
+  bool more = 2; // Another page follows the last entry.
+  uint32 total = 3; // Every guild the query matches.
+}
 
 message GuildCommand {
   oneof action {
@@ -126,6 +260,16 @@ message GuildCommand {
     MuteGuildMember mute = 8;
     UnmuteGuildMember unmute = 9;
     DisbandGuild disband = 10;
+    CreateGuildTitle create_title = 11;
+    RenameGuildTitle rename_title = 12;
+    DeleteGuildTitle delete_title = 13;
+    SetGuildMemberTitle set_title = 14;
+    SetGuildInfo set_info = 15;
+    SetGuildListed set_listed = 16;
+    ApplyToGuild apply = 17;
+    WithdrawGuildApplication withdraw = 18;
+    AnswerGuildJoinRequest answer_request = 19;
+    QueryGuildCatalog catalog = 20;
   }
 }
 

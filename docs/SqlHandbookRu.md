@@ -26,7 +26,10 @@ Username, DisplayName может совпадать. Регистрация со
 | `sign_in_addresses`, `address_bans` | Адреса входа игроков за `SignInHistoryDays` и баны диапазонов IP |
 | `player_devices`, `device_bans` | Устройства игроков (хэш клиента) и устройства, на которые распространён бан |
 
-Гильдии — `guilds`, `guild_members` и `guild_invites` (схема 13, [GuildsRu.md](GuildsRu.md)).
+Гильдии — `guilds`, `guild_members` и `guild_invites` (схема 13, [GuildsRu.md](GuildsRu.md)),
+их кастомные роли — `guild_titles` и `guild_members.title_id` (схема 15), информация —
+`guilds.info` (схема 16), показ в каталоге и заявки — `guilds.listed` и `guild_join_requests`
+(схема 17).
 Цвет имени в чате — `profiles.name_color`, `0xRRGGBB` (схема 14,
 [ModerationAndNamesRu.md](ModerationAndNamesRu.md#цвет-имени-в-чате)).
 Друзей, блоклиста, партий, сессий и ключей идентичности в БД нет. Время —

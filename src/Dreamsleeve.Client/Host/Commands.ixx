@@ -324,6 +324,13 @@ export namespace Dreamsleeve::Host
         if (auto posted = context.session.Guild(context.exchange, command.requestId, Bridge::GuildActionOf(command)); !posted)
           Emit(Bridge::GuildResultEvent{.requestId = command.requestId, .error = posted.error()});
       }
+
+      // The server answers with guildCatalog; a request that did not leave is answered here.
+      void operator()(Commands::GuildCatalog& command)
+      {
+        if (auto posted = context.session.GuildCatalog(context.exchange, command.requestId, Bridge::GuildCatalogQueryOf(command)); !posted)
+          Emit(Bridge::GuildCatalogEvent{.requestId = command.requestId, .error = posted.error()});
+      }
     };
 
   }

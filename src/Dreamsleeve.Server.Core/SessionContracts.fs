@@ -358,11 +358,23 @@ type GuildOptions = {
     MaxMembers: int
     /// Pending invitations of one guild.
     MaxInvites: int
-    /// Bounds of a guild name in Unicode scalar values.
+    /// Bounds of a guild name and a custom role's name in Unicode scalar values.
     NameMinLength: int
     NameMaxLength: int
     /// Days an invitation waits for an answer.
     InviteDays: int
+    /// Custom roles of one guild; 0 leaves guilds without them.
+    MaxTitles: int
+    /// The guild information the master writes, in Unicode scalar values.
+    InfoMaxLength: int
+    /// Pending join requests of one guild.
+    MaxJoinRequests: int
+    /// Pending join requests of one player, so that nobody floods every guild.
+    MaxApplicationsPerPlayer: int
+    /// Days a join request waits for an answer.
+    JoinRequestDays: int
+    /// Guilds in one page of the public catalog.
+    CatalogPageSize: int
     /// Chat messages each guild keeps in memory; at most Server.MaxRecentMessages.
     HistoryCapacity: int
     MailboxCapacity: int
@@ -370,7 +382,7 @@ type GuildOptions = {
     MaxControlDeliveries: int
     /// Pending persistence writes before the owner treats storage as broken.
     MaxPendingWrites: int
-    /// How often expired invitations are collected.
+    /// How often expired invitations, join requests and guild mutes are collected.
     InviteCheckIntervalMs: int
 }
 
@@ -381,19 +393,46 @@ module GuildOptions =
 
     /// The longest guild name a server may allow.
     [<Literal>]
-    let MaxNameLength = 64
+    let MaxNameLength = GuildName.MaxLength
+
+    /// The most custom roles a server may allow per guild: every member's
+    /// update and the master's choice list carry them all.
+    [<Literal>]
+    let MaxTitlesLimit = 100
+
+    /// The longest guild information a server may allow: every snapshot of
+    /// every member carries it, so it stays well inside a welcome packet.
+    [<Literal>]
+    let MaxInfoLength = 2000
+
+    /// The largest catalog page a server may send: one page is one packet.
+    [<Literal>]
+    let MaxCatalogPageSize = 100
 
     let defaults = {
         MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
-        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; HistoryCapacity = 200
+        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; MaxTitles = 10; InfoMaxLength = 500
+        MaxJoinRequests = 128; MaxApplicationsPerPlayer = 10; JoinRequestDays = 7; CatalogPageSize = 20; HistoryCapacity = 200
         MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
         InviteCheckIntervalMs = 60000
     }
 
     /// The domain limits of these options.
     let rules options =
-        GuildLimits.create options.MaxGuilds options.MaxGuildsPerPlayer options.MaxMembers options.MaxInvites
-            options.NameMinLength options.NameMaxLength (TimeSpan.FromDays(float options.InviteDays))
+        GuildLimits.create {
+            MaxGuilds = options.MaxGuilds
+            MaxGuildsPerPlayer = options.MaxGuildsPerPlayer
+            MaxMembers = options.MaxMembers
+            MaxInvites = options.MaxInvites
+            NameMinLength = options.NameMinLength
+            NameMaxLength = options.NameMaxLength
+            InviteLifetime = TimeSpan.FromDays(float options.InviteDays)
+            MaxTitles = options.MaxTitles
+            InfoMaxLength = options.InfoMaxLength
+            MaxJoinRequests = options.MaxJoinRequests
+            MaxApplicationsPerPlayer = options.MaxApplicationsPerPlayer
+            JoinRequestLifetime = TimeSpan.FromDays(float options.JoinRequestDays)
+        }
 
     let validate options = [
         let range name value low high =
@@ -405,7 +444,13 @@ module GuildOptions =
               range "MaxInvites" options.MaxInvites 1 10_000
               range "NameMinLength" options.NameMinLength 1 MaxNameLength
               range "NameMaxLength" options.NameMaxLength (max 1 options.NameMinLength) MaxNameLength
-              range "InviteDays" options.InviteDays 1 365 ]
+              range "InviteDays" options.InviteDays 1 365
+              range "MaxTitles" options.MaxTitles 0 MaxTitlesLimit
+              range "InfoMaxLength" options.InfoMaxLength 1 MaxInfoLength
+              range "MaxJoinRequests" options.MaxJoinRequests 1 10_000
+              range "MaxApplicationsPerPlayer" options.MaxApplicationsPerPlayer 1 100
+              range "JoinRequestDays" options.JoinRequestDays 1 365
+              range "CatalogPageSize" options.CatalogPageSize 1 MaxCatalogPageSize ]
             |> List.choose id
         if options.HistoryCapacity < 1 then "Guilds.HistoryCapacity must be positive."
         if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
@@ -430,14 +475,18 @@ type GuildEvent =
     | Snapshot of GuildState
     | Changed of GuildChange
     | Done of requestId: uint64 * GuildId
+    /// The answer to GuildAction.Catalog.
+    | CatalogPage of requestId: uint64 * GuildCatalogView
     | Refused of requestId: uint64 * RequestRejection
     /// A message published in or removed from one of the player's guild channels.
     | Chat of ChatRoomEvent
 
-/// A guild for the panel: its name, size and master.
+/// A guild for the panel: its name, size, master, information and whether the catalog shows it.
 type GuildSummary = {
     Guild: GuildId
     Name: GuildName
+    Info: GuildInfo voption
+    Listed: bool
     CreatedAt: DateTimeOffset
     Members: int
     Master: PlayerData voption
@@ -495,6 +544,15 @@ type GuildWrite =
     | RemoveMember of GuildId * PlayerId
     | PutInvite of GuildInvite
     | RemoveInvite of GuildId * PlayerId
+    /// A new or renamed custom role.
+    | PutTitle of GuildId * GuildTitle
+    /// A deleted custom role; its holders were put without it first.
+    | RemoveTitle of GuildTitleId
+    /// The guild information, or none.
+    | PutInfo of GuildId * GuildInfo voption
+    | PutListed of GuildId * bool
+    | PutJoinRequest of GuildJoinRequest
+    | RemoveJoinRequest of GuildId * PlayerId
 
 /// Stored guilds, the profiles their members and invited players have now,
 /// the storage high-water mark and the writer; supplied at runtime start.
@@ -504,6 +562,8 @@ type GuildPersistence = {
     Profiles: PlayerData list
     /// One above the highest guild ID storage ever issued, so IDs never repeat.
     NextId: uint64
+    /// The same for custom role IDs.
+    NextTitleId: uint64
     Writer: ReliableAgentRef<GuildWrite>
     /// Completes when the writer stops. A failed write stops it, and the
     /// runtime fails so that the supervisor restarts the game from storage.

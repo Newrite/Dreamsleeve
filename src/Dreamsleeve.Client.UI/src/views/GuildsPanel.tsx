@@ -1,21 +1,38 @@
 import { useState } from "react";
 import type { Chat, ChatState } from "../state/chat";
-import type { Guild, GuildMember, GuildRole } from "../bridge/types";
+import type {
+  Guild,
+  GuildLimits,
+  GuildMember,
+  GuildRole,
+  GuildTitle,
+  Player,
+  Settings,
+} from "../bridge/types";
 import {
   mayInvite,
   memberOf,
   outranks,
+  type PlayerLine,
   roleLabels,
   roleOf,
+  titleName,
 } from "../state/guilds";
 import { term } from "../state/moderation";
-import { playerName } from "../state/names";
+import { nameMatches, playerName } from "../state/names";
 import { Select } from "./Select";
+import { GuildCatalog } from "./GuildCatalog";
 import styles from "../styles/Guilds.module.css";
 const createdFormat = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
   year: "numeric",
+});
+const motdFormat = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 const order: Record<GuildRole, number> = { master: 0, officer: 1, member: 2 };
 // The master first, then officers, the online before the offline, by name.
@@ -39,6 +56,427 @@ function nameProblem(name: string, minimum: number, maximum: number) {
   if (minimum && length < minimum) return `Не короче ${minimum} символов`;
   if (maximum && length > maximum) return `Не длиннее ${maximum} символов`;
   return "";
+}
+// Players a search shows at once: the online list may hold hundreds.
+const INVITE_RESULTS = 8;
+// An invitation by name: the player types, the page shows a few online
+// players outside the guild whose names match, names starting with the query
+// first. The server checks the rest.
+function InviteSearch({
+  chat,
+  state: s,
+  guild,
+  busy,
+}: {
+  chat: Chat;
+  state: ChatState;
+  guild: Guild;
+  busy: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("ru");
+  const name = (p: Player) => playerName(p, s.settings);
+  const found = normalized
+    ? s.players
+        .filter(
+          (p) =>
+            p.id !== s.selfId &&
+            !memberOf(guild, p.id) &&
+            nameMatches(p, s.settings, normalized),
+        )
+        .map((p) => ({
+          player: p,
+          label: name(p),
+          prefix: name(p).toLocaleLowerCase("ru").startsWith(normalized),
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.prefix) - Number(a.prefix) ||
+            a.label.localeCompare(b.label, "ru"),
+        )
+    : [];
+  const shown = found.slice(0, INVITE_RESULTS);
+  return (
+    <div className={styles.inviteSearch}>
+      <input
+        aria-label="Кого пригласить"
+        placeholder="Имя игрока онлайн…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {normalized && !found.length && (
+        <p className={styles.muted}>
+          Среди игроков онлайн вне гильдии такого имени нет.
+        </p>
+      )}
+      {shown.length > 0 && (
+        <ul className={styles.members} aria-label="Найденные игроки">
+          {shown.map(({ player, label }) => (
+            <li key={player.id}>
+              <span>{label}</span>
+              <span className={styles.rowActions}>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    chat.guilds.invite(guild.id, player.id, label);
+                    setQuery("");
+                  }}
+                >
+                  Пригласить
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {found.length > shown.length && (
+        <p className={styles.muted}>
+          И ещё {found.length - shown.length} — уточните имя.
+        </p>
+      )}
+    </div>
+  );
+}
+// The newest line of the guild's chat when the player came in.
+function MessageOfDay({
+  chat,
+  line,
+  settings,
+}: {
+  chat: Chat;
+  line: PlayerLine;
+  settings: Settings;
+}) {
+  return (
+    <section className={styles.section} aria-label="Сообщение дня">
+      <h4>Сообщение дня</h4>
+      <p className={styles.motdBy}>
+        <button
+          style={{ color: line.author.color }}
+          onClick={() => chat.open("profile", line.author.id)}
+        >
+          {playerName(line.author, settings)}
+        </button>
+        <time className={styles.muted}>{motdFormat.format(line.time)}</time>
+      </p>
+      <p className={styles.about}>{line.text}</p>
+    </section>
+  );
+}
+// What the master tells about the guild: everyone in it reads, the master
+// edits in place. The server counts characters and checks the word list.
+function GuildAbout({
+  chat,
+  guild,
+  limits,
+  master,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  limits: GuildLimits;
+  master: boolean;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null)
+    return (
+      <section className={styles.section} aria-label="О гильдии">
+        <h4>О гильдии</h4>
+        {guild.info ? (
+          <p className={styles.about}>{guild.info}</p>
+        ) : (
+          <p className={styles.muted}>
+            {master
+              ? "Расскажите, чем живёт гильдия: это увидят участники и, позже, игроки в каталоге."
+              : "Глава пока ничего не рассказал о гильдии."}
+          </p>
+        )}
+        {master && (
+          <div className={styles.actions}>
+            <button disabled={busy} onClick={() => setDraft(guild.info)}>
+              Изменить
+            </button>
+          </div>
+        )}
+      </section>
+    );
+  const length = [...draft].length;
+  const over = limits.infoMax > 0 && length > limits.infoMax;
+  return (
+    <section className={styles.section} aria-label="О гильдии">
+      <h4>О гильдии</h4>
+      <form
+        className={styles.aboutForm}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (busy || over) return;
+          chat.guilds.setInfo(guild.id, draft);
+          setDraft(null);
+        }}
+      >
+        <textarea
+          aria-label="Информация о гильдии"
+          rows={5}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <small className={over ? styles.error : styles.muted}>
+          {length} / {limits.infoMax}
+        </small>
+        <div className={styles.actions}>
+          <button type="submit" disabled={busy || over}>
+            Сохранить
+          </button>
+          <button type="button" onClick={() => setDraft(null)}>
+            Отмена
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+const NO_TITLE = "";
+// The master's choice of a member's custom role; one role at most.
+function TitleChoice({
+  chat,
+  guild,
+  member,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  member: GuildMember;
+  busy: boolean;
+}) {
+  return (
+    <Select
+      label={`Роль: ${member.name}`}
+      variant="plain"
+      value={member.title ?? NO_TITLE}
+      disabled={busy}
+      options={[
+        { value: NO_TITLE, label: "без роли" },
+        ...guild.titles.map((t) => ({ value: t.id, label: t.name })),
+      ]}
+      onChange={(value) =>
+        chat.guilds.setTitle(
+          guild.id,
+          member.id,
+          value === NO_TITLE ? undefined : value,
+          member.name,
+        )
+      }
+    />
+  );
+}
+// One custom role in the master's list: rename in place or delete.
+function TitleRow({
+  chat,
+  guild,
+  title,
+  limits,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  title: GuildTitle;
+  limits: GuildLimits;
+  busy: boolean;
+}) {
+  const [name, setName] = useState<string | null>(null);
+  const holders = guild.members.filter((m) => m.title === title.id).length;
+  if (name === null)
+    return (
+      <li>
+        <span className={styles.title}>{title.name}</span>
+        <small className={styles.muted}>
+          {holders ? `у ${holders}` : "ни у кого"}
+        </small>
+        <span className={styles.rowActions}>
+          <button disabled={busy} onClick={() => setName(title.name)}>
+            Переименовать
+          </button>
+          <Confirm
+            label="Удалить"
+            confirm="Удалить роль"
+            disabled={busy}
+            onConfirm={() =>
+              chat.guilds.deleteTitle(guild.id, title.id, title.name)
+            }
+          />
+        </span>
+      </li>
+    );
+  const problem = nameProblem(name, limits.nameMin, limits.nameMax);
+  return (
+    <li>
+      <form
+        className={styles.create}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (busy || problem || !name.trim()) return;
+          chat.guilds.renameTitle(guild.id, title.id, name, title.name);
+          setName(null);
+        }}
+      >
+        <input
+          aria-label={`Новое название роли ${title.name}`}
+          value={name}
+          maxLength={limits.nameMax || 64}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button type="submit" disabled={busy || !!problem || !name.trim()}>
+          Сохранить
+        </button>
+        <button type="button" onClick={() => setName(null)}>
+          Отмена
+        </button>
+      </form>
+      {problem && <p className={styles.error}>{problem}</p>}
+    </li>
+  );
+}
+// The master's custom roles: cosmetic names such as «Казначей», no rights.
+function GuildTitles({
+  chat,
+  guild,
+  limits,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  limits: GuildLimits;
+  busy: boolean;
+}) {
+  const [name, setName] = useState("");
+  const full = guild.titles.length >= limits.titles;
+  const problem = nameProblem(name, limits.nameMin, limits.nameMax);
+  return (
+    <section className={styles.section} aria-label="Роли гильдии">
+      <h4>
+        Роли гильдии{" "}
+        <small className={styles.muted}>
+          {guild.titles.length} / {limits.titles}
+        </small>
+      </h4>
+      {guild.titles.length > 0 && (
+        <ul className={styles.members}>
+          {guild.titles.map((t) => (
+            <TitleRow
+              key={t.id}
+              chat={chat}
+              guild={guild}
+              title={t}
+              limits={limits}
+              busy={busy}
+            />
+          ))}
+        </ul>
+      )}
+      {full ? (
+        <p className={styles.muted}>
+          {guild.titles.length}/{limits.titles} — новых ролей не создать
+        </p>
+      ) : (
+        <form
+          className={styles.create}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (busy || problem || !name.trim()) return;
+            chat.guilds.createTitle(guild.id, name);
+            setName("");
+          }}
+        >
+          <input
+            aria-label="Название новой роли"
+            placeholder="Например, Казначей"
+            value={name}
+            maxLength={limits.nameMax || 64}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button type="submit" disabled={busy || !!problem || !name.trim()}>
+            Создать роль
+          </button>
+        </form>
+      )}
+      {problem && <p className={styles.error}>{problem}</p>}
+      <p className={styles.muted}>
+        Роль — только название: прав она не даёт. Буквы, цифры и пробелы,{" "}
+        {limits.nameMin}–{limits.nameMax} символов, без повторов в гильдии. У
+        участника одна роль; удалённая роль снимается со всех.
+      </p>
+    </section>
+  );
+}
+// Requests to join from the catalog, for the master and officers to answer;
+// the master also decides whether the catalog shows the guild.
+function JoinRequests({
+  chat,
+  guild,
+  master,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  master: boolean;
+  busy: boolean;
+}) {
+  return (
+    <section className={styles.section} aria-label="Заявки на вступление">
+      <h4>
+        Заявки на вступление{" "}
+        <small className={styles.muted}>{guild.joinRequests.length}</small>
+      </h4>
+      {master && (
+        <label className={styles.check}>
+          <input
+            type="checkbox"
+            checked={guild.listed}
+            disabled={busy}
+            onChange={(e) => chat.guilds.setListed(guild.id, e.target.checked)}
+          />
+          Показывать гильдию в каталоге
+        </label>
+      )}
+      {guild.joinRequests.length === 0 ? (
+        <p className={styles.muted}>
+          {guild.listed
+            ? "Заявок нет. Игроки подают их из каталога гильдий."
+            : "Гильдия скрыта из каталога: новых заявок не будет."}
+        </p>
+      ) : (
+        <ul className={styles.members}>
+          {guild.joinRequests.map((r) => (
+            <li key={r.id}>
+              <button onClick={() => chat.open("profile", r.id)}>
+                {r.name}
+              </button>
+              <small className={styles.muted}>ждёт {term(r.expires)}</small>
+              <span className={styles.rowActions}>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    chat.guilds.answerRequest(guild.id, r.id, true, r.name)
+                  }
+                >
+                  Принять
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    chat.guilds.answerRequest(guild.id, r.id, false, r.name)
+                  }
+                >
+                  Отклонить
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 // A button that asks once more before an action that cannot be taken back.
 function Confirm({
@@ -167,11 +605,9 @@ function GuildCard({
   const limit = s.guildLimits.members;
   const count = guild.members.length;
   // An online player outside the guild; the server checks they are still online.
-  const candidates = s.players.filter(
+  const invitable = s.players.some(
     (p) => p.id !== s.selfId && !memberOf(guild, p.id),
   );
-  const [invitee, setInvitee] = useState("");
-  const chosen = candidates.find((p) => p.id === invitee) ?? candidates[0];
   return (
     <div className={styles.section}>
       <p className={styles.facts}>
@@ -188,6 +624,28 @@ function GuildCard({
           Создана: <b>{createdFormat.format(guild.createdAt)}</b>
         </span>
       </p>
+      {s.guildMotd[guild.id] && (
+        <MessageOfDay
+          chat={chat}
+          line={s.guildMotd[guild.id]}
+          settings={s.settings}
+        />
+      )}
+      <GuildAbout
+        chat={chat}
+        guild={guild}
+        limits={s.guildLimits}
+        master={own === "master"}
+        busy={busy}
+      />
+      {mayInvite(own) && (
+        <JoinRequests
+          chat={chat}
+          guild={guild}
+          master={own === "master"}
+          busy={busy}
+        />
+      )}
       <ul
         className={styles.members}
         aria-label={`Участники гильдии ${guild.name}`}
@@ -199,6 +657,15 @@ function GuildCard({
               {m.id === s.selfId ? " (вы)" : ""}
             </button>
             <span className={styles.role}>{roleLabels[m.role]}</span>
+            {own === "master" && guild.titles.length > 0 ? (
+              <TitleChoice chat={chat} guild={guild} member={m} busy={busy} />
+            ) : (
+              titleName(guild, m.title) && (
+                <span className={styles.title}>
+                  {titleName(guild, m.title)}
+                </span>
+              )
+            )}
             <small className={styles.muted}>
               {m.online ? "в сети" : "не в сети"}
             </small>
@@ -219,39 +686,25 @@ function GuildCard({
           </li>
         ))}
       </ul>
+      {own === "master" && (
+        <GuildTitles
+          chat={chat}
+          guild={guild}
+          limits={s.guildLimits}
+          busy={busy}
+        />
+      )}
       {mayInvite(own) &&
         (limit > 0 && count >= limit ? (
           <p className={styles.muted}>
             {count}/{limit} — приглашения недоступны
           </p>
-        ) : !chosen ? (
+        ) : !invitable ? (
           <p className={styles.muted}>
             Пригласить некого: все игроки онлайн уже в гильдии.
           </p>
         ) : (
-          <div className={styles.invite}>
-            <Select
-              label="Кого пригласить"
-              value={chosen.id}
-              options={candidates.map((p) => ({
-                value: p.id,
-                label: playerName(p, s.settings),
-              }))}
-              onChange={setInvitee}
-            />
-            <button
-              disabled={busy}
-              onClick={() =>
-                guilds.invite(
-                  guild.id,
-                  chosen.id,
-                  playerName(chosen, s.settings),
-                )
-              }
-            >
-              Пригласить
-            </button>
-          </div>
+          <InviteSearch chat={chat} state={s} guild={guild} busy={busy} />
         ))}
       <div className={styles.actions}>
         {own === "master" ? (
@@ -338,6 +791,7 @@ export function GuildsPanel({
 }) {
   const guilds = chat.guilds;
   const [name, setName] = useState("");
+  const [view, setView] = useState<"mine" | "catalog">("mine");
   if (!s.guildsKnown)
     return (
       <p className={styles.muted}>
@@ -351,8 +805,29 @@ export function GuildsPanel({
   const full = limits.perPlayer > 0 && s.guilds.length >= limits.perPlayer;
   const problem = nameProblem(name, limits.nameMin, limits.nameMax);
   const selected = s.guilds.find((g) => g.id === s.selectedGuild);
+  const views = (
+    <div className={styles.tabs} role="group" aria-label="Раздел гильдий">
+      <button aria-pressed={view === "mine"} onClick={() => setView("mine")}>
+        Мои гильдии
+      </button>
+      <button
+        aria-pressed={view === "catalog"}
+        onClick={() => setView("catalog")}
+      >
+        Каталог
+      </button>
+    </div>
+  );
+  if (view === "catalog")
+    return (
+      <div className={styles.guilds}>
+        {views}
+        <GuildCatalog chat={chat} state={s} />
+      </div>
+    );
   return (
     <div className={styles.guilds}>
+      {views}
       {s.invites.length > 0 && (
         <section className={styles.section} aria-label="Приглашения">
           <h3>Приглашения</h3>
@@ -381,6 +856,34 @@ export function GuildsPanel({
                     onClick={() => guilds.answer(invite.guildId, false)}
                   >
                     Отклонить
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {s.applications.length > 0 && (
+        <section className={styles.section} aria-label="Мои заявки">
+          <h3>
+            Мои заявки{" "}
+            <small className={styles.muted}>
+              {s.applications.length} / {limits.applications}
+            </small>
+          </h3>
+          <ul className={styles.members}>
+            {s.applications.map((a) => (
+              <li key={a.guildId}>
+                <b>«{a.guildName}»</b>
+                <small className={styles.muted}>
+                  ждёт ответа {term(a.expires)}
+                </small>
+                <span className={styles.rowActions}>
+                  <button
+                    disabled={busy}
+                    onClick={() => guilds.withdraw(a.guildId, a.guildName)}
+                  >
+                    Отозвать
                   </button>
                 </span>
               </li>

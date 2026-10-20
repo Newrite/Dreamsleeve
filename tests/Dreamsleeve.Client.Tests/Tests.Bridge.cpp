@@ -48,10 +48,7 @@ namespace
   // The web UI's view of the bridge tables.
   std::string BridgeModule()
   {
-    return "// Generated from src/Dreamsleeve.Client/Host/Bridge.ixx by the native test\n"
-           "// \"The web UI bridge module is generated from the bridge tables\"; do not edit.\n"
-           "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n\n"
-           "// The \"type\" of every host event and UI command.\n" +
+    return "// Generated from src/Dreamsleeve.Client/Host/Bridge.ixx by the native test\n" "// \"The web UI bridge module is generated from the bridge tables\"; do not edit.\n" "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n\n" "// The \"type\" of every host event and UI command.\n" +
            List("eventTypes", Bridge::EventNames) + List("commandTypes", Bridge::CommandNames) + "\n// Enum strings of the events.\n" +
            List("connectionPhases", Bridge::PhaseNames) + List("authOperations", Bridge::OperationNames) +
            List("authFailures", Bridge::FailureNames) + List("announcementOrigins", Bridge::OriginNames) +
@@ -59,15 +56,10 @@ namespace
            List("channelKinds", Bridge::ChannelKindNames) + List("hidingModes", HidingNames) + List("sessionEndReasons", Bridge::EndNames) +
            List("sanctionKinds", Bridge::SanctionKindNames) + List("registrationModes", Bridge::RegistrationNames) +
            List("guildRoles", Bridge::GuildRoleNames) + List("guildRemovalReasons", Bridge::GuildRemovalNames) +
-           List("guildActions", Bridge::GuildActionNames) +
+           List("guildActions", Bridge::GuildActionNames) + List("guildApplicationEnds", Bridge::GuildApplicationEndNames) +
+           List("guildCatalogSorts", Bridge::GuildCatalogSortNames) +
            std::format(
-             "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
-             "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
-             "export const maxText = {};\n"
-             "export const maxSnapshotRows = {};\n"
-             "export const maxError = {};\n"
-             "// Bytes of a moderator's reason the host accepts; the server's limit is smaller.\n"
-             "export const maxReason = {};\n",
+             "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n" "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n" "export const maxText = {};\n" "export const maxSnapshotRows = {};\n" "export const maxError = {};\n" "// Bytes of a moderator's reason the host accepts; the server's limit is smaller.\n" "export const maxReason = {};\n",
              Bridge::MaxChatText,
              Bridge::MaxSnapshotRows,
              Bridge::MaxErrorBytes,
@@ -117,11 +109,15 @@ namespace
   Domain::GroundMark SampleMark(Domain::GroundMarkKind kind, std::string text)
   {
     Domain::GroundMark mark;
-    mark.markId        = kind == Domain::GroundMarkKind::Note ? 3 : 4;
-    mark.author        = {7, "seven", "Seven"};
-    mark.kind          = kind;
-    mark.text          = std::move(text);
-    mark.placement     = {{"skyrim.esm", 0x1A26F}, {100, 200, 300}, 1.5f};
+    mark.markId    = kind == Domain::GroundMarkKind::Note ? 3 : 4;
+    mark.author    = {7, "seven", "Seven"};
+    mark.kind      = kind;
+    mark.text      = std::move(text);
+    mark.placement = {
+        {"skyrim.esm", 0x1A26F},
+        {100, 200, 300},
+        1.5f
+    };
     mark.createdAt     = Domain::FromUnixMilliseconds(1700000000000);
     mark.characterName = "Nerevar";
     mark.gameDate      = Domain::GameDate{4, 201, 8, 17, 2, 10, 30};
@@ -144,7 +140,13 @@ namespace
     const UiSettings settings;
     const auto       player = Bridge::ToUiPlayer(SamplePlayer(), names, settings);
 
-    Domain::ChatMessage chat{11, 1, Domain::PlayerData{7, "seven", "Seven", false, 0xE57373}, "Привет, Вайтран", Domain::FromUnixMilliseconds(1700000000000)};
+    Domain::ChatMessage chat{
+        11,
+        1,
+        Domain::PlayerData{7, "seven", "Seven", false, 0xE57373},
+        "Привет, Вайтран",
+        Domain::FromUnixMilliseconds(1700000000000)
+    };
     chat.characterName = "Nerevar";
     Domain::ChatMessage notice{12, 2, std::nullopt, "Сервер перезапустится", Domain::FromUnixMilliseconds(1700000001000)};
     notice.announcement = Domain::Announcement{Domain::AnnouncementSource::Server, Domain::AnnouncementKind::Admin, {}};
@@ -163,14 +165,15 @@ namespace
 
     return {
         Bridge::SnapshotEvent{
-                              .channels             = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
-                              .messages             = messages,
-                              .players              = {player},
-                              .selfId               = "1",
+                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
+                              .messages = messages,
+                              .players  = {player},
+                              .selfId   = "1",
                               .serverName           = "Tamriel",
                               .groundMarksSupported = true,
                               .groundMarks          = {own},
-                              .nearbyMarks          = {nearby}},
+                              .nearbyMarks          = {nearby}
+        },
         Bridge::MessagesEvent{.messages = messages},
         Bridge::PlayersEvent{.players = {player}},
         Bridge::ConnectionState(signedIn),
@@ -188,28 +191,48 @@ namespace
         Bridge::NameColorEvent{.changed = "#E57373"},
         Bridge::RoutesEvent{.routes = {"Основной", "Прокси"}, .active = "Прокси", .chosen = "", .reached = true},
         Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
-        Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
+        Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}
+        ),
         Bridge::RoleEvent{.moderator = true},
         Bridge::MessagesRemovedEvent{.channelId = "1", .messageIds = {"11"}},
         Bridge::ModerationResultEvent{.requestId = "m1", .sanctions = SampleSanctions()},
         Bridge::GuildsEvent{
-                              .guilds  = {{"4",
-                         "Вороны",
-                         "4294967300",
-                         1700000000000,
-                         {Bridge::ToUiGuildMember({{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000}, names, settings),
-                          Bridge::ToUiGuildMember(
-                            {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
-                            names,
-                            settings)}}},
-                              .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
-                              .limits  = {3, 64, 3, 24},
-                              .removed = {{"6", "Изгнанники", "excluded"}}},
+                              .guilds =
+              {{"4",
+                "Вороны",
+                "4294967300",
+                1700000000000,
+                {Bridge::ToUiGuildMember(
+                   {{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000, 2},
+                   names,
+                   settings),
+                 Bridge::ToUiGuildMember(
+                   {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
+                   names,
+                   settings)},
+                {{"2", "Казначей"}},
+                "Сбор по пятницам",
+                true,
+                {{"11", "Eleven", 1700000600000, 1700604800000}}}},
+                              .invites           = {{"5", "Соратники", "8", "Eight", 1700604800000}},
+                              .limits            = {3, 64, 3, 24, 10, 500, 128, 10},
+                              .removed           = {{"6", "Изгнанники", "excluded"}},
+                              .applications      = {{"7", "Совы", 1700604800000}},
+                              .applicationsEnded = {{"8", "Лисы", "rejected"}}
+        },
         Bridge::GuildResultEvent{.requestId = "g1", .guildId = "4"},
+        Bridge::GuildCatalogEvent{
+                              .requestId = "c1",
+                              .guilds    = std::vector<Bridge::UiCatalogGuild>{{"7", "Совы", "Ночные дозоры", 12, 1690000000000}},
+                              .more      = true,
+                              .total     = 31
+        },
         Bridge::ChannelsEvent{
-                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
-                         Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
-                         Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}},
+                              .channels =
+              {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
+               Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
+               Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}
+        },
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
@@ -234,6 +257,8 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   CHECK(Strings(Bridge::RegistrationNames) == EnumeratorNames<Auth::RegistrationMode>());
   CHECK(Strings(Bridge::GuildRoleNames) == EnumeratorNames<Domain::GuildRole>());
   CHECK(Strings(Bridge::GuildRemovalNames) == EnumeratorNames<Domain::GuildRemovalReason>());
+  CHECK(Strings(Bridge::GuildApplicationEndNames) == EnumeratorNames<Domain::GuildApplicationEnd>());
+  CHECK(Strings(Bridge::GuildCatalogSortNames) == EnumeratorNames<Domain::GuildCatalogSort>());
   // "off" is the ui.toml word for None; the others follow the enumerators.
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";
@@ -264,9 +289,9 @@ TEST_CASE("The web UI bridge module is generated from the bridge tables")
 
 TEST_CASE("Every host event has a sample for the web UI parser")
 {
-  const auto        samples = SampleEvents();
+  const auto            samples = SampleEvents();
   std::set<std::size_t> kinds;
-  std::string       text = "[\n";
+  std::string           text = "[\n";
   for (const auto& event : samples)
   {
     kinds.insert(event.index());
@@ -295,6 +320,48 @@ TEST_CASE("Every web UI command sample is accepted")
     if (parsed) kinds.insert(parsed->index());
   }
   CHECK(kinds.size() == Bridge::CommandNames.size());
+}
+
+TEST_CASE("A catalog command becomes the query it names; the next page starts after the given entry")
+{
+  Bridge::Commands::GuildCatalog command{
+      .requestId  = "c1",
+      .search     = "вор",
+      .minMembers = 2,
+      .maxMembers = 10,
+      .openOnly   = true,
+      .sort       = "members",
+      .after      = Bridge::Commands::GuildCatalogAfter{{7}, "Совы", 12},
+  };
+  const auto query = Bridge::GuildCatalogQueryOf(command);
+  CHECK(
+    query == Domain::GuildCatalogQuery{
+                 "вор",
+                 2,
+                 10,
+                 true,
+                 Domain::GuildCatalogSort::Members,
+                 Domain::GuildCatalogAfter{7, "Совы", 12}
+  });
+  CHECK_FALSE(Bridge::ParseCommand(R"({"type":"guildCatalog","requestId":"c2","sort":"size"})"));
+  REQUIRE(Bridge::ParseCommand(R"({"type":"guildCatalog","requestId":"c2","sort":"name"})"));
+}
+
+TEST_CASE("Refusals of the guild information read as such, not as a name's")
+{
+  using Code = RequestRejectionCode;
+  CHECK(
+    Bridge::GuildRejectionText(Code::TextNotAllowed, "The guild information contains words that are not allowed.") ==
+    "Текст содержит запрещённые слова");
+  CHECK(
+    Bridge::GuildRejectionText(Code::TextNotAllowed, "The guild name contains words that are not allowed.") ==
+    "Название содержит запрещённые слова");
+  CHECK(
+    Bridge::GuildRejectionText(Code::InvalidRequest, "The guild information has at most 500 characters.") ==
+    "Информация о гильдии не длиннее 500 символов");
+  CHECK(
+    Bridge::GuildRejectionText(Code::InvalidRequest, "The guild information contains control characters.") ==
+    "В тексте недопустимые символы");
 }
 
 TEST_SUITE_END();

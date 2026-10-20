@@ -26,6 +26,17 @@ export function realNames(player: Player, settings: Settings) {
     character: player.character,
   };
 }
+// Whether a name the player may see contains the query (lower case, trimmed):
+// the shown name and, outside streamer mode, the real ones.
+export function nameMatches(player: Player, settings: Settings, query: string) {
+  const real = realNames(player, settings);
+  return [
+    playerName(player, settings),
+    real?.displayName,
+    real?.username,
+    real?.character,
+  ].some((v) => v?.toLocaleLowerCase("ru").includes(query));
+}
 export function characterLine(player: Player, settings: Settings): string {
   if (player.pseudonymous) return "Имя скрыто игроком";
   if (!player.inCharacter) return "Вне персонажа";
