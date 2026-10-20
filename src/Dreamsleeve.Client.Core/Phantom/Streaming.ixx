@@ -19,6 +19,13 @@ export namespace Dreamsleeve::Client::Phantom
   {
     using Clock                   = std::chrono::steady_clock;
     static constexpr auto Timeout = std::chrono::seconds(30);
+    // A transfer that could not start or stalled is tried again after this.
+    static constexpr auto RetryDelay = std::chrono::seconds(1);
+    // The server's answer to a failed HTTP transfer is to retry after this.
+    static constexpr std::uint32_t TransferRetryMs = 1000;
+    static constexpr std::size_t   MaxRequests     = 128;
+    // Requests encoded per poll; the rest wait for the next one.
+    static constexpr std::size_t MaxOutboundPerPoll = 16;
 
     struct Upload
     {
@@ -106,7 +113,7 @@ export namespace Dreamsleeve::Client::Phantom
 
     bool Request(Wire::Request request)
     {
-      if (requests.size() >= 128)
+      if (requests.size() >= MaxRequests)
       {
         exchange.Failed("Очередь передачи фантомов заполнена");
         return false;
@@ -289,7 +296,7 @@ export namespace Dreamsleeve::Client::Phantom
               std::min(policy->modelBytesPerSecond, exchange.Settings().uploadBytesPerSecond)))
         {
           Cancel(value.transfer);
-          local->state = Pending{Clock::now() + std::chrono::seconds(1)};
+          local->state = Pending{Clock::now() + RetryDelay};
           return;
         }
         local->state = Upload{value, 0, Clock::now()};
@@ -331,7 +338,7 @@ export namespace Dreamsleeve::Client::Phantom
       {
         Cancel(value.transfer);
         downloads.erase(value.transfer.value);
-        plan->second.state = Pending{Clock::now() + std::chrono::seconds(1)};
+        plan->second.state = Pending{Clock::now() + RetryDelay};
       }
     }
 
@@ -491,7 +498,7 @@ export namespace Dreamsleeve::Client::Phantom
         if (const auto* probe = std::get_if<CacheProbe>(&plan.state); probe && now >= probe->deadline) plan.state = Pending{now};
         if (const auto* waiting = std::get_if<Awaiting>(&plan.state); waiting && now >= waiting->deadline)
         {
-          plan.state = Pending{now + std::chrono::seconds(1)};
+          plan.state = Pending{now + RetryDelay};
           --count;
           exchange.Failed("Таймаут начала загрузки фантома");
         }
@@ -500,7 +507,7 @@ export namespace Dreamsleeve::Client::Phantom
           const auto remote = exchange.Find(id);
           if (remote && remote->WaitingBudget())
           {
-            plan.state = Pending{now + std::chrono::seconds(1)};
+            plan.state = Pending{now + RetryDelay};
             if (exchange.Offer(plan.offer) && worker.Queue(plan.offer)) plan.state = CacheProbe{now + Timeout};
             continue;
           }
@@ -522,7 +529,7 @@ export namespace Dreamsleeve::Client::Phantom
         {
           Cancel(TransferId{it->first});
           const auto plan = plans.find(it->second.offer.player);
-          if (plan != plans.end()) plan->second.state = Pending{now + std::chrono::seconds(1)};
+          if (plan != plans.end()) plan->second.state = Pending{now + RetryDelay};
           it = downloads.erase(it);
         }
         else
@@ -530,9 +537,23 @@ export namespace Dreamsleeve::Client::Phantom
       }
     }
 
+    // The latest captured pose goes out when the publication can carry it:
+    // committed, or rejected with a bridge to the older generation, in this
+    // context, newer than the last one sent and within the sampling rate.
+    bool PoseDue(Clock::time_point now, bool publish) const
+    {
+      if (!latestPose || !active || !policy || !local || !publish) return false;
+      const bool rejected = std::holds_alternative<Rejected>(local->state);
+      const bool carried  = std::holds_alternative<Ready>(local->state) || rejected || latestPose->previous;
+      const bool current =
+        latestPose->generation == local->value.generation || (rejected && latestPose->generation.value < local->value.generation.value);
+      return carried && current && latestPose->context == context && latestPose->sequence.value > lastPoseSequence && now >= nextPose &&
+             latestPose->payload.size() <= policy->limits.compressedPoseBytes;
+    }
+
     void DrainRequests(std::vector<Outbound>& output)
     {
-      while (!requests.empty() && output.size() < 16)
+      while (!requests.empty() && output.size() < MaxOutboundPerPoll)
       {
         auto encoded = Wire::Encode(requests.front());
         requests.pop_front();
@@ -653,7 +674,7 @@ public:
           if (now - upload->touched > Timeout)
           {
             Cancel(upload->transfer.transfer);
-            local->state = Pending{now + std::chrono::seconds(1)};
+            local->state = Pending{now + RetryDelay};
           }
         }
       for (auto& [id, download] : downloads)
@@ -686,7 +707,7 @@ public:
                 *done.error,
                 transfer.player,
                 transfer.asset.generation,
-                1000,
+                TransferRetryMs,
                 transfer.upload,
                 transfer.request
             });
@@ -763,7 +784,7 @@ public:
       {
         if (const auto* awaiting = std::get_if<Awaiting>(&local->state); awaiting && now >= awaiting->deadline)
         {
-          local->state = Pending{now + std::chrono::seconds(1)};
+          local->state = Pending{now + RetryDelay};
           exchange.Failed("Таймаут начала публикации фантома");
         }
         Publish(now);
@@ -786,12 +807,7 @@ public:
       if (rejected && latestPose && latestPose->generation == local->value.generation)
         latestPose = latestPose->previous ? std::optional<Wire::Pose>{*latestPose->previous} : std::nullopt;
       const auto rate = policy ? std::min(outgoing.settings.sampleRate, policy->sampleRate) : 1;
-      if (
-        latestPose && active && policy && local && (std::holds_alternative<Ready>(local->state) || rejected || latestPose->previous) &&
-        outgoing.settings.publish &&
-        (latestPose->generation == local->value.generation || (rejected && latestPose->generation.value < local->value.generation.value)) &&
-        latestPose->context == context && latestPose->sequence.value > lastPoseSequence && now >= nextPose &&
-        latestPose->payload.size() <= policy->limits.compressedPoseBytes)
+      if (PoseDue(now, outgoing.settings.publish))
       {
         auto encoded = Wire::Encode(*latestPose);
         if (encoded && encoded->size() <= poseCredit)

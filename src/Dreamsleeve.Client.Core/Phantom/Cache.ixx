@@ -26,6 +26,11 @@ export namespace Dreamsleeve::Client::Phantom
     std::filesystem::path        directory;
     static constexpr std::size_t FileLimit = 4096;
 
+    std::filesystem::path File(const Digest& hash) const
+    {
+      return directory / (Hex(hash) + ".zst");
+    }
+
     static Error Storage(std::string operation, const std::error_code& error)
     {
       if (error) operation += ": " + error.message();
@@ -64,7 +69,7 @@ public:
       if (!*present) return std::nullopt;
 
       std::error_code error;
-      const auto      size = std::filesystem::file_size(directory / (Hex(hash) + ".zst"), error);
+      const auto      size = std::filesystem::file_size(File(hash), error);
       if (error == std::errc::no_such_file_or_directory) return std::nullopt;
       if (error) return std::unexpected(Storage("cache.size", error));
       if (!size || size > Limits{}.compressedAssetBytes || (expectedSize && size != expectedSize))
@@ -79,7 +84,7 @@ public:
       if (!*size) return std::nullopt;
 
       Bytes         bytes(**size);
-      std::ifstream input(directory / (Hex(hash) + ".zst"), std::ios::binary);
+      std::ifstream input(File(hash), std::ios::binary);
       if (!input.is_open()) return std::unexpected(Storage("cache.open", {}));
       input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
       if (input.bad()) return std::unexpected(Storage("cache.read", {}));
@@ -92,7 +97,7 @@ public:
     {
       if (directory.empty()) return {};
       std::error_code error;
-      std::filesystem::last_write_time(directory / (Hex(hash) + ".zst"), std::filesystem::file_time_type::clock::now(), error);
+      std::filesystem::last_write_time(File(hash), std::filesystem::file_time_type::clock::now(), error);
       if (error) return std::unexpected(Storage("cache.touch", error));
       return {};
     }
@@ -100,7 +105,7 @@ public:
     Result<void> Erase(const Digest& hash) const
     {
       if (directory.empty()) return {};
-      return Remove(directory / (Hex(hash) + ".zst"));
+      return Remove(File(hash));
     }
 
     Result<void> Trim(std::uint64_t budget) const
@@ -166,7 +171,7 @@ public:
       std::filesystem::create_directories(directory, error);
       if (error) return std::unexpected(Storage("cache.directory", error));
 
-      const auto path = directory / (Hex(hash) + ".zst"), temporary = directory / (Hex(hash) + ".partial");
+      const auto path = File(hash), temporary = std::filesystem::path(path).replace_extension(".partial");
       bool       written{};
       {
         std::ofstream out(temporary, std::ios::binary | std::ios::trunc);

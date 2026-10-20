@@ -159,21 +159,16 @@ private:
       localReservation = 0;
     }
 
+    // Decode and model capacity and the compressed transfer, with the poses.
     static std::uint64_t Reservation(const Wire::Descriptor& descriptor)
     {
-      // Decode/model capacity and compressed transfer. Live playback plus the
-      // display, network and worker copies can retain independent histories.
-      // Four more frames cover decode/interpolation and producers; raw/encoded
-      // scratch and two worker batches are charged independently.
-      return 3ULL * descriptor.rawBytes + descriptor.compressedBytes + (4 * BufferedPoseCount + 4) * SnapshotWorkingBytes() +
-             Limits{}.poseBytes + 4ULL * Limits{}.compressedPoseBytes;
+      return 3ULL * descriptor.rawBytes + descriptor.compressedBytes + RemotePoseBytes();
     }
 
     static std::uint64_t Retained(const RemoteVersion& remote)
     {
       const auto asset = remote.Asset();
-      return (asset ? asset->MemoryBytes() : 0) + (4 * BufferedPoseCount + 4) * SnapshotWorkingBytes() + Limits{}.poseBytes +
-             4ULL * Limits{}.compressedPoseBytes;
+      return (asset ? asset->MemoryBytes() : 0) + RemotePoseBytes();
     }
 
     static std::uint64_t Reservation(const Remote& remote)
@@ -315,7 +310,7 @@ public:
     bool Submit(std::uint64_t expectedContext, Generation generation, ValidatedAsset asset)
     {
       std::lock_guard lock(mutex);
-      const auto bytes = 4 * asset.MemoryBytes() + 6 * SnapshotWorkingBytes() + Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
+      const auto      bytes = 4 * asset.MemoryBytes() + LocalPoseBytes();
       if (
         expectedContext != context || !available || !settings.publish || capture ||
         (localGeneration && phase != PublicationPhase::Settled && phase != PublicationPhase::Rejected) ||
@@ -383,8 +378,7 @@ public:
         // Preparation scratch is gone; keep immutable NIF/compressed data and
         // bounded pose work, not another compression reservation indefinitely.
         localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() +
-                           (value.asset->delta ? value.asset->delta->bytes->capacity() : 0) + 6 * SnapshotWorkingBytes() +
-                           Limits{}.poseBytes + 2ULL * Limits{}.compressedPoseBytes;
+                           (value.asset->delta ? value.asset->delta->bytes->capacity() : 0) + LocalPoseBytes();
         localAsset       = value.asset;
         publication      = std::move(value);
         if (phase == PublicationPhase::Preparing) phase = PublicationPhase::Pending;

@@ -30,6 +30,14 @@ export namespace Dreamsleeve::Client::Phantom
     using Handle = std::unique_ptr<void, Closer>;
     using Clock  = std::chrono::steady_clock;
 
+    // Transfers at once; Streaming keeps fewer by the server's policy.
+    static constexpr std::size_t MaxJobs = 8;
+    // One read or write; the rate budget is charged per chunk.
+    static constexpr DWORD ChunkBytes = 32768;
+    // WinHTTP resolve and connect, then send and receive, in milliseconds.
+    static constexpr int ConnectTimeoutMs  = 5000;
+    static constexpr int TransferTimeoutMs = 30000;
+
     // Per-job timings, emitted at most once/sec plus slow operations and endpoints.
     struct Trace
     {
@@ -140,8 +148,8 @@ export namespace Dreamsleeve::Client::Phantom
       DWORD                       count{};
       DWORD                       error{};
 
-      bool                        closing{};
-      bool                        callback{};
+      bool closing{};
+      bool callback{};
 
       static void CALLBACK Status(HINTERNET, DWORD_PTR context, DWORD status, void* data, DWORD length)
       {
@@ -257,7 +265,7 @@ export namespace Dreamsleeve::Client::Phantom
       DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
       DWORD disabled  = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
       if (
-        !WinHttpSetTimeouts(request.handle, 5000, 5000, 30000, 30000) ||
+        !WinHttpSetTimeouts(request.handle, ConnectTimeoutMs, ConnectTimeoutMs, TransferTimeoutMs, TransferTimeoutMs) ||
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects)) ||
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
         return "HTTP options";
@@ -288,7 +296,7 @@ export namespace Dreamsleeve::Client::Phantom
         while (job.progress < job.input->size())
         {
           auto offset = job.progress.load();
-          auto count  = static_cast<DWORD>(std::min<std::size_t>(32768, job.input->size() - offset));
+          auto count  = static_cast<DWORD>(std::min<std::size_t>(ChunkBytes, job.input->size() - offset));
           if (!trace.Step(2, "budget", [&] { return uploadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
           if (!trace.Step(3, "write", [&] {
                 return request.Step(stop, WINHTTP_CALLBACK_STATUS_WRITE_COMPLETE, [&] {
@@ -335,7 +343,7 @@ export namespace Dreamsleeve::Client::Phantom
       while (job.progress < contentLength)
       {
         auto offset = job.progress.load();
-        auto count  = std::min<DWORD>(32768, contentLength - offset);
+        auto count  = std::min<DWORD>(ChunkBytes, contentLength - offset);
         if (!trace.Step(2, "budget", [&] { return downloadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
         if (!trace.Step(3, "read", [&] {
               return request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] {
@@ -381,7 +389,7 @@ public:
 
     bool Start(Wire::Transfer transfer, std::shared_ptr<const Bytes> input, std::uint32_t rate)
     {
-      if (jobs.size() >= 8 || origin.empty() || !rate || (transfer.upload && (!input || input->size() != transfer.BodyBytes())))
+      if (jobs.size() >= MaxJobs || origin.empty() || !rate || (transfer.upload && (!input || input->size() != transfer.BodyBytes())))
         return false;
 
       auto job      = std::make_unique<Job>();

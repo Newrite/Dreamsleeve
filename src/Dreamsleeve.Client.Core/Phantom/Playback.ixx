@@ -77,6 +77,11 @@ export namespace Dreamsleeve::Client::Phantom
   {
     using Time = std::chrono::time_point<std::chrono::steady_clock, std::chrono::microseconds>;
 
+    // A longer source gap starts a new history instead of interpolating across it.
+    static constexpr std::uint64_t MaxSourceGapUs = 5'000'000;
+    // A root jump this far between two samples is a teleport, never a velocity.
+    static constexpr float TeleportDistance = 512;
+
     struct Sample
     {
       std::shared_ptr<const Snapshot> pose;
@@ -106,7 +111,7 @@ public:
           Clear();
         else if (pose->sequence <= last.sequence || pose->sampledAtUs <= last.sampledAtUs)
           return false;
-        else if (pose->sampledAtUs - last.sampledAtUs > 5000000)
+        else if (pose->sampledAtUs - last.sampledAtUs > MaxSourceGapUs)
           Clear();
       }
 
@@ -131,9 +136,9 @@ public:
       std::uint64_t arrivalGapUs{};
       std::uint64_t ageUs{};
 
-      std::int64_t  aheadUs{};
-      double        delayUs{};
-      double        speed{1};
+      std::int64_t aheadUs{};
+      double       delayUs{};
+      double       speed{1};
     };
 
     // A read-only view of the existing buffer, not another clock/state owner.
@@ -182,8 +187,7 @@ public:
       const auto& b     = *samples.back().pose;
       const auto  extra = std::min<std::uint64_t>((target - samples.back().time).count(), settings.extrapolationMs * 1000ULL);
 
-      // A teleport is never interpreted as velocity.
-      if (Motion::Distance(a.origin, b.origin) > 512) return b;
+      if (Motion::Distance(a.origin, b.origin) > TeleportDistance) return b;
 
       // Predict only root translation. Independent bone velocities stretch the
       // skeleton and detach weapons; retain the newest complete articulation.
@@ -196,7 +200,7 @@ private:
 
     static void TranslateRoot(Snapshot& result, const Snapshot& a, const Snapshot& b, std::uint64_t extra)
     {
-      const auto ratio  = static_cast<float>(extra) / static_cast<float>(b.sampledAtUs - a.sampledAtUs);
+      const auto ratio = static_cast<float>(extra) / static_cast<float>(b.sampledAtUs - a.sampledAtUs);
       const Vec3 delta{(b.origin.x - a.origin.x) * ratio, (b.origin.y - a.origin.y) * ratio, (b.origin.z - a.origin.z) * ratio};
       const auto move = [&](Vec3& value) {
         value.x += delta.x;

@@ -14,12 +14,30 @@ export namespace Dreamsleeve::Client::Phantom
 
   class Worker final
   {
+    // Queued remote models, decode jobs waiting for a download, poses waiting
+    // for decoding, and players whose last model may serve as a delta basis.
+    static constexpr std::size_t MaxQueuedAssets = 8;
+    static constexpr std::size_t MaxMissing      = 16;
+    static constexpr std::size_t MaxQueuedPoses  = 32;
+    static constexpr std::size_t MaxDeltaBases   = 512;
+    // Pose decoding wakes at least this often to take the publication's work;
+    // the model thread rechecks the cache budget at its own pace.
+    static constexpr auto PoseWait  = std::chrono::milliseconds(5);
+    static constexpr auto ModelWait = std::chrono::milliseconds(20);
+
     struct AssetJob
     {
       std::uint64_t                epoch;
       Wire::Offer                  offer;
       std::shared_ptr<const Bytes> bytes;
       std::optional<AssetDelta>    delta;
+
+      // Raw and compressed buffers while decoding; a delta also holds its full basis.
+      std::uint64_t MemoryBytes() const
+      {
+        return 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes +
+               (delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
+      }
     };
 
     struct PoseJob
@@ -165,7 +183,8 @@ export namespace Dreamsleeve::Client::Phantom
       bytes.reset();
       job.bytes.reset();
       exchange.Loaded(job.epoch, job.offer, std::make_shared<const ValidatedAsset>(std::move(*decoded)), cached);
-      if (previousAssets.size() >= 512 && !previousAssets.contains(job.offer.player)) previousAssets.erase(previousAssets.begin());
+      if (previousAssets.size() >= MaxDeltaBases && !previousAssets.contains(job.offer.player))
+        previousAssets.erase(previousAssets.begin());
       previousAssets.insert_or_assign(job.offer.player, job.offer.asset);
     }
 
@@ -187,7 +206,7 @@ export namespace Dreamsleeve::Client::Phantom
 
       std::lock_guard lock(mutex);
       std::erase_if(missing, [&](const auto& value) { return value.epoch != job.epoch || value.offer.player == job.offer.player; });
-      if (missing.size() < 16)
+      if (missing.size() < MaxMissing)
         missing.push_back({job.epoch, job.offer, baseHash});
       else
         exchange.Unavailable(job.epoch, job.offer, "Очередь загрузки моделей заполнена");
@@ -288,7 +307,7 @@ export namespace Dreamsleeve::Client::Phantom
           DecodePose(job);
 
         std::unique_lock lock(mutex);
-        wake.wait_for(lock, std::chrono::milliseconds(5), [&] { return stop.stop_requested() || !poses.empty(); });
+        wake.wait_for(lock, PoseWait, [&] { return stop.stop_requested() || !poses.empty(); });
       }
     }
 
@@ -300,15 +319,14 @@ export namespace Dreamsleeve::Client::Phantom
         std::optional<AssetJob> remote;
         {
           std::unique_lock lock(mutex);
-          modelWake.wait_for(lock, std::chrono::milliseconds(20), [&] { return stop.stop_requested() || model || !assets.empty(); });
+          modelWake.wait_for(lock, ModelWait, [&] { return stop.stop_requested() || model || !assets.empty(); });
           if (stop.stop_requested()) break;
           capture = std::exchange(model, {});
           if (!capture && !assets.empty())
           {
             remote = std::move(assets.front());
             assets.pop_front();
-            assetInFlightBytes = 2ULL * remote->offer.asset.rawBytes + remote->offer.asset.compressedBytes +
-                                 (remote->delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
+            assetInFlightBytes = remote->MemoryBytes();
           }
         }
 
@@ -403,16 +421,15 @@ public:
     {
       const auto      epoch  = exchange.Epoch();
       const auto      budget = exchange.Settings().memoryBytes;
+      AssetJob        job{epoch, std::move(offer), std::move(bytes), delta};
       std::lock_guard lock(mutex);
-      std::erase_if(assets, [&](const auto& job) { return job.epoch != epoch || job.offer.player == offer.player; });
-      std::uint64_t queued = assetInFlightBytes + 2ULL * offer.asset.rawBytes + offer.asset.compressedBytes +
-                             (delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
-      for (const auto& job : assets)
-        queued += 2ULL * job.offer.asset.rawBytes + job.offer.asset.compressedBytes +
-                  (job.delta ? Limits{}.assetBytes + Limits{}.compressedAssetBytes : 0ULL);
-      if (assets.size() >= 8 || queued > budget) return false;
+      std::erase_if(assets, [&](const auto& queued) { return queued.epoch != epoch || queued.offer.player == job.offer.player; });
+      std::uint64_t queued = assetInFlightBytes + job.MemoryBytes();
+      for (const auto& waiting : assets)
+        queued += waiting.MemoryBytes();
+      if (assets.size() >= MaxQueuedAssets || queued > budget) return false;
 
-      assets.push_back({epoch, std::move(offer), std::move(bytes), delta});
+      assets.push_back(std::move(job));
       modelWake.notify_one();
       return true;
     }
@@ -422,7 +439,7 @@ public:
       std::lock_guard lock(mutex);
       pose.sample.previous.reset();  // Each queue slot owns exactly one generation.
       const auto key = std::pair{pose.player, pose.sample.generation.value};
-      if (poses.size() >= 32 && !poses.contains(key)) return;
+      if (poses.size() >= MaxQueuedPoses && !poses.contains(key)) return;
       poses.insert_or_assign(key, PoseJob{exchange.Epoch(), arrivalUs, std::move(pose), std::move(asset)});
       wake.notify_one();
     }

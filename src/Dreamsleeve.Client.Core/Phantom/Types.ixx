@@ -134,6 +134,20 @@ export namespace Dreamsleeve::Client::Phantom
     return 2ULL * limits.poseBytes + limits.nodes * sizeof(Channel) + limits.nodes * sizeof(Bound) + sizeof(Snapshot);
   }
 
+  // Pose memory a remote model keeps beside it: live playback plus the display,
+  // network and worker copies can each retain a history; four more frames cover
+  // decoding, interpolation and producers, then raw and encoded scratch.
+  constexpr std::uint64_t RemotePoseBytes(const Limits& limits = {})
+  {
+    return (4 * BufferedPoseCount + 4) * SnapshotWorkingBytes(limits) + limits.poseBytes + 4ULL * limits.compressedPoseBytes;
+  }
+
+  // Pose memory of the own publication: capture, encoding and the bridge pose.
+  constexpr std::uint64_t LocalPoseBytes(const Limits& limits = {})
+  {
+    return 6 * SnapshotWorkingBytes(limits) + limits.poseBytes + 2ULL * limits.compressedPoseBytes;
+  }
+
   enum class Representation
   {
     Disabled,
