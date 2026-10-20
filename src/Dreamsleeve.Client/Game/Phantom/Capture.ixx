@@ -2,9 +2,7 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.Phantom.Capture;
 import std;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-#endif
 import Dreamsleeve.Client.Phantom.Payload;
 import Dreamsleeve.Game.Phantom.Native;
 import Dreamsleeve.Game.Phantom.Math;
@@ -12,11 +10,12 @@ export import Dreamsleeve.Game.Phantom.CaptureRules;
 
 export namespace Dreamsleeve::Game::PhantomCapture
 {
-  namespace P  = Dreamsleeve::Client::Phantom;
-  namespace N  = Dreamsleeve::Game::PhantomNative;
-  namespace A  = Dreamsleeve::Game::PhantomMath;
-  using Engine = N::Engine;
-  using Flag   = RE::NiAVObject::Flag;
+  namespace P     = Dreamsleeve::Client::Phantom;
+  namespace N     = Dreamsleeve::Game::PhantomNative;
+  namespace A     = Dreamsleeve::Game::PhantomMath;
+  namespace Trace = Dreamsleeve::Client::Diagnostics::Trace;
+  using Engine    = N::Engine;
+  using Flag      = RE::NiAVObject::Flag;
 
   struct Stamp
   {
@@ -297,18 +296,12 @@ public:
     if (!root || !root->parent) return A::Fail(P::Failure::MissingSource, "native.third-person");
     auto prepared = N::Prepare(root, engine);
     if (!prepared) return std::unexpected(prepared.error());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto parseStart = std::chrono::steady_clock::now();
-#endif
-    auto asset = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
+    auto       asset      = [&] {
       Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ValidateAsset);
-#endif
       return P::ValidatedAsset::Parse(std::move(prepared->asset), limits);
     }();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto parseEnd = std::chrono::steady_clock::now();
-#endif
     if (!asset) return std::unexpected(asset.error());
     if (asset->Layout().nodes.size() != prepared->bindings.size()) return A::Fail(P::Failure::InvalidLink, "native.serialized-tree");
     auto probe = Probe(*root);
@@ -316,12 +309,13 @@ public:
     auto source  = std::make_unique<Source>(engine, player, root, std::move(prepared->bindings), *asset, std::move(*probe));
     auto initial = source->Sample(player, firstPerson, stamp);
     if (!initial) return std::unexpected(initial.error());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    logger::info(
-      "[Phantom stages] validate_asset_ms={:.3f} bind_probe_initial_pose_ms={:.3f}",
-      std::chrono::duration<double, std::milli>(parseEnd - parseStart).count(),
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - parseEnd).count());
-#endif
+    if constexpr (Trace::Compiled)
+    {
+      logger::info(
+        "[Phantom stages] validate_asset_ms={:.3f} bind_probe_initial_pose_ms={:.3f}",
+        std::chrono::duration<double, std::milli>(parseEnd - parseStart).count(),
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - parseEnd).count());
+    }
     return Opened{std::move(source), std::move(*asset), std::move(*initial)};
   }
 

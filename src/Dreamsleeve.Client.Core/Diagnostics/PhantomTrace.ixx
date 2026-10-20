@@ -1,5 +1,6 @@
 module;
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
 #include <process.h>
 #include <cerrno>
 #define NOMINMAX
@@ -10,13 +11,27 @@ module;
 #include <spdlog/async_logger.h>
 #include <spdlog/details/thread_pool.h>
 #include <spdlog/sinks/base_sink.h>
+#endif
 
+// Timings and events of the phantom pipeline for local diagnosis. Producers
+// call it unconditionally: in an ordinary build every function is empty and
+// lazy fields are never formatted. Sessions exist only in a diagnostics build.
 export module Dreamsleeve.Client.Diagnostics.PhantomTrace;
 import std;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.ProtocolCodec;
+#endif
 
 export namespace Dreamsleeve::Client::Diagnostics::Trace
 {
+
+  // Whether this build traces at all: diagnostic logging that is not a trace
+  // event branches on it with if constexpr, both branches still compiled.
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+  inline constexpr bool Compiled = true;
+#else
+  inline constexpr bool Compiled = false;
+#endif
 
   enum class Metric
   {
@@ -44,6 +59,7 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     Count
   };
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
   enum class TraceFailure
   {
     InvalidConfiguration,
@@ -69,11 +85,12 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
   // one session, including its pending cleanup; a new session cannot bypass it.
   std::expected<void, TraceError>        Start(const std::filesystem::path& directory, std::size_t partBytes = 64ULL * 1024 * 1024);
   std::expected<StopOutcome, TraceError> Stop();
-  bool                                   Enabled() noexcept;
+
+  bool Enabled() noexcept;
 
   void Event(std::string_view kind, std::string fields = {});
   // Detached compressed bytes only; caller is the model worker, never the game thread.
-  void Asset(std::string_view hash, std::span<const std::uint8_t> bytes);
+  void Asset(std::span<const std::uint8_t> hash, std::span<const std::uint8_t> bytes);
   void Packet(bool outgoing, std::uint8_t lane, std::span<const std::uint8_t> bytes);
   void Observe(Metric metric, double milliseconds) noexcept;
   void FlushMetrics();
@@ -86,6 +103,105 @@ export namespace Dreamsleeve::Client::Diagnostics::Trace
     void GateNextCleanup(std::shared_future<void> gate);
 
   }
+
+#else
+  constexpr bool Enabled() noexcept
+  {
+    return false;
+  }
+
+  inline void Event(std::string_view, std::string = {}) {}
+
+  inline void Asset(std::span<const std::uint8_t>, std::span<const std::uint8_t>) {}
+
+  inline void Packet(bool, std::uint8_t, std::span<const std::uint8_t>) {}
+
+  inline void Observe(Metric, double) noexcept {}
+
+  inline void FlushMetrics() {}
+#endif
+
+  // Fields are formatted only while a trace session runs.
+  template <class Fields>
+  requires std::invocable<Fields&>
+  void Event(std::string_view kind, Fields&& fields)
+  {
+    if (Enabled()) Event(kind, std::string(fields()));
+  }
+
+  // What a model transfer is, for its trace lines.
+  struct TransferFields
+  {
+    std::uint64_t transfer{}, request{}, player{}, generation{};
+    bool          upload{};
+    std::uint32_t bodyBytes{};
+  };
+
+  // Per-transfer timings: emitted at the endpoints, on failure, for slow
+  // operations and at most once a second; the phases are send, headers,
+  // budget, body and end of body. Without a session a step only runs.
+  class Transfer
+  {
+    using Clock = std::chrono::steady_clock;
+
+    TransferFields        fields;
+    Clock::time_point     start{Clock::now()};
+    Clock::time_point     emitted{start};
+    std::array<double, 5> totals{};
+    std::uint32_t         progress{};
+    bool                  active{Enabled()};
+
+public:
+
+    explicit Transfer(TransferFields value) : fields(value)
+    {
+      Emit("start", 0);
+    }
+
+    void Emit(std::string_view phase, double elapsed)
+    {
+      if (!active) return;
+      Event("http", [&] {
+        return std::format(
+          "\"transfer\":{},\"request\":{},\"player\":{},\"generation\":{},\"upload\":{},\"body_bytes\":{},\"progress\":{},\"phase\":\"{}\",\"operation_ms\":{},\"elapsed_ms\":{},\"send_ms\":{},\"headers_ms\":{},\"budget_ms\":{},\"body_ms\":{},\"eof_ms\":{}",
+          fields.transfer,
+          fields.request,
+          fields.player,
+          fields.generation,
+          fields.upload,
+          fields.bodyBytes,
+          progress,
+          phase,
+          elapsed,
+          std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
+          totals[0],
+          totals[1],
+          totals[2],
+          totals[3],
+          totals[4]);
+      });
+      emitted = Clock::now();
+    }
+
+    template <class F>
+    bool Step(unsigned stage, std::string_view phase, F&& action)
+    {
+      if (!active) return action();
+      const auto at  = Clock::now();
+      const bool ok  = action();
+      const auto ms  = std::chrono::duration<double, std::milli>(Clock::now() - at).count();
+      totals[stage] += ms;
+      if (!ok || stage < 2 || stage == 4 || ms >= 250 || Clock::now() - emitted >= std::chrono::seconds(1)) Emit(phase, ms);
+      return ok;
+    }
+
+    void Progress(std::uint32_t value)
+    {
+      const bool first = !progress && value;
+      progress         = value;
+      if (first) Emit("first_body", 0);
+    }
+  };
 
   class Span
   {
@@ -111,6 +227,7 @@ public:
 
 }
 
+#ifdef DREAMSLEEVE_DIAGNOSTICS
 namespace Dreamsleeve::Client::Diagnostics::Trace
 {
   namespace
@@ -392,13 +509,20 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
     }
   }
 
-  void Asset(std::string_view hash, std::span<const std::uint8_t> bytes)
+  void Asset(std::span<const std::uint8_t> digest, std::span<const std::uint8_t> bytes)
   {
     if (!Enabled()) return;
     const auto writer = current.load();
     if (!writer) return;
-    Span span(Metric::AssetDump);
-    if (hash.size() != 64 || !std::ranges::all_of(hash, [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+    Span                       span(Metric::AssetDump);
+    constexpr std::string_view digits = "0123456789abcdef";
+    std::string                hash;
+    for (const auto byte : digest)
+    {
+      hash += digits[byte >> 4];
+      hash += digits[byte & 15];
+    }
+    if (hash.size() != 64)
     {
       WriteFailed(*writer);
       return;
@@ -411,7 +535,7 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
       WriteFailed(*writer);
       return;
     }
-    const auto target = models / (std::string(hash) + ".zst");
+    const auto target = models / (hash + ".zst");
     if (std::filesystem::exists(target, error))
     {
       if (!std::filesystem::is_regular_file(target, error) || error) WriteFailed(*writer);
@@ -562,3 +686,4 @@ namespace Dreamsleeve::Client::Diagnostics::Trace
   }
 
 }
+#endif

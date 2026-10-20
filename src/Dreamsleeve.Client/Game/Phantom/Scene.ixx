@@ -2,9 +2,7 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.Phantom.Scene;
 import std;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-#endif
 import Dreamsleeve.Client.Phantom.Nif;
 import Dreamsleeve.Game.Phantom.Native;
 import Dreamsleeve.Game.Phantom.Math;
@@ -12,12 +10,13 @@ import Dreamsleeve.Game.Phantom.CaptureRules;
 
 export namespace Dreamsleeve::Game::PhantomScene
 {
-  namespace P  = Dreamsleeve::Client::Phantom;
-  namespace N  = Dreamsleeve::Game::PhantomNative;
-  namespace A  = Dreamsleeve::Game::PhantomMath;
-  using Engine = N::Engine;
-  using Look   = N::Look;
-  using Flag   = RE::NiAVObject::Flag;
+  namespace P     = Dreamsleeve::Client::Phantom;
+  namespace N     = Dreamsleeve::Game::PhantomNative;
+  namespace A     = Dreamsleeve::Game::PhantomMath;
+  namespace Trace = Dreamsleeve::Client::Diagnostics::Trace;
+  using Engine    = N::Engine;
+  using Look      = N::Look;
+  using Flag      = RE::NiAVObject::Flag;
 
   struct Context
   {
@@ -44,11 +43,11 @@ export namespace Dreamsleeve::Game::PhantomScene
 
   class Scene
   {
-    Engine                                     engine;
-    P::ValidatedAsset                          asset;
-    Context                                    context;
-    P::Generation                              generation;
-    Look                                       look;
+    Engine            engine;
+    P::ValidatedAsset asset;
+    Context           context;
+    P::Generation     generation;
+    Look              look;
 
     RE::NiPointer<RE::NiNode>                  root, parent;
     std::vector<RE::NiAVObject*>               nodes;
@@ -138,17 +137,13 @@ public:
       skins.clear();
       surfaces.clear();
       root.reset();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
       const auto loadStart = std::chrono::steady_clock::now();
-#endif
-      auto loaded = engine.load(asset);
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      const auto loadEnd = std::chrono::steady_clock::now();
+      auto       loaded    = engine.load(asset);
+      const auto loadEnd   = std::chrono::steady_clock::now();
       Dreamsleeve::Client::Diagnostics::Trace::Observe(
         Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeLoad,
         std::chrono::duration<double, std::milli>(loadEnd - loadStart).count());
       Dreamsleeve::Client::Diagnostics::Trace::Span prepareSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ScenePrepare);
-#endif
       if (!loaded) return std::unexpected(loaded.error());
       root = std::move(*loaded);
       if (auto collected = N::Collect(root.get(), nodes); !collected) return std::unexpected(collected.error());
@@ -195,22 +190,21 @@ public:
         }
       root->GetFlags().set(Flag::kHidden);
       phase = Phase::Loaded;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      logger::info(
-        "[Phantom stages] generation={} nistream_load_ms={:.3f} scene_prepare_ms={:.3f}",
-        generation.value,
-        std::chrono::duration<double, std::milli>(loadEnd - loadStart).count(),
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadEnd).count());
-#endif
+      if constexpr (Trace::Compiled)
+      {
+        logger::info(
+          "[Phantom stages] generation={} nistream_load_ms={:.3f} scene_prepare_ms={:.3f}",
+          generation.value,
+          std::chrono::duration<double, std::milli>(loadEnd - loadStart).count(),
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadEnd).count());
+      }
       return BuildProgress::Ready;
     }
 
     P::Result<void> Apply(const P::Snapshot& pose, Context c, FrameBudget& frame)
     {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
       Dreamsleeve::Client::Diagnostics::Trace::Span applySpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::ApplyPose);
-#endif
-      auto checked = Check(c);
+      auto                                          checked = Check(c);
       if (!checked) return checked;
       if (phase == Phase::Waiting) return A::Fail(P::Failure::Busy, "scene.loading");
       if (pose.generation != generation || pose.context != c.epoch) return A::Fail(P::Failure::Stale, "scene.generation");

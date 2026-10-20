@@ -6,9 +6,9 @@ export import DreamNet.Client;
 import DreamNet.Core;
 import Dreamsleeve.Client.Utils;
 import Dreamsleeve.Client.Phantom.Streaming;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
-import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
 
 export namespace Dreamsleeve::Client
@@ -119,11 +119,7 @@ public:
         transport = std::move(*created);
       }
 
-      opening = Wire::OpenSession{
-        *requestId,
-        std::move(sessionTicket),
-        exchange.HideIdentity()
-      };
+      opening     = Wire::OpenSession{*requestId, std::move(sessionTicket), exchange.HideIdentity()};
       lastRequest = *requestId;
       ResetSession();
       auto published = Publish();
@@ -206,8 +202,8 @@ public:
         if (!packet) return Fail(packet.error());
         auto sent = transport->Send(std::move(*packet), outgoing.lane);
         if (!sent) return Fail(sent.error());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
         Diagnostics::Trace::Packet(true, outgoing.lane, outgoing.bytes);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
         if (outgoing.lane == Phantom::Wire::PosesLane) Diagnostics::Phantoms().Sent(outgoing.bytes);
 #endif
       }
@@ -298,11 +294,7 @@ private:
     // The server's answer to a request, after the state it changed.
     Result<void> Settle(std::uint64_t requestId, CommandResult::Outcome outcome)
     {
-      return Publish(false, CommandResult{
-        model.Generation(),
-        requestId,
-        std::move(outcome)
-      });
+      return Publish(false, CommandResult{model.Generation(), requestId, std::move(outcome)});
     }
 
     Result<void> Fail(Error error)
@@ -353,12 +345,7 @@ private:
     {
       auto address = DreamNetAddress::TryResolve(endpoint.host, endpoint.port);
       if (!address) return std::unexpected{std::move(address.error())};
-      return DreamNetClient::TryCreate({
-        config.network,
-        *address,
-        config.connectTimeoutMs,
-        config.disconnectTimeoutMs
-      });
+      return DreamNetClient::TryCreate({config.network, *address, config.connectTimeoutMs, config.disconnectTimeoutMs});
     }
 
     // The state of the connection kept without a session; Disconnected when
@@ -443,9 +430,7 @@ private:
           (received.channelId == Phantom::Wire::PosesLane && PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
           return Unexpected("phantom.delivery");
         const auto bytes = received.packet.Data();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
         Diagnostics::Trace::Packet(false, received.channelId, bytes);
-#endif
         const auto now =
           static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
         const auto result =
@@ -697,11 +682,7 @@ private:
 
         // Opening was refused: the full terminal reply is already received.
         // Notify the peer best-effort, without racing its own graceful close.
-        CommandResult result{
-          model.Generation(),
-          rejected.requestId,
-          std::move(rejected.rejection)
-        };
+        CommandResult result{model.Generation(), rejected.requestId, std::move(rejected.rejection)};
         transport->Abort(DisconnectReason::ClientShutdown);
         return Clear(SessionPhase::Disconnected, std::move(result));
       }
@@ -1117,11 +1098,9 @@ private:
       ResetMovement();
       latestMovement = command.location;
       Wire::SetLocation transition{++contextRevision, command.location};
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      Diagnostics::Trace::Event(
-        "movement_context",
-        std::format("\"context\":{},\"located\":{}", contextRevision, command.location.has_value()));
-#endif
+      Diagnostics::Trace::Event("movement_context", [&] {
+        return std::format("\"context\":{},\"located\":{}", contextRevision, command.location.has_value());
+      });
 
       auto result = SendPlayerUpdate(generation, transition, true);
       if (!result || pendingLocation == Domain::InvalidId) ResetMovement();
@@ -1246,10 +1225,10 @@ private:
       Port        port{};
     } endpoint{config.serverHost, config.serverPort};
 
-    std::size_t                                       unreachable{};  // See TakeUnreachable.
-    bool                                              reached{};      // See Reached.
-    bool                                              keepGuest{};
-    Utils::Timing::Backoff                            guestRetry{GuestRetryMinimum, GuestRetryMaximum};
+    std::size_t            unreachable{};  // See TakeUnreachable.
+    bool                   reached{};      // See Reached.
+    bool                   keepGuest{};
+    Utils::Timing::Backoff guestRetry{GuestRetryMinimum, GuestRetryMaximum};
 
     ClientModel                                       model;
     SessionPhase                                      phase{SessionPhase::Disconnected};
@@ -1261,18 +1240,18 @@ private:
     std::vector<QueuedClientCommand>                  commands;
     Clock::time_point                                 deadline{};
 
-    Clock::time_point                                 nextPlayerSample{};
-    std::optional<Domain::PlayerLocation>             latestMovement;
-    std::uint64_t                                     contextRevision{};
-    std::uint64_t                                     movementSequence{};
-    std::uint64_t                                     pendingLocation{Domain::InvalidId};  // The location update in flight.
-    bool                                              movementReady{};
+    Clock::time_point                     nextPlayerSample{};
+    std::optional<Domain::PlayerLocation> latestMovement;
+    std::uint64_t                         contextRevision{};
+    std::uint64_t                         movementSequence{};
+    std::uint64_t                         pendingLocation{Domain::InvalidId};  // The location update in flight.
+    bool                                  movementReady{};
 
-    std::vector<ClientUpdate>                         earlyChat;
-    std::shared_ptr<const GuildBook>                  guilds;  // Absent until the session's GuildsSnapshot.
-    std::vector<ClientEvent>                          events;
-    Wire::ActorValueKinds                             kinds;
-    std::size_t                                       kindSweep{KindSweepFloor};
+    std::vector<ClientUpdate>        earlyChat;
+    std::shared_ptr<const GuildBook> guilds;  // Absent until the session's GuildsSnapshot.
+    std::vector<ClientEvent>         events;
+    Wire::ActorValueKinds            kinds;
+    std::size_t                      kindSweep{KindSweepFloor};
   };
 
 }

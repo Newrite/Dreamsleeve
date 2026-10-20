@@ -4,9 +4,9 @@ import std;
 import Dreamsleeve.Client.Phantom.Delta;
 import Dreamsleeve.Client.Phantom.Cache;
 export import Dreamsleeve.Client.Phantom.Exchange;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
-import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
 
 export namespace Dreamsleeve::Client::Phantom
@@ -124,11 +124,9 @@ export namespace Dreamsleeve::Client::Phantom
 
       if (job.delta)
       {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
         Diagnostics::Trace::Span deltaSpan(Diagnostics::Trace::Metric::DeltaApply);
-#endif
-        const auto digest     = Hash(*bytes);
-        auto       basis      = Cached(job.delta->baseHash);
+        const auto               digest = Hash(*bytes);
+        auto                     basis  = Cached(job.delta->baseHash);
         const auto baseDigest = basis ? Hash(*basis) : Result<Digest>{std::unexpected(Error{Failure::InvalidFormat, "delta.base"})};
         auto       full       = basis && baseDigest && *baseDigest == job.delta->baseHash && digest && *digest == job.delta->hash
                                 ? Delta::Apply(*basis, *bytes, job.offer.asset.rawBytes)
@@ -160,9 +158,7 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       auto decoded = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
         Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::AssetDecode);
-#endif
         return ReadAsset(*bytes, job.offer.asset.rawBytes);
       }();
       if (!decoded || decoded->Layout().requiredChannels.size() != job.offer.asset.channels)
@@ -170,9 +166,7 @@ export namespace Dreamsleeve::Client::Phantom
         exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверный формат");
         return;
       }
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      Diagnostics::Trace::Asset(Hex(job.offer.asset.hash), *bytes);
-#endif
+      Diagnostics::Trace::Asset(job.offer.asset.hash, *bytes);
 
       const bool cached = !job.bytes;
       if (job.bytes)
@@ -217,9 +211,7 @@ export namespace Dreamsleeve::Client::Phantom
       if (job.epoch != exchange.Epoch()) return;
 
       auto pose = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
         Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseDecode);
-#endif
         return ReadSnapshot(job.pose.sample.payload, *job.asset);
       }();
 
@@ -266,9 +258,7 @@ export namespace Dreamsleeve::Client::Phantom
           const auto encodingStart = std::chrono::steady_clock::now();
 #endif
           auto encoded = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
             Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::PoseEncode);
-#endif
             return WriteSnapshot(snapshot, work.asset->asset);
           }();
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -340,17 +330,13 @@ export namespace Dreamsleeve::Client::Phantom
         if (capture && capture->epoch == exchange.Epoch() && exchange.Capturing(capture->generation))
         {
           auto result = [&] {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
             Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::ModelPrepare);
-#endif
             return prepare(std::move(capture->asset));
           }();
           if (result && capture->basis && capture->basis->hash != result->hash)
           {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
             Diagnostics::Trace::Span deltaSpan(Diagnostics::Trace::Metric::DeltaEncode);
-#endif
-            auto bytes = Delta::Create(*capture->basis->compressed, *result->compressed);
+            auto                     bytes = Delta::Create(*capture->basis->compressed, *result->compressed);
             if (bytes && bytes->size() < result->compressed->size())
             {
               auto hash = Hash(*bytes);
@@ -361,20 +347,18 @@ export namespace Dreamsleeve::Client::Phantom
                 };
             }
           }
-#ifdef DREAMSLEEVE_DIAGNOSTICS
           if (result)
           {
-            Diagnostics::Trace::Asset(Hex(result->hash), *result->compressed);
+            Diagnostics::Trace::Asset(result->hash, *result->compressed);
             if (result->delta)
-              Diagnostics::Trace::Event(
-                "delta_prepared",
-                std::format(
+              Diagnostics::Trace::Event("delta_prepared", [&] {
+                return std::format(
                   "\"generation\":{},\"full_bytes\":{},\"delta_bytes\":{}",
                   capture->generation.value,
                   result->compressed->size(),
-                  result->delta->bytes->size()));
+                  result->delta->bytes->size());
+              });
           }
-#endif
           if (result)
             exchange.Prepared(
               capture->epoch,

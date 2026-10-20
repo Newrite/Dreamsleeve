@@ -13,6 +13,7 @@ import Dreamsleeve.Game.Phantoms;
 import Dreamsleeve.Game.Phantom.Native;
 import Dreamsleeve.Game.Phantom.Capture;
 import Dreamsleeve.Client.Phantom.NifOutput;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site
 // offsets, byte checks and the thunks. The modules behind the thunks (Logic,
@@ -201,9 +202,7 @@ namespace Hooks
 
   std::expected<void, std::string> AuditPhantom(RE::NiStream& stream)
   {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Span auditSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeAudit);
-#endif
     // Reuse this registration for Save. The native RegisterSaveObject returns
     // false for a known root, so SaveStream's repeated RegisterObjects stops
     // before traversing its children. Do not mutate the tree between audit/Save.
@@ -332,23 +331,17 @@ public:
     // A size hint, not a limit or retained allocation. Only the game thread
     // accesses it. Each vector belongs exclusively to its resulting asset.
     static std::uint32_t previousBytes{};
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    const auto nativeStart = std::chrono::steady_clock::now();
-#endif
-    PhantomOutput output(previousBytes);
-#ifdef DREAMSLEEVE_DIAGNOSTICS
+    const auto           nativeStart = std::chrono::steady_clock::now();
+    PhantomOutput        output(previousBytes);
     Dreamsleeve::Client::Diagnostics::Trace::Observe(
       Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeReserve,
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
-#endif
     // Native Save(NiBinaryStream*) (slot 04) still registers objects and invokes
     // their SaveBinary. Only the grow/copy output storage is supplied by us.
     const bool saved = stream->Save1(&output);
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Observe(
       Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeSave,
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - nativeStart).count());
-#endif
     if (!output.good())
       return std::unexpected(
         P::Error{
@@ -361,16 +354,12 @@ public:
 
     auto result = std::move(output).Take();
     if (result.empty()) return std::unexpected(P::Error{P::Failure::InvalidFormat, "native.empty-output"});
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    Dreamsleeve::Client::Diagnostics::Trace::Event(
-      "native_output",
-      std::format("\"reserve_hint\":{},\"raw_bytes\":{},\"capacity\":{}", previousBytes, result.size(), result.capacity()));
-#endif
+    Dreamsleeve::Client::Diagnostics::Trace::Event("native_output", [&] {
+      return std::format("\"reserve_hint\":{},\"raw_bytes\":{},\"capacity\":{}", previousBytes, result.size(), result.capacity());
+    });
 
     previousBytes = static_cast<std::uint32_t>(result.size());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     Dreamsleeve::Client::Diagnostics::Trace::Span disposeSpan(Dreamsleeve::Client::Diagnostics::Trace::Metric::NativeDispose);
-#endif
     stream.reset();
     return result;
   }

@@ -2,9 +2,7 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.Phantom.Native;
 import std;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-#endif
 import Dreamsleeve.Client.Phantom.Nif;
 import Dreamsleeve.Game.Phantom.Math;
 import Dreamsleeve.Game.Phantom.CaptureRules;
@@ -13,6 +11,7 @@ export namespace Dreamsleeve::Game::PhantomNative
 {
   namespace P                    = Dreamsleeve::Client::Phantom;
   namespace A                    = Dreamsleeve::Game::PhantomMath;
+  namespace Trace                = Dreamsleeve::Client::Diagnostics::Trace;
   using Flag                     = RE::NiAVObject::Flag;
   constexpr std::size_t MaxNodes = P::Limits{}.nodes;
 
@@ -249,7 +248,7 @@ export namespace Dreamsleeve::Game::PhantomNative
     if (!white) return A::Fail(P::Failure::InvalidLink, "required local ghost texture fxwhite.dds missing");
     material->diffuseTexture = RE::NiPointer<RE::NiSourceTexture>{static_cast<RE::NiSourceTexture*>(white.get())};
 
-    using Shader             = RE::BSShaderProperty::EShaderPropertyFlag;
+    using Shader = RE::BSShaderProperty::EShaderPropertyFlag;
     lit->flags.reset(Shader::kCastShadows, Shader::kReceiveShadows, Shader::kSpecular);
     lit->flags.set(Shader::kZBufferTest, Shader::kZBufferWrite, Shader::kNoFade, Shader::kRimLighting);
     if (!lit->flags.all(Shader::kOwnEmit) || !lit->emissiveColor)
@@ -284,11 +283,10 @@ export namespace Dreamsleeve::Game::PhantomNative
 
 namespace Dreamsleeve::Game::PhantomNative
 {
+
   // Pairs borrow the live and detached trees retained by Prepare's root owners.
   // Required surfaces receive independent clone materials before metadata stripping.
-  inline P::Result<void> PrepareRequiredMaterials(
-    const std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs,
-    const Engine& engine)
+  inline P::Result<void> PrepareRequiredMaterials(const std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs, const Engine& engine)
   {
     for (const auto& [source, target] : pairs)
     {
@@ -330,6 +328,7 @@ namespace Dreamsleeve::Game::PhantomNative
 
 export namespace Dreamsleeve::Game::PhantomNative
 {
+
   struct Prepared
   {
     P::Asset             asset;
@@ -341,10 +340,8 @@ export namespace Dreamsleeve::Game::PhantomNative
     if (!engine.mainThread || !engine.mainThread() || !engine.save || !engine.normalizeBones || !engine.alpha || !engine.clone)
       return A::Fail(P::Failure::Busy, "native capture outside game thread");
 
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    using Clock      = std::chrono::steady_clock;
-    const auto start = Clock::now();
-#endif
+    using Clock                        = std::chrono::steady_clock;
+    const auto                   start = Clock::now();
     std::vector<RE::NiAVObject*> topology;
     if (auto collected = Collect(live, topology); !collected) return std::unexpected(collected.error());
     std::vector<RE::NiAVObject*> required;
@@ -354,15 +351,11 @@ export namespace Dreamsleeve::Game::PhantomNative
       if (!auxiliary) return std::unexpected(auxiliary.error());
       if (source->AsGeometry() && !*auxiliary) required.push_back(source);
     }
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    const auto cloneStart = Clock::now();
-#endif
+    const auto                                           cloneStart = Clock::now();
     std::unordered_map<RE::NiAVObject*, RE::NiAVObject*> pairs;
-    RE::NiPointer<RE::NiObject>                          holder = engine.clone(live, pairs);
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    const auto cloneEnd = Clock::now();
-#endif
-    auto* clone = holder ? holder->AsNode() : nullptr;
+    RE::NiPointer<RE::NiObject>                          holder   = engine.clone(live, pairs);
+    const auto                                           cloneEnd = Clock::now();
+    auto*                                                clone    = holder ? holder->AsNode() : nullptr;
     if (!clone) return A::Fail(P::Failure::InvalidLink, "Не удалось клонировать модель");
 
     std::vector<RE::NiAVObject*> cloned;
@@ -388,8 +381,7 @@ export namespace Dreamsleeve::Game::PhantomNative
             source->GetRTTI()->GetName(),
             source->parent && source->parent->name.c_str() ? source->parent->name.c_str() : ""));
 
-    if (auto materials = PrepareRequiredMaterials(pairs, engine); !materials)
-      return std::unexpected(std::move(materials.error()));
+    if (auto materials = PrepareRequiredMaterials(pairs, engine); !materials) return std::unexpected(std::move(materials.error()));
 
     // Clone may retain runtime-only metadata (FaceGen model/morph handles,
     // actor animation data, mod extras) which NiStream cannot reconstruct.
@@ -489,25 +481,22 @@ export namespace Dreamsleeve::Game::PhantomNative
     for (auto* object : cloned)
       if (auto* geometry = object->AsGeometry())
         if (auto ghost = Ghostify(*geometry, engine, {}); !ghost) return std::unexpected(ghost.error());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
     const auto saveStart = Clock::now();
-#endif
-    auto encoded = engine.save(streamRoot->get());
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    const auto saveEnd = Clock::now();
-    const auto ms      = [](auto from, auto to) {
+    auto       encoded   = engine.save(streamRoot->get());
+    const auto saveEnd   = Clock::now();
+    const auto ms        = [](auto from, auto to) {
       return std::chrono::duration<double, std::milli>(to - from).count();
     };
-    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Topology, ms(start, cloneStart));
-    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Clone, ms(cloneStart, cloneEnd));
-    Dreamsleeve::Client::Diagnostics::Trace::Observe(Dreamsleeve::Client::Diagnostics::Trace::Metric::Normalize, ms(cloneEnd, saveStart));
-    logger::info(
-      "[Phantom stages] topology_ms={:.3f} clone_ms={:.3f} normalize_ghost_ms={:.3f} native_export_ms={:.3f}",
-      ms(start, cloneStart),
-      ms(cloneStart, cloneEnd),
-      ms(cloneEnd, saveStart),
-      ms(saveStart, saveEnd));
-#endif
+    Trace::Observe(Trace::Metric::Topology, ms(start, cloneStart));
+    Trace::Observe(Trace::Metric::Clone, ms(cloneStart, cloneEnd));
+    Trace::Observe(Trace::Metric::Normalize, ms(cloneEnd, saveStart));
+    if constexpr (Trace::Compiled)
+      logger::info(
+        "[Phantom stages] topology_ms={:.3f} clone_ms={:.3f} normalize_ghost_ms={:.3f} native_export_ms={:.3f}",
+        ms(start, cloneStart),
+        ms(cloneStart, cloneEnd),
+        ms(cloneEnd, saveStart),
+        ms(saveStart, saveEnd));
     if (!encoded) return std::unexpected(encoded.error());
 
     Prepared out{P::Asset{std::move(*encoded)}, {}};

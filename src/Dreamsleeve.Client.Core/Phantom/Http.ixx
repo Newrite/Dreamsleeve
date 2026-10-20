@@ -8,9 +8,7 @@ export module Dreamsleeve.Client.Phantom.Http;
 import std;
 import Dreamsleeve.Client.Auth;
 import Dreamsleeve.Client.PhantomProtocol;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-#endif
 
 export namespace Dreamsleeve::Client::Phantom
 {
@@ -38,83 +36,7 @@ export namespace Dreamsleeve::Client::Phantom
     static constexpr int ConnectTimeoutMs  = 5000;
     static constexpr int TransferTimeoutMs = 30000;
 
-    // Per-job timings, emitted at most once/sec plus slow operations and endpoints.
-    struct Trace
-    {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      const Wire::Transfer& transfer;
-      Clock::time_point     start{Clock::now()};
-      Clock::time_point     emitted{start};
-      std::array<double, 5> totals{};
-      std::uint32_t         progress{};
-      bool                  active{Diagnostics::Trace::Enabled()};
-
-      explicit Trace(const Wire::Transfer& value) : transfer(value)
-      {
-        Emit("start", 0);
-      }
-
-      void Emit(std::string_view phase, double elapsed)
-      {
-        if (!active) return;
-        Diagnostics::Trace::Event(
-          "http",
-          std::format(
-            "\"transfer\":{},\"request\":{},\"player\":{},\"generation\":{},\"upload\":{},\"body_bytes\":{},\"progress\":{},\"phase\":\"{}\",\"operation_ms\":{},\"elapsed_ms\":{},\"send_ms\":{},\"headers_ms\":{},\"budget_ms\":{},\"body_ms\":{},\"eof_ms\":{}",
-            transfer.transfer.value,
-            transfer.request.value,
-            transfer.player,
-            transfer.asset.generation.value,
-            transfer.upload,
-            transfer.BodyBytes(),
-            progress,
-            phase,
-            elapsed,
-            std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
-            totals[0],
-            totals[1],
-            totals[2],
-            totals[3],
-            totals[4]));
-        emitted = Clock::now();
-      }
-
-      template <class F>
-      bool Step(unsigned stage, std::string_view phase, F&& action)
-      {
-        if (!active) return action();
-        const auto at  = Clock::now();
-        const bool ok  = action();
-        const auto ms  = std::chrono::duration<double, std::milli>(Clock::now() - at).count();
-        totals[stage] += ms;
-        if (!ok || stage < 2 || stage == 4 || ms >= 250 || Clock::now() - emitted >= std::chrono::seconds(1)) Emit(phase, ms);
-        return ok;
-      }
-
-      void Progress(std::uint32_t value)
-      {
-        if (!progress && value)
-        {
-          progress = value;
-          Emit("first_body", 0);
-        }
-        else
-          progress = value;
-      }
-#else
-      explicit Trace(const Wire::Transfer&) {}
-
-      void Emit(std::string_view, double) {}
-
-      template <class F>
-      bool Step(unsigned, std::string_view, F&& action)
-      {
-        return action();
-      }
-
-      void Progress(std::uint32_t) {}
-#endif
-    };
+    using Trace = Diagnostics::Trace::Transfer;
 
     struct Budget
     {
@@ -397,7 +319,15 @@ public:
       job->input    = std::move(input);
       auto* owner   = job.get();
       job->thread   = std::jthread([this, owner, url = origin, insecure = allowInsecure, rate](std::stop_token stop) {
-        Trace trace{owner->transfer};
+        const auto& transfer = owner->transfer;
+        Trace       trace{
+            {transfer.transfer.value,
+             transfer.request.value,
+             transfer.player,
+             transfer.asset.generation.value,
+             transfer.upload,
+             transfer.BodyBytes()}
+        };
         owner->error = Run(*owner, url, insecure, rate, stop, trace);
         trace.Emit(owner->error ? (stop.stop_requested() ? "canceled" : "failed") : "complete", 0);
         owner->done.store(true, std::memory_order_release);

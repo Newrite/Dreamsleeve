@@ -107,6 +107,14 @@ python Scripts/analyze_phantom_trace.py <каталог сессии или по
 Сетевой контракт она не меняет. Флаг сборки `DREAMSLEEVE_DIAGNOSTICS` независим
 от `DEBUG`; xmake включает его через отдельную опцию, по умолчанию выключенную.
 
+Трассировка (`Diagnostics.PhantomTrace`: `Span`, `Observe`, `Event`, `Packet`, `Asset`,
+трассировка HTTP-передачи) входит в любую сборку: без флага её функции пустые и встраиваемые,
+`Enabled()` — константа `false`, а поля событий передаются лямбдой и не форматируются. Поэтому
+рабочий код вызывает её без `#ifdef`. Журнальные строки «[Phantom stages]» и «[Phantom network]»
+выбираются через `if constexpr (Trace::Compiled)`. Под `#ifdef` остаются только запись и
+воспроизведение сессий (`PhantomRecorder`, `PhantomReplay`, игровой `Phantom/Replay`): их модулей
+в обычной сборке нет, и они меняют поведение (запись приостанавливает публикацию).
+
 ```powershell
 xmake f --diagnostics=y
 xmake build -y Dreamsleeve.Client

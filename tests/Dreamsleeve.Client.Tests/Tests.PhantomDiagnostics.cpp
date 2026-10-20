@@ -170,9 +170,9 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
       record.Get<std::uint64_t>();
       const auto raw        = record.Get<std::uint32_t>();
       const auto compressed = record.Get<std::uint32_t>();
-      auto       digest = record.Data(32);
-      auto       model  = record.Data(compressed);
-      auto       hash   = P::Hash(model);
+      auto       digest     = record.Data(32);
+      auto       model      = record.Data(compressed);
+      auto       hash       = P::Hash(model);
       REQUIRE(hash);
       CHECK(std::ranges::equal(digest, *hash));
       CHECK(P::ReadAsset(model, raw));
@@ -188,7 +188,7 @@ TEST_CASE("Diagnostic archive keeps original floats production bytes models and 
       Reader     original{record.Data(originalN)};
       auto       raw        = record.Data(rawN);
       auto       compressed = record.Data(zstN);
-      auto       decoded = P::ReadSnapshot(compressed, *f.asset);
+      auto       decoded    = P::ReadSnapshot(compressed, *f.asset);
       REQUIRE(decoded);
       if (samples++ == 0)
       {
@@ -641,7 +641,9 @@ TEST_CASE("continuous trace retains packet slices and excludes control payloads"
     std::filesystem::path("build/phantom-trace-tests") / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
   REQUIRE(T::Start(path, 1024));
   const std::vector<std::uint8_t> bytes(33000, 0xab);
-  T::Asset(std::string(64, 'a'), bytes);
+  std::array<std::uint8_t, 32>    digest;
+  digest.fill(0xaa);  // "aa" 32 times, the file name of the model.
+  T::Asset(digest, bytes);
   T::Packet(true, 3, bytes);
   T::Packet(false, 4, std::span(bytes).first(3));
   T::Packet(false, 0, bytes);
@@ -817,7 +819,9 @@ TEST_CASE("continuous trace preserves expected storage failures and failed-open 
     std::ofstream prior(partial / "preserve.txt");
     prior << "preserve";
   }
-  T::Asset(hash, std::array<std::uint8_t, 2>{1, 2});
+  std::array<std::uint8_t, 32> digest;
+  digest.fill(0xaa);
+  T::Asset(digest, std::array<std::uint8_t, 2>{1, 2});
   CHECK(File(partial / "preserve.txt").size() == 8);
   CHECK_FALSE(std::filesystem::exists(models / (hash + ".zst")));
   T::FlushMetrics();

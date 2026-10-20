@@ -132,7 +132,8 @@ target("Dreamsleeve.Client.Core")
     if has_config("diagnostics") then
         add_defines("DREAMSLEEVE_DIAGNOSTICS", {public = true})
     else
-        remove_files("src/Dreamsleeve.Client.Core/Diagnostics/**.ixx", "src/Dreamsleeve.Client.Core/Diagnostics/**.cpp")
+        -- Tracing stays: its functions are empty without diagnostics.
+        remove_files("src/Dreamsleeve.Client.Core/Diagnostics/PhantomRecorder.ixx", "src/Dreamsleeve.Client.Core/Diagnostics/PhantomReplay.ixx")
     end
 
     add_deps("Dreamsleeve.Protocol.Native")
