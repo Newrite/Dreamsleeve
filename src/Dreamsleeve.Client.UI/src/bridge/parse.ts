@@ -102,7 +102,9 @@ function groundMark(v: unknown): boolean {
     finite(v.x) &&
     finite(v.y) &&
     finite(v.z) &&
-    optional(label)(v.gameDate)
+    optional(label)(v.gameDate) &&
+    optional(level)(v.level) &&
+    optional(level)(v.killerLevel)
   );
 }
 function channel(v: unknown): boolean {
@@ -145,6 +147,9 @@ function sanction(v: unknown): boolean {
 }
 const count = (v: unknown) =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+// A known level: mods raise it past the vanilla range, the wire to 2^32 - 1.
+const level = (v: unknown) =>
+  count(v) && (v as number) >= 1 && (v as number) <= 0xffffffff;
 function guildMember(v: unknown): boolean {
   return (
     object(v) &&

@@ -98,6 +98,12 @@ namespace GroundMarks
   constexpr std::string_view KillerPrefix = "Убийца: ";
   constexpr std::string_view CausePrefix  = "Причина смерти: ";
 
+  // ", 32 ур." after a death's name or label; nothing for a level the mark lacks.
+  std::string LevelSuffix(std::uint32_t level)
+  {
+    return level == 0 ? std::string{} : std::format(", {} ур.", level);
+  }
+
   std::string CauseLabel(RE::PlayerCharacter* player)
   {
     auto* actorState = player->AsActorState();
@@ -120,15 +126,26 @@ namespace GroundMarks
 
     using Dreamsleeve::Utils::Text::CodePoints;
     using Dreamsleeve::Utils::Text::Prefix;
-    std::string label;
+    std::string   label;
+    std::uint32_t killerLevel{};
     if (auto ref = killer.get())
       if (auto name = World::RefName(ref.get()))
+      {
         // Untrusted text: the name is cut so the whole label fits the server limit.
         label = std::string{KillerPrefix} + std::string{Prefix(*name, DeathLabelLimit - CodePoints(KillerPrefix))};
+        // A trap or a spell left in the world kills too; only an actor has a level.
+        if (auto* actor = ref->As<RE::Actor>()) killerLevel = actor->GetLevel();
+      }
     if (label.empty()) label = CauseLabel(player);
+    const std::uint32_t characterLevel = player->GetLevel();
 
-    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, *spot))
-      logger::info("Death reported (dead={}) with label of {} bytes", dead, label.size());
+    if (auto sent = runtime.session.ReportDeath(runtime.app->Exchange(), label, characterLevel, killerLevel, *spot))
+      logger::info(
+        "Death reported (dead={}) at level {} by a killer of level {}, label of {} bytes",
+        dead,
+        characterLevel,
+        killerLevel,
+        label.size());
     else
       logger::warn("Death not reported: {}", sent.error());
   }
@@ -184,15 +201,18 @@ namespace GroundMarks
         .nameColor = Host::Hud::NameColor(ui, death),
         .style     = Host::Hud::MarkBubble(ui, death)
     };
+    // A death names the character with its level and the killer with theirs.
     if (visual.nameShown)
       label.name = Host::Names::PlateName(
-        runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui),
+        runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui) +
+          (death ? LevelSuffix(mark.characterLevel) : std::string{}),
         mark.author);
     // The same filter of server-flagged ranges as chat lines and bubbles. The
     // date header comes and goes with the text.
     if (visual.textShown)
     {
-      if (auto text = Host::Bridge::FilterText(mark.text, mark.flagged, ui, own)) label.bubble = std::move(*text);
+      if (auto text = Host::Bridge::FilterText(mark.text, mark.flagged, ui, own))
+        label.bubble = std::move(*text) + (death ? LevelSuffix(mark.killerLevel) : std::string{});
       if (mark.gameDate && (death ? ui.deathDateHeader : ui.noteDateHeader))
         label.header = Host::FormatGameDate(*mark.gameDate, ui.markDateStyle);
     }

@@ -42,7 +42,9 @@ export namespace Dreamsleeve::Client
     std::uint64_t               requestId{};
     std::string                 label;
     Domain::GroundMarkPlacement placement;
-    Domain::GameDate            gameDate;  // Required: the calendar at the death.
+    Domain::GameDate            gameDate;          // Required: the calendar at the death.
+    std::uint32_t               characterLevel{};  // Required: at least 1.
+    std::uint32_t               killerLevel{};     // Zero: no killer, or one without a level.
   };
 
   // The author's own mark; a moderator's, any mark.

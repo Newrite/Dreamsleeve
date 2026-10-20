@@ -1169,6 +1169,8 @@ class ReportDeath final : public ::google::protobuf::Message
     kLabelFieldNumber = 1,
     kPlacementFieldNumber = 2,
     kGameDateFieldNumber = 3,
+    kCharacterLevelFieldNumber = 4,
+    kKillerLevelFieldNumber = 5,
   };
   // string label = 1;
   void clear_label() ;
@@ -1215,11 +1217,31 @@ class ReportDeath final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NONNULL _internal_mutable_game_date();
 
   public:
+  // uint32 character_level = 4;
+  void clear_character_level() ;
+  ::uint32_t character_level() const;
+  void set_character_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_level() const;
+  void _internal_set_character_level(::uint32_t value);
+
+  public:
+  // uint32 killer_level = 5;
+  void clear_killer_level() ;
+  ::uint32_t killer_level() const;
+  void set_killer_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_killer_level() const;
+  void _internal_set_killer_level(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.ReportDeath)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    2, 51,
                                    2>
       _table_;
@@ -1244,6 +1266,8 @@ class ReportDeath final : public ::google::protobuf::Message
     ::google::protobuf::internal::ArenaStringPtr label_;
     ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NULLABLE placement_;
     ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE game_date_;
+    ::uint32_t character_level_;
+    ::uint32_t killer_level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1631,8 +1655,10 @@ class GroundMark final : public ::google::protobuf::Message
     kPlacementFieldNumber = 6,
     kGameDateFieldNumber = 9,
     kMarkIdFieldNumber = 1,
-    kCreatedAtUnixMsFieldNumber = 7,
     kKindFieldNumber = 3,
+    kCharacterLevelFieldNumber = 10,
+    kCreatedAtUnixMsFieldNumber = 7,
+    kKillerLevelFieldNumber = 11,
   };
   // repeated .Dreamsleeve.Protocol.Chat.TextSpan flagged = 5;
   int flagged_size() const;
@@ -1737,16 +1763,6 @@ class GroundMark final : public ::google::protobuf::Message
   void _internal_set_mark_id(::uint64_t value);
 
   public:
-  // int64 created_at_unix_ms = 7;
-  void clear_created_at_unix_ms() ;
-  ::int64_t created_at_unix_ms() const;
-  void set_created_at_unix_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_created_at_unix_ms() const;
-  void _internal_set_created_at_unix_ms(::int64_t value);
-
-  public:
   // .Dreamsleeve.Protocol.Chat.GroundMarkKind kind = 3;
   void clear_kind() ;
   ::Dreamsleeve::Protocol::Chat::GroundMarkKind kind() const;
@@ -1757,11 +1773,41 @@ class GroundMark final : public ::google::protobuf::Message
   void _internal_set_kind(::Dreamsleeve::Protocol::Chat::GroundMarkKind value);
 
   public:
+  // uint32 character_level = 10;
+  void clear_character_level() ;
+  ::uint32_t character_level() const;
+  void set_character_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_level() const;
+  void _internal_set_character_level(::uint32_t value);
+
+  public:
+  // int64 created_at_unix_ms = 7;
+  void clear_created_at_unix_ms() ;
+  ::int64_t created_at_unix_ms() const;
+  void set_created_at_unix_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_created_at_unix_ms() const;
+  void _internal_set_created_at_unix_ms(::int64_t value);
+
+  public:
+  // uint32 killer_level = 11;
+  void clear_killer_level() ;
+  ::uint32_t killer_level() const;
+  void set_killer_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_killer_level() const;
+  void _internal_set_killer_level(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GroundMark)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 9,
+  static const ::google::protobuf::internal::TcParseTable<4, 11,
                                    4, 71,
                                    2>
       _table_;
@@ -1790,8 +1836,10 @@ class GroundMark final : public ::google::protobuf::Message
     ::Dreamsleeve::Protocol::Chat::GroundMarkPlacement* PROTOBUF_NULLABLE placement_;
     ::Dreamsleeve::Protocol::Chat::GameDate* PROTOBUF_NULLABLE game_date_;
     ::uint64_t mark_id_;
-    ::int64_t created_at_unix_ms_;
     int kind_;
+    ::uint32_t character_level_;
+    ::int64_t created_at_unix_ms_;
+    ::uint32_t killer_level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2979,7 +3027,7 @@ inline void GroundMark::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000100U);
+                  0x00000080U);
 }
 inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::kind() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.kind)
@@ -2987,7 +3035,7 @@ inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::kind() const {
 }
 inline void GroundMark::set_kind(::Dreamsleeve::Protocol::Chat::GroundMarkKind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.kind)
 }
 inline ::Dreamsleeve::Protocol::Chat::GroundMarkKind GroundMark::_internal_kind() const {
@@ -3218,7 +3266,7 @@ inline void GroundMark::clear_created_at_unix_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_unix_ms_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000200U);
 }
 inline ::int64_t GroundMark::created_at_unix_ms() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.created_at_unix_ms)
@@ -3226,7 +3274,7 @@ inline ::int64_t GroundMark::created_at_unix_ms() const {
 }
 inline void GroundMark::set_created_at_unix_ms(::int64_t value) {
   _internal_set_created_at_unix_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.created_at_unix_ms)
 }
 inline ::int64_t GroundMark::_internal_created_at_unix_ms() const {
@@ -3404,6 +3452,56 @@ inline void GroundMark::set_allocated_game_date(::Dreamsleeve::Protocol::Chat::G
 
   _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.GroundMark.game_date)
+}
+
+// uint32 character_level = 10;
+inline void GroundMark::clear_character_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000100U);
+}
+inline ::uint32_t GroundMark::character_level() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.character_level)
+  return _internal_character_level();
+}
+inline void GroundMark::set_character_level(::uint32_t value) {
+  _internal_set_character_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.character_level)
+}
+inline ::uint32_t GroundMark::_internal_character_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_level_;
+}
+inline void GroundMark::_internal_set_character_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_level_ = value;
+}
+
+// uint32 killer_level = 11;
+inline void GroundMark::clear_killer_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.killer_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000400U);
+}
+inline ::uint32_t GroundMark::killer_level() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GroundMark.killer_level)
+  return _internal_killer_level();
+}
+inline void GroundMark::set_killer_level(::uint32_t value) {
+  _internal_set_killer_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GroundMark.killer_level)
+}
+inline ::uint32_t GroundMark::_internal_killer_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.killer_level_;
+}
+inline void GroundMark::_internal_set_killer_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.killer_level_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -3938,6 +4036,56 @@ inline void ReportDeath::set_allocated_game_date(::Dreamsleeve::Protocol::Chat::
 
   _impl_.game_date_ = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GameDate*>(value);
   // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ReportDeath.game_date)
+}
+
+// uint32 character_level = 4;
+inline void ReportDeath::clear_character_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline ::uint32_t ReportDeath::character_level() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ReportDeath.character_level)
+  return _internal_character_level();
+}
+inline void ReportDeath::set_character_level(::uint32_t value) {
+  _internal_set_character_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ReportDeath.character_level)
+}
+inline ::uint32_t ReportDeath::_internal_character_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_level_;
+}
+inline void ReportDeath::_internal_set_character_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_level_ = value;
+}
+
+// uint32 killer_level = 5;
+inline void ReportDeath::clear_killer_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.killer_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline ::uint32_t ReportDeath::killer_level() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.ReportDeath.killer_level)
+  return _internal_killer_level();
+}
+inline void ReportDeath::set_killer_level(::uint32_t value) {
+  _internal_set_killer_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.ReportDeath.killer_level)
+}
+inline ::uint32_t ReportDeath::_internal_killer_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.killer_level_;
+}
+inline void ReportDeath::_internal_set_killer_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.killer_level_ = value;
 }
 
 // -------------------------------------------------------------------

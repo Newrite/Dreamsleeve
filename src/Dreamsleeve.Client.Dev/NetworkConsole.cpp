@@ -387,16 +387,18 @@ namespace
   // The console has no game calendar: every mark it places is dated Tirdas, 17 Last Seed 4E 201, 14:05.
   constexpr Domain::GameDate ConsoleGameDate{4, 201, 8, 17, 2, 14, 5};
 
-  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> date=<date> text=<text>": one line per visible mark.
+  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> date=<date> levels=<character>/<killer> text=<text>":
+  // one line per visible mark; a level the mark lacks is 0.
   void PrintMark(std::ostream& output, const Domain::GroundMark& mark)
   {
     output << "mark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " author=" << mark.author.displayName
            << (mark.author.pseudonymous ? " [pseudonymous]" : "") << " x=" << mark.placement.position.X
-           << " character=" << mark.characterName.value_or("") << " date=" << DateText(mark.gameDate) << " text=" << mark.text << '\n';
+           << " character=" << mark.characterName.value_or("") << " date=" << DateText(mark.gameDate) << " levels=" << mark.characterLevel
+           << '/' << mark.killerLevel << " text=" << mark.text << '\n';
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | " "guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> | guild request <guild> <player> <accept|reject> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <level> <killer level> [label] | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | " "guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> | guild request <guild> <player> <accept|reject> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -404,14 +406,14 @@ namespace
     return hiding == Domain::HiddenIdentity::ExceptGroundMarks ? "except-marks" : "everywhere";
   }
 
-  // "own-marks <n>" then "own <id> kind=<1|2> date=<date> text=<text>" per mark: the server's
-  // complete list of this player's marks, wherever they stand.
+  // "own-marks <n>" then "own <id> kind=<1|2> date=<date> levels=<character>/<killer> text=<text>" per
+  // mark: the server's complete list of this player's marks, wherever they stand.
   void PrintOwnMarks(std::ostream& output, const std::vector<Domain::GroundMark>& marks)
   {
     output << "own-marks " << marks.size() << '\n';
     for (const auto& mark : marks)
       output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " date=" << DateText(mark.gameDate)
-             << " text=" << mark.text << '\n';
+             << " levels=" << mark.characterLevel << '/' << mark.killerLevel << " text=" << mark.text << '\n';
   }
 
   // The last position sent by move/location; marks are placed where the player stands.
@@ -493,7 +495,7 @@ namespace
     return true;
   }
 
-  // note <text> | death <label> | unmark <id>: placed at the last sent position.
+  // note <text> | death <level> <killer level> [label] | unmark <id>: placed at the last sent position.
   bool PostMarkCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
     const auto requestId = exchange.NextRequestId();
@@ -526,7 +528,19 @@ namespace
       if (line.starts_with("note "))
         command = PlaceGroundNote{*requestId, line.substr(5), placement, ConsoleGameDate};
       else
-        command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement, ConsoleGameDate};
+      {
+        std::istringstream input{line.substr(5)};
+        std::uint32_t      characterLevel{};
+        std::uint32_t      killerLevel{};
+        if (!(input >> characterLevel >> killerLevel))
+        {
+          std::cout << "Usage: death <level> <killer level> [label]\n";
+          return true;
+        }
+        std::string label;
+        std::getline(input >> std::ws, label);
+        command = ReportDeath{*requestId, std::move(label), placement, ConsoleGameDate, characterLevel, killerLevel};
+      }
     }
     if (exchange.Post({generation, std::move(command)}) == CommandPostResult::Queued)
       std::cout << "request " << *requestId << " queued\n";

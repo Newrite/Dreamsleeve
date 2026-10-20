@@ -210,11 +210,17 @@ public:
       }));
     }
 
-    // The place the character died, reported by the game once per death.
-    std::expected<void, std::string> ReportDeath(ClientExchange& exchange, std::string label, const Domain::MarkSpot& spot)
+    // The place the character died, reported by the game once per death, with
+    // the character's level and the killer's (zero: none).
+    std::expected<void, std::string> ReportDeath(
+      ClientExchange&         exchange,
+      std::string             label,
+      std::uint32_t           characterLevel,
+      std::uint32_t           killerLevel,
+      const Domain::MarkSpot& spot)
     {
       return Posted(Submit(exchange, PendingMark{{}, MarkRequest::Death}, [&](std::uint64_t id) {
-        return Dreamsleeve::Client::ReportDeath{id, std::move(label), spot.placement, spot.gameDate};
+        return Dreamsleeve::Client::ReportDeath{id, std::move(label), spot.placement, spot.gameDate, characterLevel, killerLevel};
       }));
     }
 

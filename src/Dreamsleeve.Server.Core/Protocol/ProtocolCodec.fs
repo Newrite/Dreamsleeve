@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 21u
+    let Version = 22u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -109,6 +109,8 @@ module ProtocolCodec =
             invalid "display_name" "Display name is empty or contains control characters."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("DeathMarkText", _)) ->
             invalid "text" "Death label is too long or contains control characters."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.MissingLevel field) ->
+            invalid field "A death carries the character's level."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidText("SanctionReason", _)) ->
             invalid "reason" $"A reason of one line up to {SanctionReason.MaxLength} characters is required."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidLimit("SanctionTerm", _)) ->

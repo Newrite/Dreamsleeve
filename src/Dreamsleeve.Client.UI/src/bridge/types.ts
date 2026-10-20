@@ -174,6 +174,10 @@ export interface GroundMark {
   z: number;
   // Formatted by the host in the chosen markDateStyle; absent on old marks.
   gameDate?: string;
+  // A death: the character's level and the killer's; absent when the mark
+  // has none (an old mark, no killer or one without a level).
+  level?: number;
+  killerLevel?: number;
 }
 export type SanctionKind = (typeof sanctionKinds)[number];
 // A sanction in force as a moderator lists it: the player by ID, named by the

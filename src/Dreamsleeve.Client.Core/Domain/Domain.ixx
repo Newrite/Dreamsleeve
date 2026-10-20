@@ -507,6 +507,10 @@ export namespace Domain
     std::optional<CharacterName> characterName{};
     // The author's in-game date at placement; absent on marks stored before protocol 12.
     std::optional<GameDate> gameDate{};
+    // A death: the character's level and the killer's at the moment of death.
+    // Zero is none: a note, a mark stored before protocol 22, no killer or one without a level.
+    std::uint32_t characterLevel{};
+    std::uint32_t killerLevel{};
 
     bool operator==(const GroundMark&) const = default;
   };

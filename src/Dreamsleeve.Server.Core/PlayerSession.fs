@@ -25,7 +25,7 @@ type PlayerSessionMessage =
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
     | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement * GameDate
-    | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement * GameDate
+    | ReportDeath of requestId: uint64 * DeathReport * GroundMarkPlacement * GameDate
     | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
     | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
@@ -1064,8 +1064,8 @@ module PlayerSession =
             postAnnouncement options request state context requestId announcement
         | PlayerSessionMessage.PlaceGroundNote(requestId, text, placement, gameDate) ->
             placeMark options request state context requestId (GroundMarkBody.Note text) placement gameDate
-        | PlayerSessionMessage.ReportDeath(requestId, label, placement, gameDate) ->
-            placeMark options request state context requestId (GroundMarkBody.Death label) placement gameDate
+        | PlayerSessionMessage.ReportDeath(requestId, death, placement, gameDate) ->
+            placeMark options request state context requestId (GroundMarkBody.Death death) placement gameDate
         | PlayerSessionMessage.RemoveGroundMark(requestId, id) ->
             removeMark options request state context requestId id
         | PlayerSessionMessage.Update(requestId, command) ->

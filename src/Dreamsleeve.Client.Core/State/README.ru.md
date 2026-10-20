@@ -298,7 +298,7 @@ MovementView хранит их историю со сбросами на гра�
 
 ## Метки на земле
 
-`PlaceGroundNote{requestId, text, placement, gameDate}`, `ReportDeath{requestId, label, placement, gameDate}`
+`PlaceGroundNote{requestId, text, placement, gameDate}`, `ReportDeath{requestId, label, placement, gameDate, characterLevel, killerLevel}`
 и `RemoveGroundMark{requestId, markId}` идут по пути SendChat, но по Control-каналу ENet и с
 собственным набором ожидающих запросов в ClientRuntime (бюджет `maxPendingChatRequests`).
 Codec, как и для остальных команд, проверяет только ненулевой requestId, корректный UTF-8 и

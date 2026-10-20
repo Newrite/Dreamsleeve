@@ -31,7 +31,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "MiMuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Qb3NpdGlvbhIPCgdoZWFk",
             "aW5nGAMgASgCInQKCEdhbWVEYXRlEgsKA2VyYRgBIAEoDRIMCgR5ZWFyGAIg",
             "ASgNEg0KBW1vbnRoGAMgASgNEgsKA2RheRgEIAEoDRITCgtkYXlfb2Zfd2Vl",
-            "axgFIAEoDRIMCgRob3VyGAYgASgNEg4KBm1pbnV0ZRgHIAEoDSKbAwoKR3Jv",
+            "axgFIAEoDRIMCgRob3VyGAYgASgNEg4KBm1pbnV0ZRgHIAEoDSLKAwoKR3Jv",
             "dW5kTWFyaxIPCgdtYXJrX2lkGAEgASgEEjgKBmF1dGhvchgCIAEoCzIoLkRy",
             "ZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyUHJvZmlsZRI3CgRraW5k",
             "GAMgASgOMikuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJr",
@@ -40,33 +40,35 @@ namespace Dreamsleeve.Protocol.Chat {
             "CzIuLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3JvdW5kTWFya1BsYWNl",
             "bWVudBIaChJjcmVhdGVkX2F0X3VuaXhfbXMYByABKAMSGwoOY2hhcmFjdGVy",
             "X25hbWUYCCABKAlIAIgBARI2CglnYW1lX2RhdGUYCSABKAsyIy5EcmVhbXNs",
-            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkdhbWVEYXRlQhEKD19jaGFyYWN0ZXJfbmFt",
-            "ZSKaAQoPUGxhY2VHcm91bmROb3RlEgwKBHRleHQYASABKAkSQQoJcGxhY2Vt",
-            "ZW50GAIgASgLMi4uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRN",
-            "YXJrUGxhY2VtZW50EjYKCWdhbWVfZGF0ZRgDIAEoCzIjLkRyZWFtc2xlZXZl",
-            "LlByb3RvY29sLkNoYXQuR2FtZURhdGUilwEKC1JlcG9ydERlYXRoEg0KBWxh",
-            "YmVsGAEgASgJEkEKCXBsYWNlbWVudBgCIAEoCzIuLkRyZWFtc2xlZXZlLlBy",
-            "b3RvY29sLkNoYXQuR3JvdW5kTWFya1BsYWNlbWVudBI2CglnYW1lX2RhdGUY",
-            "AyABKAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkdhbWVEYXRlIiMK",
-            "EFJlbW92ZUdyb3VuZE1hcmsSDwoHbWFya19pZBgBIAEoBCKFAQoSR3JvdW5k",
-            "TWFya3NDaGFuZ2VkEhUKDXZpZXdfcmV2aXNpb24YASABKAQSNAoFYWRkZWQY",
-            "AiADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkdyb3VuZE1hcmsS",
-            "EwoLcmVtb3ZlZF9pZHMYAyADKAQSDQoFY2xlYXIYBCABKAgiWwoQR3JvdW5k",
-            "TWFya1BsYWNlZBIzCgRtYXJrGAEgASgLMiUuRHJlYW1zbGVldmUuUHJvdG9j",
-            "b2wuQ2hhdC5Hcm91bmRNYXJrEhIKCmV2aWN0ZWRfaWQYAiABKAQiJAoRR3Jv",
-            "dW5kTWFya1JlbW92ZWQSDwoHbWFya19pZBgBIAEoBCJGCg5Pd25Hcm91bmRN",
-            "YXJrcxI0CgVtYXJrcxgBIAMoCzIlLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
-            "YXQuR3JvdW5kTWFyayppCg5Hcm91bmRNYXJrS2luZBIgChxHUk9VTkRfTUFS",
-            "S19LSU5EX1VOU1BFQ0lGSUVEEAASGQoVR1JPVU5EX01BUktfS0lORF9OT1RF",
-            "EAESGgoWR1JPVU5EX01BUktfS0lORF9ERUFUSBACYgZwcm90bzM="));
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0LkdhbWVEYXRlEhcKD2NoYXJhY3Rlcl9sZXZl",
+            "bBgKIAEoDRIUCgxraWxsZXJfbGV2ZWwYCyABKA1CEQoPX2NoYXJhY3Rlcl9u",
+            "YW1lIpoBCg9QbGFjZUdyb3VuZE5vdGUSDAoEdGV4dBgBIAEoCRJBCglwbGFj",
+            "ZW1lbnQYAiABKAsyLi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkdyb3Vu",
+            "ZE1hcmtQbGFjZW1lbnQSNgoJZ2FtZV9kYXRlGAMgASgLMiMuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuQ2hhdC5HYW1lRGF0ZSLGAQoLUmVwb3J0RGVhdGgSDQoF",
+            "bGFiZWwYASABKAkSQQoJcGxhY2VtZW50GAIgASgLMi4uRHJlYW1zbGVldmUu",
+            "UHJvdG9jb2wuQ2hhdC5Hcm91bmRNYXJrUGxhY2VtZW50EjYKCWdhbWVfZGF0",
+            "ZRgDIAEoCzIjLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR2FtZURhdGUS",
+            "FwoPY2hhcmFjdGVyX2xldmVsGAQgASgNEhQKDGtpbGxlcl9sZXZlbBgFIAEo",
+            "DSIjChBSZW1vdmVHcm91bmRNYXJrEg8KB21hcmtfaWQYASABKAQihQEKEkdy",
+            "b3VuZE1hcmtzQ2hhbmdlZBIVCg12aWV3X3JldmlzaW9uGAEgASgEEjQKBWFk",
+            "ZGVkGAIgAygLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5Hcm91bmRN",
+            "YXJrEhMKC3JlbW92ZWRfaWRzGAMgAygEEg0KBWNsZWFyGAQgASgIIlsKEEdy",
+            "b3VuZE1hcmtQbGFjZWQSMwoEbWFyaxgBIAEoCzIlLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuR3JvdW5kTWFyaxISCgpldmljdGVkX2lkGAIgASgEIiQK",
+            "EUdyb3VuZE1hcmtSZW1vdmVkEg8KB21hcmtfaWQYASABKAQiRgoOT3duR3Jv",
+            "dW5kTWFya3MSNAoFbWFya3MYASADKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0Lkdyb3VuZE1hcmsqaQoOR3JvdW5kTWFya0tpbmQSIAocR1JPVU5E",
+            "X01BUktfS0lORF9VTlNQRUNJRklFRBAAEhkKFUdST1VORF9NQVJLX0tJTkRf",
+            "Tk9URRABEhoKFkdST1VORF9NQVJLX0tJTkRfREVBVEgQAmIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkKind), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement), global::Dreamsleeve.Protocol.Chat.GroundMarkPlacement.Parser, new[]{ "LocationId", "Position", "Heading" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GameDate), global::Dreamsleeve.Protocol.Chat.GameDate.Parser, new[]{ "Era", "Year", "Month", "Day", "DayOfWeek", "Hour", "Minute" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMark), global::Dreamsleeve.Protocol.Chat.GroundMark.Parser, new[]{ "MarkId", "Author", "Kind", "Text", "Flagged", "Placement", "CreatedAtUnixMs", "CharacterName", "GameDate" }, new[]{ "CharacterName" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMark), global::Dreamsleeve.Protocol.Chat.GroundMark.Parser, new[]{ "MarkId", "Author", "Kind", "Text", "Flagged", "Placement", "CreatedAtUnixMs", "CharacterName", "GameDate", "CharacterLevel", "KillerLevel" }, new[]{ "CharacterName" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.PlaceGroundNote), global::Dreamsleeve.Protocol.Chat.PlaceGroundNote.Parser, new[]{ "Text", "Placement", "GameDate" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ReportDeath), global::Dreamsleeve.Protocol.Chat.ReportDeath.Parser, new[]{ "Label", "Placement", "GameDate" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ReportDeath), global::Dreamsleeve.Protocol.Chat.ReportDeath.Parser, new[]{ "Label", "Placement", "GameDate", "CharacterLevel", "KillerLevel" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RemoveGroundMark), global::Dreamsleeve.Protocol.Chat.RemoveGroundMark.Parser, new[]{ "MarkId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarksChanged), global::Dreamsleeve.Protocol.Chat.GroundMarksChanged.Parser, new[]{ "ViewRevision", "Added", "RemovedIds", "Clear" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced), global::Dreamsleeve.Protocol.Chat.GroundMarkPlaced.Parser, new[]{ "Mark", "EvictedId" }, null, null, null, null),
@@ -884,6 +886,8 @@ namespace Dreamsleeve.Protocol.Chat {
       createdAtUnixMs_ = other.createdAtUnixMs_;
       characterName_ = other.characterName_;
       gameDate_ = other.gameDate_ != null ? other.gameDate_.Clone() : null;
+      characterLevel_ = other.characterLevel_;
+      killerLevel_ = other.killerLevel_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1034,6 +1038,35 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "character_level" field.</summary>
+    public const int CharacterLevelFieldNumber = 10;
+    private uint characterLevel_;
+    /// <summary>
+    /// A death: the dead character's level and the killer's at the moment of
+    /// death. Zero is none: a note, a mark stored before version 22, a death
+    /// without a killer or by something that has no level.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CharacterLevel {
+      get { return characterLevel_; }
+      set {
+        characterLevel_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "killer_level" field.</summary>
+    public const int KillerLevelFieldNumber = 11;
+    private uint killerLevel_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint KillerLevel {
+      get { return killerLevel_; }
+      set {
+        killerLevel_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1058,6 +1091,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (CreatedAtUnixMs != other.CreatedAtUnixMs) return false;
       if (CharacterName != other.CharacterName) return false;
       if (!object.Equals(GameDate, other.GameDate)) return false;
+      if (CharacterLevel != other.CharacterLevel) return false;
+      if (KillerLevel != other.KillerLevel) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1074,6 +1109,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (CreatedAtUnixMs != 0L) hash ^= CreatedAtUnixMs.GetHashCode();
       if (HasCharacterName) hash ^= CharacterName.GetHashCode();
       if (gameDate_ != null) hash ^= GameDate.GetHashCode();
+      if (CharacterLevel != 0) hash ^= CharacterLevel.GetHashCode();
+      if (KillerLevel != 0) hash ^= KillerLevel.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1125,6 +1162,14 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(74);
         output.WriteMessage(GameDate);
       }
+      if (CharacterLevel != 0) {
+        output.WriteRawTag(80);
+        output.WriteUInt32(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        output.WriteRawTag(88);
+        output.WriteUInt32(KillerLevel);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1168,6 +1213,14 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(74);
         output.WriteMessage(GameDate);
       }
+      if (CharacterLevel != 0) {
+        output.WriteRawTag(80);
+        output.WriteUInt32(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        output.WriteRawTag(88);
+        output.WriteUInt32(KillerLevel);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1202,6 +1255,12 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (gameDate_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(GameDate);
+      }
+      if (CharacterLevel != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(KillerLevel);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1248,6 +1307,12 @@ namespace Dreamsleeve.Protocol.Chat {
           GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
         }
         GameDate.MergeFrom(other.GameDate);
+      }
+      if (other.CharacterLevel != 0) {
+        CharacterLevel = other.CharacterLevel;
+      }
+      if (other.KillerLevel != 0) {
+        KillerLevel = other.KillerLevel;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1313,6 +1378,14 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(GameDate);
             break;
           }
+          case 80: {
+            CharacterLevel = input.ReadUInt32();
+            break;
+          }
+          case 88: {
+            KillerLevel = input.ReadUInt32();
+            break;
+          }
         }
       }
     #endif
@@ -1375,6 +1448,14 @@ namespace Dreamsleeve.Protocol.Chat {
               GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
             }
             input.ReadMessage(GameDate);
+            break;
+          }
+          case 80: {
+            CharacterLevel = input.ReadUInt32();
+            break;
+          }
+          case 88: {
+            KillerLevel = input.ReadUInt32();
             break;
           }
         }
@@ -1682,7 +1763,8 @@ namespace Dreamsleeve.Protocol.Chat {
 
   /// <summary>
   /// Control lane. The label is the killer's name or one word of cause as the
-  /// client saw it; the server checks length and word list only.
+  /// client saw it; the server checks length and word list only. Levels are not
+  /// bounded: mods raise them past the vanilla range.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class ReportDeath : pb::IMessage<ReportDeath>
@@ -1722,6 +1804,8 @@ namespace Dreamsleeve.Protocol.Chat {
       label_ = other.label_;
       placement_ = other.placement_ != null ? other.placement_.Clone() : null;
       gameDate_ = other.gameDate_ != null ? other.gameDate_.Clone() : null;
+      characterLevel_ = other.characterLevel_;
+      killerLevel_ = other.killerLevel_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1770,6 +1854,36 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "character_level" field.</summary>
+    public const int CharacterLevelFieldNumber = 4;
+    private uint characterLevel_;
+    /// <summary>
+    /// Required: at least 1.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CharacterLevel {
+      get { return characterLevel_; }
+      set {
+        characterLevel_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "killer_level" field.</summary>
+    public const int KillerLevelFieldNumber = 5;
+    private uint killerLevel_;
+    /// <summary>
+    /// Zero: no killer, or one without a level (a trap).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint KillerLevel {
+      get { return killerLevel_; }
+      set {
+        killerLevel_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1788,6 +1902,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (Label != other.Label) return false;
       if (!object.Equals(Placement, other.Placement)) return false;
       if (!object.Equals(GameDate, other.GameDate)) return false;
+      if (CharacterLevel != other.CharacterLevel) return false;
+      if (KillerLevel != other.KillerLevel) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1798,6 +1914,8 @@ namespace Dreamsleeve.Protocol.Chat {
       if (Label.Length != 0) hash ^= Label.GetHashCode();
       if (placement_ != null) hash ^= Placement.GetHashCode();
       if (gameDate_ != null) hash ^= GameDate.GetHashCode();
+      if (CharacterLevel != 0) hash ^= CharacterLevel.GetHashCode();
+      if (KillerLevel != 0) hash ^= KillerLevel.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1828,6 +1946,14 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteMessage(GameDate);
       }
+      if (CharacterLevel != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(KillerLevel);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1850,6 +1976,14 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteMessage(GameDate);
       }
+      if (CharacterLevel != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(KillerLevel);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1868,6 +2002,12 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (gameDate_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(GameDate);
+      }
+      if (CharacterLevel != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CharacterLevel);
+      }
+      if (KillerLevel != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(KillerLevel);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1895,6 +2035,12 @@ namespace Dreamsleeve.Protocol.Chat {
           GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
         }
         GameDate.MergeFrom(other.GameDate);
+      }
+      if (other.CharacterLevel != 0) {
+        CharacterLevel = other.CharacterLevel;
+      }
+      if (other.KillerLevel != 0) {
+        KillerLevel = other.KillerLevel;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1933,6 +2079,14 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(GameDate);
             break;
           }
+          case 32: {
+            CharacterLevel = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            KillerLevel = input.ReadUInt32();
+            break;
+          }
         }
       }
     #endif
@@ -1968,6 +2122,14 @@ namespace Dreamsleeve.Protocol.Chat {
               GameDate = new global::Dreamsleeve.Protocol.Chat.GameDate();
             }
             input.ReadMessage(GameDate);
+            break;
+          }
+          case 32: {
+            CharacterLevel = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            KillerLevel = input.ReadUInt32();
             break;
           }
         }

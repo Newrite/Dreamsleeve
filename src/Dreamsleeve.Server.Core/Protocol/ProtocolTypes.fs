@@ -197,7 +197,7 @@ type ClientCommand =
     | UpdatePlayer of PlayerUpdate
     | PostAnnouncement of AnnouncementRequest
     | PlaceGroundNote of GroundNoteText * GroundMarkPlacement * GameDate
-    | ReportDeath of DeathMarkText * GroundMarkPlacement * GameDate
+    | ReportDeath of DeathReport * GroundMarkPlacement * GameDate
     | RemoveGroundMark of GroundMarkId
     | SetIdentityVisibility of HiddenIdentity
     /// The sender's own new display name, already accepted by DisplayName.create.

@@ -152,9 +152,11 @@ namespace
     notice.announcement = Domain::Announcement{Domain::AnnouncementSource::Server, Domain::AnnouncementKind::Admin, {}};
     const auto messages = std::vector{Bridge::ToUiMessage(chat, names, settings), Bridge::ToUiMessage(notice, names, settings)};
 
-    const auto own    = Bridge::ToUiGroundMark(SampleMark(Domain::GroundMarkKind::Note, "Осторожно, тролль"), settings, true);
-    auto       nearby = Bridge::ToUiGroundMark(SampleMark(Domain::GroundMarkKind::Death, "Волк"), settings, false);
-    nearby.author     = "Seven";
+    const auto own     = Bridge::ToUiGroundMark(SampleMark(Domain::GroundMarkKind::Note, "Осторожно, тролль"), settings, true);
+    auto       nearby  = Bridge::ToUiGroundMark(SampleMark(Domain::GroundMarkKind::Death, "Волк"), settings, false);
+    nearby.author      = "Seven";
+    nearby.level       = 32;
+    nearby.killerLevel = 45;
 
     ClientStatus signedIn;
     signedIn.phase         = SessionPhase::Ready;

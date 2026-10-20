@@ -513,6 +513,9 @@ export namespace Dreamsleeve::Host::Bridge
     double                     x{}, y{}, z{};
     // The in-game date in the chosen markDateStyle; absent on marks stored before dates were kept.
     std::optional<std::string> gameDate;
+    // A death: the character's level and the killer's; absent when the mark has none.
+    std::optional<std::uint32_t> level;
+    std::optional<std::uint32_t> killerLevel;
   };
 
   struct UiIgnored
@@ -1626,6 +1629,8 @@ export namespace Dreamsleeve::Host::Bridge
     result.z        = mark.placement.position.Z;
     if (!settings.streamerMode) result.character = mark.characterName;
     if (mark.gameDate) result.gameDate = FormatGameDate(*mark.gameDate, settings.markDateStyle);
+    if (mark.characterLevel != 0) result.level = mark.characterLevel;
+    if (mark.killerLevel != 0) result.killerLevel = mark.killerLevel;
     return result;
   }
 
