@@ -523,6 +523,13 @@ export function SettingsPanel({
           value={s.phantomColor}
           onChange={(phantomColor) => chat.configure({ phantomColor })}
         />
+        <ColorField
+          label="Цвет фантомов согильдейцев"
+          value={s.phantomGuildColor}
+          onChange={(phantomGuildColor) =>
+            chat.configure({ phantomGuildColor })
+          }
+        />
         {phantomRanges.map(([key, label, step, unit]) => (
           <label key={key} className={styles.range}>
             <span>

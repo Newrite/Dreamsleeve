@@ -27,13 +27,13 @@ export namespace Dreamsleeve::Host
     double fireflyNameOffset{35};
 
     // Chat bubbles above fireflies; independent of names and of the chat window fade.
-    bool        showBubbles{true};
-    double      bubbleDuration{8.0};      // Seconds a message stays fully visible.
-    bool        bubbleFade{true};
-    double      bubbleFadeDuration{1.0};  // Seconds of the fade-out after the display time.
-    double      bubbleFontSize{16};       // HUD units.
-    double      bubbleMaxWidth{320};      // HUD units, including padding.
-    double      bubbleBackground{0.65};   // Background fill only; the text stays opaque.
+    bool   showBubbles{true};
+    double bubbleDuration{8.0};      // Seconds a message stays fully visible.
+    bool   bubbleFade{true};
+    double bubbleFadeDuration{1.0};  // Seconds of the fade-out after the display time.
+    double bubbleFontSize{16};       // HUD units.
+    double bubbleMaxWidth{320};      // HUD units, including padding.
+    double bubbleBackground{0.65};   // Background fill only; the text stays opaque.
 
     std::string onlineView{"cards"};
     bool        fade{true};
@@ -122,25 +122,27 @@ export namespace Dreamsleeve::Host
     bool        noteDateHeader{false};
     std::string markDateColor{"#A9A69B"};
 
-    bool        publishPhantoms{true};
-    bool        showPhantoms{true};
-    bool        phantomFallback{true};
-    bool        combatHidePhantoms{false};
+    bool publishPhantoms{true};
+    bool showPhantoms{true};
+    bool phantomFallback{true};
+    bool combatHidePhantoms{false};
 
     double      maxVisiblePhantoms{4};
     double      phantomDrawDistance{4096};
     double      phantomOpacity{0.6};
     std::string phantomColor{"#8CCCCC"};
+    // Phantoms of players who share a guild with you; the guild chat's green.
+    std::string phantomGuildColor{"#A8CE85"};
 
-    double      phantomSampleRate{10};
-    double      phantomDelayMs{100};
-    double      phantomExtrapolationMs{100};
-    double      phantomTimeoutMs{1000};
+    double phantomSampleRate{10};
+    double phantomDelayMs{100};
+    double phantomExtrapolationMs{100};
+    double phantomTimeoutMs{1000};
 
-    double      phantomMemoryMiB{512};
-    double      phantomCacheMiB{1024};
-    double      phantomUploadKiB{5120};
-    double      phantomDownloadKiB{5120};
+    double phantomMemoryMiB{512};
+    double phantomCacheMiB{1024};
+    double phantomUploadKiB{5120};
+    double phantomDownloadKiB{5120};
 
     bool operator==(const UiSettings&) const = default;
   };
@@ -228,7 +230,7 @@ export namespace Dreamsleeve::Host
 
   // "#RRGGBB"; anything else is the default.
   constexpr auto ColorKeys = std::to_array<std::string_view>(
-    {"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor"});
+    {"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor", "phantomGuildColor"});
 
   // How names, texts, dates and whose marks are projected. These apply to every
   // surface at once, without saving, and a change projects the session again.
@@ -499,7 +501,7 @@ export namespace Dreamsleeve::Host
     {
       std::ofstream output{temporary, std::ios::binary | std::ios::noreplace};
       if (!output) return std::unexpected{"Cannot create temporary UI settings file"};
-      partial.owned      = true;
+      partial.owned = true;
 
       const bool written = static_cast<bool>(output << *text << '\n');
       output.close();

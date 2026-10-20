@@ -3,6 +3,7 @@
 
 import std;
 import Dreamsleeve.Host.UiSettings;
+import Dreamsleeve.Host.PhantomSettings;
 
 #include "Repository.h"
 
@@ -47,9 +48,9 @@ namespace
     std::string      fields;
     std::string      values;
     ForEachSettingPair(defaults, defaults, [&](std::string_view key, const auto& value, const auto&) {
-      using Field = std::remove_cvref_t<decltype(value)>;
-      fields += std::format("  {}: {};\n", key, TypeOf<Field>(key));
-      values += std::format("  {}: {},\n", key, LiteralOf(value));
+      using Field  = std::remove_cvref_t<decltype(value)>;
+      fields      += std::format("  {}: {};\n", key, TypeOf<Field>(key));
+      values      += std::format("  {}: {},\n", key, LiteralOf(value));
     });
 
     std::string limits;
@@ -60,14 +61,11 @@ namespace
     for (const auto key : InstantKeys)
       instant += std::format("  \"{}\",\n", key);
 
-    return "// Generated from src/Dreamsleeve.Client/Host/UiSettings.ixx by the native test\n"
-           "// \"The web UI settings module is generated from UiSettings\"; do not edit.\n"
-           "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n"
-           "export interface Settings {\n" +
+    return "// Generated from src/Dreamsleeve.Client/Host/UiSettings.ixx by the native test\n" "// \"The web UI settings module is generated from UiSettings\"; do not edit.\n" "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n" "export interface Settings {\n" +
            fields + "}\n\nexport const defaults: Settings = {\n" + values +
            "};\n\n// Accepted ranges of the numeric settings; the host clamps to them.\nexport const limits = {\n" + limits +
-           "} as const;\n\n// Sent with displaySettings: the host applies and saves them at once, on every surface.\nexport const instantKeys = [\n" + instant +
-           "] as const;\n";
+           "} as const;\n\n// Sent with displaySettings: the host applies and saves them at once, on every surface.\nexport const instantKeys = [\n" +
+           instant + "] as const;\n";
   }
 
 }
@@ -126,9 +124,9 @@ TEST_CASE("Instant settings are copied and compared alone")
 {
   UiSettings saved;
   UiSettings edited;
-  edited.fontSize   = 20;
-  edited.textFilter = "mask";
-  edited.showPhantoms = false;
+  edited.fontSize        = 20;
+  edited.textFilter      = "mask";
+  edited.showPhantoms    = false;
   edited.publishPhantoms = false;
   CHECK(InstantChanged(saved, edited));
   ApplyInstant(saved, edited);
@@ -255,6 +253,21 @@ TEST_CASE("UI saves preserve foreign temporary paths and clean only their own re
   REQUIRE(loaded);
   CHECK(*loaded == edited);
   CHECK_FALSE(std::filesystem::exists(temporary));
+}
+
+TEST_CASE("Phantoms of guildmates take their own color; an unreadable one falls back to the default")
+{
+  UiSettings ui;
+  const auto defaults = PhantomSettings(ui);
+  CHECK(defaults.guildColor == Dreamsleeve::Client::Phantom::Vec3{0xA8 / 255.0f, 0xCE / 255.0f, 0x85 / 255.0f});
+  CHECK(defaults.color != defaults.guildColor);
+  ui.phantomColor      = "#FF0000";
+  ui.phantomGuildColor = "#00FF00";
+  const auto chosen    = PhantomSettings(ui);
+  CHECK(chosen.color == Dreamsleeve::Client::Phantom::Vec3{1, 0, 0});
+  CHECK(chosen.guildColor == Dreamsleeve::Client::Phantom::Vec3{0, 1, 0});
+  ui.phantomGuildColor = "green";
+  CHECK(PhantomSettings(ui).guildColor == defaults.guildColor);
 }
 
 TEST_SUITE_END();

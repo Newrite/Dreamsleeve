@@ -603,7 +603,7 @@ namespace Phantoms
     if (!settings.receive) return;
     const auto observer = World::Observe(player);
     if (!observer) return;
-    const auto&                          ui = runtime.ui.ui.chat;
+    const auto& ui = runtime.ui.ui.chat;
     // Players who start in one place must not stand inside each other's character
     // creation. Scenes stay loaded and reappear when the menu closes.
     if (ui.raceMenuHidePlayers && World::CharacterCreationOpen())
@@ -630,8 +630,9 @@ namespace Phantoms
         continue;
 
       retained.insert(remote.player);
-      auto&      visual   = state.visuals[remote.player];
-      const auto revision = std::pair{remote.view, remote.descriptor.generation};
+      const auto& color    = runtime.session.Guildmate(remote.player) ? settings.guildColor : settings.color;
+      auto&       visual   = state.visuals[remote.player];
+      const auto  revision = std::pair{remote.view, remote.descriptor.generation};
       if (visual.rejected && *visual.rejected != revision) visual.rejected.reset();
       ForgetCleared(visual, exchange, remote.player);
       if (remote.previous && visual.current && visual.current->generation == remote.previous->descriptor.generation)
@@ -672,7 +673,7 @@ namespace Phantoms
             state.engine,
             context,
             remote.descriptor.generation,
-            {settings.color, settings.opacity},
+            {color, settings.opacity},
             Scene::Budget{exchange.RemainingMemory()});
           if (scene && exchange.SceneMemory(remote.player, visual.MemoryBytes() + (*scene)->MemoryBytes()))
             visual.candidate = Slot{remote.view, remote.descriptor.generation, context, std::move(*scene)};
@@ -777,10 +778,11 @@ namespace Phantoms
       }
 
       if (!visual.active || !visual.current) continue;
-      const auto look = std::pair{settings.color, settings.opacity};
+      // A guild joined or left recolours the phantom like a changed setting.
+      const auto look = std::pair{color, settings.opacity};
       if (visual.look != look)
       {
-        auto changed = visual.current->scene->SetLook({settings.color, settings.opacity}, visual.current->context);
+        auto changed = visual.current->scene->SetLook({color, settings.opacity}, visual.current->context);
         if (!changed)
         {
           Error(changed.error(), now);

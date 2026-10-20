@@ -53,6 +53,13 @@ test("phantom controls save and restore all sixteen scalar settings", async ({
   await color.fill("#abcdef");
   await color.blur();
   await expect(color).toHaveValue("#ABCDEF");
+  // Guildmates get a color of their own, the guild chat's green by default.
+  const guildColor = group.getByLabel("Цвет фантомов согильдейцев", {
+    exact: true,
+  });
+  await expect(guildColor).toHaveValue(defaults.phantomGuildColor);
+  await guildColor.fill("#123456");
+  await guildColor.blur();
   for (const [, label, value] of sliders)
     await group
       .getByRole("slider", { name: label, exact: true })
@@ -73,6 +80,7 @@ test("phantom controls save and restore all sixteen scalar settings", async ({
   await expect(group.getByLabel("Скрывать фантомы в бою")).toBeChecked();
   await expect(count).toHaveAttribute("data-value", "3");
   await expect(color).toHaveValue("#ABCDEF");
+  await expect(guildColor).toHaveValue("#123456");
   for (const [, label, value] of sliders)
     await expect(
       group.getByRole("slider", { name: label, exact: true }),
@@ -193,16 +201,29 @@ test("built phantom settings apply visibility before save and keep controls stab
     unchangedMarkup: true,
     retainedInputs: true,
   });
-  await group.getByLabel("Показывать фантомы других игроков", { exact: true }).uncheck();
-  expect(await page.evaluate(() => (window as unknown as { phantomCommands: unknown[] }).phantomCommands)).toEqual([
-    { type: "displaySettings", settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false } },
+  await group
+    .getByLabel("Показывать фантомы других игроков", { exact: true })
+    .uncheck();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { phantomCommands: unknown[] }).phantomCommands,
+    ),
+  ).toEqual([
+    {
+      type: "displaySettings",
+      settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false },
+    },
   ]);
   await page.getByRole("button", { name: "Сохранить настройки" }).click();
   const commands = await page.evaluate(
     () => (window as unknown as { phantomCommands: unknown[] }).phantomCommands,
   );
   expect(commands).toEqual([
-    { type: "displaySettings", settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false } },
+    {
+      type: "displaySettings",
+      settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false },
+    },
     {
       type: "saveSettings",
       settings: { ...defaults, phantomSampleRate: 15, showPhantoms: false },

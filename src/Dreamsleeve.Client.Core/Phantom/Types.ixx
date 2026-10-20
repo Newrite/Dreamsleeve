@@ -12,11 +12,11 @@ export namespace Dreamsleeve::Client::Phantom
     auto operator<=>(const Id&) const = default;
   };
 
-  using Generation                     = Id<struct GenerationTag, std::uint64_t>;
-  using Sequence                       = Id<struct SequenceTag, std::uint64_t>;
-  using TransferId                     = Id<struct TransferTag, std::uint64_t>;
-  using RequestId                      = Id<struct RequestTag, std::uint64_t>;
-  using NodeId                         = Id<struct NodeTag, std::uint32_t>;
+  using Generation = Id<struct GenerationTag, std::uint64_t>;
+  using Sequence   = Id<struct SequenceTag, std::uint64_t>;
+  using TransferId = Id<struct TransferTag, std::uint64_t>;
+  using RequestId  = Id<struct RequestTag, std::uint64_t>;
+  using NodeId     = Id<struct NodeTag, std::uint32_t>;
 
   constexpr std::uint32_t NoNode       = std::numeric_limits<std::uint32_t>::max();
   constexpr std::uint32_t AssetVersion = 2;
@@ -187,9 +187,10 @@ private:
     bool          hideInCombat{false};
     std::uint32_t maximum{4};
 
-    float         distance{4096};
-    float         opacity{0.6f};
-    Vec3          color{0.55f, 0.8f, 1};
+    float distance{4096};
+    float opacity{0.6f};
+    Vec3  color{0.55f, 0.8f, 1};
+    Vec3  guildColor{0.66f, 0.81f, 0.52f};  // Players who share a guild with you.
 
     std::uint32_t sampleRate{10};
     std::uint32_t delayMs{100};

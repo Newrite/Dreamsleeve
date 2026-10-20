@@ -82,6 +82,7 @@ export interface Settings {
   phantomDrawDistance: number;
   phantomOpacity: number;
   phantomColor: string;
+  phantomGuildColor: string;
   phantomSampleRate: number;
   phantomDelayMs: number;
   phantomExtrapolationMs: number;
@@ -173,6 +174,7 @@ export const defaults: Settings = {
   phantomDrawDistance: 4096,
   phantomOpacity: 0.6,
   phantomColor: "#8CCCCC",
+  phantomGuildColor: "#A8CE85",
   phantomSampleRate: 10,
   phantomDelayMs: 100,
   phantomExtrapolationMs: 100,

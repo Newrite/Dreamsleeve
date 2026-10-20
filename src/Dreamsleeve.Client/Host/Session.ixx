@@ -401,6 +401,12 @@ public:
       return guildmatesOnly && selfId != id && !guildmates.contains(id);
     }
 
+    // Whether the player shares one of the own guilds with self.
+    bool Guildmate(Domain::PlayerId id) const
+    {
+      return selfId != id && guildmates.contains(id);
+    }
+
     // Both player representations follow the same privacy and guild filter.
     bool HidesPlayerRepresentation(Domain::PlayerId id, bool guildmatesOnly) const
     {
@@ -1130,28 +1136,28 @@ private:
     std::optional<Domain::ChatChannelId>                               globalChannel;
     Domain::ChatMessageId                                              bubbleFloor{};
 
-    Players                                                            players;
-    Marks                                                              visibleMarks;
-    Marks                                                              ownMarks;
-    bool                                                               ownMarksChanged{};
+    Players players;
+    Marks   visibleMarks;
+    Marks   ownMarks;
+    bool    ownMarksChanged{};
 
-    std::unordered_map<std::uint64_t, Pending>                         pending;
-    std::optional<std::string>                                         pseudonym;
-    std::optional<std::string>                                         identityError;
-    std::optional<Bridge::IdentityEvent>                               lastIdentity;
+    std::unordered_map<std::uint64_t, Pending> pending;
+    std::optional<std::string>                 pseudonym;
+    std::optional<std::string>                 identityError;
+    std::optional<Bridge::IdentityEvent>       lastIdentity;
 
-    std::optional<std::string>                                         nameError;
-    std::optional<std::string>                                         nameChanged;
-    Bridge::DisplayNameEvent                                           lastName;
+    std::optional<std::string> nameError;
+    std::optional<std::string> nameChanged;
+    Bridge::DisplayNameEvent   lastName;
 
-    std::optional<std::string>                                         colorError;
-    std::optional<std::string>                                         colorChanged;
-    Bridge::NameColorEvent                                             lastColor;
+    std::optional<std::string> colorError;
+    std::optional<std::string> colorChanged;
+    Bridge::NameColorEvent     lastColor;
 
-    std::vector<std::string>                                           routeNames;
-    std::string                                                        routeChoice;
-    Bridge::RoutesEvent                                                lastRoutes;
-    std::optional<ClientStatus>                                        lastStatus;
+    std::vector<std::string>    routeNames;
+    std::string                 routeChoice;
+    Bridge::RoutesEvent         lastRoutes;
+    std::optional<ClientStatus> lastStatus;
 
     // The guild book of the session, the one the UI shows, whether this view
     // has had it, and the book revision whose removals the UI has heard of.
@@ -1161,8 +1167,8 @@ private:
     bool                                 guildsShown{};
     std::uint64_t                        removalsSeen{};
 
-    bool                                 needsSnapshot{true};
-    bool                                 snapshotRequested{};
+    bool needsSnapshot{true};
+    bool snapshotRequested{};
     // The session whose snapshot the current page holds; none for a new page.
     std::optional<std::uint64_t> shownGeneration;
 
