@@ -352,6 +352,9 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             | other -> failtestf "%A" other
             let! _ = expectChange fixture.Bob
             let! _ = expectChange fixture.Bob
+            // The new master receives the guild's join requests, none here.
+            let! requests = expectChange fixture.Bob
+            equal (GuildChange.JoinRequests(guild, [])) requests
             let! _ = expectChange fixture.Alice
             let! _ = expectChange fixture.Alice
             let! mine = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.PlayerGuilds(pid 1UL), reply)) |> awaitResult
@@ -447,11 +450,71 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             check (match panel with GuildAdminResult.Card(ValueSome card) -> card.Summary.Info.IsNone | _ -> false) "the panel sees the cleared text"
         }))
 
+    case "join requests reach the master and officers only; an answer brings the player in; the catalog follows the guild" (fun () ->
+        withGuilds (fun fixture -> task {
+            let! guild = founded fixture
+            let! _ = join fixture fixture.Carol
+            for _ in 1 .. 4 do
+                let! _ = receive fixture.Writes
+                ()
+            let catalogQuery = { Search = ""; MinMembers = 0; MaxMembers = ValueNone; OpenOnly = false; Sort = GuildCatalogSort.Name; After = ValueNone }
+            let page (who: Member) requestId query = task {
+                do! act fixture who requestId (GuildAction.Catalog query)
+                let! event = receive who.Events
+                match event with
+                | GuildEvent.CatalogPage(id, view) when id = requestId -> return view
+                | other -> return failtestf "Expected a catalog page, got %A" other
+            }
+            let! listed = page fixture.Carol 50UL catalogQuery
+            equal ([ "Стражи" ], 1, false) (listed.Guilds |> List.map (fun entry -> GuildName.value entry.Name), listed.Total, listed.More)
+            equal 2 listed.Guilds.Head.Members
+            do! act fixture fixture.Carol 51UL (GuildAction.Apply guild)
+            let! applied = expectChange fixture.Carol
+            check (match applied with GuildChange.Applied view -> view.Request.Guild = guild && GuildName.value view.GuildName = "Стражи" | _ -> false) "Carol's request"
+            let! requests = expectChange fixture.Alice
+            check (match requests with GuildChange.JoinRequests(_, [ view ]) -> view.Profile.PlayerId = pid 3UL | _ -> false) "the master sees it"
+            let! _ = expectDone fixture.Carol 51UL
+            let! written = receive fixture.Writes
+            check (match written with GuildWrite.PutJoinRequest request -> request.Player = pid 3UL | _ -> false) "the request is written"
+            do! act fixture fixture.Bob 52UL (GuildAction.AnswerRequest(guild, pid 3UL, true))
+            let! _ = expectRefused fixture.Bob 52UL RequestRejectionCode.NotPermitted
+            // A new officer receives the list.
+            do! act fixture fixture.Alice 53UL (GuildAction.SetRole(guild, pid 2UL, GuildRole.Officer))
+            let! _ = expectChange fixture.Alice
+            let! _ = expectDone fixture.Alice 53UL
+            let! _ = expectChange fixture.Bob
+            let! promoted = expectChange fixture.Bob
+            check (match promoted with GuildChange.JoinRequests(_, [ _ ]) -> true | _ -> false) "the officer sees the request"
+            do! act fixture fixture.Bob 54UL (GuildAction.AnswerRequest(guild, pid 3UL, true))
+            let! accepted = expectChange fixture.Carol
+            equal (GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Accepted)) accepted
+            let! added = expectChange fixture.Carol
+            check (match added with GuildChange.Added view -> view.Members.Length = 3 && view.JoinRequests.IsEmpty | _ -> false) "Carol is in"
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! arrival = expectChange who
+                check (match arrival with GuildChange.MemberChanged(_, view) -> view.Profile.PlayerId = pid 3UL | _ -> false) "Carol arrives"
+            let! _ = expectChange fixture.Alice
+            let! emptied = expectChange fixture.Bob
+            equal (GuildChange.JoinRequests(guild, [])) emptied
+            let! _ = expectDone fixture.Bob 54UL
+            // Three of three: the guild is full, and then hidden.
+            let! open' = page fixture.Carol 55UL { catalogQuery with OpenOnly = true }
+            equal 0 open'.Total
+            do! act fixture fixture.Alice 56UL (GuildAction.SetListed(guild, false))
+            for who in [ fixture.Alice; fixture.Bob; fixture.Carol ] do
+                let! hidden = expectChange who
+                equal (GuildChange.Listed(guild, false)) hidden
+            let! _ = expectDone fixture.Alice 56UL
+            let! none = page fixture.Carol 57UL catalogQuery
+            equal 0 none.Total
+        }))
+
     case "stored guilds come back with their members, profiles and the next ID" (fun () ->
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
             Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]
             Info = ValueSome(GuildInfo.create 500 "Летописцы Скайрима" |> ok)
+            Listed = true; JoinRequests = []
             Members = [ { Player = pid 2UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueNone; Title = ValueSome(tid 3UL) } ]
         }
         let loaded (writer: Agent<GuildWrite>) =
@@ -482,7 +545,7 @@ let private agentTests = testSequenced <| testList "Guild owner" [
         use host = Agent.Start(AgentOptions.create "host", fun (_: AgentContext<SessionHostCommand>) (_: SessionHostCommand) -> task { () })
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
-            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]; Members = []; Info = ValueNone
+            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]; Members = []; Info = ValueNone; Listed = true; JoinRequests = []
         }
         let persistence = { empty writer with Loaded = [ stored ]; NextId = 5UL; NextTitleId = 3UL }
         let limits = GuildOptions.rules options |> ok
@@ -529,9 +592,20 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         equal info (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.Info
         write (GuildWrite.PutInfo(gid 1UL, ValueNone))
         equal ValueNone (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.Info
+        let request = { Guild = gid 1UL; Player = carol.PlayerId; CreatedAt = at; Expires = at.AddDays 7.0 }
+        write (GuildWrite.PutJoinRequest request)
+        write (GuildWrite.PutListed(gid 1UL, false))
+        let applied = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [ request ] applied.Guilds.Head.JoinRequests
+        check (not applied.Guilds.Head.Listed) "hidden from the catalog"
+        check (applied.Profiles |> List.exists (fun profile -> profile.PlayerId = carol.PlayerId)) "the applicant's profile loads"
+        write (GuildWrite.RemoveJoinRequest(gid 1UL, carol.PlayerId))
+        check (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.JoinRequests.IsEmpty "the request is gone"
+        write (GuildWrite.PutJoinRequest request)
         write (GuildWrite.Delete(gid 1UL))
         let gone = SqliteGuildStore.loadAll database.Config token |> ok
         check gone.Guilds.IsEmpty "the guild is gone"
+        equal 0L (database.Scalar "SELECT count(*) FROM guild_join_requests")
         equal 0L (database.Scalar "SELECT count(*) FROM guild_members")
         equal 2UL gone.NextId)
 
@@ -604,6 +678,26 @@ let private codecTests = testList "Guild codec" [
         equal (GuildAction.RenameTitle(gid 4UL, tid 3UL, "Казначей")) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(RenameTitle = rename)) |> action)
         let create = Dreamsleeve.Protocol.Chat.CreateGuildTitle(GuildId = 4UL, Name = "Казначей")
         equal (GuildAction.CreateTitle(gid 4UL, "Казначей")) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(CreateTitle = create)) |> action)
+        let catalog = Dreamsleeve.Protocol.Chat.QueryGuildCatalog(Search = "  ВОРОНЫ ", MinMembers = 2u, MaxMembers = 5u, OpenOnly = true,
+                                                                  Sort = Dreamsleeve.Protocol.Chat.GuildCatalogSort.Members,
+                                                                  After = Dreamsleeve.Protocol.Chat.GuildCatalogAfter(GuildId = 3UL, Name = "Совы", Members = 4u))
+        equal (GuildAction.Catalog { Search = "вороны"; MinMembers = 2; MaxMembers = ValueSome 5; OpenOnly = true; Sort = GuildCatalogSort.Members
+                                     After = ValueSome { Guild = gid 3UL; NameKey = "совы"; Members = 4 } })
+              (decode (Dreamsleeve.Protocol.Chat.GuildCommand(Catalog = catalog)) |> action)
+        let field (command: Dreamsleeve.Protocol.Chat.GuildCommand) =
+            match decode command with
+            | Error failure -> (ProtocolCodec.rejection failure.Failure).Field
+            | Ok request -> failtestf "%A" request
+        let first = Dreamsleeve.Protocol.Chat.QueryGuildCatalog(Sort = Dreamsleeve.Protocol.Chat.GuildCatalogSort.Name)
+        equal (GuildAction.Catalog { Search = ""; MinMembers = 0; MaxMembers = ValueNone; OpenOnly = false; Sort = GuildCatalogSort.Name; After = ValueNone })
+              (decode (Dreamsleeve.Protocol.Chat.GuildCommand(Catalog = first)) |> action)
+        equal "sort" (field (Dreamsleeve.Protocol.Chat.GuildCommand(Catalog = Dreamsleeve.Protocol.Chat.QueryGuildCatalog())))
+        equal "max_members" (field (Dreamsleeve.Protocol.Chat.GuildCommand(Catalog = Dreamsleeve.Protocol.Chat.QueryGuildCatalog(
+                                                                                Sort = Dreamsleeve.Protocol.Chat.GuildCatalogSort.Name, MinMembers = 3u, MaxMembers = 2u))))
+        equal "search" (field (Dreamsleeve.Protocol.Chat.GuildCommand(Catalog = Dreamsleeve.Protocol.Chat.QueryGuildCatalog(
+                                                                           Sort = Dreamsleeve.Protocol.Chat.GuildCatalogSort.Name, Search = String('а', 65)))))
+        let answer = Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest(GuildId = 4UL, PlayerId = 7UL, Accept = true)
+        equal (GuildAction.AnswerRequest(gid 4UL, pid 7UL, true)) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(AnswerRequest = answer)) |> action)
         match decode (Dreamsleeve.Protocol.Chat.GuildCommand(DeleteTitle = Dreamsleeve.Protocol.Chat.DeleteGuildTitle(GuildId = 4UL, TitleId = 0UL))) with
         | Error failure -> equal "title_id" (ProtocolCodec.rejection failure.Failure).Field
         | Ok request -> failtestf "%A" request
@@ -620,8 +714,15 @@ let private codecTests = testList "Guild codec" [
             Messages = []
             Titles = [ { Id = tid 3UL; Name = titleName "Казначей" } ]
             Info = ValueSome(GuildInfo.create 500 "О нас" |> ok)
+            Listed = false
+            JoinRequests =
+                [ { Request = { Guild = gid 4UL; Player = pid 5UL; CreatedAt = DateTimeOffset.UnixEpoch; Expires = DateTimeOffset.UnixEpoch.AddDays 7.0 }
+                    Profile = profile 5UL } ]
         }
-        let encoded = ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ view ]; Invites = []; Limits = limits }) |> ok
+        let request = { Guild = gid 6UL; Player = pid 2UL; CreatedAt = DateTimeOffset.UnixEpoch; Expires = DateTimeOffset.UnixEpoch }
+        let application = { Request = request; GuildName = GuildName.create 1 64 "Совы" |> ok }
+        let state = { Guilds = [ view ]; Invites = []; Applications = [ application ]; Limits = limits }
+        let encoded = ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot state) |> ok
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(List.exactlyOne encoded)
         let guild = packet.GuildsSnapshot.Guilds[0]
         equal (ChatChannelId.value (ChatChannels.ofGuild (gid 4UL))) guild.ChannelId
@@ -634,10 +735,15 @@ let private codecTests = testList "Guild codec" [
         equal 10u packet.GuildsSnapshot.Limits.MaxTitles
         equal 500u packet.GuildsSnapshot.Limits.InfoMaxLength
         equal "О нас" guild.Info
+        check (not guild.Listed) "hidden from the catalog"
+        equal [ "Player 5" ] [ for request in guild.JoinRequests -> request.Profile.DisplayName ]
+        equal [ 6UL, "Совы" ] [ for entry in packet.GuildsSnapshot.Applications -> entry.GuildId, entry.GuildName ]
+        equal 128u packet.GuildsSnapshot.Limits.MaxJoinRequests
+        equal 10u packet.GuildsSnapshot.Limits.MaxApplications
         equal 3UL guild.Members[0].TitleId
         equal [ 3UL, "Казначей" ] [ for title in guild.Titles -> title.TitleId, title.Name ]
         let wrong = { view with ChannelId = ChatChannels.globalId }
-        check (ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ wrong ]; Invites = []; Limits = limits }) |> Result.isError)
+        check (ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { state with Guilds = [ wrong ] }) |> Result.isError)
             "a guild's history belongs to its own channel"
 
     testCase "a guild's chat travels with its guild changes on the control lane; the global chat keeps its own" <| fun _ ->

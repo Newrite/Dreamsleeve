@@ -4,6 +4,7 @@ name rules, an invitation and its acceptance, guild chat with the real name
 of a member who hides it elsewhere, a guild mute and its lift, an officer
 who removes a member's message and excludes them, custom roles the master
 creates, gives and deletes, the guild information only the master writes, the
+public catalog with a join request an officer accepts and a hidden guild, the
 master who cannot leave and hands the guild over, the stored rows, disbanding
 and the name free again.
 """
@@ -172,6 +173,25 @@ def smoke(args, log, directory: Path):
         done(alice, f"guild info {guild}")
         stored("SELECT info FROM guilds WHERE id = ?", (int(guild),), [(None,)], "Cleared guild information is still stored")
         stage("only the master writes the guild information, members read it and empty text clears it")
+
+        command(carol, "guild catalog", r"catalog total=1 more=0$")
+        expect(carol, rf"^catalog-guild {guild} members=2 name={name}$", 0)
+        start_alice = alice.mark()
+        start_carol = carol.mark()
+        done(carol, f"guild apply {guild}")
+        expect(carol, rf"^application {guild} name={name} expires=\d+$", start_carol)
+        expect(alice, rf"^request {guild} {carol_id} name=Smoke Carol$", start_alice)
+        stored("SELECT player_id FROM guild_join_requests WHERE guild_id = ?", (int(guild),), [(int(carol_id),)],
+               "The join request is not stored")
+        start_carol = carol.mark()
+        done(bob, f"guild request {guild} {carol_id} accept")
+        expect(carol, rf"^guild {guild} name={name} channel={channel} members=3$", start_carol)
+        stored("SELECT player_id FROM guild_join_requests WHERE guild_id = ?", (int(guild),), [],
+               "An accepted join request is still stored")
+        done(alice, f"guild listed {guild} off")
+        command(carol, "guild catalog", r"catalog total=0 more=0$")
+        done(alice, f"guild exclude {guild} {carol_id}")
+        stage("the catalog lists the guild, an officer accepts a join request, and a hidden guild leaves the catalog")
 
         command(alice, f"guild leave {guild}", rf"rejected \({GUILD_MASTER_STAYS}\)")
         start_alice = alice.mark()

@@ -52,6 +52,9 @@ export namespace Protocol::Chat
     NameColorUnreadable = 27,
     GuildTitleNameTaken = 28,
     GuildTitlesFull = 29,
+    GuildRequestsFull = 30,
+    GuildAlreadyApplied = 31,
+    GuildApplicationLimit = 32,
   };
 }
 
@@ -210,5 +213,28 @@ export namespace Protocol::Chat
     Left = 1,
     Excluded = 2,
     Disbanded = 3,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class GuildApplicationEnd : std::int32_t
+  {
+    Unspecified = 0,
+    Withdrawn = 1,
+    Accepted = 2,
+    Rejected = 3,
+    Expired = 4,
+    Disbanded = 5,
+  };
+}
+
+export namespace Protocol::Chat
+{
+  enum class GuildCatalogSort : std::int32_t
+  {
+    Unspecified = 0,
+    Name = 1,
+    Members = 2,
   };
 }

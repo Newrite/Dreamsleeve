@@ -10,6 +10,8 @@ import type {
   eventTypes,
   groundMarkKinds,
   guildActions,
+  guildApplicationEnds,
+  guildCatalogSorts,
   guildRemovalReasons,
   guildRoles,
   hidingModes,
@@ -186,6 +188,8 @@ export interface Sanction {
 }
 export type GuildRole = (typeof guildRoles)[number];
 export type GuildRemovalReason = (typeof guildRemovalReasons)[number];
+export type GuildApplicationEnd = (typeof guildApplicationEnds)[number];
+export type GuildCatalogSort = (typeof guildCatalogSorts)[number];
 // A mute inside one guild: reading only; until is Unix ms, absent until lifted.
 export interface GuildMute {
   reason: string;
@@ -203,6 +207,14 @@ export interface GuildMember {
   mute?: GuildMute;
   title?: Id;
 }
+// A request to join, as the master and officers see it: `name` is the host's
+// label of the real profile, like a member's.
+export interface GuildJoinRequest {
+  id: Id;
+  name: string;
+  createdAt: number;
+  expires: number;
+}
 // A custom role of a guild: cosmetic, the master's to create and assign.
 export interface GuildTitle {
   id: Id;
@@ -218,6 +230,30 @@ export interface Guild {
   titles: GuildTitle[];
   // What the master tells about the guild; empty: nothing.
   info: string;
+  // Shown in the public catalog.
+  listed: boolean;
+  // Only for the master and officers, oldest first.
+  joinRequests: GuildJoinRequest[];
+}
+// A request of this player to join a guild, waiting for its answer.
+export interface GuildApplication {
+  guildId: Id;
+  guildName: string;
+  expires: number;
+}
+// A guild of the public catalog.
+export interface GuildCatalogGuild {
+  id: Id;
+  name: string;
+  info: string;
+  members: number;
+  createdAt: number;
+}
+// The entry a catalog page ended with: the next page follows it.
+export interface GuildCatalogAfter {
+  guildId: Id;
+  name: string;
+  members: number;
 }
 // An invitation waiting for the player's answer; inviter is the host's name
 // for the inviting player when it has met them.
@@ -230,7 +266,8 @@ export interface GuildInvite {
 }
 // The server's limits; a lowered limit removes nobody. nameMin and nameMax
 // bound custom role names too; titles: custom roles of one guild; infoMax:
-// characters of the guild information.
+// characters of the guild information; joinRequests: pending requests of one
+// guild; applications: pending requests of one player.
 export interface GuildLimits {
   perPlayer: number;
   members: number;
@@ -238,6 +275,8 @@ export interface GuildLimits {
   nameMax: number;
   titles: number;
   infoMax: number;
+  joinRequests: number;
+  applications: number;
 }
 // What a guild command asks; the server judges roles, the name and limits.
 export type GuildAction =
@@ -270,7 +309,12 @@ export type GuildAction =
   // No titleId: the member holds none.
   | { action: "setTitle"; guildId: Id; playerId: Id; titleId?: Id }
   // The master's; empty clears it.
-  | { action: "setInfo"; guildId: Id; info: string };
+  | { action: "setInfo"; guildId: Id; info: string }
+  | { action: "setListed"; guildId: Id; listed: boolean }
+  // Requests to join from the catalog; the master and officers answer.
+  | { action: "apply"; guildId: Id }
+  | { action: "withdraw"; guildId: Id }
+  | { action: "answerRequest"; guildId: Id; playerId: Id; accept: boolean };
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }
@@ -341,7 +385,19 @@ export type Command =
       messageId: Id;
     }
   // Answered with guildResult.
-  | ({ type: "guild"; requestId: string } & GuildAction);
+  | ({ type: "guild"; requestId: string } & GuildAction)
+  // One page of the public catalog, answered with guildCatalog; no after:
+  // the first page, no maxMembers: no upper bound.
+  | {
+      type: "guildCatalog";
+      requestId: string;
+      search: string;
+      minMembers: number;
+      maxMembers?: number;
+      openOnly: boolean;
+      sort: GuildCatalogSort;
+      after?: GuildCatalogAfter;
+    };
 export type AuthEvent = { type: "auth"; phase: ConnectionPhase } & AuthState;
 export type HostEvent =
   | {
@@ -403,9 +459,25 @@ export type HostEvent =
       invites: GuildInvite[];
       limits: GuildLimits;
       removed: { guildId: Id; name: string; reason: GuildRemovalReason }[];
+      applications: GuildApplication[];
+      // The player's requests that ended since the previous event.
+      applicationsEnded: {
+        guildId: Id;
+        name: string;
+        reason: GuildApplicationEnd;
+      }[];
     }
   // The answer to a guild command: the guild (a new one's ID for create) or the refusal.
   | { type: "guildResult"; requestId: string; guildId?: Id; error?: string }
+  // A catalog page (guilds, more, total) or the refusal.
+  | {
+      type: "guildCatalog";
+      requestId: string;
+      guilds?: GuildCatalogGuild[];
+      more?: boolean;
+      total?: number;
+      error?: string;
+    }
   // The channels of the session changed: a guild came or went.
   | { type: "channels"; channels: Channel[] }
   // Personal ignore list of this server, already named for current settings.

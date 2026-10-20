@@ -121,7 +121,65 @@ namespace Dreamsleeve::Client::Wire::Detail
         info.set_guild_id(value.guildId);
         info.set_info(value.info);
       }
+
+      void operator()(const SetGuildListed& value) const
+      {
+        auto& listed = *target.mutable_set_listed();
+        listed.set_guild_id(value.guildId);
+        listed.set_listed(value.listed);
+      }
+
+      void operator()(const ApplyToGuild& value) const
+      {
+        target.mutable_apply()->set_guild_id(value.guildId);
+      }
+
+      void operator()(const WithdrawGuildApplication& value) const
+      {
+        target.mutable_withdraw()->set_guild_id(value.guildId);
+      }
+
+      void operator()(const AnswerGuildJoinRequest& value) const
+      {
+        auto& answer = *target.mutable_answer_request();
+        answer.set_guild_id(value.guildId);
+        answer.set_player_id(value.playerId);
+        answer.set_accept(value.accept);
+      }
     };
+
+    Result<Domain::GuildApplicationEnd> ApplicationEnd(int value)
+    {
+      if (!P::GuildApplicationEnd_IsValid(value) || value == P::GUILD_APPLICATION_END_UNSPECIFIED) return Invalid("reason");
+      return static_cast<Domain::GuildApplicationEnd>(value);
+    }
+
+    // Like a member's: the real profile, never a pseudonym.
+    Result<std::vector<Domain::GuildJoinRequest>> JoinRequests(const google::protobuf::RepeatedPtrField<P::GuildJoinRequest>& source)
+    {
+      std::vector<Domain::GuildJoinRequest> result;
+      result.reserve(static_cast<std::size_t>(source.size()));
+      for (const auto& request : source)
+      {
+        if (!request.has_profile()) return Invalid("profile");
+        auto profile = Profile(request.profile());
+        if (!profile) return std::unexpected{profile.error()};
+        if (profile->pseudonymous) return Invalid("pseudonymous");
+        if (std::ranges::contains(result, profile->playerId, [](const auto& entry) { return entry.profile.playerId; }))
+          return Invalid("profile");
+        if (!ValidUnixMs(request.created_at_unix_ms()) || !ValidUnixMs(request.expires_at_unix_ms())) return Invalid("expires_at_unix_ms");
+        result.push_back({std::move(*profile), request.created_at_unix_ms(), request.expires_at_unix_ms()});
+      }
+      return result;
+    }
+
+    Result<Domain::GuildApplication> Application(const P::GuildApplication& source)
+    {
+      if (source.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+      if (source.guild_name().empty()) return Invalid("guild_name");
+      if (!ValidUnixMs(source.expires_at_unix_ms())) return Invalid("expires_at_unix_ms");
+      return Domain::GuildApplication{source.guild_id(), source.guild_name(), source.expires_at_unix_ms()};
+    }
 
     Result<Domain::GuildRemovalReason> Removal(int value)
     {
@@ -193,6 +251,10 @@ namespace Dreamsleeve::Client::Wire::Detail
       auto titles = Titles(source.titles());
       if (!titles) return std::unexpected{titles.error()};
       result.guild.titles = std::move(*titles);
+      auto requests       = JoinRequests(source.join_requests());
+      if (!requests) return std::unexpected{requests.error()};
+      result.guild.joinRequests = std::move(*requests);
+      result.guild.listed       = source.listed();
       return result;
     }
 
@@ -224,7 +286,9 @@ namespace Dreamsleeve::Client::Wire::Detail
          limits.name_min_length(),
          limits.name_max_length(),
          limits.max_titles(),
-         limits.info_max_length()}
+         limits.info_max_length(),
+         limits.max_join_requests(),
+         limits.max_applications()}
     };
     for (const auto& value : source.guilds())
     {
@@ -238,6 +302,45 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!invite) return std::unexpected{invite.error()};
       result.invites.push_back(std::move(*invite));
     }
+    for (const auto& value : source.applications())
+    {
+      auto application = Application(value);
+      if (!application) return std::unexpected{application.error()};
+      if (std::ranges::contains(result.applications, application->guildId, &Domain::GuildApplication::guildId)) return Invalid("guild_id");
+      result.applications.push_back(std::move(*application));
+    }
+    return result;
+  }
+
+  void WriteGuildCatalog(P::GuildCommand& target, const Domain::GuildCatalogQuery& query)
+  {
+    auto& catalog = *target.mutable_catalog();
+    catalog.set_search(query.search);
+    catalog.set_min_members(query.minMembers);
+    if (query.maxMembers) catalog.set_max_members(*query.maxMembers);
+    catalog.set_open_only(query.openOnly);
+    catalog.set_sort(static_cast<P::GuildCatalogSort>(query.sort));
+    if (query.after)
+    {
+      auto& after = *catalog.mutable_after();
+      after.set_guild_id(query.after->guildId);
+      after.set_name(query.after->name);
+      after.set_members(query.after->members);
+    }
+  }
+
+  Result<Domain::GuildCatalogPage> ReadGuildCatalog(const P::GuildCatalogPage& source)
+  {
+    Domain::GuildCatalogPage result{{}, source.more(), source.total()};
+    result.guilds.reserve(static_cast<std::size_t>(source.guilds_size()));
+    for (const auto& entry : source.guilds())
+    {
+      if (entry.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+      if (entry.name().empty()) return Invalid("name");
+      if (!ValidUnixMs(entry.created_at_unix_ms())) return Invalid("created_at_unix_ms");
+      result.guilds.push_back({entry.guild_id(), entry.name(), entry.info(), entry.members(), entry.created_at_unix_ms()});
+    }
+    if (result.guilds.size() > result.total) return Invalid("total");
     return result;
   }
 
@@ -301,6 +404,36 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (changed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
         return GuildChanged{
             GuildInfoChanged{changed.guild_id(), changed.info()}
+        };
+      }
+      case P::GuildChanged::kJoinRequests: {
+        const auto& changed = source.join_requests();
+        if (changed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        auto requests = JoinRequests(changed.requests());
+        if (!requests) return std::unexpected{requests.error()};
+        return GuildChanged{
+            GuildJoinRequestsChanged{changed.guild_id(), std::move(*requests)}
+        };
+      }
+      case P::GuildChanged::kApplied: {
+        auto application = Application(source.applied());
+        if (!application) return std::unexpected{application.error()};
+        return GuildChanged{GuildApplied{std::move(*application)}};
+      }
+      case P::GuildChanged::kApplicationRemoved: {
+        const auto& removed = source.application_removed();
+        if (removed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        auto reason = ApplicationEnd(removed.reason());
+        if (!reason) return std::unexpected{reason.error()};
+        return GuildChanged{
+            GuildApplicationRemoved{removed.guild_id(), *reason}
+        };
+      }
+      case P::GuildChanged::kListed: {
+        const auto& listed = source.listed();
+        if (listed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        return GuildChanged{
+            GuildListedChanged{listed.guild_id(), listed.listed()}
         };
       }
       case P::GuildChanged::CHANGE_NOT_SET:

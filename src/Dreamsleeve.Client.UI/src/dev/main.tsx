@@ -559,6 +559,7 @@ function command(c: Command) {
     return true;
   }
   if (c.type === "guild") return guildStand.command(c);
+  if (c.type === "guildCatalog") return guildStand.catalog(c);
   if (c.type !== "sendChat") return moderate(c);
   const rejected = rejectNext;
   rejectNext = false;

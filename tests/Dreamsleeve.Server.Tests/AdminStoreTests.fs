@@ -39,11 +39,12 @@ let private downSql file =
     text.Substring(text.IndexOf("MIGRONDI:DOWN", StringComparison.Ordinal)).Split('\n', 2)[1]
 
 let tests = testList "SQLite admin" [
-    testCase "migrations 5 to 16 apply over schema 4, keep players and roll back" (fun () ->
+    testCase "migrations 5 to 17 apply over schema 4, keep players and roll back" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok
         let alice = player database "alice" "Alice"
-        database.Execute ((downSql "1791763200000_guild_info.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_info%';"
+        database.Execute ((downSql "1791849600000_guild_catalog.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_catalog%';"
+                          + (downSql "1791763200000_guild_info.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_info%';"
                           + (downSql "1791676800000_guild_titles.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_titles%';"
                           + (downSql "1791590400000_name_colors.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%';"
                           + (downSql "1791504000000_guilds.sql") + "DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%';"
@@ -58,13 +59,15 @@ let tests = testList "SQLite admin" [
                           + "DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; PRAGMA user_version = 4")
         equal 0L (tableCount database)
         SqliteAccountStore.initialize database.Config |> ok
-        equal 16L (database.Scalar "PRAGMA user_version")
+        equal 17L (database.Scalar "PRAGMA user_version")
         equal 5L (tableCount database)
         equal (Some alice.PlayerId) (SqliteAccountStore.find database.Config (name "alice") token |> ok |> Option.map _.Profile.PlayerId)
         // An existing player gets a name color of the palette new accounts get theirs from.
         let color = database.Scalar "SELECT name_color FROM profiles" |> uint32
         check (NameColor.palette |> Array.exists (fun entry -> NameColor.value entry = color)) $"palette color: {color:X6}"
-        // The DOWN sections return to schemas 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        // The DOWN sections return to schemas 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5 and 4 without touching player data.
+        database.Execute (downSql "1791849600000_guild_catalog.sql")
+        equal 16L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791763200000_guild_info.sql")
         equal 15L (database.Scalar "PRAGMA user_version")
         database.Execute (downSql "1791676800000_guild_titles.sql")

@@ -636,7 +636,8 @@ module AdminRoutes =
         | GuildError.TargetNotFound -> showGuild routes admin 409 (Some "Этот игрок не состоит в гильдии.") guild
         | GuildError.NameTaken | GuildError.ServerFull | GuildError.PlayerLimit | GuildError.GuildFull | GuildError.InvitesFull
         | GuildError.AlreadyMember | GuildError.AlreadyInvited | GuildError.NotPermitted | GuildError.MasterStays
-        | GuildError.TitleNameTaken | GuildError.TitlesFull | GuildError.TitleNotFound ->
+        | GuildError.TitleNameTaken | GuildError.TitlesFull | GuildError.TitleNotFound
+        | GuildError.JoinRequestsFull | GuildError.AlreadyApplied | GuildError.ApplicationLimit ->
             showGuild routes admin 409 (Some "Владелец гильдий отказал в действии.") guild
 
     /// The guild owner hands the role over and tells the members; the panel audits it.

@@ -19,6 +19,7 @@ import {
 import { term } from "../state/moderation";
 import { nameMatches, playerName } from "../state/names";
 import { Select } from "./Select";
+import { GuildCatalog } from "./GuildCatalog";
 import styles from "../styles/Guilds.module.css";
 const createdFormat = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -374,6 +375,75 @@ function GuildTitles({
     </section>
   );
 }
+// Requests to join from the catalog, for the master and officers to answer;
+// the master also decides whether the catalog shows the guild.
+function JoinRequests({
+  chat,
+  guild,
+  master,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  master: boolean;
+  busy: boolean;
+}) {
+  return (
+    <section className={styles.section} aria-label="Заявки на вступление">
+      <h4>
+        Заявки на вступление{" "}
+        <small className={styles.muted}>{guild.joinRequests.length}</small>
+      </h4>
+      {master && (
+        <label className={styles.check}>
+          <input
+            type="checkbox"
+            checked={guild.listed}
+            disabled={busy}
+            onChange={(e) => chat.guilds.setListed(guild.id, e.target.checked)}
+          />
+          Показывать гильдию в каталоге
+        </label>
+      )}
+      {guild.joinRequests.length === 0 ? (
+        <p className={styles.muted}>
+          {guild.listed
+            ? "Заявок нет. Игроки подают их из каталога гильдий."
+            : "Гильдия скрыта из каталога: новых заявок не будет."}
+        </p>
+      ) : (
+        <ul className={styles.members}>
+          {guild.joinRequests.map((r) => (
+            <li key={r.id}>
+              <button onClick={() => chat.open("profile", r.id)}>
+                {r.name}
+              </button>
+              <small className={styles.muted}>ждёт {term(r.expires)}</small>
+              <span className={styles.rowActions}>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    chat.guilds.answerRequest(guild.id, r.id, true, r.name)
+                  }
+                >
+                  Принять
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    chat.guilds.answerRequest(guild.id, r.id, false, r.name)
+                  }
+                >
+                  Отклонить
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 // A button that asks once more before an action that cannot be taken back.
 function Confirm({
   label,
@@ -527,6 +597,14 @@ function GuildCard({
         master={own === "master"}
         busy={busy}
       />
+      {mayInvite(own) && (
+        <JoinRequests
+          chat={chat}
+          guild={guild}
+          master={own === "master"}
+          busy={busy}
+        />
+      )}
       <ul
         className={styles.members}
         aria-label={`Участники гильдии ${guild.name}`}
@@ -672,6 +750,7 @@ export function GuildsPanel({
 }) {
   const guilds = chat.guilds;
   const [name, setName] = useState("");
+  const [view, setView] = useState<"mine" | "catalog">("mine");
   if (!s.guildsKnown)
     return (
       <p className={styles.muted}>
@@ -685,8 +764,29 @@ export function GuildsPanel({
   const full = limits.perPlayer > 0 && s.guilds.length >= limits.perPlayer;
   const problem = nameProblem(name, limits.nameMin, limits.nameMax);
   const selected = s.guilds.find((g) => g.id === s.selectedGuild);
+  const views = (
+    <div className={styles.tabs} role="group" aria-label="Раздел гильдий">
+      <button aria-pressed={view === "mine"} onClick={() => setView("mine")}>
+        Мои гильдии
+      </button>
+      <button
+        aria-pressed={view === "catalog"}
+        onClick={() => setView("catalog")}
+      >
+        Каталог
+      </button>
+    </div>
+  );
+  if (view === "catalog")
+    return (
+      <div className={styles.guilds}>
+        {views}
+        <GuildCatalog chat={chat} state={s} />
+      </div>
+    );
   return (
     <div className={styles.guilds}>
+      {views}
       {s.invites.length > 0 && (
         <section className={styles.section} aria-label="Приглашения">
           <h3>Приглашения</h3>
@@ -715,6 +815,34 @@ export function GuildsPanel({
                     onClick={() => guilds.answer(invite.guildId, false)}
                   >
                     Отклонить
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {s.applications.length > 0 && (
+        <section className={styles.section} aria-label="Мои заявки">
+          <h3>
+            Мои заявки{" "}
+            <small className={styles.muted}>
+              {s.applications.length} / {limits.applications}
+            </small>
+          </h3>
+          <ul className={styles.members}>
+            {s.applications.map((a) => (
+              <li key={a.guildId}>
+                <b>«{a.guildName}»</b>
+                <small className={styles.muted}>
+                  ждёт ответа {term(a.expires)}
+                </small>
+                <span className={styles.rowActions}>
+                  <button
+                    disabled={busy}
+                    onClick={() => guilds.withdraw(a.guildId, a.guildName)}
+                  >
+                    Отозвать
                   </button>
                 </span>
               </li>

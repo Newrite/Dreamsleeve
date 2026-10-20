@@ -483,6 +483,15 @@ MaxTitles = 10
 # The guild information its master writes, in characters (Unicode scalar values), 1..2000:
 # chat text rules (line breaks allowed) and the word list. Every member's snapshot carries it.
 InfoMaxLength = 500
+# Pending join requests of one guild from the public catalog, 1..10000. The master and officers
+# answer them; accepting checks the member limits at that moment.
+MaxJoinRequests = 128
+# Pending join requests of one player, 1..100: nobody floods every guild with them.
+MaxApplicationsPerPlayer = 10
+# Days a join request waits for an answer, 1..365.
+JoinRequestDays = 7
+# Guilds in one page of the public catalog, 1..100; the client asks for more as the player scrolls.
+CatalogPageSize = 20
 # Chat messages each guild keeps in memory, >= 1 and at most Server.MaxRecentMessages.
 HistoryCapacity = 200
 # Owner mailbox, messages, >= 1.
@@ -493,7 +502,7 @@ ControlReserve = 64
 MaxControlDeliveries = 128
 # Queued storage writes before the owner treats the database as broken and stops, >= 1.
 MaxPendingWrites = 1024
-# How often expired invitations and guild mutes are collected, milliseconds, >= 1000.
+# How often expired invitations, join requests and guild mutes are collected, milliseconds, >= 1000.
 InviteCheckIntervalMs = 60000
 
 # Proxies players connect through when they cannot reach this server directly

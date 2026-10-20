@@ -9,7 +9,8 @@ import "ground.proto";
 import "moderation.proto";
 import "guild.proto";
 
-// Control/chat envelope. Version 21 gives guilds custom roles and information;
+// Control/chat envelope. Version 21 gives guilds custom roles, information, a
+// public catalog and join requests;
 // version 20 colors player names in chat;
 // version 19 adds guilds;
 // version 18 lets a moderator's ban cover the player's devices;
@@ -86,6 +87,7 @@ message ServerPacket {
     GuildChanged guild_changed = 39; // Control lane, no request_id.
     GuildCommandDone guild_command_done = 40; // Control lane, request_id required.
     NameColorChanged name_color_changed = 41; // Control lane, request_id required.
+    GuildCatalogPage guild_catalog_page = 42; // Answers GuildCommand.catalog; Control lane, request_id required.
   }
 }
 
@@ -125,6 +127,9 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE = 27; // The name color is too dark to read in chat.
   REQUEST_REJECTION_CODE_GUILD_TITLE_NAME_TAKEN = 28; // Another custom role of the guild has the name, in any case.
   REQUEST_REJECTION_CODE_GUILD_TITLES_FULL = 29; // The guild has the maximum number of custom roles.
+  REQUEST_REJECTION_CODE_GUILD_REQUESTS_FULL = 30; // The guild has the maximum number of pending join requests.
+  REQUEST_REJECTION_CODE_GUILD_ALREADY_APPLIED = 31; // The player asked to join the guild already.
+  REQUEST_REJECTION_CODE_GUILD_APPLICATION_LIMIT = 32; // The player has the maximum number of pending join requests.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

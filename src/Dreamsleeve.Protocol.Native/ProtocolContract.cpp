@@ -49,7 +49,10 @@ static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Guild
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NameColorUnreadable) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildTitleNameTaken) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_TITLE_NAME_TAKEN));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildTitlesFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_TITLES_FULL));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 30);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildRequestsFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_REQUESTS_FULL));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyApplied) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_APPLIED));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildApplicationLimit) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_APPLICATION_LIMIT));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 33);
 
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));
@@ -143,3 +146,16 @@ static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Left) =
 static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Excluded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_EXCLUDED));
 static_assert(static_cast<long long>(Protocol::Chat::GuildRemovalReason::Disbanded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_REMOVAL_REASON_DISBANDED));
 static_assert(Dreamsleeve::Protocol::Chat::GuildRemovalReason_ARRAYSIZE == 4);
+
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Withdrawn) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_WITHDRAWN));
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Accepted) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_ACCEPTED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Rejected) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_REJECTED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Expired) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_EXPIRED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildApplicationEnd::Disbanded) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_APPLICATION_END_DISBANDED));
+static_assert(Dreamsleeve::Protocol::Chat::GuildApplicationEnd_ARRAYSIZE == 6);
+
+static_assert(static_cast<long long>(Protocol::Chat::GuildCatalogSort::Unspecified) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_CATALOG_SORT_UNSPECIFIED));
+static_assert(static_cast<long long>(Protocol::Chat::GuildCatalogSort::Name) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_CATALOG_SORT_NAME));
+static_assert(static_cast<long long>(Protocol::Chat::GuildCatalogSort::Members) == static_cast<long long>(Dreamsleeve::Protocol::Chat::GUILD_CATALOG_SORT_MEMBERS));
+static_assert(Dreamsleeve::Protocol::Chat::GuildCatalogSort_ARRAYSIZE == 3);

@@ -61,6 +61,10 @@ module internal GuildText =
 
 [<RequireQualifiedAccess>]
 module GuildName =
+    /// The longest guild name a server may allow.
+    [<Literal>]
+    let MaxLength = 64
+
     let value (name: GuildName) : string = UMX.untag name
 
     /// Letters, digits and single spaces between words (GuildText.name). The
@@ -181,63 +185,76 @@ type GuildInvite = {
     Expires: DateTimeOffset
 }
 
+/// A player's request to join a guild from the catalog. The master or an
+/// officer answers it; accepting checks the limits at that moment.
+type GuildJoinRequest = {
+    Guild: GuildId
+    Player: PlayerId
+    CreatedAt: DateTimeOffset
+    Expires: DateTimeOffset
+}
+
+/// The values of the server's guild limits, before GuildLimits.create checks them.
+type GuildLimitSettings = {
+    MaxGuilds: int
+    /// Guilds a player is in, the ones they master included.
+    MaxGuildsPerPlayer: int
+    MaxMembers: int
+    /// Pending invitations of one guild.
+    MaxInvites: int
+    /// Bounds of a guild name and of a custom role's name.
+    NameMinLength: int
+    NameMaxLength: int
+    InviteLifetime: TimeSpan
+    /// Custom roles of one guild; 0 leaves guilds without them.
+    MaxTitles: int
+    /// Bound of the guild information in Unicode scalar values.
+    InfoMaxLength: int
+    /// Pending join requests of one guild.
+    MaxJoinRequests: int
+    /// Pending join requests of one player, so that nobody floods every guild.
+    MaxApplicationsPerPlayer: int
+    JoinRequestLifetime: TimeSpan
+}
+
 /// The server's guild limits (docs/DomainSpecRu.MD §10), checked when an
 /// action would grow what they bound.
 type GuildLimits =
-    private {
-        maxGuilds: int
-        maxGuildsPerPlayer: int
-        maxMembers: int
-        maxInvites: int
-        nameMinLength: int
-        nameMaxLength: int
-        inviteLifetime: TimeSpan
-        maxTitles: int
-        infoMaxLength: int
-    }
+    private { settings: GuildLimitSettings }
 
-    member this.MaxGuilds = this.maxGuilds
-    /// Guilds a player is in, the ones they master included.
-    member this.MaxGuildsPerPlayer = this.maxGuildsPerPlayer
-    member this.MaxMembers = this.maxMembers
-    /// Pending invitations of one guild.
-    member this.MaxInvites = this.maxInvites
-    /// Bounds of a guild name and of a custom role's name.
-    member this.NameMinLength = this.nameMinLength
-    member this.NameMaxLength = this.nameMaxLength
-    member this.InviteLifetime = this.inviteLifetime
-    /// Custom roles of one guild; 0 leaves guilds without them.
-    member this.MaxTitles = this.maxTitles
-    /// Bound of the guild information in Unicode scalar values.
-    member this.InfoMaxLength = this.infoMaxLength
+    member this.MaxGuilds = this.settings.MaxGuilds
+    member this.MaxGuildsPerPlayer = this.settings.MaxGuildsPerPlayer
+    member this.MaxMembers = this.settings.MaxMembers
+    member this.MaxInvites = this.settings.MaxInvites
+    member this.NameMinLength = this.settings.NameMinLength
+    member this.NameMaxLength = this.settings.NameMaxLength
+    member this.InviteLifetime = this.settings.InviteLifetime
+    member this.MaxTitles = this.settings.MaxTitles
+    member this.InfoMaxLength = this.settings.InfoMaxLength
+    member this.MaxJoinRequests = this.settings.MaxJoinRequests
+    member this.MaxApplicationsPerPlayer = this.settings.MaxApplicationsPerPlayer
+    member this.JoinRequestLifetime = this.settings.JoinRequestLifetime
 
 [<RequireQualifiedAccess>]
 module GuildLimits =
-    let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) maxTitles infoMaxLength =
-        let positive field value = if value < 1 then Error(DomainError.InvalidLimit(field, value)) else Ok value
-        positive "MaxGuilds" maxGuilds
-        |> Result.bind (fun _ -> positive "MaxGuildsPerPlayer" maxGuildsPerPlayer)
-        |> Result.bind (fun _ -> if maxMembers < 2 then Error(DomainError.InvalidLimit("MaxMembers", maxMembers)) else Ok maxMembers)
-        |> Result.bind (fun _ -> positive "MaxInvites" maxInvites)
-        |> Result.bind (fun _ -> positive "NameMinLength" nameMinLength)
-        |> Result.bind (fun _ ->
-            if nameMaxLength < nameMinLength then Error(DomainError.InvalidLimit("NameMaxLength", nameMaxLength)) else Ok nameMaxLength)
-        |> Result.bind (fun _ ->
-            if inviteLifetime <= TimeSpan.Zero then Error(DomainError.InvalidLimit("InviteLifetime", int inviteLifetime.TotalSeconds))
-            else Ok inviteLifetime)
-        |> Result.bind (fun _ -> if maxTitles < 0 then Error(DomainError.InvalidLimit("MaxTitles", maxTitles)) else Ok maxTitles)
-        |> Result.bind (fun _ -> positive "InfoMaxLength" infoMaxLength)
-        |> Result.map (fun _ -> {
-            maxGuilds = maxGuilds
-            maxGuildsPerPlayer = maxGuildsPerPlayer
-            maxMembers = maxMembers
-            maxInvites = maxInvites
-            nameMinLength = nameMinLength
-            nameMaxLength = nameMaxLength
-            inviteLifetime = inviteLifetime
-            maxTitles = maxTitles
-            infoMaxLength = infoMaxLength
-        })
+    let create (settings: GuildLimitSettings) =
+        let invalid field (value: int) = Error(DomainError.InvalidLimit(field, value))
+        let positive field value = if value < 1 then invalid field value else Ok()
+        let lifetime field (value: TimeSpan) = if value <= TimeSpan.Zero then invalid field (int value.TotalSeconds) else Ok()
+        positive "MaxGuilds" settings.MaxGuilds
+        |> Result.bind (fun () -> positive "MaxGuildsPerPlayer" settings.MaxGuildsPerPlayer)
+        |> Result.bind (fun () -> if settings.MaxMembers < 2 then invalid "MaxMembers" settings.MaxMembers else Ok())
+        |> Result.bind (fun () -> positive "MaxInvites" settings.MaxInvites)
+        |> Result.bind (fun () -> positive "NameMinLength" settings.NameMinLength)
+        |> Result.bind (fun () ->
+            if settings.NameMaxLength < settings.NameMinLength then invalid "NameMaxLength" settings.NameMaxLength else Ok())
+        |> Result.bind (fun () -> lifetime "InviteLifetime" settings.InviteLifetime)
+        |> Result.bind (fun () -> if settings.MaxTitles < 0 then invalid "MaxTitles" settings.MaxTitles else Ok())
+        |> Result.bind (fun () -> positive "InfoMaxLength" settings.InfoMaxLength)
+        |> Result.bind (fun () -> positive "MaxJoinRequests" settings.MaxJoinRequests)
+        |> Result.bind (fun () -> positive "MaxApplicationsPerPlayer" settings.MaxApplicationsPerPlayer)
+        |> Result.bind (fun () -> lifetime "JoinRequestLifetime" settings.JoinRequestLifetime)
+        |> Result.map (fun () -> { settings = settings })
 
 [<RequireQualifiedAccess>]
 type GuildError =
@@ -266,9 +283,15 @@ type GuildError =
     | TitlesFull
     /// The guild has no such custom role.
     | TitleNotFound
+    /// The guild has MaxJoinRequests pending join requests.
+    | JoinRequestsFull
+    /// The player asked to join the guild already.
+    | AlreadyApplied
+    /// The player has MaxApplicationsPerPlayer pending join requests.
+    | ApplicationLimit
 
-/// One guild: its name, members, custom roles and pending invitations. Owned
-/// by the guild book's owner; no function exposes its live collections.
+/// One guild: its name, members, custom roles, pending invitations and join
+/// requests. Owned by the guild book's owner; no function exposes its live collections.
 [<NoEquality; NoComparison>]
 type Guild =
     private {
@@ -278,19 +301,25 @@ type Guild =
         members: Dictionary<PlayerId, GuildMember>
         invites: Dictionary<PlayerId, GuildInvite>
         titles: Dictionary<GuildTitleId, GuildTitle>
+        requests: Dictionary<PlayerId, GuildJoinRequest>
         mutable info: GuildInfo voption
+        mutable listed: bool
     }
 
     member this.Id = this.id
     member this.Name = this.name
     /// Absent: the master wrote none.
     member this.Info = this.info
+    /// Shown in the public catalog, where players ask to join.
+    member this.Listed = this.listed
     member this.CreatedAt = this.createdAt
     member this.MemberCount = this.members.Count
     member this.Members = List.ofSeq this.members.Values
     member this.Invites = List.ofSeq this.invites.Values
     /// Oldest first: IDs grow with creation.
     member this.Titles = this.titles.Values |> Seq.sortBy _.Id |> List.ofSeq
+    /// Pending join requests, oldest first.
+    member this.JoinRequests = this.requests.Values |> Seq.sortBy _.CreatedAt |> List.ofSeq
 
     member this.Member player =
         match this.members.TryGetValue player with
@@ -299,7 +328,7 @@ type Guild =
 
     member this.Master = this.members.Values |> Seq.tryFind (fun membership -> membership.Role = GuildRole.Master) |> Option.toValueOption
 
-/// What storage restores: a guild with its members, custom roles and invitations.
+/// What storage restores: a guild with its members, custom roles, invitations and join requests.
 type StoredGuild = {
     Id: GuildId
     Name: GuildName
@@ -308,14 +337,51 @@ type StoredGuild = {
     Invites: GuildInvite list
     Titles: GuildTitle list
     Info: GuildInfo voption
+    Listed: bool
+    JoinRequests: GuildJoinRequest list
 }
 
-/// What a disbanded guild leaves: who was in it and who was invited.
+/// What a disbanded guild leaves: who was in it, who was invited and who asked to join.
 type DisbandedGuild = {
     Guild: GuildId
     Name: GuildName
     Members: GuildMember list
     Invites: GuildInvite list
+    JoinRequests: GuildJoinRequest list
+}
+
+[<RequireQualifiedAccess>]
+type GuildCatalogSort =
+    /// By name, regardless of case.
+    | Name
+    /// The largest first, then by name.
+    | Members
+
+/// The last entry a catalog page ended with; the next page starts after it.
+/// NameKey is the guild name in lower case.
+type GuildCatalogCursor = {
+    Guild: GuildId
+    NameKey: string
+    Members: int
+}
+
+/// A search of the public catalog: listed guilds whose name contains Search
+/// (lower case, empty: any) with MinMembers..MaxMembers members, only those
+/// with free places when OpenOnly.
+type GuildCatalogQuery = {
+    Search: string
+    MinMembers: int
+    MaxMembers: int voption
+    OpenOnly: bool
+    Sort: GuildCatalogSort
+    After: GuildCatalogCursor voption
+}
+
+/// One page of the catalog; Total counts every match, More says a next page exists.
+type GuildCatalogPage = {
+    Guilds: Guild list
+    More: bool
+    Total: int
 }
 
 /// Every guild of the server and the indexes the limits need. Mutable and
@@ -328,6 +394,7 @@ type GuildBook =
         names: Dictionary<string, GuildId>
         memberships: Dictionary<PlayerId, HashSet<GuildId>>
         invitations: Dictionary<PlayerId, HashSet<GuildId>>
+        applications: Dictionary<PlayerId, HashSet<GuildId>>
     }
 
     member this.Limits = this.limits
@@ -358,6 +425,7 @@ module GuildBook =
         names = Dictionary(StringComparer.Ordinal)
         memberships = Dictionary()
         invitations = Dictionary()
+        applications = Dictionary()
     }
 
     /// The guilds storage kept, as they are: limits lowered since bind nobody.
@@ -371,7 +439,9 @@ module GuildBook =
                 members = Dictionary()
                 invites = Dictionary()
                 titles = Dictionary()
+                requests = Dictionary()
                 info = guild.Info
+                listed = guild.Listed
             }
             for title in guild.Titles do
                 entry.titles[title.Id] <- title
@@ -381,6 +451,9 @@ module GuildBook =
             for invite in guild.Invites do
                 entry.invites[invite.Player] <- invite
                 index book.invitations invite.Player guild.Id
+            for request in guild.JoinRequests do
+                entry.requests[request.Player] <- request
+                index book.applications request.Player guild.Id
             book.guilds[guild.Id] <- entry
             book.names[GuildName.key guild.Name] <- guild.Id
         book
@@ -421,6 +494,21 @@ module GuildBook =
             |> List.ofSeq
         | false, _ -> []
 
+    /// The player's pending join requests, expired ones included until expireJoinRequests runs.
+    let applicationsOf player (book: GuildBook) =
+        match book.applications.TryGetValue player with
+        | true, set ->
+            set
+            |> Seq.choose (fun guild ->
+                match book.guilds.TryGetValue guild with
+                | true, entry ->
+                    match entry.requests.TryGetValue player with
+                    | true, request -> Some request
+                    | false, _ -> None
+                | false, _ -> None)
+            |> List.ofSeq
+        | false, _ -> []
+
     /// The actor's guild and membership: absent for both an unknown guild and
     /// one the actor is not in, so a stranger learns nothing about it.
     let private membership actor guild (book: GuildBook) =
@@ -448,6 +536,15 @@ module GuildBook =
         entry.invites.Remove player |> ignore
         unindex book.invitations player entry.id
 
+    // The player's join request to the guild, removed if there was one.
+    let private dropRequest (book: GuildBook) (entry: Guild) player =
+        match entry.requests.TryGetValue player with
+        | true, request ->
+            entry.requests.Remove player |> ignore
+            unindex book.applications player entry.id
+            ValueSome request
+        | false, _ -> ValueNone
+
     /// A new guild with its creator as master. The ID comes from storage.
     let create id (name: GuildName) creator (now: DateTimeOffset) (book: GuildBook) =
         if book.names.ContainsKey(GuildName.key name) then Error GuildError.NameTaken
@@ -461,7 +558,9 @@ module GuildBook =
                 members = Dictionary()
                 invites = Dictionary()
                 titles = Dictionary()
+                requests = Dictionary()
                 info = ValueNone
+                listed = true
             }
             book.guilds[id] <- entry
             book.names[GuildName.key name] <- id
@@ -500,17 +599,28 @@ module GuildBook =
             | true, _ | false, _ -> Error GuildError.TargetNotFound
         | ValueNone -> Error GuildError.TargetNotFound
 
-    /// Joining checks the limits at this moment, not when the invitation was sent.
+    // A new member, from an invitation or a join request: the other one goes too.
+    let private join (book: GuildBook) (entry: Guild) player (now: DateTimeOffset) =
+        dropInvite book entry player
+        let request = dropRequest book entry player
+        let joined = { Player = player; Role = GuildRole.Member; JoinedAt = now; Mute = ValueNone; Title = ValueNone }
+        addMember book entry joined
+        struct (joined, request)
+
+    let private roomFor (book: GuildBook) (entry: Guild) player =
+        if entry.members.Count >= book.limits.MaxMembers then Error GuildError.GuildFull
+        elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
+        else Ok()
+
+    /// Joining checks the limits at this moment, not when the invitation was
+    /// sent. A join request of the player to the guild goes as well (returned).
     let accept player guild (now: DateTimeOffset) (book: GuildBook) =
         invitation player guild now book
         |> Result.bind (fun (entry, invite) ->
-            if entry.members.Count >= book.limits.MaxMembers then Error GuildError.GuildFull
-            elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
-            else
-                dropInvite book entry player
-                let joined = { Player = player; Role = GuildRole.Member; JoinedAt = now; Mute = ValueNone; Title = ValueNone }
-                addMember book entry joined
-                Ok(entry, invite, joined))
+            roomFor book entry player
+            |> Result.map (fun () ->
+                let struct (joined, request) = join book entry player now
+                entry, invite, joined, request))
 
     let decline player guild (now: DateTimeOffset) (book: GuildBook) =
         invitation player guild now book
@@ -676,10 +786,101 @@ module GuildBook =
             entry.info <- info
             entry)
 
+    /// The master shows the guild in the public catalog or hides it; pending
+    /// join requests stay either way.
+    let setListed actor guild listed (book: GuildBook) =
+        mastered actor guild book
+        |> Result.map (fun entry ->
+            entry.listed <- listed
+            entry)
+
+    /// A player asks to join a listed guild. A guild hidden from the catalog
+    /// is not found; the limits that would refuse the answer refuse now already.
+    let apply player guild (now: DateTimeOffset) (book: GuildBook) =
+        match tryFind guild book with
+        | ValueSome entry when entry.listed ->
+            if entry.members.ContainsKey player then Error GuildError.AlreadyMember
+            elif entry.requests.ContainsKey player then Error GuildError.AlreadyApplied
+            elif entry.invites.ContainsKey player then Error GuildError.AlreadyInvited
+            elif indexed book.applications player >= book.limits.MaxApplicationsPerPlayer then Error GuildError.ApplicationLimit
+            elif entry.requests.Count >= book.limits.MaxJoinRequests then Error GuildError.JoinRequestsFull
+            else
+                roomFor book entry player
+                |> Result.map (fun () ->
+                    let request = { Guild = guild; Player = player; CreatedAt = now; Expires = now + book.limits.JoinRequestLifetime }
+                    entry.requests[player] <- request
+                    index book.applications player guild
+                    entry, request)
+        | ValueSome _ | ValueNone -> Error GuildError.NotFound
+
+    /// The player takes their join request back.
+    let withdraw player guild (book: GuildBook) =
+        match tryFind guild book with
+        | ValueSome entry ->
+            match dropRequest book entry player with
+            | ValueSome request -> Ok(entry, request)
+            | ValueNone -> Error GuildError.TargetNotFound
+        | ValueNone -> Error GuildError.TargetNotFound
+
+    // A pending join request the master or an officer answers.
+    let private answerable actor guild player (now: DateTimeOffset) (book: GuildBook) =
+        membership actor guild book
+        |> Result.bind (fun (entry, own) ->
+            if not (GuildRole.mayInvite own.Role) then Error GuildError.NotPermitted
+            else
+                match entry.requests.TryGetValue player with
+                | true, request when now < request.Expires -> Ok(entry, request)
+                | true, _ | false, _ -> Error GuildError.TargetNotFound)
+
+    /// The master or an officer lets the player in; the limits apply at this moment.
+    let acceptRequest actor guild player (now: DateTimeOffset) (book: GuildBook) =
+        answerable actor guild player now book
+        |> Result.bind (fun (entry, request) ->
+            roomFor book entry player
+            |> Result.map (fun () ->
+                let invited = entry.invites.ContainsKey player
+                let struct (joined, _) = join book entry player now
+                entry, request, joined, invited))
+
+    let rejectRequest actor guild player (now: DateTimeOffset) (book: GuildBook) =
+        answerable actor guild player now book
+        |> Result.map (fun (entry, request) ->
+            dropRequest book entry player |> ignore
+            entry, request)
+
+    /// The guilds the catalog matches, ordered by the query, after its cursor.
+    let catalog (query: GuildCatalogQuery) pageSize (book: GuildBook) =
+        let maxMembers = book.limits.MaxMembers
+        let matches (entry: Guild) =
+            let count = entry.members.Count
+            entry.listed
+            && count >= query.MinMembers
+            && (query.MaxMembers |> ValueOption.forall (fun maximum -> count <= maximum))
+            && (not query.OpenOnly || count < maxMembers)
+            && (query.Search.Length = 0 || (GuildName.key entry.name).Contains(query.Search, StringComparison.Ordinal))
+        // Ordinal comparison of the struct keys; the guild ID breaks ties.
+        let key (members: int) nameKey (id: GuildId) =
+            match query.Sort with
+            | GuildCatalogSort.Name -> struct (0, nameKey, id)
+            | GuildCatalogSort.Members -> struct (-members, nameKey, id)
+        let keyOf (entry: Guild) = key entry.members.Count (GuildName.key entry.name) entry.id
+        let found = book.guilds.Values |> Seq.filter matches |> Seq.sortBy keyOf |> Array.ofSeq
+        let start =
+            match query.After with
+            | ValueSome after ->
+                let last = key after.Members after.NameKey after.Guild
+                found |> Array.tryFindIndex (fun entry -> keyOf entry > last) |> Option.defaultValue found.Length
+            | ValueNone -> 0
+        let taken = min pageSize (found.Length - start)
+        { Guilds = List.ofArray found[start .. start + taken - 1]
+          More = start + taken < found.Length
+          Total = found.Length }
+
     let private remove (book: GuildBook) (entry: Guild) =
-        let disbanded = { Guild = entry.id; Name = entry.name; Members = entry.Members; Invites = entry.Invites }
+        let disbanded = { Guild = entry.id; Name = entry.name; Members = entry.Members; Invites = entry.Invites; JoinRequests = entry.JoinRequests }
         for membership in disbanded.Members do unindex book.memberships membership.Player entry.id
         for invite in disbanded.Invites do unindex book.invitations invite.Player entry.id
+        for request in disbanded.JoinRequests do unindex book.applications request.Player entry.id
         book.guilds.Remove entry.id |> ignore
         book.names.Remove(GuildName.key entry.name) |> ignore
         disbanded
@@ -704,6 +905,16 @@ module GuildBook =
             |> Seq.filter (fun invite -> now >= invite.Expires)
             |> List.ofSeq
         for invite in expired do dropInvite book book.guilds[invite.Guild] invite.Player
+        expired
+
+    /// Removes and returns the join requests that expired by now.
+    let expireJoinRequests (now: DateTimeOffset) (book: GuildBook) =
+        let expired =
+            book.guilds.Values
+            |> Seq.collect (fun entry -> entry.requests.Values)
+            |> Seq.filter (fun request -> now >= request.Expires)
+            |> List.ofSeq
+        for request in expired do dropRequest book book.guilds[request.Guild] request.Player |> ignore
         expired
 
     /// Clears and returns the guild mutes that ended by now, with their guilds.

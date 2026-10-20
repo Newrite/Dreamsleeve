@@ -73,6 +73,15 @@ type GuildAction =
     | SetTitle of GuildId * PlayerId * GuildTitleId voption
     /// The master's; empty clears it. Checked against [Guilds] InfoMaxLength and the word list.
     | SetInfo of GuildId * info: string
+    /// The master shows the guild in the public catalog or hides it.
+    | SetListed of GuildId * listed: bool
+    /// A join request to a listed guild.
+    | Apply of GuildId
+    | Withdraw of GuildId
+    /// The master or an officer answers a join request.
+    | AnswerRequest of GuildId * PlayerId * accept: bool
+    /// One page of the public catalog; answered by GuildCatalogPage.
+    | Catalog of GuildCatalogQuery
 
 /// A member as guildmates see them: the real profile after the word list,
 /// never a pseudonym, and whether they are online.
@@ -80,6 +89,12 @@ type GuildMemberView = {
     Membership: GuildMember
     Profile: PlayerData
     Online: bool
+}
+
+/// A join request as the master and officers see it: the real profile, like a member's.
+type GuildJoinRequestView = {
+    Request: GuildJoinRequest
+    Profile: PlayerData
 }
 
 type GuildView = {
@@ -93,6 +108,30 @@ type GuildView = {
     /// Custom roles, oldest first.
     Titles: GuildTitle list
     Info: GuildInfo voption
+    Listed: bool
+    /// Pending join requests, oldest first; empty unless the viewer is the master or an officer.
+    JoinRequests: GuildJoinRequestView list
+}
+
+/// A join request as the player who sent it sees it.
+type GuildApplicationView = {
+    Request: GuildJoinRequest
+    GuildName: GuildName
+}
+
+/// A guild of the public catalog.
+type GuildCatalogEntryView = {
+    Guild: GuildId
+    Name: GuildName
+    Info: GuildInfo voption
+    Members: int
+    CreatedAt: DateTimeOffset
+}
+
+type GuildCatalogView = {
+    Guilds: GuildCatalogEntryView list
+    More: bool
+    Total: int
 }
 
 /// An invitation as the invited player sees it: the inviter is named only by
@@ -102,12 +141,23 @@ type GuildInviteView = {
     GuildName: GuildName
 }
 
-/// Every guild of a player and their invitations, with the server's limits.
+/// Every guild of a player, their invitations and join requests, with the server's limits.
 type GuildState = {
     Guilds: GuildView list
     Invites: GuildInviteView list
+    Applications: GuildApplicationView list
     Limits: GuildLimits
 }
+
+/// Why a join request of the player ended.
+[<RequireQualifiedAccess>]
+type GuildApplicationEnd =
+    | Withdrawn
+    /// The guild comes as GuildChange.Added after it.
+    | Accepted
+    | Rejected
+    | Expired
+    | Disbanded
 
 [<RequireQualifiedAccess>]
 type GuildRemoval =
@@ -130,6 +180,13 @@ type GuildChange =
     | Titles of GuildId * GuildTitle list
     /// The master wrote or cleared the guild information.
     | Info of GuildId * GuildInfo voption
+    /// The guild's pending join requests, complete: to the master and
+    /// officers, and empty to a member who stops being one of them.
+    | JoinRequests of GuildId * GuildJoinRequestView list
+    /// The player asked to join a guild.
+    | Applied of GuildApplicationView
+    | ApplicationRemoved of GuildId * GuildApplicationEnd
+    | Listed of GuildId * bool
 
 [<RequireQualifiedAccess>]
 type ClientCommand =
@@ -285,6 +342,8 @@ type ServerResponse =
     | GuildChanged of GuildChange
     /// Settles a guild command; the effect arrives as GuildChanged.
     | GuildCommandDone of requestId: uint64 * GuildId
+    /// Answers GuildAction.Catalog.
+    | GuildCatalogPage of requestId: uint64 * GuildCatalogView
 
 /// How a response travels: its lane, the request it settles (none for a
 /// notification) and whether it may leave while the session is still opening.

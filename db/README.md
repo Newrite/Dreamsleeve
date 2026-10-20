@@ -161,8 +161,13 @@ deletes a role and refuses to load a member holding a role of another guild.
 Schema 16 (`1791763200000_guild_info.sql`) adds `guilds.info`, the text the master writes
 about the guild (docs/GuildsRu.md), NULL when there is none. `[Guilds] InfoMaxLength`
 bounds it when the master writes; a stored text loads up to the largest bound the server
-allows. DOWN drops the column. This is the schema version the server supports
-(`SqliteDatabase.SchemaVersion`).
+allows. DOWN drops the column.
+
+Schema 17 (`1791849600000_guild_catalog.sql`) adds the public guild catalog: `guilds.listed`
+(1 by default, so every existing guild shows) and `guild_join_requests`, the players' pending
+requests to join with their expiry. A request goes with its guild and with the player's
+profile (`ON DELETE CASCADE`); its answer, withdrawal or expiry deletes it. DOWN drops both.
+This is the schema version the server supports (`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

@@ -244,7 +244,7 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_._oneof_case_[0]),
-        32, // hasbit index offset
+        33, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.protocol_version_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
@@ -273,8 +273,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Chat::ServerPacket, _impl_.payload_),
         1,
         0,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -330,10 +332,10 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::Dreamsleeve::Protocol::Chat::ClientPacket)},
         {47, sizeof(::Dreamsleeve::Protocol::Chat::ServerPacket)},
-        {106, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
-        {107, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
-        {116, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
-        {123, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
+        {108, sizeof(::Dreamsleeve::Protocol::Chat::PlayerUpdateAccepted)},
+        {109, sizeof(::Dreamsleeve::Protocol::Chat::RequestRejected)},
+        {118, sizeof(::Dreamsleeve::Protocol::Chat::ClientMovementPacket)},
+        {125, sizeof(::Dreamsleeve::Protocol::Chat::ServerMovementPacket)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Dreamsleeve::Protocol::Chat::_ClientPacket_default_instance_._instance,
@@ -383,7 +385,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "d\030\033 \001(\0132\'.Dreamsleeve.Protocol.Chat.Guil"
     "dCommandH\000\022A\n\016set_name_color\030\034 \001(\0132\'.Dre"
     "amsleeve.Protocol.Chat.SetNameColorH\000B\t\n"
-    "\007payload\"\225\020\n\014ServerPacket\022\030\n\020protocol_ve"
+    "\007payload\"\340\020\n\014ServerPacket\022\030\n\020protocol_ve"
     "rsion\030\001 \001(\r\022\027\n\nrequest_id\030\002 \001(\004H\001\210\001\001\022B\n\016"
     "session_opened\030\n \001(\0132(.Dreamsleeve.Proto"
     "col.Chat.SessionOpenedH\000\022B\n\016chat_publish"
@@ -430,56 +432,62 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "( \001(\0132+.Dreamsleeve.Protocol.Chat.GuildC"
     "ommandDoneH\000\022I\n\022name_color_changed\030) \001(\013"
     "2+.Dreamsleeve.Protocol.Chat.NameColorCh"
-    "angedH\000B\t\n\007payloadB\r\n\013_request_idJ\004\010\r\020\016J"
-    "\004\010\016\020\017J\004\010\017\020\020J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024J\004\010\024\020\025R\014pla"
-    "yer_movedR\rplayers_movedR\rplayer_joinedR"
-    "\013player_leftR\016player_updatedR\031player_vis"
-    "ibility_changedR\027player_metadata_changed"
-    "\"\026\n\024PlayerUpdateAccepted\"p\n\017RequestRejec"
-    "ted\022=\n\004code\030\001 \001(\0162/.Dreamsleeve.Protocol"
-    ".Chat.RequestRejectionCode\022\017\n\007message\030\002 "
-    "\001(\t\022\r\n\005field\030\003 \001(\t\"k\n\024ClientMovementPack"
-    "et\022\030\n\020protocol_version\030\001 \001(\r\0229\n\006sample\030\002"
-    " \001(\0132).Dreamsleeve.Protocol.Chat.Movemen"
-    "tSample\"l\n\024ServerMovementPacket\022\030\n\020proto"
-    "col_version\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.D"
-    "reamsleeve.Protocol.Chat.PlayersMoved*\214\013"
-    "\n\024RequestRejectionCode\022&\n\"REQUEST_REJECT"
-    "ION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECT"
-    "ION_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_RE"
-    "JECTION_CODE_SESSION_NOT_READY\020\002\022/\n+REQU"
-    "EST_REJECTION_CODE_SESSION_ALREADY_OPEN\020"
-    "\003\022)\n%REQUEST_REJECTION_CODE_USERNAME_TAK"
-    "EN\020\004\022,\n(REQUEST_REJECTION_CODE_CHANNEL_N"
-    "OT_FOUND\020\005\022-\n)REQUEST_REJECTION_CODE_NOT"
-    "_CHANNEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_C"
-    "ODE_OVERLOADED\020\007\0220\n,REQUEST_REJECTION_CO"
-    "DE_AUTHENTICATION_FAILED\020\010\022+\n\'REQUEST_RE"
-    "JECTION_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQUE"
-    "ST_REJECTION_CODE_RATE_LIMITED\020\n\0223\n/REQU"
-    "EST_REJECTION_CODE_ANNOUNCEMENT_NOT_ALLO"
-    "WED\020\013\0220\n,REQUEST_REJECTION_CODE_GROUND_M"
-    "ARK_AREA_FULL\020\014\0220\n,REQUEST_REJECTION_COD"
-    "E_GROUND_MARK_NOT_FOUND\020\r\0226\n2REQUEST_REJ"
-    "ECTION_CODE_HIDDEN_IDENTITY_NOT_ALLOWED\020"
-    "\016\022:\n6REQUEST_REJECTION_CODE_DISPLAY_NAME"
-    "_CHANGE_NOT_ALLOWED\020\017\022 \n\034REQUEST_REJECTI"
-    "ON_CODE_MUTED\020\020\022(\n$REQUEST_REJECTION_COD"
-    "E_NOT_PERMITTED\020\021\022+\n\'REQUEST_REJECTION_C"
-    "ODE_TARGET_NOT_FOUND\020\022\022+\n\'REQUEST_REJECT"
-    "ION_CODE_GUILD_NAME_TAKEN\020\023\022%\n!REQUEST_R"
-    "EJECTION_CODE_GUILD_FULL\020\024\022-\n)REQUEST_RE"
-    "JECTION_CODE_GUILD_PLAYER_LIMIT\020\025\022-\n)REQ"
-    "UEST_REJECTION_CODE_GUILD_SERVER_LIMIT\020\026"
-    "\022-\n)REQUEST_REJECTION_CODE_GUILD_INVITES"
-    "_FULL\020\027\022/\n+REQUEST_REJECTION_CODE_GUILD_"
-    "ALREADY_MEMBER\020\030\0220\n,REQUEST_REJECTION_CO"
-    "DE_GUILD_ALREADY_INVITED\020\031\022-\n)REQUEST_RE"
-    "JECTION_CODE_GUILD_MASTER_STAYS\020\032\0220\n,REQ"
-    "UEST_REJECTION_CODE_NAME_COLOR_UNREADABL"
-    "E\020\033\0221\n-REQUEST_REJECTION_CODE_GUILD_TITL"
-    "E_NAME_TAKEN\020\034\022,\n(REQUEST_REJECTION_CODE"
-    "_GUILD_TITLES_FULL\020\035b\006proto3"
+    "angedH\000\022I\n\022guild_catalog_page\030* \001(\0132+.Dr"
+    "eamsleeve.Protocol.Chat.GuildCatalogPage"
+    "H\000B\t\n\007payloadB\r\n\013_request_idJ\004\010\r\020\016J\004\010\016\020\017"
+    "J\004\010\017\020\020J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024J\004\010\024\020\025R\014player_m"
+    "ovedR\rplayers_movedR\rplayer_joinedR\013play"
+    "er_leftR\016player_updatedR\031player_visibili"
+    "ty_changedR\027player_metadata_changed\"\026\n\024P"
+    "layerUpdateAccepted\"p\n\017RequestRejected\022="
+    "\n\004code\030\001 \001(\0162/.Dreamsleeve.Protocol.Chat"
+    ".RequestRejectionCode\022\017\n\007message\030\002 \001(\t\022\r"
+    "\n\005field\030\003 \001(\t\"k\n\024ClientMovementPacket\022\030\n"
+    "\020protocol_version\030\001 \001(\r\0229\n\006sample\030\002 \001(\0132"
+    ").Dreamsleeve.Protocol.Chat.MovementSamp"
+    "le\"l\n\024ServerMovementPacket\022\030\n\020protocol_v"
+    "ersion\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.Dreams"
+    "leeve.Protocol.Chat.PlayersMoved*\242\014\n\024Req"
+    "uestRejectionCode\022&\n\"REQUEST_REJECTION_C"
+    "ODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECTION_C"
+    "ODE_INVALID_REQUEST\020\001\022,\n(REQUEST_REJECTI"
+    "ON_CODE_SESSION_NOT_READY\020\002\022/\n+REQUEST_R"
+    "EJECTION_CODE_SESSION_ALREADY_OPEN\020\003\022)\n%"
+    "REQUEST_REJECTION_CODE_USERNAME_TAKEN\020\004\022"
+    ",\n(REQUEST_REJECTION_CODE_CHANNEL_NOT_FO"
+    "UND\020\005\022-\n)REQUEST_REJECTION_CODE_NOT_CHAN"
+    "NEL_MEMBER\020\006\022%\n!REQUEST_REJECTION_CODE_O"
+    "VERLOADED\020\007\0220\n,REQUEST_REJECTION_CODE_AU"
+    "THENTICATION_FAILED\020\010\022+\n\'REQUEST_REJECTI"
+    "ON_CODE_TEXT_NOT_ALLOWED\020\t\022\'\n#REQUEST_RE"
+    "JECTION_CODE_RATE_LIMITED\020\n\0223\n/REQUEST_R"
+    "EJECTION_CODE_ANNOUNCEMENT_NOT_ALLOWED\020\013"
+    "\0220\n,REQUEST_REJECTION_CODE_GROUND_MARK_A"
+    "REA_FULL\020\014\0220\n,REQUEST_REJECTION_CODE_GRO"
+    "UND_MARK_NOT_FOUND\020\r\0226\n2REQUEST_REJECTIO"
+    "N_CODE_HIDDEN_IDENTITY_NOT_ALLOWED\020\016\022:\n6"
+    "REQUEST_REJECTION_CODE_DISPLAY_NAME_CHAN"
+    "GE_NOT_ALLOWED\020\017\022 \n\034REQUEST_REJECTION_CO"
+    "DE_MUTED\020\020\022(\n$REQUEST_REJECTION_CODE_NOT"
+    "_PERMITTED\020\021\022+\n\'REQUEST_REJECTION_CODE_T"
+    "ARGET_NOT_FOUND\020\022\022+\n\'REQUEST_REJECTION_C"
+    "ODE_GUILD_NAME_TAKEN\020\023\022%\n!REQUEST_REJECT"
+    "ION_CODE_GUILD_FULL\020\024\022-\n)REQUEST_REJECTI"
+    "ON_CODE_GUILD_PLAYER_LIMIT\020\025\022-\n)REQUEST_"
+    "REJECTION_CODE_GUILD_SERVER_LIMIT\020\026\022-\n)R"
+    "EQUEST_REJECTION_CODE_GUILD_INVITES_FULL"
+    "\020\027\022/\n+REQUEST_REJECTION_CODE_GUILD_ALREA"
+    "DY_MEMBER\020\030\0220\n,REQUEST_REJECTION_CODE_GU"
+    "ILD_ALREADY_INVITED\020\031\022-\n)REQUEST_REJECTI"
+    "ON_CODE_GUILD_MASTER_STAYS\020\032\0220\n,REQUEST_"
+    "REJECTION_CODE_NAME_COLOR_UNREADABLE\020\033\0221"
+    "\n-REQUEST_REJECTION_CODE_GUILD_TITLE_NAM"
+    "E_TAKEN\020\034\022,\n(REQUEST_REJECTION_CODE_GUIL"
+    "D_TITLES_FULL\020\035\022.\n*REQUEST_REJECTION_COD"
+    "E_GUILD_REQUESTS_FULL\020\036\0220\n,REQUEST_REJEC"
+    "TION_CODE_GUILD_ALREADY_APPLIED\020\037\0222\n.REQ"
+    "UEST_REJECTION_CODE_GUILD_APPLICATION_LI"
+    "MIT\020 b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[6] = {
@@ -494,7 +502,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    5388,
+    5613,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -515,7 +523,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    1966080u, 0u, };
+    2162688u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {
@@ -2575,6 +2583,30 @@ void ServerPacket::clear_name_color_changed() {
     clear_has_payload();
   }
 }
+void ServerPacket::set_allocated_guild_catalog_page(::Dreamsleeve::Protocol::Chat::GuildCatalogPage* PROTOBUF_NULLABLE guild_catalog_page) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_payload();
+  if (guild_catalog_page) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(guild_catalog_page)->GetArena();
+    if (message_arena != submessage_arena) {
+      guild_catalog_page = ::google::protobuf::internal::GetOwnedMessage(message_arena, guild_catalog_page, submessage_arena);
+    }
+    set_has_guild_catalog_page();
+    _impl_.payload_.guild_catalog_page_ = guild_catalog_page;
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.ServerPacket.guild_catalog_page)
+}
+void ServerPacket::clear_guild_catalog_page() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (payload_case() == kGuildCatalogPage) {
+    if (GetArena() == nullptr) {
+      delete _impl_.payload_.guild_catalog_page_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.guild_catalog_page_);
+    }
+    clear_has_payload();
+  }
+}
 ServerPacket::ServerPacket(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ServerPacket_class_data_.base()) {
@@ -2690,6 +2722,9 @@ ServerPacket::ServerPacket(
         break;
       case kNameColorChanged:
         _impl_.payload_.name_color_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.name_color_changed_);
+        break;
+      case kGuildCatalogPage:
+        _impl_.payload_.guild_catalog_page_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_catalog_page_);
         break;
   }
 
@@ -2932,6 +2967,14 @@ void ServerPacket::clear_payload() {
       }
       break;
     }
+    case kGuildCatalogPage: {
+      if (GetArena() == nullptr) {
+        delete _impl_.payload_.guild_catalog_page_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.payload_.guild_catalog_page_);
+      }
+      break;
+    }
     case PAYLOAD_NOT_SET: {
       break;
     }
@@ -2983,17 +3026,17 @@ ServerPacket::GetClassData() const {
   return ServerPacket_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 27, 25, 0, 7>
+const ::_pbi::TcParseTable<1, 28, 26, 0, 7>
 ServerPacket::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_._has_bits_),
     0, // no _extensions_
-    41, 8,  // max_field_number, fast_idx_mask
+    42, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
     1012220,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    27,  // num_field_entries
-    25,  // num_aux_entries
+    28,  // num_field_entries
+    26,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServerPacket_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -3012,7 +3055,7 @@ ServerPacket::_table_ = {
       PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.protocol_version_)}},
   }}, {{
     33, 0, 1,
-    65024, 18,
+    64512, 18,
     65535, 65535
   }}, {{
     // uint32 protocol_version = 1;
@@ -3069,6 +3112,8 @@ ServerPacket::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.guild_command_done_), _Internal::kOneofCaseOffset + 0, 23, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .Dreamsleeve.Protocol.Chat.NameColorChanged name_color_changed = 41;
     {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.name_color_changed_), _Internal::kOneofCaseOffset + 0, 24, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .Dreamsleeve.Protocol.Chat.GuildCatalogPage guild_catalog_page = 42;
+    {PROTOBUF_FIELD_OFFSET(ServerPacket, _impl_.payload_.guild_catalog_page_), _Internal::kOneofCaseOffset + 0, 25, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::SessionOpened>()},
@@ -3096,6 +3141,7 @@ ServerPacket::_table_ = {
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildChanged>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildCommandDone>()},
       {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::NameColorChanged>()},
+      {::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Chat::GuildCatalogPage>()},
   }},
   {{
   }},
@@ -3304,6 +3350,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
           stream);
       break;
     }
+    case kGuildCatalogPage: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          42, *this_._impl_.payload_.guild_catalog_page_, this_._impl_.payload_.guild_catalog_page_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -3495,6 +3547,12 @@ PROTOBUF_NOINLINE void ServerPacket::Clear() {
     case kNameColorChanged: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.name_color_changed_);
+      break;
+    }
+    // .Dreamsleeve.Protocol.Chat.GuildCatalogPage guild_catalog_page = 42;
+    case kGuildCatalogPage: {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.payload_.guild_catalog_page_);
       break;
     }
     case PAYLOAD_NOT_SET: {
@@ -3740,6 +3798,14 @@ void ServerPacket::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.payload_.name_color_changed_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.name_color_changed_);
         } else {
           _this->_impl_.payload_.name_color_changed_->MergeFrom(*from._impl_.payload_.name_color_changed_);
+        }
+        break;
+      }
+      case kGuildCatalogPage: {
+        if (oneof_needs_init) {
+          _this->_impl_.payload_.guild_catalog_page_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.payload_.guild_catalog_page_);
+        } else {
+          _this->_impl_.payload_.guild_catalog_page_->MergeFrom(*from._impl_.payload_.guild_catalog_page_);
         }
         break;
       }

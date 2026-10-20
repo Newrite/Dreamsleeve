@@ -238,6 +238,31 @@ export namespace Dreamsleeve::Client
     std::string     info;
   };
 
+  // The master shows the guild in the public catalog or hides it.
+  struct SetGuildListed
+  {
+    Domain::GuildId guildId{};
+    bool            listed{};
+  };
+
+  // A join request to a listed guild; the master and officers answer.
+  struct ApplyToGuild
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct WithdrawGuildApplication
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct AnswerGuildJoinRequest
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+    bool             accept{};
+  };
+
   using GuildAction = std::variant<
     CreateGuild,
     InviteToGuild,
@@ -253,12 +278,24 @@ export namespace Dreamsleeve::Client
     RenameGuildTitle,
     DeleteGuildTitle,
     SetGuildMemberTitle,
-    SetGuildInfo>;
+    SetGuildInfo,
+    SetGuildListed,
+    ApplyToGuild,
+    WithdrawGuildApplication,
+    AnswerGuildJoinRequest>;
 
   struct GuildRequest
   {
     std::uint64_t requestId{};
     GuildAction   action;
+  };
+
+  // One page of the public catalog; settled with GuildCatalogListed. Shares
+  // the guild requests' pending budget.
+  struct GuildCatalogRequest
+  {
+    std::uint64_t             requestId{};
+    Domain::GuildCatalogQuery query;
   };
 
   // Complete sampled values, not a patch. Only adjacent pending samples from
@@ -317,6 +354,7 @@ export namespace Dreamsleeve::Client
     ClearPlayerMarks,
     DeleteChatMessage,
     GuildRequest,
+    GuildCatalogRequest,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -461,6 +499,12 @@ export namespace Dreamsleeve::Client
     Domain::GuildId guildId{};
   };
 
+  // The page of the catalog a GuildCatalogRequest asked for.
+  struct GuildCatalogListed
+  {
+    Domain::GuildCatalogPage page;
+  };
+
   // Exactly one result settles every command with a request ID: the server's
   // answer, its refusal or a local failure, with the command's generation.
   struct CommandResult
@@ -480,6 +524,7 @@ export namespace Dreamsleeve::Client
       MarksCleared,
       MessageDeleted,
       GuildDone,
+      GuildCatalogListed,
       ServerRejection,
       CommandFailureCode>;
 

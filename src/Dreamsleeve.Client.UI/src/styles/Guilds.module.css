@@ -133,6 +133,54 @@
   max-width: 560px;
   resize: vertical;
 }
+/* The public catalog: filters above a list that scrolls by itself, so the
+   next page loads as its end comes into sight. */
+.catalogFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.catalogFilters input[aria-label="Поиск гильдии"] {
+  width: 220px;
+}
+.catalogFilters button {
+  border: 1px solid var(--border);
+}
+.bound {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.bound input {
+  width: 56px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+}
+.catalogList {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.catalogEntry {
+  display: grid !important;
+  gap: 4px;
+}
+.catalogHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.catalogHead button {
+  border: 1px solid var(--border);
+}
 .inviteSearch {
   display: grid;
   gap: 6px;

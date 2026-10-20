@@ -60,6 +60,8 @@ const guild = (
   members,
   titles: [],
   info: "",
+  listed: true,
+  joinRequests: [],
 });
 const guildsEvent = (
   guilds: Guild[],
@@ -75,8 +77,12 @@ const guildsEvent = (
     nameMax: 24,
     titles: 10,
     infoMax: 500,
+    joinRequests: 128,
+    applications: 10,
   },
   removed: [],
+  applications: [],
+  applicationsEnded: [],
   ...extra,
 });
 const line = (id: string, channelId: string): Message => ({
@@ -375,6 +381,38 @@ describe("guilds in the chat", () => {
     );
   });
 
+  it("tell a master of a new join request and an applicant how theirs ended", () => {
+    const { chat, sent, guilds } = inGuilds();
+    const [ravensGuild, companionsGuild] = guilds;
+    const request = { id: "9", name: "Ингрид", createdAt: 0, expires: 0 };
+    chat.receive(
+      guildsEvent([
+        { ...ravensGuild, joinRequests: [request] },
+        companionsGuild,
+      ]),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Заявка в гильдию «Вороны» от Ингрид",
+    );
+    chat.guilds.answerRequest("4", "9", true, "Ингрид");
+    expect(sent().at(-1)).toMatchObject({
+      action: "answerRequest",
+      guildId: "4",
+      playerId: "9",
+      accept: true,
+    });
+    chat.guilds.apply("8", "Совы");
+    expect(sent().at(-1)).toMatchObject({ action: "apply", guildId: "8" });
+    chat.receive(
+      guildsEvent(guilds, {
+        applicationsEnded: [{ guildId: "8", name: "Совы", reason: "rejected" }],
+      }),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Заявку в гильдию «Совы» отклонили",
+    );
+  });
+
   it("mute a member through a dialog that keeps a refusal and closes on success", () => {
     const { chat, sent } = inGuilds();
     chat.guilds.openMute("4", "7", "Игрок 7");
@@ -447,6 +485,8 @@ describe("guild events at the bridge", () => {
         ],
         titles: [{ id: "2", name: "Казначей" }],
         info: "Сбор по пятницам\nу Йоррваскра",
+        listed: true,
+        joinRequests: [{ id: "9", name: "Ингрид", createdAt: 0, expires: 0 }],
       },
     ],
     invites: [
@@ -459,8 +499,12 @@ describe("guild events at the bridge", () => {
       nameMax: 24,
       titles: 10,
       infoMax: 500,
+      joinRequests: 128,
+      applications: 10,
     },
     removed: [{ guildId: "6", name: "Изгнанники", reason: "disbanded" }],
+    applications: [{ guildId: "8", guildName: "Совы", expires: 0 }],
+    applicationsEnded: [{ guildId: "3", name: "Лисы", reason: "rejected" }],
   };
   it("accept what the host sends and refuse what it never would", () => {
     expect(parseHostEvent(JSON.stringify(sample)).type).toBe("guilds");

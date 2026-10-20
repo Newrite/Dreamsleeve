@@ -69,6 +69,11 @@ module SqliteGuildStore =
             Ok { Guild = guild; Player = player; InvitedBy = by; CreatedAt = time (reader.GetInt64 3); Expires = time (reader.GetInt64 4) }
         | _ -> invalidData "A stored guild invitation is invalid."
 
+    let private requestOf (reader: DbDataReader) =
+        match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)) with
+        | Ok guild, Ok player -> Ok { Guild = guild; Player = player; CreatedAt = time (reader.GetInt64 2); Expires = time (reader.GetInt64 3) }
+        | _ -> invalidData "A stored guild join request is invalid."
+
     let private titleOf (reader: DbDataReader) =
         match GuildTitleId.create (uint64 (reader.GetInt64 0)), GuildId.create (uint64 (reader.GetInt64 1)),
               GuildTitleName.create 1 GuildOptions.MaxNameLength (reader.GetString 2) with
@@ -101,36 +106,40 @@ module SqliteGuildStore =
                 use reader = statement.ExecuteReader()
                 readAll reader row
             let guilds =
-                rows "SELECT id, name, created_at, info FROM guilds ORDER BY id" (fun reader ->
+                rows "SELECT id, name, created_at, info, listed FROM guilds ORDER BY id" (fun reader ->
                     let info =
                         match optional reader 3 reader.GetString with
                         | ValueSome text -> GuildInfo.create GuildOptions.MaxInfoLength text |> Result.map ValueSome
                         | ValueNone -> Ok ValueNone
                     match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1), info with
-                    | Ok id, Ok name, Ok info -> Ok(id, name, time (reader.GetInt64 2), info)
+                    | Ok id, Ok name, Ok info -> Ok(id, name, time (reader.GetInt64 2), info, reader.GetInt64 4 <> 0L)
                     | _ -> invalidData "A stored guild is invalid.")
             let members =
                 rows "SELECT guild_id, player_id, role, joined_at, mute_reason, muted_by, muted_at, muted_until, title_id FROM guild_members" memberOf
             let invites = rows "SELECT guild_id, player_id, invited_by, created_at, expires_at FROM guild_invites" inviteOf
             let titles = rows "SELECT id, guild_id, name FROM guild_titles" titleOf
+            let requests = rows "SELECT guild_id, player_id, created_at, expires_at FROM guild_join_requests" requestOf
             let profiles =
-                rows "SELECT p.player_id, a.username, p.display_name, p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites)"
+                rows "SELECT p.player_id, a.username, p.display_name, p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites UNION SELECT player_id FROM guild_join_requests)"
                     (fun reader ->
                         match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
                               DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
                         | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
                         | _ -> invalidData "A stored profile is invalid.")
-            match guilds, members, invites, profiles, titles with
-            | Ok guilds, Ok members, Ok invites, Ok profiles, Ok titles ->
+            match guilds, members, invites, profiles, titles, requests with
+            | Ok guilds, Ok members, Ok invites, Ok profiles, Ok titles, Ok requests ->
                 let membersOf = members |> List.groupBy fst |> Map.ofList
                 let invitesOf = invites |> List.groupBy _.Guild |> Map.ofList
                 let titlesOf = titles |> List.groupBy fst |> Map.ofList
+                let requestsOf = requests |> List.groupBy _.Guild |> Map.ofList
                 let stored =
-                    guilds |> List.map (fun (id, name, createdAt, info) ->
+                    guilds |> List.map (fun (id, name, createdAt, info, listed) ->
                         { Id = id
                           Name = name
                           CreatedAt = createdAt
                           Info = info
+                          Listed = listed
+                          JoinRequests = requestsOf |> Map.tryFind id |> Option.defaultValue []
                           Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
                           Invites = invitesOf |> Map.tryFind id |> Option.defaultValue []
                           Titles = titlesOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd })
@@ -140,8 +149,8 @@ module SqliteGuildStore =
                 | Ok _, Ok _ when not (titlesHeld members titles) -> invalidData "A guild member holds a custom role of another guild."
                 | Ok next, Ok nextTitle -> Ok { Guilds = stored; Profiles = profiles; NextId = next; NextTitleId = nextTitle }
                 | Error(), _ | _, Error() -> invalidData "A guild ID sequence is negative."
-            | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _ | _, _, _, Error error, _ | _, _, _, _, Error error ->
-                Error error)
+            | Error error, _, _, _, _, _ | _, Error error, _, _, _, _ | _, _, Error error, _, _, _
+            | _, _, _, Error error, _, _ | _, _, _, _, Error error, _ | _, _, _, _, _, Error error -> Error error)
 
     let private guild (id: GuildId) = box (int64 (GuildId.value id))
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
@@ -202,6 +211,23 @@ module SqliteGuildStore =
                   "@guild", guild id
                   "@name", box (GuildTitleName.value created.Name)
                   "@key", box (GuildTitleName.key created.Name) ]
+            |> ignore
+            Ok()
+        | GuildWrite.PutListed(id, listed) ->
+            execute context "UPDATE guilds SET listed=@listed WHERE id=@guild" [ "@guild", guild id; "@listed", box (if listed then 1L else 0L) ]
+            |> ignore
+            Ok()
+        | GuildWrite.PutJoinRequest request ->
+            execute context
+                "INSERT INTO guild_join_requests(guild_id, player_id, created_at, expires_at) VALUES (@guild, @player, @at, @expires) ON CONFLICT(guild_id, player_id) DO UPDATE SET created_at=excluded.created_at, expires_at=excluded.expires_at"
+                [ "@guild", guild request.Guild
+                  "@player", player request.Player
+                  "@at", box (milliseconds request.CreatedAt)
+                  "@expires", box (milliseconds request.Expires) ]
+            |> ignore
+            Ok()
+        | GuildWrite.RemoveJoinRequest(id, playerId) ->
+            execute context "DELETE FROM guild_join_requests WHERE guild_id=@guild AND player_id=@player" [ "@guild", guild id; "@player", player playerId ]
             |> ignore
             Ok()
         | GuildWrite.PutInfo(id, info) ->

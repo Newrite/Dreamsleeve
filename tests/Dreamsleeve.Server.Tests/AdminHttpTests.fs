@@ -380,7 +380,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone; Title = ValueNone }
             // The master's account is gone: the guild waits for the panel.
             let info = GuildInfo.create 500 "<b>Сбор</b> по пятницам" |> ok
-            let summary master : GuildSummary = { Guild = guild; Name = name; Info = ValueSome info; CreatedAt = at; Members = 2; Master = master }
+            let summary master : GuildSummary = { Guild = guild; Name = name; Info = ValueSome info; Listed = true; CreatedAt = at; Members = 2; Master = master }
             let card bobRole master : GuildCard =
                 { Summary = summary master
                   Members = [ { Membership = membership bob bobRole; Profile = bob; Online = true }
@@ -394,7 +394,7 @@ let tests = testSequenced (testList "Admin HTTP" [
                 | GuildAdminCommand.Appoint(_, player) when player = pid 10UL -> GuildAdminResult.Refused GuildError.TargetNotFound
                 | GuildAdminCommand.Appoint _ -> GuildAdminResult.Appointed(card GuildRole.Master (ValueSome bob))
                 | GuildAdminCommand.Dissolve _ ->
-                    GuildAdminResult.Dissolved { Guild = guild; Name = name; Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]; Invites = [] })
+                    GuildAdminResult.Dissolved { Guild = guild; Name = name; Members = [ membership bob GuildRole.Master; membership carol GuildRole.Officer ]; Invites = []; JoinRequests = [] })
             do! signIn panel
             use! list = panel.Http.GetAsync "/guilds?q=вор"
             status 200 list

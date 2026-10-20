@@ -249,6 +249,14 @@ public:
         Submit(exchange, PendingGuild{std::move(uiRequestId)}, [&](std::uint64_t id) { return GuildRequest{id, std::move(action)}; }));
     }
 
+    // A page of the public catalog for the web UI, answered with guildCatalog.
+    std::expected<void, std::string> GuildCatalog(ClientExchange& exchange, std::string uiRequestId, Domain::GuildCatalogQuery query)
+    {
+      return Posted(Submit(exchange, PendingGuildCatalog{std::move(uiRequestId)}, [&](std::uint64_t id) {
+        return GuildCatalogRequest{id, std::move(query)};
+      }));
+    }
+
     // The next Process must deliver a full snapshot; old correlations are dropped
     // so a reply cannot reach a view that no longer exists.
     void ResetView()
@@ -263,7 +271,8 @@ public:
         const auto* mark = std::get_if<PendingMark>(&entry.second.request);
         return std::holds_alternative<PendingChat>(entry.second.request) ||
                std::holds_alternative<PendingModeration>(entry.second.request) ||
-               std::holds_alternative<PendingGuild>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
+               std::holds_alternative<PendingGuild>(entry.second.request) ||
+               std::holds_alternative<PendingGuildCatalog>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
       });
       lastStatus.reset();
       lastIdentity.reset();
@@ -465,8 +474,21 @@ private:
       std::string uiRequestId;
     };
 
-    using PendingRequest = std::
-      variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingColor, PendingModeration, PendingGuild>;
+    struct PendingGuildCatalog
+    {
+      std::string uiRequestId;
+    };
+
+    using PendingRequest = std::variant<
+      PendingChat,
+      PendingAnnouncement,
+      PendingMark,
+      PendingIdentity,
+      PendingName,
+      PendingColor,
+      PendingModeration,
+      PendingGuild,
+      PendingGuildCatalog>;
 
     struct Pending
     {
@@ -697,6 +719,22 @@ private:
       Emit(frame, std::move(event));
     }
 
+    void Resolve(Frame& frame, PendingGuildCatalog& catalog, const CommandResult::Outcome& outcome, const UiSettings&)
+    {
+      Bridge::GuildCatalogEvent event{.requestId = std::move(catalog.uiRequestId)};
+      if (const auto* listed = std::get_if<GuildCatalogListed>(&outcome))
+      {
+        event.guilds = Bridge::ToUiCatalog(listed->page);
+        event.more   = listed->page.more;
+        event.total  = listed->page.total;
+      }
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        event.error = Bridge::ClipError(Bridge::GuildRejectionText(rejection->code, rejection->message));
+      else
+        event.error = Bridge::ClipError(Reason(outcome));
+      Emit(frame, std::move(event));
+    }
+
     // The guild book as the UI shows it: after a change or a new view, and
     // only once the server sent it, so a session never starts with "no
     // guilds". The guilds left since the last event ride along for notices.
@@ -719,11 +757,25 @@ private:
            KnownName(invite.invitedBy, settings),
            invite.expiresAtUnixMs});
       const auto& limits = guilds->Limits();
-      event.limits =
-        {limits.maxGuildsPerPlayer, limits.maxMembers, limits.nameMinLength, limits.nameMaxLength, limits.maxTitles, limits.infoMaxLength};
+      event.limits       = {
+          limits.maxGuildsPerPlayer,
+          limits.maxMembers,
+          limits.nameMinLength,
+          limits.nameMaxLength,
+          limits.maxTitles,
+          limits.infoMaxLength,
+          limits.maxJoinRequests,
+          limits.maxApplications
+      };
       for (const auto& removal : guilds->Removals())
         if (removal.revision > removalsSeen)
           event.removed.push_back({Bridge::Id(removal.guildId), removal.name, std::string{Bridge::GuildRemovalName(removal.reason)}});
+      for (const auto& application : guilds->Applications())
+        event.applications.push_back({Bridge::Id(application.guildId), application.guildName, application.expiresAtUnixMs});
+      for (const auto& ended : guilds->ApplicationEnds())
+        if (ended.revision > removalsSeen)
+          event.applicationsEnded.push_back(
+            {Bridge::Id(ended.guildId), ended.name, std::string{Bridge::GuildApplicationEndName(ended.reason)}});
       removalsSeen = guilds->Revision();
       Emit(frame, std::move(event));
       shownGuilds = guilds;

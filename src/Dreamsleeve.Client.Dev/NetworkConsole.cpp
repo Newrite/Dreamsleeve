@@ -194,7 +194,9 @@ namespace
   // guild exclude|transfer|unmute <guild> <player> | guild role <guild> <player> <member|officer> |
   // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id> |
   // guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | guild title-delete <guild> <title> |
-  // guild title <guild> <player> <title|none> | guild info <guild> <text, empty clears>
+  // guild title <guild> <player> <title|none> | guild info <guild> <text, empty clears> |
+  // guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> |
+  // guild request <guild> <player> <accept|reject>
   std::optional<ClientCommand> ParseGuild(std::string_view line, std::uint64_t requestId, const GuildBook* book)
   {
     std::istringstream input{std::string{line.substr(6)}};
@@ -206,6 +208,7 @@ namespace
       return text;
     };
     if (action == "create") return GuildRequest{requestId, CreateGuild{rest()}};
+    if (action == "catalog") return GuildCatalogRequest{requestId, {.search = rest()}};
     if (!(input >> first)) return std::nullopt;
     const auto guild = ParseId(first);
     if (!guild) return std::nullopt;
@@ -215,6 +218,8 @@ namespace
           AnswerGuildInvite{*guild, action == "accept"}
       };
     if (action == "leave") return GuildRequest{requestId, LeaveGuild{*guild}};
+    if (action == "apply") return GuildRequest{requestId, ApplyToGuild{*guild}};
+    if (action == "withdraw") return GuildRequest{requestId, WithdrawGuildApplication{*guild}};
     if (action == "disband") return GuildRequest{requestId, DisbandGuild{*guild}};
     if (action == "title-create")
       return GuildRequest{
@@ -238,6 +243,14 @@ namespace
       return DeleteChatMessage{requestId, found->channelId, *message};
     }
     if (!(input >> second)) return std::nullopt;
+    if (action == "listed")
+    {
+      if (second != "on" && second != "off") return std::nullopt;
+      return GuildRequest{
+          requestId,
+          SetGuildListed{*guild, second == "on"}
+      };
+    }
     if (action == "title-rename" || action == "title-delete")
     {
       const auto title = ParseId(second);
@@ -275,6 +288,14 @@ namespace
           UnmuteGuildMember{*guild, *player}
       };
     if (!(input >> third)) return std::nullopt;
+    if (action == "request")
+    {
+      if (third != "accept" && third != "reject") return std::nullopt;
+      return GuildRequest{
+          requestId,
+          AnswerGuildJoinRequest{*guild, *player, third == "accept"}
+      };
+    }
     if (action == "title")
     {
       std::optional<Domain::GuildTitleId> title;
@@ -328,7 +349,9 @@ namespace
     for (const auto& guild : book.Guilds())
     {
       output << "guild " << guild.guildId << " name=" << guild.name << " channel=" << guild.channelId << " members=" << guild.members.size()
-             << '\n';
+             << (guild.listed ? "" : " unlisted") << '\n';
+      for (const auto& request : guild.joinRequests)
+        output << "request " << guild.guildId << ' ' << request.profile.playerId << " name=" << request.profile.displayName << '\n';
       if (!guild.info.empty()) output << "info " << guild.guildId << ' ' << guild.info << '\n';
       for (const auto& title : guild.titles)
         output << "title " << guild.guildId << ' ' << title.titleId << " name=" << title.name << '\n';
@@ -343,6 +366,9 @@ namespace
     for (const auto& invite : book.Invites())
       output << "invite " << invite.guildId << " name=" << invite.guildName << " by=" << invite.invitedBy
              << " expires=" << invite.expiresAtUnixMs << '\n';
+    for (const auto& application : book.Applications())
+      output << "application " << application.guildId << " name=" << application.guildName << " expires=" << application.expiresAtUnixMs
+             << '\n';
   }
 
   void PrintPlayer(std::ostream& output, const Domain::Player& player)
@@ -370,7 +396,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | " "guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> | guild request <guild> <player> <accept|reject> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -644,6 +670,12 @@ namespace
             console << "deleted message " << value.messageId;
           else if constexpr (std::is_same_v<Outcome, GuildDone>)
             console << "guild done " << value.guildId;
+          else if constexpr (std::is_same_v<Outcome, GuildCatalogListed>)
+          {
+            console << "catalog total=" << value.page.total << " more=" << value.page.more;
+            for (const auto& entry : value.page.guilds)
+              console << "\ncatalog-guild " << entry.guildId << " members=" << entry.members << " name=" << entry.name;
+          }
           else if constexpr (std::is_same_v<Outcome, ServerRejection>)
             console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
           else

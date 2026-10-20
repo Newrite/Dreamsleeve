@@ -117,6 +117,10 @@ module ProtocolCodec =
         | ProtocolCodecFailure.InvalidPayload "role" -> invalid "role" "A guild role is member or officer."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildId") -> invalid "guild_id" "Invalid guild."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildTitleId") -> invalid "title_id" "Invalid guild role."
+        | ProtocolCodecFailure.InvalidPayload "search" -> invalid "search" "A catalog search is at most a guild name long."
+        | ProtocolCodecFailure.InvalidPayload "sort" -> invalid "sort" "Sort the catalog by name or by members."
+        | ProtocolCodecFailure.InvalidPayload("min_members" | "max_members") -> invalid "max_members" "Invalid member bounds."
+        | ProtocolCodecFailure.InvalidPayload "after" -> invalid "after" "Invalid catalog position."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidColor _) -> invalid "name_color" "A color is 0xRRGGBB."
         | _ -> invalid "" "Invalid request."
 
@@ -143,7 +147,7 @@ module ProtocolCodec =
         | ServerResponse.NameColorChanged(requestId, _)
         | ServerResponse.SanctionIssued(requestId, _) | ServerResponse.SanctionLifted(requestId, _, _) | ServerResponse.PlayerKicked(requestId, _)
         | ServerResponse.SanctionList(requestId, _) | ServerResponse.PlayerMarks(requestId, _, _) | ServerResponse.PlayerMarksCleared(requestId, _, _)
-        | ServerResponse.GuildCommandDone(requestId, _) ->
+        | ServerResponse.GuildCommandDone(requestId, _) | ServerResponse.GuildCatalogPage(requestId, _) ->
             settles DeliveryLane.Control requestId
         | ServerResponse.ChatMessageRemoved(ValueSome requestId, channel, _) -> settles (chatLane channel) requestId
         | ServerResponse.ChatMessageRemoved(ValueNone, channel, _) -> notifies (chatLane channel)
@@ -327,6 +331,9 @@ module ProtocolCodec =
                 else
                     packet.GuildChanged <- GuildCodec.changed change
                     envelope ()
+            | ServerResponse.GuildCatalogPage(_, page) ->
+                packet.GuildCatalogPage <- GuildCodec.catalogPage page
+                envelope ()
             | ServerResponse.GuildCommandDone(_, guild) ->
                 packet.GuildCommandDone <- Dreamsleeve.Protocol.Chat.GuildCommandDone(GuildId = GuildId.value guild)
                 envelope ()

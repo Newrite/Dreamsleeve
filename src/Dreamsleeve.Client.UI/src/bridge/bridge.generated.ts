@@ -28,6 +28,7 @@ export const eventTypes = [
   "moderationResult",
   "guilds",
   "guildResult",
+  "guildCatalog",
   "channels",
   "show",
   "hide",
@@ -63,6 +64,7 @@ export const commandTypes = [
   "signInSteam",
   "copySteamLink",
   "guild",
+  "guildCatalog",
 ] as const;
 
 // Enum strings of the events.
@@ -170,6 +172,21 @@ export const guildActions = [
   "deleteTitle",
   "setTitle",
   "setInfo",
+  "setListed",
+  "apply",
+  "withdraw",
+  "answerRequest",
+] as const;
+export const guildApplicationEnds = [
+  "withdrawn",
+  "accepted",
+  "rejected",
+  "expired",
+  "disbanded",
+] as const;
+export const guildCatalogSorts = [
+  "name",
+  "members",
 ] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per

@@ -92,7 +92,8 @@ export namespace Dreamsleeve::Client::Wire
     ListPlayerMarks,
     ClearPlayerMarks,
     DeleteChatMessage,
-    GuildRequest>;
+    GuildRequest,
+    GuildCatalogRequest>;
 
   // A server number for one key and label of actor values, defined to the
   // session before the first message that uses it.
@@ -320,9 +321,10 @@ private:
   // what the client knew.
   struct GuildsSnapshot
   {
-    std::vector<GuildOpened>         guilds;
-    std::vector<Domain::GuildInvite> invites;
-    Domain::GuildLimits              limits;
+    std::vector<GuildOpened>              guilds;
+    std::vector<Domain::GuildInvite>      invites;
+    Domain::GuildLimits                   limits;
+    std::vector<Domain::GuildApplication> applications;
   };
 
   // The player created or joined it.
@@ -377,6 +379,31 @@ private:
     std::string     info;
   };
 
+  // The guild's pending join requests, complete; empty for a member who no longer answers them.
+  struct GuildJoinRequestsChanged
+  {
+    Domain::GuildId                       guildId{};
+    std::vector<Domain::GuildJoinRequest> requests;
+  };
+
+  // This player asked to join a guild.
+  struct GuildApplied
+  {
+    Domain::GuildApplication application;
+  };
+
+  struct GuildApplicationRemoved
+  {
+    Domain::GuildId             guildId{};
+    Domain::GuildApplicationEnd reason{Domain::GuildApplicationEnd::Withdrawn};
+  };
+
+  struct GuildListedChanged
+  {
+    Domain::GuildId guildId{};
+    bool            listed{};
+  };
+
   struct GuildChanged
   {
     std::variant<
@@ -387,8 +414,19 @@ private:
       GuildInvited,
       GuildInviteRemoved,
       GuildTitlesChanged,
-      GuildInfoChanged>
+      GuildInfoChanged,
+      GuildJoinRequestsChanged,
+      GuildApplied,
+      GuildApplicationRemoved,
+      GuildListedChanged>
       change;
+  };
+
+  // Settles a GuildCatalogRequest.
+  struct GuildCatalogPageReceived
+  {
+    std::uint64_t            requestId;
+    Domain::GuildCatalogPage page;
   };
 
   // Settles a GuildRequest; its effect arrived before as GuildChanged.
@@ -427,7 +465,8 @@ private:
     ChatMessageRemoved,
     GuildsSnapshot,
     GuildChanged,
-    GuildCommandDone>;
+    GuildCommandDone,
+    GuildCatalogPageReceived>;
 
   // One immutable configuration per network owner, checked by ValidateClientSettings.
   class ProtocolCodec

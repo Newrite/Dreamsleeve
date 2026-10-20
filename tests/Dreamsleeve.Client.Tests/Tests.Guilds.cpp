@@ -127,6 +127,38 @@ TEST_CASE("A guild's custom roles are replaced whole and a member keeps the one 
   CHECK(book->Find(4)->titles.size() == 1);
 }
 
+TEST_CASE("Join requests, the catalog flag and the player's own requests follow the server")
+{
+  auto book = GuildBook::TryCreate(
+    {
+        MakeGuild(4)
+  },
+    {},
+    {},
+    {{6, "Совы", 2000}});
+  REQUIRE(book);
+  REQUIRE(book->Applications().size() == 1);
+  CHECK(book->FindApplication(6));
+
+  const std::vector<Domain::GuildJoinRequest> requests{
+      {Domain::PlayerData{9, "user9", "Name9"}, 1000, 2000}
+  };
+  REQUIRE(book->PutJoinRequests(4, requests));
+  CHECK(book->Find(4)->joinRequests == requests);
+  REQUIRE(book->PutListed(4, false));
+  CHECK_FALSE(book->Find(4)->listed);
+  CHECK_FALSE(book->PutJoinRequests(5, requests));
+
+  CHECK_FALSE(book->PutApplication({6, "Совы", 3000}));
+  REQUIRE(book->PutApplication({7, "Лисы", 3000}));
+  const auto before = book->Revision();
+  REQUIRE(book->RemoveApplication(7, Domain::GuildApplicationEnd::Rejected));
+  CHECK_FALSE(book->RemoveApplication(7, Domain::GuildApplicationEnd::Rejected));
+  REQUIRE(book->ApplicationEnds().size() == 1);
+  CHECK(book->ApplicationEnds()[0] == GuildBook::ApplicationEnd{before + 1, 7, "Лисы", Domain::GuildApplicationEnd::Rejected});
+  CHECK(book->Applications().size() == 1);
+}
+
 TEST_CASE("A guild's information is replaced as the server sent it, empty when cleared")
 {
   auto book = GuildBook::TryCreate({MakeGuild(4)}, {}, {});

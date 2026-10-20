@@ -500,6 +500,23 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   REQUIRE(frame.events.size() == 1);
   CHECK(Parse(frame.events[0])["guildId"].get<std::string>() == "4");
 
+  // A catalog page answers with its own event.
+  REQUIRE(session.GuildCatalog(*exchange, "c1", {.search = "сов"}));
+  exchange->TakeCommands(commands);
+  REQUIRE(commands.size() == 1);
+  const auto catalog = std::get<GuildCatalogRequest>(commands[0].command);
+  CHECK(catalog.query.search == "сов");
+  publish(
+    shared,
+    CommandResult{model.Generation(), catalog.requestId, GuildCatalogListed{{{{7, "Совы", "Ночные дозоры", 12, 1000}}, true, 31}}});
+  REQUIRE(frame.events.size() == 1);
+  CHECK(Type(frame.events[0]) == "guildCatalog");
+  auto page = Parse(frame.events[0]);
+  CHECK(page["requestId"].get<std::string>() == "c1");
+  CHECK(page["guilds"][0]["name"].get<std::string>() == "Совы");
+  CHECK(page["more"].get<bool>());
+  CHECK(page["total"].get<double>() == 31);
+
   // Excluded: the channel goes, and the page hears why exactly once.
   auto next = *shared;
   REQUIRE(next.Remove(4, Domain::GuildRemovalReason::Excluded));

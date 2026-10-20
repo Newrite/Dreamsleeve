@@ -15,8 +15,13 @@ let private name text = GuildName.create 3 24 text |> ok
 let private at minutes = DateTimeOffset(2026, 10, 2, 12, 0, 0, TimeSpan.Zero).AddMinutes(float minutes)
 let private reason = SanctionReason.create "Флуд" |> ok
 let private maxTitles = 2
+let private settings : GuildLimitSettings = {
+    MaxGuilds = 10; MaxGuildsPerPlayer = 3; MaxMembers = 4; MaxInvites = 4; NameMinLength = 3; NameMaxLength = 24
+    InviteLifetime = TimeSpan.FromDays 7.0; MaxTitles = maxTitles; InfoMaxLength = 100
+    MaxJoinRequests = 2; MaxApplicationsPerPlayer = 2; JoinRequestLifetime = TimeSpan.FromDays 7.0
+}
 let private limits maxGuilds perPlayer members invites =
-    GuildLimits.create maxGuilds perPlayer members invites 3 24 (TimeSpan.FromDays 7.0) maxTitles 100 |> ok
+    GuildLimits.create { settings with MaxGuilds = maxGuilds; MaxGuildsPerPlayer = perPlayer; MaxMembers = members; MaxInvites = invites } |> ok
 let private tid raw = GuildTitleId.create raw |> ok
 let private titleName text = GuildTitleName.create 3 24 text |> ok
 let private book () = GuildBook.empty (limits 10 3 4 4)
@@ -113,7 +118,7 @@ let tests = testList "Guild domain" [
         GuildBook.invite (pid 1UL) (gid 1UL) (pid 4UL) (at 3) lowered |> ok |> ignore
         let restored =
             GuildBook.restore (limits 1 1 2 1)
-                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []; Info = ValueNone
+                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []; Info = ValueNone; Listed = true; JoinRequests = []
                     Titles = [ for id in 1UL .. 3UL -> { Id = tid id; Name = titleName $"Роль {id}" } ]
                     Members = [ for player in 1UL .. 5UL ->
                                     { Player = pid player; JoinedAt = at 0; Mute = ValueNone; Title = ValueSome(tid 1UL)
@@ -222,4 +227,83 @@ let tests = testList "Guild domain" [
         Expect.isTrue (may 2UL (ValueSome(pid 8UL))) "an author who left ranks as a member"
         Expect.isFalse (may 3UL (ValueSome(pid 3UL))) "a member removes nothing"
         GuildBook.mayRemoveMessage (pid 9UL) (gid 1UL) ValueNone guilds |> refused GuildError.NotFound
+
+    testCase "a player asks to join a listed guild; the limits that would refuse the answer refuse now" <| fun _ ->
+        let guilds = staffed ()
+        GuildBook.create (gid 2UL) (name "Вороны") (pid 7UL) (at 0) guilds |> ok |> ignore
+        GuildBook.apply (pid 3UL) (gid 1UL) (at 3) guilds |> refused GuildError.AlreadyMember
+        GuildBook.apply (pid 4UL) (gid 9UL) (at 3) guilds |> refused GuildError.NotFound
+        let _, request = GuildBook.apply (pid 4UL) (gid 1UL) (at 3) guilds |> ok
+        Expect.equal request.Expires (at (3 + 7 * 24 * 60)) "the request waits JoinRequestLifetime"
+        GuildBook.apply (pid 4UL) (gid 1UL) (at 3) guilds |> refused GuildError.AlreadyApplied
+        GuildBook.invite (pid 1UL) (gid 1UL) (pid 5UL) (at 3) guilds |> ok |> ignore
+        GuildBook.apply (pid 5UL) (gid 1UL) (at 3) guilds |> refused GuildError.AlreadyInvited
+        GuildBook.apply (pid 6UL) (gid 1UL) (at 3) guilds |> ok |> ignore
+        GuildBook.apply (pid 8UL) (gid 1UL) (at 3) guilds |> refused GuildError.JoinRequestsFull
+        GuildBook.apply (pid 4UL) (gid 2UL) (at 3) guilds |> ok |> ignore
+        GuildBook.create (gid 3UL) (name "Совы") (pid 9UL) (at 0) guilds |> ok |> ignore
+        GuildBook.apply (pid 4UL) (gid 3UL) (at 3) guilds |> refused GuildError.ApplicationLimit
+        Expect.equal (GuildBook.applicationsOf (pid 4UL) guilds |> List.map _.Guild |> List.sort) [ gid 1UL; gid 2UL ] "the player's requests"
+        // A hidden guild takes no new requests and is not found; pending ones stay.
+        GuildBook.setListed (pid 2UL) (gid 1UL) false guilds |> refused GuildError.NotPermitted
+        GuildBook.setListed (pid 1UL) (gid 1UL) false guilds |> ok |> ignore
+        GuildBook.apply (pid 8UL) (gid 3UL) (at 3) guilds |> ok |> ignore
+        GuildBook.withdraw (pid 8UL) (gid 3UL) guilds |> ok |> ignore
+        GuildBook.withdraw (pid 8UL) (gid 3UL) guilds |> refused GuildError.TargetNotFound
+        Expect.equal (GuildBook.tryFind (gid 1UL) guilds).Value.JoinRequests.Length 2 "pending requests stay hidden"
+
+    testCase "the master or an officer answers a join request; joining checks the limits then" <| fun _ ->
+        let guilds = staffed ()
+        GuildBook.apply (pid 4UL) (gid 1UL) (at 3) guilds |> ok |> ignore
+        GuildBook.apply (pid 5UL) (gid 1UL) (at 3) guilds |> ok |> ignore
+        GuildBook.acceptRequest (pid 3UL) (gid 1UL) (pid 4UL) (at 4) guilds |> refused GuildError.NotPermitted
+        GuildBook.acceptRequest (pid 9UL) (gid 1UL) (pid 4UL) (at 4) guilds |> refused GuildError.NotFound
+        GuildBook.invite (pid 1UL) (gid 1UL) (pid 6UL) (at 3) guilds |> ok |> ignore
+        let _, _, joined, invited = GuildBook.acceptRequest (pid 2UL) (gid 1UL) (pid 4UL) (at 4) guilds |> ok
+        Expect.equal (joined.Player, joined.Role, invited) (pid 4UL, GuildRole.Member, false) "an officer lets a member in"
+        // The guild is full (4) now.
+        GuildBook.acceptRequest (pid 1UL) (gid 1UL) (pid 5UL) (at 4) guilds |> refused GuildError.GuildFull
+        GuildBook.rejectRequest (pid 1UL) (gid 1UL) (pid 5UL) (at 4) guilds |> ok |> ignore
+        GuildBook.rejectRequest (pid 1UL) (gid 1UL) (pid 5UL) (at 4) guilds |> refused GuildError.TargetNotFound
+        Expect.isEmpty (GuildBook.applicationsOf (pid 5UL) guilds) "the rejected request is gone"
+
+    testCase "accepting an invitation takes the join request to the guild along; requests expire" <| fun _ ->
+        let guilds = staffed ()
+        GuildBook.exclude (pid 1UL) (gid 1UL) (pid 3UL) guilds |> ok |> ignore
+        GuildBook.invite (pid 1UL) (gid 1UL) (pid 4UL) (at 3) guilds |> ok |> ignore
+        GuildBook.decline (pid 4UL) (gid 1UL) (at 3) guilds |> ok |> ignore
+        GuildBook.apply (pid 4UL) (gid 1UL) (at 3) guilds |> ok |> ignore
+        GuildBook.invite (pid 2UL) (gid 1UL) (pid 4UL) (at 3) guilds |> ok |> ignore
+        let _, _, _, request = GuildBook.accept (pid 4UL) (gid 1UL) (at 4) guilds |> ok
+        Expect.isTrue request.IsSome "the request went with the invitation"
+        Expect.isEmpty (GuildBook.applicationsOf (pid 4UL) guilds) "nothing pending"
+        GuildBook.apply (pid 5UL) (gid 1UL) (at 4) guilds |> ok |> ignore
+        Expect.isEmpty (GuildBook.expireJoinRequests (at (4 + 7 * 24 * 60 - 1)) guilds) "still waiting"
+        GuildBook.acceptRequest (pid 1UL) (gid 1UL) (pid 5UL) (at (4 + 7 * 24 * 60)) guilds |> refused GuildError.TargetNotFound
+        let expired = GuildBook.expireJoinRequests (at (4 + 7 * 24 * 60)) guilds
+        Expect.equal (expired |> List.map _.Player) [ pid 5UL ] "expired"
+
+    testCase "the catalog lists shown guilds by name or size, filters them and pages after a cursor" <| fun _ ->
+        let guilds = GuildBook.empty (limits 10 3 4 4)
+        let found (page: GuildCatalogPage) = page.Guilds |> List.map (fun guild -> GuildName.value guild.Name)
+        for id, title, extra in [ 1UL, "Вороны", 2; 2UL, "Совы", 0; 3UL, "Волки", 3; 4UL, "Лисы", 1; 5UL, "Скрытые", 0 ] do
+            GuildBook.create (gid id) (name title) (pid (id * 10UL)) (at 0) guilds |> ok |> ignore
+            for joiner in 1 .. extra do
+                GuildBook.invite (pid (id * 10UL)) (gid id) (pid (id * 10UL + uint64 joiner)) (at 0) guilds |> ok |> ignore
+                GuildBook.accept (pid (id * 10UL + uint64 joiner)) (gid id) (at 0) guilds |> ok |> ignore
+        GuildBook.setListed (pid 50UL) (gid 5UL) false guilds |> ok |> ignore
+        let query = { Search = ""; MinMembers = 0; MaxMembers = ValueNone; OpenOnly = false; Sort = GuildCatalogSort.Name; After = ValueNone }
+        let first = GuildBook.catalog query 2 guilds
+        Expect.equal (found first) [ "Волки"; "Вороны" ] "by name, hidden guilds left out"
+        Expect.equal (first.Total, first.More) (4, true) "four match, more follow"
+        let last = first.Guilds |> List.last
+        let after = { Guild = last.Id; NameKey = GuildName.key last.Name; Members = last.MemberCount }
+        let second = GuildBook.catalog { query with After = ValueSome after } 2 guilds
+        Expect.equal (found second) [ "Лисы"; "Совы" ] "the next page follows the cursor"
+        Expect.isFalse second.More "the end"
+        let bySize = GuildBook.catalog { query with Sort = GuildCatalogSort.Members } 10 guilds
+        Expect.equal (found bySize) [ "Волки"; "Вороны"; "Лисы"; "Совы" ] "the largest first"
+        Expect.equal (found (GuildBook.catalog { query with OpenOnly = true } 10 guilds)) [ "Вороны"; "Лисы"; "Совы" ] "full guilds left out"
+        Expect.equal (found (GuildBook.catalog { query with MinMembers = 2; MaxMembers = ValueSome 3 } 10 guilds)) [ "Вороны"; "Лисы" ] "2..3 members"
+        Expect.equal (found (GuildBook.catalog { query with Search = "во" } 10 guilds)) [ "Волки"; "Вороны" ] "a part of the name in any case"
 ]
