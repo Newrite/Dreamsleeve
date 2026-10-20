@@ -16,6 +16,8 @@ open BackgroundTests
 let private ok = function Ok value -> value | Error error -> failtestf "Expected success, got %A" error
 let private pid raw = PlayerId.create raw |> ok
 let private gid raw = GuildId.create raw |> ok
+let private tid raw = GuildTitleId.create raw |> ok
+let private titleName value = GuildTitleName.create 1 64 value |> ok
 let private profile number =
     PlayerData.create (pid number) (Username.create 32 $"player{number}" |> ok) (DisplayName.create 64 $"Player {number}" |> ok) NameColor.unknown
 let private text value = ChatMessageText.create 2000 value |> ok
@@ -85,7 +87,7 @@ let private withGuildsUsing (persistence: Agent<GuildWrite> -> GuildPersistence)
 }
 
 let private empty (writer: Agent<GuildWrite>) =
-    { Loaded = []; Profiles = []; NextId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
+    { Loaded = []; Profiles = []; NextId = 1UL; NextTitleId = 1UL; Writer = writer.Ref.TryReliable().Value; WriterStopped = writer.Completion }
 
 let private withGuilds run = withGuildsUsing empty run
 
@@ -360,13 +362,68 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             equal (GuildChange.Removed(guild, GuildRemoval.Disbanded)) gone
         }))
 
+    case "the master creates, assigns and deletes custom roles; every member hears the list and the holder" (fun () ->
+        withGuilds (fun fixture -> task {
+            let! guild = founded fixture
+            // Creation, invitation, its removal and Bob's membership.
+            for _ in 1 .. 4 do
+                let! _ = receive fixture.Writes
+                ()
+            do! act fixture fixture.Bob 30UL (GuildAction.CreateTitle(guild, "Казначей"))
+            let! _ = expectRefused fixture.Bob 30UL RequestRejectionCode.NotPermitted
+            do! act fixture fixture.Alice 31UL (GuildAction.CreateTitle(guild, "Каз!"))
+            let! invalid = expectRefused fixture.Alice 31UL RequestRejectionCode.InvalidRequest
+            equal "name" invalid.Field
+            equal "A custom role name has letters, digits and spaces only." invalid.Message
+            do! act fixture fixture.Alice 32UL (GuildAction.CreateTitle(guild, "badword"))
+            let! _ = expectRefused fixture.Alice 32UL RequestRejectionCode.TextNotAllowed
+            do! act fixture fixture.Alice 33UL (GuildAction.CreateTitle(guild, " Казначей "))
+            let treasurer = { Id = tid 1UL; Name = titleName "Казначей" }
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! titles = expectChange who
+                equal (GuildChange.Titles(guild, [ treasurer ])) titles
+            let! _ = expectDone fixture.Alice 33UL
+            let! created = receive fixture.Writes
+            equal (GuildWrite.PutTitle(guild, treasurer)) created
+            do! act fixture fixture.Alice 34UL (GuildAction.CreateTitle(guild, "КАЗНАЧЕЙ"))
+            let! _ = expectRefused fixture.Alice 34UL RequestRejectionCode.GuildTitleNameTaken
+            do! act fixture fixture.Alice 35UL (GuildAction.SetTitle(guild, pid 2UL, ValueSome(tid 9UL)))
+            let! missing = expectRefused fixture.Alice 35UL RequestRejectionCode.TargetNotFound
+            equal "title_id" missing.Field
+            do! act fixture fixture.Alice 36UL (GuildAction.SetTitle(guild, pid 2UL, ValueSome treasurer.Id))
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! held = expectChange who
+                match held with
+                | GuildChange.MemberChanged(id, view) ->
+                    equal guild id
+                    equal (pid 2UL) view.Profile.PlayerId
+                    equal (ValueSome treasurer.Id) view.Membership.Title
+                | other -> failtestf "Expected Bob's custom role, got %A" other
+            let! _ = expectDone fixture.Alice 36UL
+            let! assigned = receive fixture.Writes
+            check (match assigned with GuildWrite.PutMember(_, membership) -> membership.Title = ValueSome treasurer.Id | _ -> false) "the holder is written"
+            do! act fixture fixture.Alice 37UL (GuildAction.DeleteTitle(guild, treasurer.Id))
+            // The holder loses the role before the list does.
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! cleared = expectChange who
+                check (match cleared with GuildChange.MemberChanged(_, view) -> view.Membership.Title.IsNone | _ -> false) "Bob holds none"
+                let! titles = expectChange who
+                equal (GuildChange.Titles(guild, [])) titles
+            let! _ = expectDone fixture.Alice 37UL
+            let! holder = receive fixture.Writes
+            check (match holder with GuildWrite.PutMember(_, membership) -> membership.Title.IsNone | _ -> false) "the holder is written first"
+            let! deleted = receive fixture.Writes
+            equal (GuildWrite.RemoveTitle treasurer.Id) deleted
+        }))
+
     case "stored guilds come back with their members, profiles and the next ID" (fun () ->
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
-            Members = [ { Player = pid 2UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueNone } ]
+            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]
+            Members = [ { Player = pid 2UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueNone; Title = ValueSome(tid 3UL) } ]
         }
         let loaded (writer: Agent<GuildWrite>) =
-            { empty writer with Loaded = [ stored ]; Profiles = [ profile 2UL ]; NextId = 9UL }
+            { empty writer with Loaded = [ stored ]; Profiles = [ profile 2UL ]; NextId = 9UL; NextTitleId = 5UL }
         withGuildsUsing loaded (fun fixture -> task {
             let! alice = join fixture fixture.Alice
             check alice.Guilds.IsEmpty "not hers"
@@ -375,12 +432,33 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             | [ guild ] ->
                 equal (gid 4UL) guild.Guild
                 equal "Player 2" (DisplayName.value guild.Members.Head.Profile.DisplayName)
+                equal stored.Titles guild.Titles
+                equal (ValueSome(tid 3UL)) guild.Members.Head.Membership.Title
             | other -> failtestf "%A" other
             do! act fixture fixture.Alice 70UL (GuildAction.Create "Совы")
             let! _ = expectChange fixture.Alice
             let! created = expectDone fixture.Alice 70UL
             equal (gid 9UL) created
+            do! act fixture fixture.Alice 71UL (GuildAction.CreateTitle(created, "Казначей"))
+            let! titles = expectChange fixture.Alice
+            check (match titles with GuildChange.Titles(_, [ title ]) -> title.Id = tid 5UL | _ -> false) "the next custom role ID"
         }))
+
+    case "a stored custom role ID at or above the next ID is refused at start" (fun () -> task {
+        use writer = Agent.Start(AgentOptions.create "guild-writer", fun (_: AgentContext<GuildWrite>) (_: GuildWrite) -> task { () })
+        use host = Agent.Start(AgentOptions.create "host", fun (_: AgentContext<SessionHostCommand>) (_: SessionHostCommand) -> task { () })
+        let stored = {
+            Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
+            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]; Members = []
+        }
+        let persistence = { empty writer with Loaded = [ stored ]; NextId = 5UL; NextTitleId = 3UL }
+        let limits = GuildOptions.rules options |> ok
+        match GuildsAgent.start options limits rules chatRate persistence (host.Ref.TryReliable().Value) NullLogger.Instance with
+        | Error message -> check (message.Contains "custom role") message
+        | Ok agent ->
+            (agent :> IDisposable).Dispose()
+            failtest "a repeated custom role ID was accepted"
+    })
 ]
 
 let private storeTests = testSequenced <| testList "SQLite guilds" [
@@ -392,9 +470,9 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         let alice, bob, carol = register "alice", register "bob", register "carol"
         let at = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
         let write change = SqliteGuildStore.write database.Config change token |> ok
-        let master = { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone }
+        let master = { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone; Title = ValueNone }
         write (GuildWrite.Create(gid 1UL, GuildName.create 3 24 "Стражи" |> ok, at, master))
-        let muted = { Player = bob.PlayerId; Role = GuildRole.Officer; JoinedAt = at
+        let muted = { Player = bob.PlayerId; Role = GuildRole.Officer; JoinedAt = at; Title = ValueNone
                       Mute = ValueSome { Reason = reason; IssuedBy = alice.PlayerId; IssuedAt = at; Expires = ValueSome(at.AddMinutes 5.0) } }
         write (GuildWrite.PutMember(gid 1UL, muted))
         write (GuildWrite.PutInvite { Guild = gid 1UL; Player = carol.PlayerId; InvitedBy = alice.PlayerId; CreatedAt = at; Expires = at.AddDays 7.0 })
@@ -418,6 +496,42 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         check gone.Guilds.IsEmpty "the guild is gone"
         equal 0L (database.Scalar "SELECT count(*) FROM guild_members")
         equal 2UL gone.NextId)
+
+    testCase "custom roles and their holders load back; deleting a role clears its holders; IDs never return" (fun () ->
+        use database = new SqliteAccountStoreTests.Database()
+        SqliteAccountStore.initialize database.Config |> ok
+        let register name =
+            SqliteAccountStore.create database.Config (Username.create 32 name |> ok) (DisplayName.create 64 $"Display {name}" |> ok) "hash" token |> ok
+        let alice, bob = register "alice", register "bob"
+        let at = DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L
+        let write change = SqliteGuildStore.write database.Config change token |> ok
+        let treasurer = { Id = tid 1UL; Name = titleName "Казначей" }
+        let recruit = { Id = tid 2UL; Name = titleName "Новобранец" }
+        write (GuildWrite.Create(gid 1UL, GuildName.create 3 24 "Стражи" |> ok, at, { Player = alice.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone; Title = ValueNone }))
+        write (GuildWrite.PutTitle(gid 1UL, treasurer))
+        write (GuildWrite.PutTitle(gid 1UL, recruit))
+        let holder = { Player = bob.PlayerId; Role = GuildRole.Member; JoinedAt = at; Mute = ValueNone; Title = ValueSome treasurer.Id }
+        write (GuildWrite.PutMember(gid 1UL, holder))
+        let renamed = { treasurer with Name = titleName "Хранитель казны" }
+        write (GuildWrite.PutTitle(gid 1UL, renamed))
+        Expect.throws (fun () -> database.Execute "INSERT INTO guild_titles(guild_id, name, name_key) VALUES (1, 'НОВОБРАНЕЦ', 'новобранец')")
+            "names are unique in the guild in any case"
+        let loaded = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [ renamed; recruit ] loaded.Guilds.Head.Titles
+        equal [ ValueSome treasurer.Id ] (loaded.Guilds.Head.Members |> List.filter (fun item -> item.Player = bob.PlayerId) |> List.map _.Title)
+        equal 3UL loaded.NextTitleId
+        write (GuildWrite.RemoveTitle treasurer.Id)
+        let cleared = SqliteGuildStore.loadAll database.Config token |> ok
+        equal [ recruit ] cleared.Guilds.Head.Titles
+        check (cleared.Guilds.Head.Members |> List.forall (fun item -> item.Title.IsNone)) "the holder lost the deleted role"
+        // A role of another guild is broken storage, not a role.
+        write (GuildWrite.Create(gid 2UL, GuildName.create 3 24 "Вороны" |> ok, at, { Player = bob.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone; Title = ValueSome recruit.Id }))
+        check (SqliteGuildStore.loadAll database.Config token |> Result.isError) "a member holds a role of another guild"
+        write (GuildWrite.PutMember(gid 2UL, { Player = bob.PlayerId; Role = GuildRole.Master; JoinedAt = at; Mute = ValueNone; Title = ValueNone }))
+        write (GuildWrite.Delete(gid 1UL))
+        let gone = SqliteGuildStore.loadAll database.Config token |> ok
+        equal 0L (database.Scalar "SELECT count(*) FROM guild_titles")
+        equal 3UL gone.NextTitleId)
 ]
 
 let private codecTests = testList "Guild codec" [
@@ -444,6 +558,17 @@ let private codecTests = testList "Guild codec" [
         match decode (Dreamsleeve.Protocol.Chat.GuildCommand(Leave = Dreamsleeve.Protocol.Chat.LeaveGuild(GuildId = 0UL))) with
         | Error failure -> equal "guild_id" (ProtocolCodec.rejection failure.Failure).Field
         | Ok request -> failtestf "%A" request
+        let assign = Dreamsleeve.Protocol.Chat.SetGuildMemberTitle(GuildId = 4UL, PlayerId = 7UL, TitleId = 3UL)
+        equal (GuildAction.SetTitle(gid 4UL, pid 7UL, ValueSome(tid 3UL))) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(SetTitle = assign)) |> action)
+        let takeAway = Dreamsleeve.Protocol.Chat.SetGuildMemberTitle(GuildId = 4UL, PlayerId = 7UL)
+        equal (GuildAction.SetTitle(gid 4UL, pid 7UL, ValueNone)) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(SetTitle = takeAway)) |> action)
+        let rename = Dreamsleeve.Protocol.Chat.RenameGuildTitle(GuildId = 4UL, TitleId = 3UL, Name = "Казначей")
+        equal (GuildAction.RenameTitle(gid 4UL, tid 3UL, "Казначей")) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(RenameTitle = rename)) |> action)
+        let create = Dreamsleeve.Protocol.Chat.CreateGuildTitle(GuildId = 4UL, Name = "Казначей")
+        equal (GuildAction.CreateTitle(gid 4UL, "Казначей")) (decode (Dreamsleeve.Protocol.Chat.GuildCommand(CreateTitle = create)) |> action)
+        match decode (Dreamsleeve.Protocol.Chat.GuildCommand(DeleteTitle = Dreamsleeve.Protocol.Chat.DeleteGuildTitle(GuildId = 4UL, TitleId = 0UL))) with
+        | Error failure -> equal "title_id" (ProtocolCodec.rejection failure.Failure).Field
+        | Ok request -> failtestf "%A" request
         equal DeliveryLane.Control (ProtocolCodec.requestLane { RequestId = 5UL; Command = ClientCommand.Guild(GuildAction.Leave(gid 4UL)) })
 
     testCase "a guild snapshot carries real names, roles, the guild mute and the channel" <| fun _ ->
@@ -452,9 +577,10 @@ let private codecTests = testList "Guild codec" [
         let mute = { Reason = reason; IssuedBy = pid 1UL; IssuedAt = DateTimeOffset.UnixEpoch; Expires = ValueNone }
         let view = {
             Guild = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; ChannelId = ChatChannels.ofGuild (gid 4UL); CreatedAt = DateTimeOffset.UnixEpoch
-            Members = [ { Membership = { Player = pid 2UL; Role = GuildRole.Officer; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueSome mute }
+            Members = [ { Membership = { Player = pid 2UL; Role = GuildRole.Officer; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueSome mute; Title = ValueSome(tid 3UL) }
                           Profile = profile 2UL; Online = true } ]
             Messages = []
+            Titles = [ { Id = tid 3UL; Name = titleName "Казначей" } ]
         }
         let encoded = ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ view ]; Invites = []; Limits = limits }) |> ok
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(List.exactlyOne encoded)
@@ -466,6 +592,9 @@ let private codecTests = testList "Guild codec" [
         equal "Флуд" guild.Members[0].Mute.Reason
         equal 3u packet.GuildsSnapshot.Limits.MaxGuildsPerPlayer
         equal 64u packet.GuildsSnapshot.Limits.MaxMembers
+        equal 10u packet.GuildsSnapshot.Limits.MaxTitles
+        equal 3UL guild.Members[0].TitleId
+        equal [ 3UL, "Казначей" ] [ for title in guild.Titles -> title.TitleId, title.Name ]
         let wrong = { view with ChannelId = ChatChannels.globalId }
         check (ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ wrong ]; Invites = []; Limits = limits }) |> Result.isError)
             "a guild's history belongs to its own channel"

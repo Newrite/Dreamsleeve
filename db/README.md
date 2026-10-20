@@ -149,8 +149,15 @@ Schema 14 (`1791590400000_name_colors.sql`) adds `profiles.name_color`: the colo
 player's name in chat, 0xRRGGBB (docs/ModerationAndNamesRu.md). Every existing profile gets
 a random one of the 16 colors new accounts get theirs from (`NameColor.palette`); the
 account store picks one for each new profile. Readability is checked when a player chooses
-a color, not when a profile loads. DOWN drops the column. This is the schema version the
-server supports (`SqliteDatabase.SchemaVersion`).
+a color, not when a profile loads. DOWN drops the column.
+
+Schema 15 (`1791676800000_guild_titles.sql`) adds custom roles of a guild (docs/GuildsRu.md):
+`guild_titles` with the guild, the name and a lower-case `name_key` unique inside the guild,
+and `guild_members.title_id`, the one role a member holds. Roles go with their guild
+(`ON DELETE CASCADE`); AUTOINCREMENT never reuses an ID. `title_id` has no foreign key, so
+DOWN can drop the column: `SqliteGuildStore` clears the holders in the same transaction that
+deletes a role and refuses to load a member holding a role of another guild. This is the
+schema version the server supports (`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

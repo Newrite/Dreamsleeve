@@ -377,7 +377,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             let profile raw username display = PlayerData.create (pid raw) (Username.create 32 username |> ok) (DisplayName.create 64 display |> ok) NameColor.unknown
             let bob = profile 8UL "bob" "<i>Боб</i>"
             let carol = profile 9UL "carol" "Кэрол"
-            let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone }
+            let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone; Title = ValueNone }
             // The master's account is gone: the guild waits for the panel.
             let summary master : GuildSummary = { Guild = guild; Name = name; CreatedAt = at; Members = 2; Master = master }
             let card bobRole master : GuildCard =

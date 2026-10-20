@@ -6,7 +6,8 @@ import "common.proto";
 import "chat.proto";
 import "session.proto";
 
-// Guilds (version 19; docs/GuildsRu.md, docs/DomainSpecRu.MD §4.7). A guild has
+// Guilds (version 19, custom roles since 21; docs/GuildsRu.md,
+// docs/DomainSpecRu.MD §4.7). A guild has
 // one chat channel (ChatChannelKind GUILD): members write in it with SendChat
 // and receive ChatPublished like in any channel; the master and officers remove
 // messages with DeleteChatMessage. Members see each other's real names, even a
@@ -29,6 +30,14 @@ message GuildMember {
   bool online = 3;
   MuteState mute = 4; // Present while muted in this guild: reading only.
   int64 joined_at_unix_ms = 5;
+  optional uint64 title_id = 6; // One of the guild's custom roles; absent: none.
+}
+
+// A custom role of a guild, such as "Treasurer": cosmetic, no rights. The
+// master creates and assigns it; a member holds at most one.
+message GuildTitle {
+  uint64 title_id = 1; // Unique across guilds.
+  string name = 2; // The rules of a guild name; unique in the guild regardless of case.
 }
 
 message Guild {
@@ -38,6 +47,7 @@ message Guild {
   int64 created_at_unix_ms = 4;
   repeated GuildMember members = 5;
   repeated ChatMessage recent_messages = 6; // Retained history, oldest first.
+  repeated GuildTitle titles = 7; // Oldest first.
 }
 
 message GuildInvite {
@@ -53,6 +63,7 @@ message GuildLimits {
   uint32 max_members = 2;
   uint32 name_min_length = 3; // Unicode scalar values.
   uint32 name_max_length = 4;
+  uint32 max_titles = 5; // Custom roles of one guild; their names follow name_*_length.
 }
 
 // After SessionOpened: every guild of the player and their invitations; it
@@ -87,6 +98,13 @@ message GuildMemberRemoved {
   GuildRemovalReason reason = 3;
 }
 
+// The guild's custom roles after one was created, renamed or deleted: the
+// complete list. A deleted role's holders arrive before it as GuildMemberUpdate.
+message GuildTitles {
+  uint64 guild_id = 1;
+  repeated GuildTitle titles = 2;
+}
+
 message GuildChanged {
   oneof change {
     Guild added = 1; // The player created or joined it.
@@ -95,6 +113,7 @@ message GuildChanged {
     GuildMemberRemoved member_removed = 4;
     GuildInvite invited = 5;
     uint64 invite_removed = 6; // Guild ID: accepted, declined, expired or disbanded.
+    GuildTitles titles = 7;
   }
 }
 
@@ -113,6 +132,15 @@ message MuteGuildMember {
 }
 message UnmuteGuildMember { uint64 guild_id = 1; uint64 player_id = 2; }
 message DisbandGuild { uint64 guild_id = 1; }
+// Custom roles: the master only.
+message CreateGuildTitle { uint64 guild_id = 1; string name = 2; }
+message RenameGuildTitle { uint64 guild_id = 1; uint64 title_id = 2; string name = 3; }
+message DeleteGuildTitle { uint64 guild_id = 1; uint64 title_id = 2; } // Its holders lose it.
+message SetGuildMemberTitle {
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  optional uint64 title_id = 3; // Absent: the member holds none.
+}
 
 message GuildCommand {
   oneof action {
@@ -126,6 +154,10 @@ message GuildCommand {
     MuteGuildMember mute = 8;
     UnmuteGuildMember unmute = 9;
     DisbandGuild disband = 10;
+    CreateGuildTitle create_title = 11;
+    RenameGuildTitle rename_title = 12;
+    DeleteGuildTitle delete_title = 13;
+    SetGuildMemberTitle set_title = 14;
   }
 }
 

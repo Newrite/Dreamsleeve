@@ -192,7 +192,9 @@ namespace
 
   // guild create <name> | guild invite <guild> <player> | guild accept|decline|leave|disband <guild> |
   // guild exclude|transfer|unmute <guild> <player> | guild role <guild> <player> <member|officer> |
-  // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id>
+  // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id> |
+  // guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | guild title-delete <guild> <title> |
+  // guild title <guild> <player> <title|none>
   std::optional<ClientCommand> ParseGuild(std::string_view line, std::uint64_t requestId, const GuildBook* book)
   {
     std::istringstream input{std::string{line.substr(6)}};
@@ -214,6 +216,11 @@ namespace
       };
     if (action == "leave") return GuildRequest{requestId, LeaveGuild{*guild}};
     if (action == "disband") return GuildRequest{requestId, DisbandGuild{*guild}};
+    if (action == "title-create")
+      return GuildRequest{
+          requestId,
+          CreateGuildTitle{*guild, rest()}
+      };
     // The guild's channel follows from the book; an unknown guild sends nothing.
     if (action == "say" || action == "delete")
     {
@@ -226,6 +233,20 @@ namespace
       return DeleteChatMessage{requestId, found->channelId, *message};
     }
     if (!(input >> second)) return std::nullopt;
+    if (action == "title-rename" || action == "title-delete")
+    {
+      const auto title = ParseId(second);
+      if (!title) return std::nullopt;
+      if (action == "title-delete")
+        return GuildRequest{
+            requestId,
+            DeleteGuildTitle{*guild, *title}
+        };
+      return GuildRequest{
+          requestId,
+          RenameGuildTitle{*guild, *title, rest()}
+      };
+    }
     const auto player = ParseId(second);
     if (!player) return std::nullopt;
     if (action == "invite")
@@ -249,6 +270,19 @@ namespace
           UnmuteGuildMember{*guild, *player}
       };
     if (!(input >> third)) return std::nullopt;
+    if (action == "title")
+    {
+      std::optional<Domain::GuildTitleId> title;
+      if (third != "none")
+      {
+        title = ParseId(third);
+        if (!title) return std::nullopt;
+      }
+      return GuildRequest{
+          requestId,
+          SetGuildMemberTitle{*guild, *player, title}
+      };
+    }
     if (action == "role")
     {
       const auto role = GuildRoleNamed(third);
@@ -275,21 +309,29 @@ namespace
     return std::nullopt;
   }
 
-  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max>", then
-  // "guild <id> name=<name> channel=<id> members=<n>" with "member <guild> <player> <role> online=<0|1>[ muted] name=<name>"
-  // per member, and "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
+  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max> titles=<n>", then
+  // "guild <id> name=<name> channel=<id> members=<n>" with "title <guild> <title> name=<name>" per custom role and
+  // "member <guild> <player> <role> online=<0|1>[ muted][ title=<title>] name=<name>" per member, and
+  // "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
   void PrintGuilds(std::ostream& output, const GuildBook& book)
   {
     const auto& limits = book.Limits();
     output << "guilds " << book.Guilds().size() << " invites " << book.Invites().size() << " per-player=" << limits.maxGuildsPerPlayer
-           << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength << '\n';
+           << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength
+           << " titles=" << limits.maxTitles << '\n';
     for (const auto& guild : book.Guilds())
     {
       output << "guild " << guild.guildId << " name=" << guild.name << " channel=" << guild.channelId << " members=" << guild.members.size()
              << '\n';
+      for (const auto& title : guild.titles)
+        output << "title " << guild.guildId << ' ' << title.titleId << " name=" << title.name << '\n';
       for (const auto& member : guild.members)
+      {
         output << "member " << guild.guildId << ' ' << member.profile.playerId << ' ' << GuildRoleName(member.role)
-               << " online=" << member.online << (member.mute ? " muted" : "") << " name=" << member.profile.displayName << '\n';
+               << " online=" << member.online << (member.mute ? " muted" : "");
+        if (member.titleId) output << " title=" << *member.titleId;
+        output << " name=" << member.profile.displayName << '\n';
+      }
     }
     for (const auto& invite : book.Invites())
       output << "invite " << invite.guildId << " name=" << invite.guildName << " by=" << invite.invitedBy
@@ -321,7 +363,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -726,7 +768,7 @@ int RunNetworkConsole(int argc, char* argv[])
     return 1;
   }
   // Validated by TryCreate; the view trusts it.
-  auto  movement = MovementView::Create((*application)->Settings().client.movement);
+  auto movement = MovementView::Create((*application)->Settings().client.movement);
   for (const auto& route : (*application)->Routes())
     routeNames.push_back(route.name);
   auto& exchange = (*application)->Exchange();
@@ -848,7 +890,11 @@ int RunNetworkConsole(int argc, char* argv[])
         std::cout << "Usage: color #RRGGBB\n";
       else if (const auto requestId = exchange.NextRequestId(); !requestId)
         std::cout << "Request IDs exhausted\n";
-      else if (exchange.Post({generation, SetNameColor{*requestId, color}}) == CommandPostResult::Queued)
+      else if (
+        exchange.Post({
+            generation,
+            SetNameColor{*requestId, color}
+      }) == CommandPostResult::Queued)
         std::cout << "request " << *requestId << " queued\n";
       else
         std::cout << "Command queue is full or closed\n";

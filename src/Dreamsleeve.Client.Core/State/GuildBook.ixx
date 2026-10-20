@@ -127,7 +127,17 @@ public:
       return {};
     }
 
-    // A member joined, or their role, mute, online state or name changed.
+    // The guild's custom roles, complete; a deleted role's holders came before.
+    Domain::OperationResult PutTitles(Domain::GuildId guildId, std::vector<Domain::GuildTitle> titles)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->titles = std::move(titles);
+      ++revision;
+      return {};
+    }
+
+    // A member joined, or their role, custom role, mute, online state or name changed.
     Domain::OperationResult PutMember(Domain::GuildId guildId, Domain::GuildMember member)
     {
       auto* guild = FindMutable(guildId);

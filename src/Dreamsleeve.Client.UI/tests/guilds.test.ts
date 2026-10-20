@@ -58,6 +58,7 @@ const guild = (
   channelId: channel.id,
   createdAt: 0,
   members,
+  titles: [],
 });
 const guildsEvent = (
   guilds: Guild[],
@@ -66,7 +67,7 @@ const guildsEvent = (
   type: "guilds",
   guilds,
   invites: [],
-  limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24 },
+  limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24, titles: 10 },
   removed: [],
   ...extra,
 });
@@ -304,6 +305,53 @@ describe("guilds in the chat", () => {
     );
   });
 
+  it("ask for custom roles in the master's words and tell the holder what they got", () => {
+    const { chat, sent, guilds } = inGuilds();
+    chat.guilds.createTitle("4", "  Казначей ");
+    expect(sent().at(-1)).toEqual({
+      type: "guild",
+      requestId: "g1",
+      action: "createTitle",
+      guildId: "4",
+      name: "Казначей",
+    });
+    chat.receive({ type: "guildResult", requestId: "g1", guildId: "4" });
+    expect(chat.store.getState().notice).toBe("Роль «Казначей» создана");
+    chat.guilds.setTitle("4", "7", "3", "Игрок 7");
+    expect(sent().at(-1)).toMatchObject({ action: "setTitle", titleId: "3" });
+    chat.guilds.setTitle("4", "7", undefined, "Игрок 7");
+    expect(sent().at(-1)).not.toHaveProperty("titleId");
+    chat.guilds.renameTitle("4", "3", "Хранитель", "Казначей");
+    expect(sent().at(-1)).toMatchObject({
+      action: "renameTitle",
+      titleId: "3",
+      name: "Хранитель",
+    });
+    chat.guilds.deleteTitle("4", "3", "Хранитель");
+    expect(sent().at(-1)).toMatchObject({
+      action: "deleteTitle",
+      titleId: "3",
+    });
+
+    // The member's own role: given, then taken away with its deletion.
+    const [ravensGuild, companionsGuild] = guilds;
+    const titled = {
+      ...companionsGuild,
+      titles: [{ id: "9", name: "Летописец" }],
+      members: [member("8", "master"), member(SELF, "member", { title: "9" })],
+    };
+    chat.receive(guildsEvent([ravensGuild, titled]));
+    expect(chat.store.getState().notice).toBe(
+      "Ваша роль в гильдии «Соратники»: «Летописец»",
+    );
+    chat.receive(
+      guildsEvent([ravensGuild, { ...companionsGuild, titles: [] }]),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Роль «Летописец» в гильдии «Соратники» снята",
+    );
+  });
+
   it("mute a member through a dialog that keeps a refusal and closes on success", () => {
     const { chat, sent } = inGuilds();
     chat.guilds.openMute("4", "7", "Игрок 7");
@@ -371,14 +419,16 @@ describe("guild events at the bridge", () => {
             online: true,
             joinedAt: 0,
             mute: { reason: "Флуд" },
+            title: "2",
           },
         ],
+        titles: [{ id: "2", name: "Казначей" }],
       },
     ],
     invites: [
       { guildId: "5", guildName: "Соратники", invitedBy: "7", expires: 0 },
     ],
-    limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24 },
+    limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24, titles: 10 },
     removed: [{ guildId: "6", name: "Изгнанники", reason: "disbanded" }],
   };
   it("accept what the host sends and refuse what it never would", () => {
@@ -386,6 +436,9 @@ describe("guild events at the bridge", () => {
     const broken = structuredClone(sample);
     broken.guilds[0].members[0].role = "king";
     expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
+    const untitled = structuredClone(sample);
+    untitled.guilds[0].members[0].title = 2 as never;
+    expect(() => parseHostEvent(JSON.stringify(untitled))).toThrow();
     expect(() =>
       parseHostEvent(
         JSON.stringify({

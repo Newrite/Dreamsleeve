@@ -304,6 +304,14 @@ Control-канале ENet.
   `guild_changed = 39`. `CHAT_CHANNEL_KIND_GUILD = 3`. `ChatPublished`, принятие `SendChat` и
   `ChatMessageRemoved` в канале гильдии идут по Control, а не по Chat. Коды отказа
   `GUILD_NAME_TAKEN = 19` … `GUILD_MASTER_STAYS = 26`.
+- v21: кастомные роли гильдии ([GuildsRu](../docs/GuildsRu.md#правила)). `Guild.titles = 7`
+  (`GuildTitle{title_id, name}`, старые первыми), `GuildMember.title_id = 6` (optional: роли нет),
+  `GuildLimits.max_titles = 5`, изменение `GuildChanged.titles = 7` (`GuildTitles{guild_id,
+  titles}` — полный список; обладатели удаленной роли приходят раньше него). Действия
+  `GuildCommand`: `create_title = 11`, `rename_title = 12`, `delete_title = 13`,
+  `set_title = 14` (`SetGuildMemberTitle`, без `title_id` — снять). Коды отказа
+  `GUILD_TITLE_NAME_TAKEN = 28`, `GUILD_TITLES_FULL = 29`; нет такой роли — `TARGET_NOT_FOUND` с
+  полем `title_id`. Клиент отвергает роль с нулевым ID, без имени и повтор ID в списке.
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

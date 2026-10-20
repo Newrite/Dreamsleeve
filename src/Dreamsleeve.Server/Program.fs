@@ -244,7 +244,7 @@ let private startGame settings (game: GameSettings) moderation pseudonyms (authe
     | Ok transport ->
         let marks = { Loaded = records; NextId = nextId; Writer = writer.Ref.TryReliable().Value }
         let guildStorage = {
-            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId
+            Loaded = guilds.Guilds; Profiles = guilds.Profiles; NextId = guilds.NextId; NextTitleId = guilds.NextTitleId
             Writer = guildWriter.Ref.TryReliable().Value; WriterStopped = guildWriter.Completion
         }
         let runtime =

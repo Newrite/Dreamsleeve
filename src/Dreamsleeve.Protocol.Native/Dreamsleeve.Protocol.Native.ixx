@@ -50,6 +50,8 @@ export namespace Protocol::Chat
     GuildAlreadyInvited = 25,
     GuildMasterStays = 26,
     NameColorUnreadable = 27,
+    GuildTitleNameTaken = 28,
+    GuildTitlesFull = 29,
   };
 }
 

@@ -13,12 +13,22 @@ module GuildUMX =
     [<Measure>]
     type guildName
 
+    [<Measure>]
+    type guildTitleName
+
+    [<Measure>]
+    type guildTitleId
+
 type GuildName = string<guildName>
 
-[<RequireQualifiedAccess>]
-module GuildName =
-    let value (name: GuildName) : string = UMX.untag name
+/// A custom role's name (docs/GuildsRu.md): the same rules as a guild name.
+type GuildTitleName = string<guildTitleName>
 
+/// Storage-issued and never reused across guilds.
+type GuildTitleId = uint64<guildTitleId>
+
+/// The rules guild names and custom role names share.
+module internal GuildText =
     let private lettersDigitsAndSpaces (source: string) =
         if source.EnumerateRunes() |> Seq.forall (fun rune -> Rune.IsLetterOrDigit rune || rune.Value = int ' ') then ValueNone
         else ValueSome TextError.InvalidCharacters
@@ -30,19 +40,56 @@ module GuildName =
 
     /// Letters and digits of any alphabet and single spaces between words, in
     /// NFC: no other whitespace, punctuation or controls; minLength..maxLength
-    /// scalar values, spaces included. The word list and uniqueness are the
-    /// owner's checks; a name never changes.
-    let create minLength maxLength raw : Result<GuildName, DomainError> =
-        if minLength <= 0 || minLength > maxLength then Error(DomainError.InvalidLimit("GuildName", minLength))
+    /// scalar values, spaces included.
+    let name field minLength maxLength raw : Result<string, DomainError> =
+        if minLength <= 0 || minLength > maxLength then Error(DomainError.InvalidLimit(field, minLength))
         else
-            PrimitiveValidation.text "GuildName" maxLength canonical false lettersDigitsAndSpaces raw
+            PrimitiveValidation.text field maxLength canonical false lettersDigitsAndSpaces raw
             |> Result.bind (fun canonical ->
                 if PrimitiveValidation.scalarCount canonical < minLength then
-                    Error(DomainError.InvalidText("GuildName", TextError.TooShort minLength))
-                else Ok(UMX.tag<guildName> canonical))
+                    Error(DomainError.InvalidText(field, TextError.TooShort minLength))
+                else Ok canonical)
+
+    /// Unique regardless of case: "Стражи" and "стражи" are one name.
+    let key (text: string) = text.ToLowerInvariant()
+
+[<RequireQualifiedAccess>]
+module GuildName =
+    let value (name: GuildName) : string = UMX.untag name
+
+    /// Letters, digits and single spaces between words (GuildText.name). The
+    /// word list and uniqueness are the owner's checks.
+    let create minLength maxLength raw : Result<GuildName, DomainError> =
+        GuildText.name "GuildName" minLength maxLength raw |> Result.map UMX.tag<guildName>
 
     /// Names are unique regardless of case: "Стражи" and "стражи" are one name.
-    let key (name: GuildName) = (value name).ToLowerInvariant()
+    let key (name: GuildName) = GuildText.key (value name)
+
+[<RequireQualifiedAccess>]
+module GuildTitleName =
+    let value (name: GuildTitleName) : string = UMX.untag name
+
+    /// The rules of a guild name; the word list and uniqueness inside the
+    /// guild are the owner's checks.
+    let create minLength maxLength raw : Result<GuildTitleName, DomainError> =
+        GuildText.name "GuildTitleName" minLength maxLength raw |> Result.map UMX.tag<guildTitleName>
+
+    let key (name: GuildTitleName) = GuildText.key (value name)
+
+[<RequireQualifiedAccess>]
+module GuildTitleId =
+    let value (id: GuildTitleId) : uint64 = UMX.untag id
+
+    /// A storage row ID: positive and within SQLite's INTEGER.
+    let create raw : Result<GuildTitleId, DomainError> =
+        if raw = 0UL || raw > uint64 Int64.MaxValue then Error(DomainError.InvalidId "GuildTitleId") else Ok(UMX.tag<guildTitleId> raw)
+
+/// A custom role of one guild, such as "Казначей": cosmetic, it grants no
+/// rights; the master creates and assigns it.
+type GuildTitle = {
+    Id: GuildTitleId
+    Name: GuildTitleName
+}
 
 [<RequireQualifiedAccess>]
 type GuildRole =
@@ -100,6 +147,8 @@ type GuildMember = {
     Role: GuildRole
     JoinedAt: DateTimeOffset
     Mute: GuildMute voption
+    /// The member's custom role, one of the guild's; absent: none.
+    Title: GuildTitleId voption
 }
 
 [<RequireQualifiedAccess>]
@@ -127,6 +176,7 @@ type GuildLimits =
         nameMinLength: int
         nameMaxLength: int
         inviteLifetime: TimeSpan
+        maxTitles: int
     }
 
     member this.MaxGuilds = this.maxGuilds
@@ -135,13 +185,16 @@ type GuildLimits =
     member this.MaxMembers = this.maxMembers
     /// Pending invitations of one guild.
     member this.MaxInvites = this.maxInvites
+    /// Bounds of a guild name and of a custom role's name.
     member this.NameMinLength = this.nameMinLength
     member this.NameMaxLength = this.nameMaxLength
     member this.InviteLifetime = this.inviteLifetime
+    /// Custom roles of one guild; 0 leaves guilds without them.
+    member this.MaxTitles = this.maxTitles
 
 [<RequireQualifiedAccess>]
 module GuildLimits =
-    let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) =
+    let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) maxTitles =
         let positive field value = if value < 1 then Error(DomainError.InvalidLimit(field, value)) else Ok value
         positive "MaxGuilds" maxGuilds
         |> Result.bind (fun _ -> positive "MaxGuildsPerPlayer" maxGuildsPerPlayer)
@@ -153,6 +206,7 @@ module GuildLimits =
         |> Result.bind (fun _ ->
             if inviteLifetime <= TimeSpan.Zero then Error(DomainError.InvalidLimit("InviteLifetime", int inviteLifetime.TotalSeconds))
             else Ok inviteLifetime)
+        |> Result.bind (fun _ -> if maxTitles < 0 then Error(DomainError.InvalidLimit("MaxTitles", maxTitles)) else Ok maxTitles)
         |> Result.map (fun _ -> {
             maxGuilds = maxGuilds
             maxGuildsPerPlayer = maxGuildsPerPlayer
@@ -161,6 +215,7 @@ module GuildLimits =
             nameMinLength = nameMinLength
             nameMaxLength = nameMaxLength
             inviteLifetime = inviteLifetime
+            maxTitles = maxTitles
         })
 
 [<RequireQualifiedAccess>]
@@ -184,9 +239,15 @@ type GuildError =
     | NotPermitted
     /// The master hands the role over or disbands the guild before leaving.
     | MasterStays
+    /// Another custom role of the guild has the name, in any case.
+    | TitleNameTaken
+    /// The guild has MaxTitles custom roles.
+    | TitlesFull
+    /// The guild has no such custom role.
+    | TitleNotFound
 
-/// One guild: its name, members and pending invitations. Owned by the guild
-/// book's owner; no function exposes its live collections.
+/// One guild: its name, members, custom roles and pending invitations. Owned
+/// by the guild book's owner; no function exposes its live collections.
 [<NoEquality; NoComparison>]
 type Guild =
     private {
@@ -195,6 +256,7 @@ type Guild =
         createdAt: DateTimeOffset
         members: Dictionary<PlayerId, GuildMember>
         invites: Dictionary<PlayerId, GuildInvite>
+        titles: Dictionary<GuildTitleId, GuildTitle>
     }
 
     member this.Id = this.id
@@ -203,6 +265,8 @@ type Guild =
     member this.MemberCount = this.members.Count
     member this.Members = List.ofSeq this.members.Values
     member this.Invites = List.ofSeq this.invites.Values
+    /// Oldest first: IDs grow with creation.
+    member this.Titles = this.titles.Values |> Seq.sortBy _.Id |> List.ofSeq
 
     member this.Member player =
         match this.members.TryGetValue player with
@@ -211,13 +275,14 @@ type Guild =
 
     member this.Master = this.members.Values |> Seq.tryFind (fun membership -> membership.Role = GuildRole.Master) |> Option.toValueOption
 
-/// What storage restores: a guild with its members and invitations.
+/// What storage restores: a guild with its members, custom roles and invitations.
 type StoredGuild = {
     Id: GuildId
     Name: GuildName
     CreatedAt: DateTimeOffset
     Members: GuildMember list
     Invites: GuildInvite list
+    Titles: GuildTitle list
 }
 
 /// What a disbanded guild leaves: who was in it and who was invited.
@@ -280,7 +345,10 @@ module GuildBook =
                 createdAt = guild.CreatedAt
                 members = Dictionary()
                 invites = Dictionary()
+                titles = Dictionary()
             }
+            for title in guild.Titles do
+                entry.titles[title.Id] <- title
             for membership in guild.Members do
                 entry.members[membership.Player] <- membership
                 index book.memberships membership.Player guild.Id
@@ -360,10 +428,10 @@ module GuildBook =
         elif book.guilds.Count >= book.limits.MaxGuilds then Error GuildError.ServerFull
         elif indexed book.memberships creator >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
         else
-            let entry = { id = id; name = name; createdAt = now; members = Dictionary(); invites = Dictionary() }
+            let entry = { id = id; name = name; createdAt = now; members = Dictionary(); invites = Dictionary(); titles = Dictionary() }
             book.guilds[id] <- entry
             book.names[GuildName.key name] <- id
-            let master = { Player = creator; Role = GuildRole.Master; JoinedAt = now; Mute = ValueNone }
+            let master = { Player = creator; Role = GuildRole.Master; JoinedAt = now; Mute = ValueNone; Title = ValueNone }
             addMember book entry master
             Ok(entry, master)
 
@@ -406,7 +474,7 @@ module GuildBook =
             elif indexed book.memberships player >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
             else
                 dropInvite book entry player
-                let joined = { Player = player; Role = GuildRole.Member; JoinedAt = now; Mute = ValueNone }
+                let joined = { Player = player; Role = GuildRole.Member; JoinedAt = now; Mute = ValueNone; Title = ValueNone }
                 addMember book entry joined
                 Ok(entry, invite, joined))
 
@@ -501,6 +569,71 @@ module GuildBook =
                     let changed = { current with Mute = ValueNone }
                     entry.members[player] <- changed
                     Ok(entry, changed)))
+
+    let private mastered actor guild (book: GuildBook) =
+        membership actor guild book
+        |> Result.bind (fun (entry, own) -> if own.Role = GuildRole.Master then Ok entry else Error GuildError.NotPermitted)
+
+    let private title id (entry: Guild) =
+        match entry.titles.TryGetValue id with
+        | true, found -> Ok found
+        | false, _ -> Error GuildError.TitleNotFound
+
+    // Another custom role of the guild has the name in any case; except is the renamed one.
+    let private titleNameTaken (entry: Guild) (name: GuildTitleName) (except: GuildTitleId voption) =
+        let key = GuildTitleName.key name
+        entry.titles.Values |> Seq.exists (fun other -> ValueSome other.Id <> except && GuildTitleName.key other.Name = key)
+
+    /// The master creates a custom role. The ID comes from storage.
+    let createTitle actor guild id (name: GuildTitleName) (book: GuildBook) =
+        mastered actor guild book
+        |> Result.bind (fun entry ->
+            if entry.titles.Count >= book.limits.MaxTitles then Error GuildError.TitlesFull
+            elif titleNameTaken entry name ValueNone then Error GuildError.TitleNameTaken
+            else
+                let created = { Id = id; Name = name }
+                entry.titles[id] <- created
+                Ok(entry, created))
+
+    /// The master renames a custom role; its holders keep it.
+    let renameTitle actor guild id (name: GuildTitleName) (book: GuildBook) =
+        mastered actor guild book
+        |> Result.bind (fun entry ->
+            title id entry
+            |> Result.bind (fun current ->
+                if titleNameTaken entry name (ValueSome id) then Error GuildError.TitleNameTaken
+                else
+                    let renamed = { current with Name = name }
+                    entry.titles[id] <- renamed
+                    Ok(entry, renamed)))
+
+    /// The master deletes a custom role; the members who held it are returned without it.
+    let deleteTitle actor guild id (book: GuildBook) =
+        mastered actor guild book
+        |> Result.bind (fun entry ->
+            title id entry
+            |> Result.map (fun _ ->
+                entry.titles.Remove id |> ignore
+                let holders = entry.members.Values |> Seq.filter (fun membership -> membership.Title = ValueSome id) |> List.ofSeq
+                let cleared = holders |> List.map (fun membership -> { membership with Title = ValueNone })
+                for membership in cleared do entry.members[membership.Player] <- membership
+                entry, cleared))
+
+    /// The master gives a member one of the guild's custom roles, replacing
+    /// the one they had, or takes it away (ValueNone). The master may hold one too.
+    let setTitle actor guild player (id: GuildTitleId voption) (book: GuildBook) =
+        mastered actor guild book
+        |> Result.bind (fun entry ->
+            let known =
+                match id with
+                | ValueSome titleId -> title titleId entry |> Result.map ignore
+                | ValueNone -> Ok()
+            known
+            |> Result.bind (fun () -> target player entry)
+            |> Result.map (fun current ->
+                let changed = { current with Title = id }
+                entry.members[player] <- changed
+                entry, changed))
 
     let private remove (book: GuildBook) (entry: Guild) =
         let disbanded = { Guild = entry.id; Name = entry.name; Members = entry.Members; Invites = entry.Invites }

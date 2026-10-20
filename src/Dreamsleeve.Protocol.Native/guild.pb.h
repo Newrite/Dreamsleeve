@@ -71,6 +71,14 @@ class CreateGuild;
 struct CreateGuildDefaultTypeInternal;
 extern CreateGuildDefaultTypeInternal _CreateGuild_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull CreateGuild_class_data_;
+class CreateGuildTitle;
+struct CreateGuildTitleDefaultTypeInternal;
+extern CreateGuildTitleDefaultTypeInternal _CreateGuildTitle_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull CreateGuildTitle_class_data_;
+class DeleteGuildTitle;
+struct DeleteGuildTitleDefaultTypeInternal;
+extern DeleteGuildTitleDefaultTypeInternal _DeleteGuildTitle_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteGuildTitle_class_data_;
 class DisbandGuild;
 struct DisbandGuildDefaultTypeInternal;
 extern DisbandGuildDefaultTypeInternal _DisbandGuild_default_instance_;
@@ -119,6 +127,14 @@ class GuildRemoved;
 struct GuildRemovedDefaultTypeInternal;
 extern GuildRemovedDefaultTypeInternal _GuildRemoved_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull GuildRemoved_class_data_;
+class GuildTitle;
+struct GuildTitleDefaultTypeInternal;
+extern GuildTitleDefaultTypeInternal _GuildTitle_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull GuildTitle_class_data_;
+class GuildTitles;
+struct GuildTitlesDefaultTypeInternal;
+extern GuildTitlesDefaultTypeInternal _GuildTitles_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull GuildTitles_class_data_;
 class GuildsSnapshot;
 struct GuildsSnapshotDefaultTypeInternal;
 extern GuildsSnapshotDefaultTypeInternal _GuildsSnapshot_default_instance_;
@@ -135,6 +151,14 @@ class MuteGuildMember;
 struct MuteGuildMemberDefaultTypeInternal;
 extern MuteGuildMemberDefaultTypeInternal _MuteGuildMember_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull MuteGuildMember_class_data_;
+class RenameGuildTitle;
+struct RenameGuildTitleDefaultTypeInternal;
+extern RenameGuildTitleDefaultTypeInternal _RenameGuildTitle_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull RenameGuildTitle_class_data_;
+class SetGuildMemberTitle;
+struct SetGuildMemberTitleDefaultTypeInternal;
+extern SetGuildMemberTitleDefaultTypeInternal _SetGuildMemberTitle_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SetGuildMemberTitle_class_data_;
 class SetGuildRole;
 struct SetGuildRoleDefaultTypeInternal;
 extern SetGuildRoleDefaultTypeInternal _SetGuildRole_default_instance_;
@@ -301,7 +325,7 @@ class UnmuteGuildMember final : public ::google::protobuf::Message
     return *reinterpret_cast<const UnmuteGuildMember*>(
         &_UnmuteGuildMember_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(UnmuteGuildMember& a, UnmuteGuildMember& b) { a.Swap(&b); }
   inline void Swap(UnmuteGuildMember* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -503,7 +527,7 @@ class TransferGuild final : public ::google::protobuf::Message
     return *reinterpret_cast<const TransferGuild*>(
         &_TransferGuild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(TransferGuild& a, TransferGuild& b) { a.Swap(&b); }
   inline void Swap(TransferGuild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -705,7 +729,7 @@ class SetGuildRole final : public ::google::protobuf::Message
     return *reinterpret_cast<const SetGuildRole*>(
         &_SetGuildRole_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SetGuildRole& a, SetGuildRole& b) { a.Swap(&b); }
   inline void Swap(SetGuildRole* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -864,6 +888,440 @@ class SetGuildRole final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull SetGuildRole_class_data_;
 // -------------------------------------------------------------------
 
+class SetGuildMemberTitle final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle) */ {
+ public:
+  inline SetGuildMemberTitle() : SetGuildMemberTitle(nullptr) {}
+  ~SetGuildMemberTitle() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetGuildMemberTitle* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetGuildMemberTitle));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SetGuildMemberTitle(::google::protobuf::internal::ConstantInitialized);
+
+  inline SetGuildMemberTitle(const SetGuildMemberTitle& from) : SetGuildMemberTitle(nullptr, from) {}
+  inline SetGuildMemberTitle(SetGuildMemberTitle&& from) noexcept
+      : SetGuildMemberTitle(nullptr, ::std::move(from)) {}
+  inline SetGuildMemberTitle& operator=(const SetGuildMemberTitle& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetGuildMemberTitle& operator=(SetGuildMemberTitle&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SetGuildMemberTitle& default_instance() {
+    return *reinterpret_cast<const SetGuildMemberTitle*>(
+        &_SetGuildMemberTitle_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(SetGuildMemberTitle& a, SetGuildMemberTitle& b) { a.Swap(&b); }
+  inline void Swap(SetGuildMemberTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetGuildMemberTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SetGuildMemberTitle* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetGuildMemberTitle>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetGuildMemberTitle& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetGuildMemberTitle& from) { SetGuildMemberTitle::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetGuildMemberTitle* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.SetGuildMemberTitle"; }
+
+  explicit SetGuildMemberTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetGuildMemberTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetGuildMemberTitle& from);
+  SetGuildMemberTitle(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetGuildMemberTitle&& from) noexcept
+      : SetGuildMemberTitle(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kGuildIdFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+    kTitleIdFieldNumber = 3,
+  };
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // optional uint64 title_id = 3;
+  bool has_title_id() const;
+  void clear_title_id() ;
+  ::uint64_t title_id() const;
+  void set_title_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_title_id() const;
+  void _internal_set_title_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetGuildMemberTitle& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t guild_id_;
+    ::uint64_t player_id_;
+    ::uint64_t title_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SetGuildMemberTitle_class_data_;
+// -------------------------------------------------------------------
+
+class RenameGuildTitle final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.RenameGuildTitle) */ {
+ public:
+  inline RenameGuildTitle() : RenameGuildTitle(nullptr) {}
+  ~RenameGuildTitle() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RenameGuildTitle* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RenameGuildTitle));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RenameGuildTitle(::google::protobuf::internal::ConstantInitialized);
+
+  inline RenameGuildTitle(const RenameGuildTitle& from) : RenameGuildTitle(nullptr, from) {}
+  inline RenameGuildTitle(RenameGuildTitle&& from) noexcept
+      : RenameGuildTitle(nullptr, ::std::move(from)) {}
+  inline RenameGuildTitle& operator=(const RenameGuildTitle& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RenameGuildTitle& operator=(RenameGuildTitle&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RenameGuildTitle& default_instance() {
+    return *reinterpret_cast<const RenameGuildTitle*>(
+        &_RenameGuildTitle_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(RenameGuildTitle& a, RenameGuildTitle& b) { a.Swap(&b); }
+  inline void Swap(RenameGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RenameGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RenameGuildTitle* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RenameGuildTitle>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RenameGuildTitle& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RenameGuildTitle& from) { RenameGuildTitle::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RenameGuildTitle* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.RenameGuildTitle"; }
+
+  explicit RenameGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RenameGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RenameGuildTitle& from);
+  RenameGuildTitle(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RenameGuildTitle&& from) noexcept
+      : RenameGuildTitle(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 3,
+    kGuildIdFieldNumber = 1,
+    kTitleIdFieldNumber = 2,
+  };
+  // string name = 3;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // uint64 title_id = 2;
+  void clear_title_id() ;
+  ::uint64_t title_id() const;
+  void set_title_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_title_id() const;
+  void _internal_set_title_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.RenameGuildTitle)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 55,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RenameGuildTitle& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t guild_id_;
+    ::uint64_t title_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull RenameGuildTitle_class_data_;
+// -------------------------------------------------------------------
+
 class MuteGuildMember final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.MuteGuildMember) */ {
  public:
@@ -919,7 +1377,7 @@ class MuteGuildMember final : public ::google::protobuf::Message
     return *reinterpret_cast<const MuteGuildMember*>(
         &_MuteGuildMember_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(MuteGuildMember& a, MuteGuildMember& b) { a.Swap(&b); }
   inline void Swap(MuteGuildMember* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1151,7 +1609,7 @@ class LeaveGuild final : public ::google::protobuf::Message
     return *reinterpret_cast<const LeaveGuild*>(
         &_LeaveGuild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(LeaveGuild& a, LeaveGuild& b) { a.Swap(&b); }
   inline void Swap(LeaveGuild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1341,7 +1799,7 @@ class InviteToGuild final : public ::google::protobuf::Message
     return *reinterpret_cast<const InviteToGuild*>(
         &_InviteToGuild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(InviteToGuild& a, InviteToGuild& b) { a.Swap(&b); }
   inline void Swap(InviteToGuild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1488,6 +1946,213 @@ class InviteToGuild final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull InviteToGuild_class_data_;
 // -------------------------------------------------------------------
 
+class GuildTitle final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.GuildTitle) */ {
+ public:
+  inline GuildTitle() : GuildTitle(nullptr) {}
+  ~GuildTitle() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildTitle* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildTitle));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR GuildTitle(::google::protobuf::internal::ConstantInitialized);
+
+  inline GuildTitle(const GuildTitle& from) : GuildTitle(nullptr, from) {}
+  inline GuildTitle(GuildTitle&& from) noexcept
+      : GuildTitle(nullptr, ::std::move(from)) {}
+  inline GuildTitle& operator=(const GuildTitle& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildTitle& operator=(GuildTitle&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const GuildTitle& default_instance() {
+    return *reinterpret_cast<const GuildTitle*>(
+        &_GuildTitle_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(GuildTitle& a, GuildTitle& b) { a.Swap(&b); }
+  inline void Swap(GuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GuildTitle* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildTitle>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildTitle& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildTitle& from) { GuildTitle::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildTitle* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.GuildTitle"; }
+
+  explicit GuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildTitle& from);
+  GuildTitle(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildTitle&& from) noexcept
+      : GuildTitle(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kTitleIdFieldNumber = 1,
+  };
+  // string name = 2;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 title_id = 1;
+  void clear_title_id() ;
+  ::uint64_t title_id() const;
+  void set_title_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_title_id() const;
+  void _internal_set_title_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildTitle)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 49,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildTitle& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t title_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull GuildTitle_class_data_;
+// -------------------------------------------------------------------
+
 class GuildRemoved final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.GuildRemoved) */ {
  public:
@@ -1543,7 +2208,7 @@ class GuildRemoved final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildRemoved*>(
         &_GuildRemoved_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GuildRemoved& a, GuildRemoved& b) { a.Swap(&b); }
   inline void Swap(GuildRemoved* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1745,7 +2410,7 @@ class GuildMemberRemoved final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildMemberRemoved*>(
         &_GuildMemberRemoved_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(GuildMemberRemoved& a, GuildMemberRemoved& b) { a.Swap(&b); }
   inline void Swap(GuildMemberRemoved* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1959,7 +2624,7 @@ class GuildLimits final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildLimits*>(
         &_GuildLimits_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(GuildLimits& a, GuildLimits& b) { a.Swap(&b); }
   inline void Swap(GuildLimits* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2050,6 +2715,7 @@ class GuildLimits final : public ::google::protobuf::Message
     kMaxMembersFieldNumber = 2,
     kNameMinLengthFieldNumber = 3,
     kNameMaxLengthFieldNumber = 4,
+    kMaxTitlesFieldNumber = 5,
   };
   // uint32 max_guilds_per_player = 1;
   void clear_max_guilds_per_player() ;
@@ -2091,11 +2757,21 @@ class GuildLimits final : public ::google::protobuf::Message
   void _internal_set_name_max_length(::uint32_t value);
 
   public:
+  // uint32 max_titles = 5;
+  void clear_max_titles() ;
+  ::uint32_t max_titles() const;
+  void set_max_titles(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_titles() const;
+  void _internal_set_max_titles(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildLimits)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
                                    0, 0,
                                    2>
       _table_;
@@ -2121,6 +2797,7 @@ class GuildLimits final : public ::google::protobuf::Message
     ::uint32_t max_members_;
     ::uint32_t name_min_length_;
     ::uint32_t name_max_length_;
+    ::uint32_t max_titles_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2185,7 +2862,7 @@ class GuildInvite final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildInvite*>(
         &_GuildInvite_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(GuildInvite& a, GuildInvite& b) { a.Swap(&b); }
   inline void Swap(GuildInvite* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2416,7 +3093,7 @@ class GuildCommandDone final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildCommandDone*>(
         &_GuildCommandDone_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(GuildCommandDone& a, GuildCommandDone& b) { a.Swap(&b); }
   inline void Swap(GuildCommandDone* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2606,7 +3283,7 @@ class ExcludeGuildMember final : public ::google::protobuf::Message
     return *reinterpret_cast<const ExcludeGuildMember*>(
         &_ExcludeGuildMember_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(ExcludeGuildMember& a, ExcludeGuildMember& b) { a.Swap(&b); }
   inline void Swap(ExcludeGuildMember* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2808,7 +3485,7 @@ class DisbandGuild final : public ::google::protobuf::Message
     return *reinterpret_cast<const DisbandGuild*>(
         &_DisbandGuild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(DisbandGuild& a, DisbandGuild& b) { a.Swap(&b); }
   inline void Swap(DisbandGuild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2943,6 +3620,415 @@ class DisbandGuild final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull DisbandGuild_class_data_;
 // -------------------------------------------------------------------
 
+class DeleteGuildTitle final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.DeleteGuildTitle) */ {
+ public:
+  inline DeleteGuildTitle() : DeleteGuildTitle(nullptr) {}
+  ~DeleteGuildTitle() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteGuildTitle* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteGuildTitle));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR DeleteGuildTitle(::google::protobuf::internal::ConstantInitialized);
+
+  inline DeleteGuildTitle(const DeleteGuildTitle& from) : DeleteGuildTitle(nullptr, from) {}
+  inline DeleteGuildTitle(DeleteGuildTitle&& from) noexcept
+      : DeleteGuildTitle(nullptr, ::std::move(from)) {}
+  inline DeleteGuildTitle& operator=(const DeleteGuildTitle& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteGuildTitle& operator=(DeleteGuildTitle&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const DeleteGuildTitle& default_instance() {
+    return *reinterpret_cast<const DeleteGuildTitle*>(
+        &_DeleteGuildTitle_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(DeleteGuildTitle& a, DeleteGuildTitle& b) { a.Swap(&b); }
+  inline void Swap(DeleteGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DeleteGuildTitle* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteGuildTitle>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteGuildTitle& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteGuildTitle& from) { DeleteGuildTitle::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteGuildTitle* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.DeleteGuildTitle"; }
+
+  explicit DeleteGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteGuildTitle& from);
+  DeleteGuildTitle(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteGuildTitle&& from) noexcept
+      : DeleteGuildTitle(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kGuildIdFieldNumber = 1,
+    kTitleIdFieldNumber = 2,
+  };
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // uint64 title_id = 2;
+  void clear_title_id() ;
+  ::uint64_t title_id() const;
+  void set_title_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_title_id() const;
+  void _internal_set_title_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.DeleteGuildTitle)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteGuildTitle& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t guild_id_;
+    ::uint64_t title_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull DeleteGuildTitle_class_data_;
+// -------------------------------------------------------------------
+
+class CreateGuildTitle final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.CreateGuildTitle) */ {
+ public:
+  inline CreateGuildTitle() : CreateGuildTitle(nullptr) {}
+  ~CreateGuildTitle() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CreateGuildTitle* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CreateGuildTitle));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CreateGuildTitle(::google::protobuf::internal::ConstantInitialized);
+
+  inline CreateGuildTitle(const CreateGuildTitle& from) : CreateGuildTitle(nullptr, from) {}
+  inline CreateGuildTitle(CreateGuildTitle&& from) noexcept
+      : CreateGuildTitle(nullptr, ::std::move(from)) {}
+  inline CreateGuildTitle& operator=(const CreateGuildTitle& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CreateGuildTitle& operator=(CreateGuildTitle&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const CreateGuildTitle& default_instance() {
+    return *reinterpret_cast<const CreateGuildTitle*>(
+        &_CreateGuildTitle_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(CreateGuildTitle& a, CreateGuildTitle& b) { a.Swap(&b); }
+  inline void Swap(CreateGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CreateGuildTitle* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CreateGuildTitle* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CreateGuildTitle>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CreateGuildTitle& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CreateGuildTitle& from) { CreateGuildTitle::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CreateGuildTitle* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.CreateGuildTitle"; }
+
+  explicit CreateGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CreateGuildTitle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CreateGuildTitle& from);
+  CreateGuildTitle(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CreateGuildTitle&& from) noexcept
+      : CreateGuildTitle(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kGuildIdFieldNumber = 1,
+  };
+  // string name = 2;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.CreateGuildTitle)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 55,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CreateGuildTitle& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t guild_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull CreateGuildTitle_class_data_;
+// -------------------------------------------------------------------
+
 class CreateGuild final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.CreateGuild) */ {
  public:
@@ -2998,7 +4084,7 @@ class CreateGuild final : public ::google::protobuf::Message
     return *reinterpret_cast<const CreateGuild*>(
         &_CreateGuild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(CreateGuild& a, CreateGuild& b) { a.Swap(&b); }
   inline void Swap(CreateGuild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3193,7 +4279,7 @@ class AnswerGuildInvite final : public ::google::protobuf::Message
     return *reinterpret_cast<const AnswerGuildInvite*>(
         &_AnswerGuildInvite_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(AnswerGuildInvite& a, AnswerGuildInvite& b) { a.Swap(&b); }
   inline void Swap(AnswerGuildInvite* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3338,6 +4424,215 @@ class AnswerGuildInvite final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull AnswerGuildInvite_class_data_;
+// -------------------------------------------------------------------
+
+class GuildTitles final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Dreamsleeve.Protocol.Chat.GuildTitles) */ {
+ public:
+  inline GuildTitles() : GuildTitles(nullptr) {}
+  ~GuildTitles() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildTitles* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildTitles));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR GuildTitles(::google::protobuf::internal::ConstantInitialized);
+
+  inline GuildTitles(const GuildTitles& from) : GuildTitles(nullptr, from) {}
+  inline GuildTitles(GuildTitles&& from) noexcept
+      : GuildTitles(nullptr, ::std::move(from)) {}
+  inline GuildTitles& operator=(const GuildTitles& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildTitles& operator=(GuildTitles&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const GuildTitles& default_instance() {
+    return *reinterpret_cast<const GuildTitles*>(
+        &_GuildTitles_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(GuildTitles& a, GuildTitles& b) { a.Swap(&b); }
+  inline void Swap(GuildTitles* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildTitles* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GuildTitles* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildTitles>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildTitles& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildTitles& from) { GuildTitles::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildTitles* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Dreamsleeve.Protocol.Chat.GuildTitles"; }
+
+  explicit GuildTitles(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildTitles(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildTitles& from);
+  GuildTitles(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildTitles&& from) noexcept
+      : GuildTitles(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTitlesFieldNumber = 2,
+    kGuildIdFieldNumber = 1,
+  };
+  // repeated .Dreamsleeve.Protocol.Chat.GuildTitle titles = 2;
+  int titles_size() const;
+  private:
+  int _internal_titles_size() const;
+
+  public:
+  void clear_titles() ;
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL mutable_titles(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL mutable_titles();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& _internal_titles() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL _internal_mutable_titles();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::GuildTitle& titles(int index) const;
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL add_titles();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& titles() const;
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildTitles)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   1, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildTitles& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::GuildTitle > titles_;
+    ::uint64_t guild_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_guild_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull GuildTitles_class_data_;
 // -------------------------------------------------------------------
 
 class GuildMember final : public ::google::protobuf::Message
@@ -3487,6 +4782,7 @@ class GuildMember final : public ::google::protobuf::Message
     kRoleFieldNumber = 2,
     kOnlineFieldNumber = 3,
     kJoinedAtUnixMsFieldNumber = 5,
+    kTitleIdFieldNumber = 6,
   };
   // .Dreamsleeve.Protocol.Chat.PlayerProfile profile = 1;
   bool has_profile() const;
@@ -3548,11 +4844,22 @@ class GuildMember final : public ::google::protobuf::Message
   void _internal_set_joined_at_unix_ms(::int64_t value);
 
   public:
+  // optional uint64 title_id = 6;
+  bool has_title_id() const;
+  void clear_title_id() ;
+  ::uint64_t title_id() const;
+  void set_title_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_title_id() const;
+  void _internal_set_title_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildMember)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 5,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
                                    2, 0,
                                    2>
       _table_;
@@ -3579,6 +4886,7 @@ class GuildMember final : public ::google::protobuf::Message
     int role_;
     bool online_;
     ::int64_t joined_at_unix_ms_;
+    ::uint64_t title_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3654,9 +4962,13 @@ class GuildCommand final : public ::google::protobuf::Message
     kMute = 8,
     kUnmute = 9,
     kDisband = 10,
+    kCreateTitle = 11,
+    kRenameTitle = 12,
+    kDeleteTitle = 13,
+    kSetTitle = 14,
     ACTION_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(GuildCommand& a, GuildCommand& b) { a.Swap(&b); }
   inline void Swap(GuildCommand* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3753,6 +5065,10 @@ class GuildCommand final : public ::google::protobuf::Message
     kMuteFieldNumber = 8,
     kUnmuteFieldNumber = 9,
     kDisbandFieldNumber = 10,
+    kCreateTitleFieldNumber = 11,
+    kRenameTitleFieldNumber = 12,
+    kDeleteTitleFieldNumber = 13,
+    kSetTitleFieldNumber = 14,
   };
   // .Dreamsleeve.Protocol.Chat.CreateGuild create = 1;
   bool has_create() const;
@@ -3944,6 +5260,82 @@ class GuildCommand final : public ::google::protobuf::Message
   ::Dreamsleeve::Protocol::Chat::DisbandGuild* PROTOBUF_NONNULL _internal_mutable_disband();
 
   public:
+  // .Dreamsleeve.Protocol.Chat.CreateGuildTitle create_title = 11;
+  bool has_create_title() const;
+  private:
+  bool _internal_has_create_title() const;
+
+  public:
+  void clear_create_title() ;
+  const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle& create_title() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE release_create_title();
+  ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NONNULL mutable_create_title();
+  void set_allocated_create_title(::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_create_title(::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE unsafe_arena_release_create_title();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle& _internal_create_title() const;
+  ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NONNULL _internal_mutable_create_title();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.RenameGuildTitle rename_title = 12;
+  bool has_rename_title() const;
+  private:
+  bool _internal_has_rename_title() const;
+
+  public:
+  void clear_rename_title() ;
+  const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle& rename_title() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE release_rename_title();
+  ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NONNULL mutable_rename_title();
+  void set_allocated_rename_title(::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_rename_title(::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE unsafe_arena_release_rename_title();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle& _internal_rename_title() const;
+  ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NONNULL _internal_mutable_rename_title();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.DeleteGuildTitle delete_title = 13;
+  bool has_delete_title() const;
+  private:
+  bool _internal_has_delete_title() const;
+
+  public:
+  void clear_delete_title() ;
+  const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle& delete_title() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE release_delete_title();
+  ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NONNULL mutable_delete_title();
+  void set_allocated_delete_title(::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_delete_title(::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE unsafe_arena_release_delete_title();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle& _internal_delete_title() const;
+  ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NONNULL _internal_mutable_delete_title();
+
+  public:
+  // .Dreamsleeve.Protocol.Chat.SetGuildMemberTitle set_title = 14;
+  bool has_set_title() const;
+  private:
+  bool _internal_has_set_title() const;
+
+  public:
+  void clear_set_title() ;
+  const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle& set_title() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE release_set_title();
+  ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NONNULL mutable_set_title();
+  void set_allocated_set_title(::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_set_title(::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE unsafe_arena_release_set_title();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle& _internal_set_title() const;
+  ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NONNULL _internal_mutable_set_title();
+
+  public:
   void clear_action();
   ActionCase action_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildCommand)
@@ -3959,11 +5351,15 @@ class GuildCommand final : public ::google::protobuf::Message
   void set_has_mute();
   void set_has_unmute();
   void set_has_disband();
+  void set_has_create_title();
+  void set_has_rename_title();
+  void set_has_delete_title();
+  void set_has_set_title();
   inline bool has_action() const;
   inline void clear_has_action();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 10,
-                                   10, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 14,
+                                   14, 0,
                                    2>
       _table_;
 
@@ -3995,6 +5391,10 @@ class GuildCommand final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE mute_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE unmute_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE disband_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE create_title_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE rename_title_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE delete_title_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE set_title_;
     } action_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t _oneof_case_[1];
@@ -4062,7 +5462,7 @@ class GuildMemberUpdate final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildMemberUpdate*>(
         &_GuildMemberUpdate_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(GuildMemberUpdate& a, GuildMemberUpdate& b) { a.Swap(&b); }
   inline void Swap(GuildMemberUpdate* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4269,7 +5669,7 @@ class Guild final : public ::google::protobuf::Message
     return *reinterpret_cast<const Guild*>(
         &_Guild_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(Guild& a, Guild& b) { a.Swap(&b); }
   inline void Swap(Guild* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4358,6 +5758,7 @@ class Guild final : public ::google::protobuf::Message
   enum : int {
     kMembersFieldNumber = 5,
     kRecentMessagesFieldNumber = 6,
+    kTitlesFieldNumber = 7,
     kNameFieldNumber = 2,
     kGuildIdFieldNumber = 1,
     kChannelIdFieldNumber = 3,
@@ -4397,6 +5798,23 @@ class Guild final : public ::google::protobuf::Message
   const ::Dreamsleeve::Protocol::Chat::ChatMessage& recent_messages(int index) const;
   ::Dreamsleeve::Protocol::Chat::ChatMessage* PROTOBUF_NONNULL add_recent_messages();
   const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatMessage>& recent_messages() const;
+  // repeated .Dreamsleeve.Protocol.Chat.GuildTitle titles = 7;
+  int titles_size() const;
+  private:
+  int _internal_titles_size() const;
+
+  public:
+  void clear_titles() ;
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL mutable_titles(int index);
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL mutable_titles();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& _internal_titles() const;
+  ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL _internal_mutable_titles();
+  public:
+  const ::Dreamsleeve::Protocol::Chat::GuildTitle& titles(int index) const;
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL add_titles();
+  const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& titles() const;
   // string name = 2;
   void clear_name() ;
   const ::std::string& name() const;
@@ -4446,8 +5864,8 @@ class Guild final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   2, 44,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   3, 44,
                                    2>
       _table_;
 
@@ -4470,6 +5888,7 @@ class Guild final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::GuildMember > members_;
     ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::ChatMessage > recent_messages_;
+    ::google::protobuf::RepeatedPtrField< ::Dreamsleeve::Protocol::Chat::GuildTitle > titles_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::uint64_t guild_id_;
     ::uint64_t channel_id_;
@@ -4538,7 +5957,7 @@ class GuildsSnapshot final : public ::google::protobuf::Message
     return *reinterpret_cast<const GuildsSnapshot*>(
         &_GuildsSnapshot_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(GuildsSnapshot& a, GuildsSnapshot& b) { a.Swap(&b); }
   inline void Swap(GuildsSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4778,9 +6197,10 @@ class GuildChanged final : public ::google::protobuf::Message
     kMemberRemoved = 4,
     kInvited = 5,
     kInviteRemoved = 6,
+    kTitles = 7,
     CHANGE_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(GuildChanged& a, GuildChanged& b) { a.Swap(&b); }
   inline void Swap(GuildChanged* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4873,6 +6293,7 @@ class GuildChanged final : public ::google::protobuf::Message
     kMemberRemovedFieldNumber = 4,
     kInvitedFieldNumber = 5,
     kInviteRemovedFieldNumber = 6,
+    kTitlesFieldNumber = 7,
   };
   // .Dreamsleeve.Protocol.Chat.Guild added = 1;
   bool has_added() const;
@@ -4980,6 +6401,25 @@ class GuildChanged final : public ::google::protobuf::Message
   void _internal_set_invite_removed(::uint64_t value);
 
   public:
+  // .Dreamsleeve.Protocol.Chat.GuildTitles titles = 7;
+  bool has_titles() const;
+  private:
+  bool _internal_has_titles() const;
+
+  public:
+  void clear_titles() ;
+  const ::Dreamsleeve::Protocol::Chat::GuildTitles& titles() const;
+  [[nodiscard]] ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE release_titles();
+  ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NONNULL mutable_titles();
+  void set_allocated_titles(::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_titles(::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE value);
+  ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE unsafe_arena_release_titles();
+
+  private:
+  const ::Dreamsleeve::Protocol::Chat::GuildTitles& _internal_titles() const;
+  ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NONNULL _internal_mutable_titles();
+
+  public:
   void clear_change();
   ChangeCase change_case() const;
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Chat.GuildChanged)
@@ -4991,11 +6431,12 @@ class GuildChanged final : public ::google::protobuf::Message
   void set_has_member_removed();
   void set_has_invited();
   void set_has_invite_removed();
+  void set_has_titles();
   inline bool has_change() const;
   inline void clear_has_change();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 6,
-                                   5, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 7,
+                                   6, 0,
                                    2>
       _table_;
 
@@ -5023,6 +6464,7 @@ class GuildChanged final : public ::google::protobuf::Message
       ::google::protobuf::Message* PROTOBUF_NULLABLE member_removed_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE invited_;
       ::uint64_t invite_removed_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE titles_;
     } change_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t _oneof_case_[1];
@@ -5311,6 +6753,129 @@ inline void GuildMember::_internal_set_joined_at_unix_ms(::int64_t value) {
   _impl_.joined_at_unix_ms_ = value;
 }
 
+// optional uint64 title_id = 6;
+inline bool GuildMember::has_title_id() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  return value;
+}
+inline void GuildMember::clear_title_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline ::uint64_t GuildMember::title_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildMember.title_id)
+  return _internal_title_id();
+}
+inline void GuildMember::set_title_id(::uint64_t value) {
+  _internal_set_title_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GuildMember.title_id)
+}
+inline ::uint64_t GuildMember::_internal_title_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_id_;
+}
+inline void GuildMember::_internal_set_title_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GuildTitle
+
+// uint64 title_id = 1;
+inline void GuildTitle::clear_title_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t GuildTitle::title_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildTitle.title_id)
+  return _internal_title_id();
+}
+inline void GuildTitle::set_title_id(::uint64_t value) {
+  _internal_set_title_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GuildTitle.title_id)
+}
+inline ::uint64_t GuildTitle::_internal_title_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_id_;
+}
+inline void GuildTitle::_internal_set_title_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = value;
+}
+
+// string name = 2;
+inline void GuildTitle::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& GuildTitle::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildTitle.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildTitle::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GuildTitle.name)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildTitle::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildTitle.name)
+  return _s;
+}
+inline const ::std::string& GuildTitle::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void GuildTitle::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildTitle::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildTitle::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildTitle.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildTitle::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.GuildTitle.name)
+}
+
 // -------------------------------------------------------------------
 
 // Guild
@@ -5320,7 +6885,7 @@ inline void Guild::clear_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::uint64_t Guild::guild_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Guild.guild_id)
@@ -5328,7 +6893,7 @@ inline ::uint64_t Guild::guild_id() const {
 }
 inline void Guild::set_guild_id(::uint64_t value) {
   _internal_set_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Guild.guild_id)
 }
 inline ::uint64_t Guild::_internal_guild_id() const {
@@ -5345,7 +6910,7 @@ inline void Guild::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.name_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline const ::std::string& Guild::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -5355,13 +6920,13 @@ inline const ::std::string& Guild::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void Guild::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Guild.name)
 }
 inline ::std::string* PROTOBUF_NONNULL Guild::mutable_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_name();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.Guild.name)
   return _s;
@@ -5381,10 +6946,10 @@ inline ::std::string* PROTOBUF_NONNULL Guild::_internal_mutable_name() {
 inline ::std::string* PROTOBUF_NULLABLE Guild::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.Guild.name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.name_.Set("", GetArena());
@@ -5394,9 +6959,9 @@ inline ::std::string* PROTOBUF_NULLABLE Guild::release_name() {
 inline void Guild::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
@@ -5410,7 +6975,7 @@ inline void Guild::clear_channel_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::uint64_t Guild::channel_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Guild.channel_id)
@@ -5418,7 +6983,7 @@ inline ::uint64_t Guild::channel_id() const {
 }
 inline void Guild::set_channel_id(::uint64_t value) {
   _internal_set_channel_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Guild.channel_id)
 }
 inline ::uint64_t Guild::_internal_channel_id() const {
@@ -5435,7 +7000,7 @@ inline void Guild::clear_created_at_unix_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_unix_ms_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline ::int64_t Guild::created_at_unix_ms() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Guild.created_at_unix_ms)
@@ -5443,7 +7008,7 @@ inline ::int64_t Guild::created_at_unix_ms() const {
 }
 inline void Guild::set_created_at_unix_ms(::int64_t value) {
   _internal_set_created_at_unix_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.Guild.created_at_unix_ms)
 }
 inline ::int64_t Guild::_internal_created_at_unix_ms() const {
@@ -5559,6 +7124,62 @@ inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::ChatM
 Guild::_internal_mutable_recent_messages() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.recent_messages_;
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.GuildTitle titles = 7;
+inline int Guild::_internal_titles_size() const {
+  return _internal_titles().size();
+}
+inline int Guild::titles_size() const {
+  return _internal_titles_size();
+}
+inline void Guild::clear_titles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.titles_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL Guild::mutable_titles(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.Guild.titles)
+  return _internal_mutable_titles()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL Guild::mutable_titles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.Guild.titles)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_titles();
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildTitle& Guild::titles(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.Guild.titles)
+  return _internal_titles().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL Guild::add_titles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* _add =
+      _internal_mutable_titles()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.Guild.titles)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& Guild::titles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.Guild.titles)
+  return _internal_titles();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>&
+Guild::_internal_titles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.titles_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL
+Guild::_internal_mutable_titles() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.titles_;
 }
 
 // -------------------------------------------------------------------
@@ -5807,6 +7428,31 @@ inline ::uint32_t GuildLimits::_internal_name_max_length() const {
 inline void GuildLimits::_internal_set_name_max_length(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.name_max_length_ = value;
+}
+
+// uint32 max_titles = 5;
+inline void GuildLimits::clear_max_titles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_titles_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline ::uint32_t GuildLimits::max_titles() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildLimits.max_titles)
+  return _internal_max_titles();
+}
+inline void GuildLimits::set_max_titles(::uint32_t value) {
+  _internal_set_max_titles(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GuildLimits.max_titles)
+}
+inline ::uint32_t GuildLimits::_internal_max_titles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_titles_;
+}
+inline void GuildLimits::_internal_set_max_titles(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_titles_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -6287,6 +7933,91 @@ inline void GuildMemberRemoved::_internal_set_reason(::Dreamsleeve::Protocol::Ch
 
 // -------------------------------------------------------------------
 
+// GuildTitles
+
+// uint64 guild_id = 1;
+inline void GuildTitles::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t GuildTitles::guild_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildTitles.guild_id)
+  return _internal_guild_id();
+}
+inline void GuildTitles::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.GuildTitles.guild_id)
+}
+inline ::uint64_t GuildTitles::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void GuildTitles::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// repeated .Dreamsleeve.Protocol.Chat.GuildTitle titles = 2;
+inline int GuildTitles::_internal_titles_size() const {
+  return _internal_titles().size();
+}
+inline int GuildTitles::titles_size() const {
+  return _internal_titles_size();
+}
+inline void GuildTitles::clear_titles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.titles_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL GuildTitles::mutable_titles(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildTitles.titles)
+  return _internal_mutable_titles()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL GuildTitles::mutable_titles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:Dreamsleeve.Protocol.Chat.GuildTitles.titles)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_titles();
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildTitle& GuildTitles::titles(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildTitles.titles)
+  return _internal_titles().Get(index);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitle* PROTOBUF_NONNULL GuildTitles::add_titles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Dreamsleeve::Protocol::Chat::GuildTitle* _add =
+      _internal_mutable_titles()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:Dreamsleeve.Protocol.Chat.GuildTitles.titles)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>& GuildTitles::titles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:Dreamsleeve.Protocol.Chat.GuildTitles.titles)
+  return _internal_titles();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>&
+GuildTitles::_internal_titles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.titles_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Dreamsleeve::Protocol::Chat::GuildTitle>* PROTOBUF_NONNULL
+GuildTitles::_internal_mutable_titles() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.titles_;
+}
+
+// -------------------------------------------------------------------
+
 // GuildChanged
 
 // .Dreamsleeve.Protocol.Chat.Guild added = 1;
@@ -6730,6 +8461,88 @@ inline ::uint64_t GuildChanged::_internal_invite_removed() const {
     return _impl_.change_.invite_removed_;
   }
   return ::uint64_t{0u};
+}
+
+// .Dreamsleeve.Protocol.Chat.GuildTitles titles = 7;
+inline bool GuildChanged::has_titles() const {
+  return change_case() == kTitles;
+}
+inline bool GuildChanged::_internal_has_titles() const {
+  return change_case() == kTitles;
+}
+inline void GuildChanged::set_has_titles() {
+  _impl_._oneof_case_[0] = kTitles;
+}
+inline void GuildChanged::clear_titles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (change_case() == kTitles) {
+    if (GetArena() == nullptr) {
+      delete _impl_.change_.titles_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.change_.titles_);
+    }
+    clear_has_change();
+  }
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE GuildChanged::release_titles() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildChanged.titles)
+  if (change_case() == kTitles) {
+    clear_has_change();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildTitles*>(_impl_.change_.titles_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.change_.titles_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildTitles& GuildChanged::_internal_titles() const {
+  return change_case() == kTitles ? static_cast<const ::Dreamsleeve::Protocol::Chat::GuildTitles&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildTitles*>(_impl_.change_.titles_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::GuildTitles&>(::Dreamsleeve::Protocol::Chat::_GuildTitles_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::GuildTitles& GuildChanged::titles() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildChanged.titles)
+  return _internal_titles();
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE GuildChanged::unsafe_arena_release_titles() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.GuildChanged.titles)
+  if (change_case() == kTitles) {
+    clear_has_change();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildTitles*>(_impl_.change_.titles_);
+    _impl_.change_.titles_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GuildChanged::unsafe_arena_set_allocated_titles(
+    ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_change();
+  if (value) {
+    set_has_titles();
+    _impl_.change_.titles_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GuildChanged.titles)
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NONNULL GuildChanged::_internal_mutable_titles() {
+  if (change_case() != kTitles) {
+    clear_change();
+    set_has_titles();
+    _impl_.change_.titles_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::GuildTitles>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::GuildTitles*>(_impl_.change_.titles_);
+}
+inline ::Dreamsleeve::Protocol::Chat::GuildTitles* PROTOBUF_NONNULL GuildChanged::mutable_titles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::GuildTitles* _msg = _internal_mutable_titles();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildChanged.titles)
+  return _msg;
 }
 
 inline bool GuildChanged::has_change() const {
@@ -7363,6 +9176,356 @@ inline ::uint64_t DisbandGuild::_internal_guild_id() const {
 inline void DisbandGuild::_internal_set_guild_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CreateGuildTitle
+
+// uint64 guild_id = 1;
+inline void CreateGuildTitle::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t CreateGuildTitle::guild_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.CreateGuildTitle.guild_id)
+  return _internal_guild_id();
+}
+inline void CreateGuildTitle::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.CreateGuildTitle.guild_id)
+}
+inline ::uint64_t CreateGuildTitle::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void CreateGuildTitle::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// string name = 2;
+inline void CreateGuildTitle::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& CreateGuildTitle::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.CreateGuildTitle.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CreateGuildTitle::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.CreateGuildTitle.name)
+}
+inline ::std::string* PROTOBUF_NONNULL CreateGuildTitle::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.CreateGuildTitle.name)
+  return _s;
+}
+inline const ::std::string& CreateGuildTitle::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void CreateGuildTitle::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CreateGuildTitle::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CreateGuildTitle::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.CreateGuildTitle.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CreateGuildTitle::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.CreateGuildTitle.name)
+}
+
+// -------------------------------------------------------------------
+
+// RenameGuildTitle
+
+// uint64 guild_id = 1;
+inline void RenameGuildTitle::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t RenameGuildTitle::guild_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.RenameGuildTitle.guild_id)
+  return _internal_guild_id();
+}
+inline void RenameGuildTitle::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.RenameGuildTitle.guild_id)
+}
+inline ::uint64_t RenameGuildTitle::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void RenameGuildTitle::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// uint64 title_id = 2;
+inline void RenameGuildTitle::clear_title_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t RenameGuildTitle::title_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.RenameGuildTitle.title_id)
+  return _internal_title_id();
+}
+inline void RenameGuildTitle::set_title_id(::uint64_t value) {
+  _internal_set_title_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.RenameGuildTitle.title_id)
+}
+inline ::uint64_t RenameGuildTitle::_internal_title_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_id_;
+}
+inline void RenameGuildTitle::_internal_set_title_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = value;
+}
+
+// string name = 3;
+inline void RenameGuildTitle::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& RenameGuildTitle::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.RenameGuildTitle.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RenameGuildTitle::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.RenameGuildTitle.name)
+}
+inline ::std::string* PROTOBUF_NONNULL RenameGuildTitle::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.RenameGuildTitle.name)
+  return _s;
+}
+inline const ::std::string& RenameGuildTitle::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void RenameGuildTitle::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RenameGuildTitle::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RenameGuildTitle::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.RenameGuildTitle.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RenameGuildTitle::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Chat.RenameGuildTitle.name)
+}
+
+// -------------------------------------------------------------------
+
+// DeleteGuildTitle
+
+// uint64 guild_id = 1;
+inline void DeleteGuildTitle::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint64_t DeleteGuildTitle::guild_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.DeleteGuildTitle.guild_id)
+  return _internal_guild_id();
+}
+inline void DeleteGuildTitle::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.DeleteGuildTitle.guild_id)
+}
+inline ::uint64_t DeleteGuildTitle::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void DeleteGuildTitle::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// uint64 title_id = 2;
+inline void DeleteGuildTitle::clear_title_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t DeleteGuildTitle::title_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.DeleteGuildTitle.title_id)
+  return _internal_title_id();
+}
+inline void DeleteGuildTitle::set_title_id(::uint64_t value) {
+  _internal_set_title_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.DeleteGuildTitle.title_id)
+}
+inline ::uint64_t DeleteGuildTitle::_internal_title_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_id_;
+}
+inline void DeleteGuildTitle::_internal_set_title_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetGuildMemberTitle
+
+// uint64 guild_id = 1;
+inline void SetGuildMemberTitle::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint64_t SetGuildMemberTitle::guild_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.guild_id)
+  return _internal_guild_id();
+}
+inline void SetGuildMemberTitle::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.guild_id)
+}
+inline ::uint64_t SetGuildMemberTitle::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void SetGuildMemberTitle::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// uint64 player_id = 2;
+inline void SetGuildMemberTitle::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint64_t SetGuildMemberTitle::player_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.player_id)
+  return _internal_player_id();
+}
+inline void SetGuildMemberTitle::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.player_id)
+}
+inline ::uint64_t SetGuildMemberTitle::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void SetGuildMemberTitle::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// optional uint64 title_id = 3;
+inline bool SetGuildMemberTitle::has_title_id() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  return value;
+}
+inline void SetGuildMemberTitle::clear_title_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint64_t SetGuildMemberTitle::title_id() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.title_id)
+  return _internal_title_id();
+}
+inline void SetGuildMemberTitle::set_title_id(::uint64_t value) {
+  _internal_set_title_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.title_id)
+}
+inline ::uint64_t SetGuildMemberTitle::_internal_title_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_id_;
+}
+inline void SetGuildMemberTitle::_internal_set_title_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -8186,6 +10349,334 @@ inline ::Dreamsleeve::Protocol::Chat::DisbandGuild* PROTOBUF_NONNULL GuildComman
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::Dreamsleeve::Protocol::Chat::DisbandGuild* _msg = _internal_mutable_disband();
   // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildCommand.disband)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.CreateGuildTitle create_title = 11;
+inline bool GuildCommand::has_create_title() const {
+  return action_case() == kCreateTitle;
+}
+inline bool GuildCommand::_internal_has_create_title() const {
+  return action_case() == kCreateTitle;
+}
+inline void GuildCommand::set_has_create_title() {
+  _impl_._oneof_case_[0] = kCreateTitle;
+}
+inline void GuildCommand::clear_create_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kCreateTitle) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.create_title_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.create_title_);
+    }
+    clear_has_action();
+  }
+}
+inline ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE GuildCommand::release_create_title() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildCommand.create_title)
+  if (action_case() == kCreateTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CreateGuildTitle*>(_impl_.action_.create_title_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.create_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle& GuildCommand::_internal_create_title() const {
+  return action_case() == kCreateTitle ? static_cast<const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::CreateGuildTitle*>(_impl_.action_.create_title_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle&>(::Dreamsleeve::Protocol::Chat::_CreateGuildTitle_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::CreateGuildTitle& GuildCommand::create_title() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildCommand.create_title)
+  return _internal_create_title();
+}
+inline ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE GuildCommand::unsafe_arena_release_create_title() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.GuildCommand.create_title)
+  if (action_case() == kCreateTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::CreateGuildTitle*>(_impl_.action_.create_title_);
+    _impl_.action_.create_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GuildCommand::unsafe_arena_set_allocated_create_title(
+    ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_create_title();
+    _impl_.action_.create_title_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GuildCommand.create_title)
+}
+inline ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NONNULL GuildCommand::_internal_mutable_create_title() {
+  if (action_case() != kCreateTitle) {
+    clear_action();
+    set_has_create_title();
+    _impl_.action_.create_title_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::CreateGuildTitle>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::CreateGuildTitle*>(_impl_.action_.create_title_);
+}
+inline ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* PROTOBUF_NONNULL GuildCommand::mutable_create_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::CreateGuildTitle* _msg = _internal_mutable_create_title();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildCommand.create_title)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.RenameGuildTitle rename_title = 12;
+inline bool GuildCommand::has_rename_title() const {
+  return action_case() == kRenameTitle;
+}
+inline bool GuildCommand::_internal_has_rename_title() const {
+  return action_case() == kRenameTitle;
+}
+inline void GuildCommand::set_has_rename_title() {
+  _impl_._oneof_case_[0] = kRenameTitle;
+}
+inline void GuildCommand::clear_rename_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kRenameTitle) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.rename_title_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.rename_title_);
+    }
+    clear_has_action();
+  }
+}
+inline ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE GuildCommand::release_rename_title() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildCommand.rename_title)
+  if (action_case() == kRenameTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::RenameGuildTitle*>(_impl_.action_.rename_title_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.rename_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle& GuildCommand::_internal_rename_title() const {
+  return action_case() == kRenameTitle ? static_cast<const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::RenameGuildTitle*>(_impl_.action_.rename_title_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle&>(::Dreamsleeve::Protocol::Chat::_RenameGuildTitle_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::RenameGuildTitle& GuildCommand::rename_title() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildCommand.rename_title)
+  return _internal_rename_title();
+}
+inline ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE GuildCommand::unsafe_arena_release_rename_title() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.GuildCommand.rename_title)
+  if (action_case() == kRenameTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::RenameGuildTitle*>(_impl_.action_.rename_title_);
+    _impl_.action_.rename_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GuildCommand::unsafe_arena_set_allocated_rename_title(
+    ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_rename_title();
+    _impl_.action_.rename_title_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GuildCommand.rename_title)
+}
+inline ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NONNULL GuildCommand::_internal_mutable_rename_title() {
+  if (action_case() != kRenameTitle) {
+    clear_action();
+    set_has_rename_title();
+    _impl_.action_.rename_title_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::RenameGuildTitle>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::RenameGuildTitle*>(_impl_.action_.rename_title_);
+}
+inline ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* PROTOBUF_NONNULL GuildCommand::mutable_rename_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::RenameGuildTitle* _msg = _internal_mutable_rename_title();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildCommand.rename_title)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.DeleteGuildTitle delete_title = 13;
+inline bool GuildCommand::has_delete_title() const {
+  return action_case() == kDeleteTitle;
+}
+inline bool GuildCommand::_internal_has_delete_title() const {
+  return action_case() == kDeleteTitle;
+}
+inline void GuildCommand::set_has_delete_title() {
+  _impl_._oneof_case_[0] = kDeleteTitle;
+}
+inline void GuildCommand::clear_delete_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kDeleteTitle) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.delete_title_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.delete_title_);
+    }
+    clear_has_action();
+  }
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE GuildCommand::release_delete_title() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildCommand.delete_title)
+  if (action_case() == kDeleteTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteGuildTitle*>(_impl_.action_.delete_title_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.delete_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle& GuildCommand::_internal_delete_title() const {
+  return action_case() == kDeleteTitle ? static_cast<const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteGuildTitle*>(_impl_.action_.delete_title_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle&>(::Dreamsleeve::Protocol::Chat::_DeleteGuildTitle_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle& GuildCommand::delete_title() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildCommand.delete_title)
+  return _internal_delete_title();
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE GuildCommand::unsafe_arena_release_delete_title() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.GuildCommand.delete_title)
+  if (action_case() == kDeleteTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteGuildTitle*>(_impl_.action_.delete_title_);
+    _impl_.action_.delete_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GuildCommand::unsafe_arena_set_allocated_delete_title(
+    ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_delete_title();
+    _impl_.action_.delete_title_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GuildCommand.delete_title)
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NONNULL GuildCommand::_internal_mutable_delete_title() {
+  if (action_case() != kDeleteTitle) {
+    clear_action();
+    set_has_delete_title();
+    _impl_.action_.delete_title_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::DeleteGuildTitle>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::DeleteGuildTitle*>(_impl_.action_.delete_title_);
+}
+inline ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* PROTOBUF_NONNULL GuildCommand::mutable_delete_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::DeleteGuildTitle* _msg = _internal_mutable_delete_title();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildCommand.delete_title)
+  return _msg;
+}
+
+// .Dreamsleeve.Protocol.Chat.SetGuildMemberTitle set_title = 14;
+inline bool GuildCommand::has_set_title() const {
+  return action_case() == kSetTitle;
+}
+inline bool GuildCommand::_internal_has_set_title() const {
+  return action_case() == kSetTitle;
+}
+inline void GuildCommand::set_has_set_title() {
+  _impl_._oneof_case_[0] = kSetTitle;
+}
+inline void GuildCommand::clear_set_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kSetTitle) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.set_title_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.set_title_);
+    }
+    clear_has_action();
+  }
+}
+inline ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE GuildCommand::release_set_title() {
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Chat.GuildCommand.set_title)
+  if (action_case() == kSetTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle*>(_impl_.action_.set_title_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.set_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle& GuildCommand::_internal_set_title() const {
+  return action_case() == kSetTitle ? static_cast<const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle&>(*reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle*>(_impl_.action_.set_title_))
+                     : reinterpret_cast<const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle&>(::Dreamsleeve::Protocol::Chat::_SetGuildMemberTitle_default_instance_);
+}
+inline const ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle& GuildCommand::set_title() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Chat.GuildCommand.set_title)
+  return _internal_set_title();
+}
+inline ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE GuildCommand::unsafe_arena_release_set_title() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:Dreamsleeve.Protocol.Chat.GuildCommand.set_title)
+  if (action_case() == kSetTitle) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle*>(_impl_.action_.set_title_);
+    _impl_.action_.set_title_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GuildCommand::unsafe_arena_set_allocated_set_title(
+    ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_set_title();
+    _impl_.action_.set_title_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:Dreamsleeve.Protocol.Chat.GuildCommand.set_title)
+}
+inline ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NONNULL GuildCommand::_internal_mutable_set_title() {
+  if (action_case() != kSetTitle) {
+    clear_action();
+    set_has_set_title();
+    _impl_.action_.set_title_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle>(GetArena()));
+  }
+  return reinterpret_cast<::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle*>(_impl_.action_.set_title_);
+}
+inline ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* PROTOBUF_NONNULL GuildCommand::mutable_set_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::Dreamsleeve::Protocol::Chat::SetGuildMemberTitle* _msg = _internal_mutable_set_title();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Chat.GuildCommand.set_title)
   return _msg;
 }
 

@@ -154,9 +154,11 @@ function guildMember(v: unknown): boolean {
     time(v.joinedAt) &&
     optional((m) => object(m) && label(m.reason) && optional(time)(m.until))(
       v.mute,
-    )
+    ) &&
+    optional(id)(v.title)
   );
 }
+const guildTitle = (v: unknown) => object(v) && id(v.id) && label(v.name);
 function guild(v: unknown): boolean {
   return (
     object(v) &&
@@ -164,7 +166,8 @@ function guild(v: unknown): boolean {
     label(v.name) &&
     id(v.channelId) &&
     time(v.createdAt) &&
-    list(v.members, guildMember, 4096)
+    list(v.members, guildMember, 4096) &&
+    list(v.titles, guildTitle, 128)
   );
 }
 function guildInvite(v: unknown): boolean {
@@ -182,7 +185,8 @@ const guildLimits = (v: unknown) =>
   count(v.perPlayer) &&
   count(v.members) &&
   count(v.nameMin) &&
-  count(v.nameMax);
+  count(v.nameMax) &&
+  count(v.titles);
 const guildRemoval = (v: unknown) =>
   object(v) &&
   id(v.guildId) &&

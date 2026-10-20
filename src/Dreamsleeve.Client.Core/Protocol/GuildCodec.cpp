@@ -84,6 +84,36 @@ namespace Dreamsleeve::Client::Wire::Detail
       {
         target.mutable_disband()->set_guild_id(value.guildId);
       }
+
+      void operator()(const CreateGuildTitle& value) const
+      {
+        auto& create = *target.mutable_create_title();
+        create.set_guild_id(value.guildId);
+        create.set_name(value.name);
+      }
+
+      void operator()(const RenameGuildTitle& value) const
+      {
+        auto& rename = *target.mutable_rename_title();
+        rename.set_guild_id(value.guildId);
+        rename.set_title_id(value.titleId);
+        rename.set_name(value.name);
+      }
+
+      void operator()(const DeleteGuildTitle& value) const
+      {
+        auto& removal = *target.mutable_delete_title();
+        removal.set_guild_id(value.guildId);
+        removal.set_title_id(value.titleId);
+      }
+
+      void operator()(const SetGuildMemberTitle& value) const
+      {
+        auto& assignment = *target.mutable_set_title();
+        assignment.set_guild_id(value.guildId);
+        assignment.set_player_id(value.playerId);
+        if (value.titleId) assignment.set_title_id(*value.titleId);
+      }
     };
 
     Result<Domain::GuildRemovalReason> Removal(int value)
@@ -102,9 +132,27 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!P::GuildRole_IsValid(source.role()) || source.role() == P::GUILD_ROLE_UNSPECIFIED) return Invalid("role");
       if (!ValidUnixMs(source.joined_at_unix_ms())) return Invalid("joined_at_unix_ms");
 
+      if (source.has_title_id() && source.title_id() == Domain::InvalidId) return Invalid("title_id");
+
       Domain::GuildMember result{std::move(*profile), static_cast<Domain::GuildRole>(source.role()), source.online()};
       if (source.has_mute()) result.mute = Mute(source.mute());
       result.joinedAtUnixMs = source.joined_at_unix_ms();
+      if (source.has_title_id()) result.titleId = source.title_id();
+      return result;
+    }
+
+    // A guild's custom roles: each ID once, each with a name.
+    Result<std::vector<Domain::GuildTitle>> Titles(const google::protobuf::RepeatedPtrField<P::GuildTitle>& source)
+    {
+      std::vector<Domain::GuildTitle> result;
+      result.reserve(static_cast<std::size_t>(source.size()));
+      for (const auto& title : source)
+      {
+        if (title.title_id() == Domain::InvalidId || std::ranges::contains(result, title.title_id(), &Domain::GuildTitle::titleId))
+          return Invalid("title_id");
+        if (title.name().empty()) return Invalid("name");
+        result.push_back({title.title_id(), title.name()});
+      }
       return result;
     }
 
@@ -135,6 +183,9 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!message) return std::unexpected{message.error()};
         result.recentMessages.push_back(std::move(*message));
       }
+      auto titles = Titles(source.titles());
+      if (!titles) return std::unexpected{titles.error()};
+      result.guild.titles = std::move(*titles);
       return result;
     }
 
@@ -161,7 +212,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     GuildsSnapshot result{
         {},
         {},
-        {limits.max_guilds_per_player(), limits.max_members(), limits.name_min_length(), limits.name_max_length()}
+        {limits.max_guilds_per_player(), limits.max_members(), limits.name_min_length(), limits.name_max_length(), limits.max_titles()}
     };
     for (const auto& value : source.guilds())
     {
@@ -224,6 +275,15 @@ namespace Dreamsleeve::Client::Wire::Detail
       case P::GuildChanged::kInviteRemoved:
         if (source.invite_removed() == Domain::InvalidId) return Invalid("invite_removed");
         return GuildChanged{GuildInviteRemoved{source.invite_removed()}};
+      case P::GuildChanged::kTitles: {
+        const auto& changed = source.titles();
+        if (changed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        auto titles = Titles(changed.titles());
+        if (!titles) return std::unexpected{titles.error()};
+        return GuildChanged{
+            GuildTitlesChanged{changed.guild_id(), std::move(*titles)}
+        };
+      }
       case P::GuildChanged::CHANGE_NOT_SET:
         return Invalid("change");
       default:

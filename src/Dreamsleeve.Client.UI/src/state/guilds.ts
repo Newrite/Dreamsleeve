@@ -36,7 +36,7 @@ export interface GuildsState {
 export const idleGuilds: GuildsState = {
   guilds: [],
   invites: [],
-  guildLimits: { perPlayer: 0, members: 0, nameMin: 0, nameMax: 0 },
+  guildLimits: { perPlayer: 0, members: 0, nameMin: 0, nameMax: 0, titles: 0 },
   guildsKnown: false,
   guildRequests: {},
   selectedGuild: null,
@@ -53,6 +53,11 @@ export const memberOf = (guild: Guild, playerId: string) =>
   guild.members.find((m) => m.id === playerId);
 export const roleOf = (guild: Guild, playerId: string) =>
   memberOf(guild, playerId)?.role;
+// The name of the custom role a member holds, if any.
+export const titleName = (guild: Guild, titleId?: string) =>
+  titleId === undefined
+    ? undefined
+    : guild.titles.find((t) => t.id === titleId)?.name;
 export const guildOfChannel = (guilds: Guild[], channelId: string) =>
   guilds.find((g) => g.channelId === channelId);
 // The rules of the server's guild owner, so the page offers only what it
@@ -126,6 +131,13 @@ export function guildNotices(
       );
     if (was?.mute && now && !now.mute)
       notices.push(`Мут в гильдии «${guild.name}» снят`);
+    const title = titleName(guild, now?.title);
+    if (was && now && was.title !== now.title)
+      notices.push(
+        title
+          ? `Ваша роль в гильдии «${guild.name}»: «${title}»`
+          : `Роль «${titleName(previous, was.title) ?? ""}» в гильдии «${guild.name}» снята`,
+      );
     const master = guild.members.find((m) => m.role === "master");
     const previousMaster = previous.members.find((m) => m.role === "master");
     if (master && master.id !== previousMaster?.id && master.id !== selfId)
@@ -193,6 +205,16 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
         return `${label}: мут в гильдии снят`;
       case "disband":
         return `Гильдия «${label}» распущена`;
+      case "createTitle":
+        return `Роль «${action.name}» создана`;
+      case "renameTitle":
+        return `Роль «${label}» теперь «${action.name}»`;
+      case "deleteTitle":
+        return `Роль «${label}» удалена`;
+      case "setTitle":
+        return action.titleId === undefined
+          ? `${label}: роль снята`
+          : `${label}: роль выдана`;
     }
   }
   function result(event: GuildResult) {
@@ -287,6 +309,35 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
     },
     disband(guildId: string) {
       request({ action: "disband", guildId }, guildName(guildId));
+    },
+    createTitle(guildId: string, name: string) {
+      const value = name.trim();
+      if (value) request({ action: "createTitle", guildId, name: value });
+    },
+    renameTitle(guildId: string, titleId: string, name: string, was: string) {
+      const value = name.trim();
+      if (value)
+        request({ action: "renameTitle", guildId, titleId, name: value }, was);
+    },
+    deleteTitle(guildId: string, titleId: string, name: string) {
+      request({ action: "deleteTitle", guildId, titleId }, name);
+    },
+    // No titleId takes the member's custom role away.
+    setTitle(
+      guildId: string,
+      playerId: string,
+      titleId: string | undefined,
+      name: string,
+    ) {
+      request(
+        {
+          action: "setTitle",
+          guildId,
+          playerId,
+          ...(titleId === undefined ? {} : { titleId }),
+        },
+        name,
+      );
     },
     openMute(guildId: string, playerId: string, name: string) {
       store.setState({

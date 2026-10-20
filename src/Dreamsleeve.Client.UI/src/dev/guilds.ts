@@ -15,6 +15,7 @@ const LIMITS: GuildLimits = {
   members: 64,
   nameMin: 3,
   nameMax: 24,
+  titles: 10,
 };
 type GuildRemoval = Extract<HostEvent, { type: "guilds" }>["removed"][number];
 type GuildCommand = Extract<Command, { type: "guild" }>;
@@ -48,8 +49,12 @@ export function makeGuildStand(
       createdAt: now - 30 * 86400000,
       members: [
         member(self, "master"),
-        member(players[1], "officer"),
+        { ...member(players[1], "officer"), title: "1" },
         member(players[2], "member", false),
+      ],
+      titles: [
+        { id: "1", name: "Казначей" },
+        { id: "2", name: "Новобранец" },
       ],
     },
     {
@@ -61,6 +66,7 @@ export function makeGuildStand(
         member(players[2], "master"),
         { ...member(self, "member"), mute: undefined },
       ],
+      titles: [],
     },
   ];
   const invites: GuildInvite[] = [
@@ -73,6 +79,11 @@ export function makeGuildStand(
     },
   ];
   let nextGuild = 10;
+  let nextTitle = 10;
+  const titleTaken = (guild: Guild, name: string, except?: string) =>
+    guild.titles.some(
+      (t) => t.id !== except && t.name.toLowerCase() === name.toLowerCase(),
+    );
   const channels = (): Channel[] =>
     guilds.map((g) => ({
       id: g.channelId,
@@ -120,6 +131,7 @@ export function makeGuildStand(
           channelId: String(GUILD_BASE + Number(id)),
           createdAt: Date.now(),
           members: [member(self, "master")],
+          titles: [],
         });
         changed(true);
         return undefined;
@@ -135,6 +147,7 @@ export function makeGuildStand(
             channelId: String(GUILD_BASE + Number(invite.guildId)),
             createdAt: Date.now() - 365 * 86400000,
             members: [member(players[1], "master"), member(self, "member")],
+            titles: [],
           });
         changed(c.accept);
         return undefined;
@@ -151,6 +164,32 @@ export function makeGuildStand(
         return undefined;
       case "disband":
         remove(c.guildId, "disbanded");
+        return undefined;
+      case "createTitle":
+        if (!guild) return "Гильдия не найдена";
+        if (guild.titles.length >= LIMITS.titles)
+          return "В гильдии уже предельное число ролей";
+        if (titleTaken(guild, c.name))
+          return "В гильдии уже есть роль с таким названием";
+        guild.titles.push({ id: String(nextTitle++), name: c.name });
+        changed(false);
+        return undefined;
+      case "renameTitle": {
+        const title = guild?.titles.find((t) => t.id === c.titleId);
+        if (!guild || !title) return "Такой роли в гильдии уже нет";
+        if (titleTaken(guild, c.name, c.titleId))
+          return "В гильдии уже есть роль с таким названием";
+        title.name = c.name;
+        changed(false);
+        return undefined;
+      }
+      case "deleteTitle":
+        if (!guild?.titles.some((t) => t.id === c.titleId))
+          return "Такой роли в гильдии уже нет";
+        guild.titles = guild.titles.filter((t) => t.id !== c.titleId);
+        for (const m of guild.members)
+          if (m.title === c.titleId) delete m.title;
+        changed(false);
         return undefined;
       default:
         if (!guild || !target)
@@ -169,7 +208,10 @@ export function makeGuildStand(
               ? {}
               : { until: Date.now() + c.minutes * 60000 }),
           };
-        else delete target.mute;
+        else if (c.action === "setTitle") {
+          if (c.titleId === undefined) delete target.title;
+          else target.title = c.titleId;
+        } else delete target.mute;
         changed(false);
         return undefined;
     }

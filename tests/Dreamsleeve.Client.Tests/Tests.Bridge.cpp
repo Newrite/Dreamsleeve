@@ -48,10 +48,7 @@ namespace
   // The web UI's view of the bridge tables.
   std::string BridgeModule()
   {
-    return "// Generated from src/Dreamsleeve.Client/Host/Bridge.ixx by the native test\n"
-           "// \"The web UI bridge module is generated from the bridge tables\"; do not edit.\n"
-           "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n\n"
-           "// The \"type\" of every host event and UI command.\n" +
+    return "// Generated from src/Dreamsleeve.Client/Host/Bridge.ixx by the native test\n" "// \"The web UI bridge module is generated from the bridge tables\"; do not edit.\n" "// Regenerate: set DREAMSLEEVE_WRITE_GENERATED=1 and run Dreamsleeve.Client.Tests.\n\n" "// The \"type\" of every host event and UI command.\n" +
            List("eventTypes", Bridge::EventNames) + List("commandTypes", Bridge::CommandNames) + "\n// Enum strings of the events.\n" +
            List("connectionPhases", Bridge::PhaseNames) + List("authOperations", Bridge::OperationNames) +
            List("authFailures", Bridge::FailureNames) + List("announcementOrigins", Bridge::OriginNames) +
@@ -61,13 +58,7 @@ namespace
            List("guildRoles", Bridge::GuildRoleNames) + List("guildRemovalReasons", Bridge::GuildRemovalNames) +
            List("guildActions", Bridge::GuildActionNames) +
            std::format(
-             "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n"
-             "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n"
-             "export const maxText = {};\n"
-             "export const maxSnapshotRows = {};\n"
-             "export const maxError = {};\n"
-             "// Bytes of a moderator's reason the host accepts; the server's limit is smaller.\n"
-             "export const maxReason = {};\n",
+             "\n// Bounds of text the host sends: chat and mark text, snapshot lines per\n" "// channel, error strings (UTF-8 bytes, never more UTF-16 units).\n" "export const maxText = {};\n" "export const maxSnapshotRows = {};\n" "export const maxError = {};\n" "// Bytes of a moderator's reason the host accepts; the server's limit is smaller.\n" "export const maxReason = {};\n",
              Bridge::MaxChatText,
              Bridge::MaxSnapshotRows,
              Bridge::MaxErrorBytes,
@@ -117,11 +108,15 @@ namespace
   Domain::GroundMark SampleMark(Domain::GroundMarkKind kind, std::string text)
   {
     Domain::GroundMark mark;
-    mark.markId        = kind == Domain::GroundMarkKind::Note ? 3 : 4;
-    mark.author        = {7, "seven", "Seven"};
-    mark.kind          = kind;
-    mark.text          = std::move(text);
-    mark.placement     = {{"skyrim.esm", 0x1A26F}, {100, 200, 300}, 1.5f};
+    mark.markId    = kind == Domain::GroundMarkKind::Note ? 3 : 4;
+    mark.author    = {7, "seven", "Seven"};
+    mark.kind      = kind;
+    mark.text      = std::move(text);
+    mark.placement = {
+        {"skyrim.esm", 0x1A26F},
+        {100, 200, 300},
+        1.5f
+    };
     mark.createdAt     = Domain::FromUnixMilliseconds(1700000000000);
     mark.characterName = "Nerevar";
     mark.gameDate      = Domain::GameDate{4, 201, 8, 17, 2, 10, 30};
@@ -144,7 +139,13 @@ namespace
     const UiSettings settings;
     const auto       player = Bridge::ToUiPlayer(SamplePlayer(), names, settings);
 
-    Domain::ChatMessage chat{11, 1, Domain::PlayerData{7, "seven", "Seven", false, 0xE57373}, "Привет, Вайтран", Domain::FromUnixMilliseconds(1700000000000)};
+    Domain::ChatMessage chat{
+        11,
+        1,
+        Domain::PlayerData{7, "seven", "Seven", false, 0xE57373},
+        "Привет, Вайтран",
+        Domain::FromUnixMilliseconds(1700000000000)
+    };
     chat.characterName = "Nerevar";
     Domain::ChatMessage notice{12, 2, std::nullopt, "Сервер перезапустится", Domain::FromUnixMilliseconds(1700000001000)};
     notice.announcement = Domain::Announcement{Domain::AnnouncementSource::Server, Domain::AnnouncementKind::Admin, {}};
@@ -163,14 +164,15 @@ namespace
 
     return {
         Bridge::SnapshotEvent{
-                              .channels             = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
-                              .messages             = messages,
-                              .players              = {player},
-                              .selfId               = "1",
+                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global), Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)},
+                              .messages = messages,
+                              .players  = {player},
+                              .selfId   = "1",
                               .serverName           = "Tamriel",
                               .groundMarksSupported = true,
                               .groundMarks          = {own},
-                              .nearbyMarks          = {nearby}},
+                              .nearbyMarks          = {nearby}
+        },
         Bridge::MessagesEvent{.messages = messages},
         Bridge::PlayersEvent{.players = {player}},
         Bridge::ConnectionState(signedIn),
@@ -188,28 +190,37 @@ namespace
         Bridge::NameColorEvent{.changed = "#E57373"},
         Bridge::RoutesEvent{.routes = {"Основной", "Прокси"}, .active = "Прокси", .chosen = "", .reached = true},
         Bridge::MuteEvent{.muted = true, .reason = "Флуд", .until = 1700000900000},
-        Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}),
+        Bridge::Ended({Domain::SessionEndReason::Banned, "Читы", 1700086400000}
+        ),
         Bridge::RoleEvent{.moderator = true},
         Bridge::MessagesRemovedEvent{.channelId = "1", .messageIds = {"11"}},
         Bridge::ModerationResultEvent{.requestId = "m1", .sanctions = SampleSanctions()},
         Bridge::GuildsEvent{
-                              .guilds  = {{"4",
-                         "Вороны",
-                         "4294967300",
-                         1700000000000,
-                         {Bridge::ToUiGuildMember({{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000}, names, settings),
-                          Bridge::ToUiGuildMember(
-                            {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
-                            names,
-                            settings)}}},
+                              .guilds =
+              {{"4",
+                "Вороны",
+                "4294967300",
+                1700000000000,
+                {Bridge::ToUiGuildMember(
+                   {{7, "seven", "Seven"}, Domain::GuildRole::Master, true, std::nullopt, 1700000000000, 2},
+                   names,
+                   settings),
+                 Bridge::ToUiGuildMember(
+                   {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
+                   names,
+                   settings)},
+                {{"2", "Казначей"}}}},
                               .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
-                              .limits  = {3, 64, 3, 24},
-                              .removed = {{"6", "Изгнанники", "excluded"}}},
+                              .limits  = {3, 64, 3, 24, 10},
+                              .removed = {{"6", "Изгнанники", "excluded"}}
+        },
         Bridge::GuildResultEvent{.requestId = "g1", .guildId = "4"},
         Bridge::ChannelsEvent{
-                              .channels = {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
-                         Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
-                         Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}},
+                              .channels =
+              {Bridge::ToUiChannel(1, Domain::ChatChannelKind::Global),
+               Bridge::ToUiChannel(Domain::GuildChannelBase + 4, Domain::ChatChannelKind::Guild, "Вороны"),
+               Bridge::ToUiChannel(2, Domain::ChatChannelKind::System)}
+        },
         Bridge::ShowEvent{},
         Bridge::HideEvent{},
         Bridge::ActivateEvent{},
@@ -264,9 +275,9 @@ TEST_CASE("The web UI bridge module is generated from the bridge tables")
 
 TEST_CASE("Every host event has a sample for the web UI parser")
 {
-  const auto        samples = SampleEvents();
+  const auto            samples = SampleEvents();
   std::set<std::size_t> kinds;
-  std::string       text = "[\n";
+  std::string           text = "[\n";
   for (const auto& event : samples)
   {
     kinds.insert(event.index());

@@ -111,7 +111,7 @@ namespace Dreamsleeve.Protocol.Chat {
             "b24YASABKA0SOQoGc2FtcGxlGAIgASgLMikuRHJlYW1zbGVldmUuUHJvdG9j",
             "b2wuQ2hhdC5Nb3ZlbWVudFNhbXBsZSJsChRTZXJ2ZXJNb3ZlbWVudFBhY2tl",
             "dBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEjoKCW1vdmVtZW50cxgCIAEo",
-            "CzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyc01vdmVkKqsK",
+            "CzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUGxheWVyc01vdmVkKowL",
             "ChRSZXF1ZXN0UmVqZWN0aW9uQ29kZRImCiJSRVFVRVNUX1JFSkVDVElPTl9D",
             "T0RFX1VOU1BFQ0lGSUVEEAASKgomUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9J",
             "TlZBTElEX1JFUVVFU1QQARIsCihSRVFVRVNUX1JFSkVDVElPTl9DT0RFX1NF",
@@ -141,7 +141,9 @@ namespace Dreamsleeve.Protocol.Chat {
             "TUJFUhAYEjAKLFJFUVVFU1RfUkVKRUNUSU9OX0NPREVfR1VJTERfQUxSRUFE",
             "WV9JTlZJVEVEEBkSLQopUkVRVUVTVF9SRUpFQ1RJT05fQ09ERV9HVUlMRF9N",
             "QVNURVJfU1RBWVMQGhIwCixSRVFVRVNUX1JFSkVDVElPTl9DT0RFX05BTUVf",
-            "Q09MT1JfVU5SRUFEQUJMRRAbYgZwcm90bzM="));
+            "Q09MT1JfVU5SRUFEQUJMRRAbEjEKLVJFUVVFU1RfUkVKRUNUSU9OX0NPREVf",
+            "R1VJTERfVElUTEVfTkFNRV9UQUtFThAcEiwKKFJFUVVFU1RfUkVKRUNUSU9O",
+            "X0NPREVfR1VJTERfVElUTEVTX0ZVTEwQHWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.PlayerReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.GroundReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ModerationReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.RequestRejectionCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -274,13 +276,22 @@ namespace Dreamsleeve.Protocol.Chat {
     /// The name color is too dark to read in chat.
     /// </summary>
     [pbr::OriginalName("REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE")] NameColorUnreadable = 27,
+    /// <summary>
+    /// Another custom role of the guild has the name, in any case.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_GUILD_TITLE_NAME_TAKEN")] GuildTitleNameTaken = 28,
+    /// <summary>
+    /// The guild has the maximum number of custom roles.
+    /// </summary>
+    [pbr::OriginalName("REQUEST_REJECTION_CODE_GUILD_TITLES_FULL")] GuildTitlesFull = 29,
   }
 
   #endregion
 
   #region Messages
   /// <summary>
-  /// Control/chat envelope. Version 20 colors player names in chat;
+  /// Control/chat envelope. Version 21 gives guilds custom roles;
+  /// version 20 colors player names in chat;
   /// version 19 adds guilds;
   /// version 18 lets a moderator's ban cover the player's devices;
   /// version 17 ends sessions from a banned IP range;

@@ -197,7 +197,7 @@ private:
       Update,
       Mark,
       Identity,
-      Profile, // A display name or a name color: the server takes one at a time.
+      Profile,  // A display name or a name color: the server takes one at a time.
       Moderation,
       Deletion,
       Guild
@@ -516,6 +516,11 @@ private:
     Result<void> Change(GuildBook& book, const Wire::GuildInviteRemoved& removed)
     {
       return Checked(book.RemoveInvite(removed.guildId));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildTitlesChanged& changed)
+    {
+      return Checked(book.PutTitles(changed.guildId, std::move(changed.titles)));
     }
 
     static Result<void> Checked(Domain::OperationResult result)
@@ -1120,16 +1125,18 @@ private:
     // The kind table is swept when it reaches this size, then twice the kinds left.
     static constexpr std::size_t KindSweepFloor = 64;
 
-    Configuration                                     config;
-    Wire::ProtocolCodec                               codec;
-    ClientExchange&                                   exchange;
-    DreamNetClient::Ptr                               transport;
+    Configuration       config;
+    Wire::ProtocolCodec codec;
+    ClientExchange&     exchange;
+    DreamNetClient::Ptr transport;
+
     // The route's game port, the main one until the application picks another.
     struct
     {
       std::string host;
       Port        port{};
     } endpoint{config.serverHost, config.serverPort};
+
     std::size_t                                       unreachable{};  // See TakeUnreachable.
     bool                                              reached{};      // See Reached.
     bool                                              keepGuest{};

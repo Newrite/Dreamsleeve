@@ -1551,3 +1551,48 @@ test("guilds have their tabs and send target, a panel by role, invitations and a
     "Чтобы выйти, передайте роль главы",
   );
 });
+
+test("the master creates custom roles, gives one to a member and deletes it", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const titles = page.getByRole("region", { name: "Роли гильдии" });
+  await expect(titles).toContainText("2 / 10");
+  await expect(titles).toContainText("Казначей");
+  const result = page.getByRole("status", { name: "Результат операции" });
+  const mira = page
+    .getByRole("list", { name: "Участники гильдии Соратники" })
+    .getByRole("listitem")
+    .filter({ hasText: "Мира" });
+  const choice = mira.getByRole("combobox", { name: "Роль: Мира" });
+  await expect(choice).toHaveText("Казначей");
+
+  const name = titles.getByRole("textbox", { name: "Название новой роли" });
+  const create = titles.getByRole("button", { name: "Создать роль" });
+  await name.fill("Каз!");
+  await expect(titles).toContainText("Только буквы, цифры и пробелы");
+  await expect(create).toBeDisabled();
+  await name.fill("Летописец");
+  await create.click();
+  await expect(result).toHaveText("Роль «Летописец» создана");
+  await expect(titles).toContainText("3 / 10");
+
+  await choice.click();
+  await page.getByRole("option", { name: "Летописец" }).click();
+  await expect(result).toHaveText("Мира: роль выдана");
+  await expect(choice).toHaveText("Летописец");
+
+  const chronicler = titles
+    .getByRole("listitem")
+    .filter({ hasText: "Летописец" });
+  await chronicler.getByRole("button", { name: "Удалить" }).click();
+  await chronicler.getByRole("button", { name: "Удалить роль" }).click();
+  await expect(result).toHaveText("Роль «Летописец» удалена");
+  await expect(choice).toHaveText("без роли");
+  await expect(titles).toContainText("2 / 10");
+});

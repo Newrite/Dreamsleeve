@@ -9,7 +9,8 @@ import "ground.proto";
 import "moderation.proto";
 import "guild.proto";
 
-// Control/chat envelope. Version 20 colors player names in chat;
+// Control/chat envelope. Version 21 gives guilds custom roles;
+// version 20 colors player names in chat;
 // version 19 adds guilds;
 // version 18 lets a moderator's ban cover the player's devices;
 // version 17 ends sessions from a banned IP range;
@@ -122,6 +123,8 @@ enum RequestRejectionCode {
   REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED = 25; // The player has an invitation to the guild already.
   REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS = 26; // The master hands the role over or disbands the guild before leaving.
   REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE = 27; // The name color is too dark to read in chat.
+  REQUEST_REJECTION_CODE_GUILD_TITLE_NAME_TAKEN = 28; // Another custom role of the guild has the name, in any case.
+  REQUEST_REJECTION_CODE_GUILD_TITLES_FULL = 29; // The guild has the maximum number of custom roles.
 }
 
 // Code controls program behavior; message is a display/diagnostic fallback.

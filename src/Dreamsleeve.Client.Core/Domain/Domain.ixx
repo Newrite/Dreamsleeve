@@ -311,6 +311,7 @@ export namespace Domain
   };
 
   using GuildId            = std::uint64_t;
+  using GuildTitleId       = std::uint64_t;
   using GuildRole          = ::Protocol::Chat::GuildRole;
   using GuildRemovalReason = ::Protocol::Chat::GuildRemovalReason;
 
@@ -325,13 +326,24 @@ export namespace Domain
   // A member as guildmates see them: the real profile, never a pseudonym.
   struct GuildMember
   {
-    PlayerData               profile{};
-    GuildRole                role{GuildRole::Member};
-    bool                     online{};
-    std::optional<MuteState> mute;  // Muted in this guild: reading only.
-    std::int64_t             joinedAtUnixMs{};
+    PlayerData                  profile{};
+    GuildRole                   role{GuildRole::Member};
+    bool                        online{};
+    std::optional<MuteState>    mute;     // Muted in this guild: reading only.
+    std::int64_t                joinedAtUnixMs{};
+    std::optional<GuildTitleId> titleId;  // One of the guild's custom roles.
 
     bool operator==(const GuildMember&) const = default;
+  };
+
+  // A custom role of a guild, such as "Казначей": cosmetic, the master's to
+  // create and assign.
+  struct GuildTitle
+  {
+    GuildTitleId titleId{};
+    std::string  name;
+
+    bool operator==(const GuildTitle&) const = default;
   };
 
   // A guild of this player; its chat is the channel channelId.
@@ -342,6 +354,7 @@ export namespace Domain
     ChatChannelId            channelId{};
     std::int64_t             createdAtUnixMs{};
     std::vector<GuildMember> members;
+    std::vector<GuildTitle>  titles;  // Oldest first.
 
     bool operator==(const Guild&) const = default;
   };
@@ -363,8 +376,9 @@ export namespace Domain
   {
     std::uint32_t maxGuildsPerPlayer{};  // Own guilds included.
     std::uint32_t maxMembers{};
-    std::uint32_t nameMinLength{};  // Unicode scalar values.
+    std::uint32_t nameMinLength{};       // Unicode scalar values; custom role names too.
     std::uint32_t nameMaxLength{};
+    std::uint32_t maxTitles{};           // Custom roles of one guild.
 
     bool operator==(const GuildLimits&) const = default;
   };

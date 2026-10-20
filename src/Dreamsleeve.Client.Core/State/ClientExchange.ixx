@@ -202,6 +202,35 @@ export namespace Dreamsleeve::Client
     Domain::GuildId guildId{};
   };
 
+  // Custom roles: the master's. A name follows the rules of a guild name.
+  struct CreateGuildTitle
+  {
+    Domain::GuildId guildId{};
+    std::string     name;
+  };
+
+  struct RenameGuildTitle
+  {
+    Domain::GuildId      guildId{};
+    Domain::GuildTitleId titleId{};
+    std::string          name;
+  };
+
+  // Its holders lose it.
+  struct DeleteGuildTitle
+  {
+    Domain::GuildId      guildId{};
+    Domain::GuildTitleId titleId{};
+  };
+
+  // A member holds at most one; absent takes it away.
+  struct SetGuildMemberTitle
+  {
+    Domain::GuildId                     guildId{};
+    Domain::PlayerId                    playerId{};
+    std::optional<Domain::GuildTitleId> titleId;
+  };
+
   using GuildAction = std::variant<
     CreateGuild,
     InviteToGuild,
@@ -212,7 +241,11 @@ export namespace Dreamsleeve::Client
     TransferGuild,
     MuteGuildMember,
     UnmuteGuildMember,
-    DisbandGuild>;
+    DisbandGuild,
+    CreateGuildTitle,
+    RenameGuildTitle,
+    DeleteGuildTitle,
+    SetGuildMemberTitle>;
 
   struct GuildRequest
   {

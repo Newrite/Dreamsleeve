@@ -12,7 +12,7 @@ type ProtocolCodec = private { Config: ServerConfig }
 [<RequireQualifiedAccess>]
 module ProtocolCodec =
     [<Literal>]
-    let Version = 20u
+    let Version = 21u
 
     let private fail requestId failure = Error { RequestId = requestId; Failure = failure }
 
@@ -116,6 +116,7 @@ module ProtocolCodec =
         | ProtocolCodecFailure.InvalidPayload "kinds" -> invalid "kinds" "Choose notes, death marks or both."
         | ProtocolCodecFailure.InvalidPayload "role" -> invalid "role" "A guild role is member or officer."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildId") -> invalid "guild_id" "Invalid guild."
+        | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidId "GuildTitleId") -> invalid "title_id" "Invalid guild role."
         | ProtocolCodecFailure.InvalidDomain(DomainError.InvalidColor _) -> invalid "name_color" "A color is 0xRRGGBB."
         | _ -> invalid "" "Invalid request."
 

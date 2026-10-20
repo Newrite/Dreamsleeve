@@ -65,6 +65,12 @@ type GuildAction =
     | Mute of GuildId * PlayerId * SanctionTerm * SanctionReason
     | Unmute of GuildId * PlayerId
     | Disband of GuildId
+    /// Custom roles, the master's: the name is checked like a guild name.
+    | CreateTitle of GuildId * name: string
+    | RenameTitle of GuildId * GuildTitleId * name: string
+    | DeleteTitle of GuildId * GuildTitleId
+    /// ValueNone takes the member's custom role away.
+    | SetTitle of GuildId * PlayerId * GuildTitleId voption
 
 /// A member as guildmates see them: the real profile after the word list,
 /// never a pseudonym, and whether they are online.
@@ -82,6 +88,8 @@ type GuildView = {
     Members: GuildMemberView list
     /// Retained chat history, oldest first; empty in a member change.
     Messages: ChatMessage list
+    /// Custom roles, oldest first.
+    Titles: GuildTitle list
 }
 
 /// An invitation as the invited player sees it: the inviter is named only by
@@ -115,6 +123,8 @@ type GuildChange =
     | Invited of GuildInviteView
     /// Accepted, declined, expired or the guild disbanded.
     | InviteRemoved of GuildId
+    /// The guild's custom roles, complete, after one was created, renamed or deleted.
+    | Titles of GuildId * GuildTitle list
 
 [<RequireQualifiedAccess>]
 type ClientCommand =

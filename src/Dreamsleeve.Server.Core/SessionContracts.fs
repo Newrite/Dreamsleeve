@@ -358,11 +358,13 @@ type GuildOptions = {
     MaxMembers: int
     /// Pending invitations of one guild.
     MaxInvites: int
-    /// Bounds of a guild name in Unicode scalar values.
+    /// Bounds of a guild name and a custom role's name in Unicode scalar values.
     NameMinLength: int
     NameMaxLength: int
     /// Days an invitation waits for an answer.
     InviteDays: int
+    /// Custom roles of one guild; 0 leaves guilds without them.
+    MaxTitles: int
     /// Chat messages each guild keeps in memory; at most Server.MaxRecentMessages.
     HistoryCapacity: int
     MailboxCapacity: int
@@ -383,9 +385,14 @@ module GuildOptions =
     [<Literal>]
     let MaxNameLength = 64
 
+    /// The most custom roles a server may allow per guild: every member's
+    /// update and the master's choice list carry them all.
+    [<Literal>]
+    let MaxTitlesLimit = 100
+
     let defaults = {
         MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
-        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; HistoryCapacity = 200
+        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; MaxTitles = 10; HistoryCapacity = 200
         MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
         InviteCheckIntervalMs = 60000
     }
@@ -393,7 +400,7 @@ module GuildOptions =
     /// The domain limits of these options.
     let rules options =
         GuildLimits.create options.MaxGuilds options.MaxGuildsPerPlayer options.MaxMembers options.MaxInvites
-            options.NameMinLength options.NameMaxLength (TimeSpan.FromDays(float options.InviteDays))
+            options.NameMinLength options.NameMaxLength (TimeSpan.FromDays(float options.InviteDays)) options.MaxTitles
 
     let validate options = [
         let range name value low high =
@@ -405,7 +412,8 @@ module GuildOptions =
               range "MaxInvites" options.MaxInvites 1 10_000
               range "NameMinLength" options.NameMinLength 1 MaxNameLength
               range "NameMaxLength" options.NameMaxLength (max 1 options.NameMinLength) MaxNameLength
-              range "InviteDays" options.InviteDays 1 365 ]
+              range "InviteDays" options.InviteDays 1 365
+              range "MaxTitles" options.MaxTitles 0 MaxTitlesLimit ]
             |> List.choose id
         if options.HistoryCapacity < 1 then "Guilds.HistoryCapacity must be positive."
         if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
@@ -495,6 +503,10 @@ type GuildWrite =
     | RemoveMember of GuildId * PlayerId
     | PutInvite of GuildInvite
     | RemoveInvite of GuildId * PlayerId
+    /// A new or renamed custom role.
+    | PutTitle of GuildId * GuildTitle
+    /// A deleted custom role; its holders were put without it first.
+    | RemoveTitle of GuildTitleId
 
 /// Stored guilds, the profiles their members and invited players have now,
 /// the storage high-water mark and the writer; supplied at runtime start.
@@ -504,6 +516,8 @@ type GuildPersistence = {
     Profiles: PlayerData list
     /// One above the highest guild ID storage ever issued, so IDs never repeat.
     NextId: uint64
+    /// The same for custom role IDs.
+    NextTitleId: uint64
     Writer: ReliableAgentRef<GuildWrite>
     /// Completes when the writer stops. A failed write stops it, and the
     /// runtime fails so that the supervisor restarts the game from storage.

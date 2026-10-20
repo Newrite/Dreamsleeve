@@ -40,7 +40,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::to_array<std::string_view>({"disconnected", "authenticating", "connecting", "opening", "connected", "disconnecting", "faulted"});
   constexpr auto OperationNames =
     std::to_array<std::string_view>({"none", "passwordLogin", "resume", "signOut", "forgetSavedLogin", "resetPassword", "steamLogin"});
-  constexpr auto FailureNames     = std::to_array<std::string_view>({
+  constexpr auto FailureNames = std::to_array<std::string_view>({
       "none",
       "invalidCredentials",
       "usernameTaken",
@@ -61,9 +61,9 @@ export namespace Dreamsleeve::Host::Bridge
   });
   // Auth::RegistrationMode from GET /auth/methods.
   constexpr auto RegistrationNames = std::to_array<std::string_view>({"unknown", "open", "steam", "manual"});
-  constexpr auto OriginNames      = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
-  constexpr auto KindNames        = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
-  constexpr auto MarkKindNames    = std::to_array<std::string_view>({"note", "death"});
+  constexpr auto OriginNames       = std::to_array<std::string_view>({"server", "trustedClient", "thirdParty"});
+  constexpr auto KindNames         = std::to_array<std::string_view>({"announcement", "event", "admin", "periodic"});
+  constexpr auto MarkKindNames     = std::to_array<std::string_view>({"note", "death"});
   // Domain::ChatChannelKind from Global; the numbers have gaps, the names follow the enumerators.
   constexpr auto ChannelKindNames = std::to_array<std::string_view>({"global", "guild", "system"});
   // Domain::SessionEndReason from AccessRevoked.
@@ -75,8 +75,21 @@ export namespace Dreamsleeve::Host::Bridge
   // Domain::GuildRemovalReason from Left.
   constexpr auto GuildRemovalNames = std::to_array<std::string_view>({"left", "excluded", "disbanded"});
   // The "action" of the guild command, in Client::GuildAction order.
-  constexpr auto GuildActionNames =
-    std::to_array<std::string_view>({"create", "invite", "answer", "leave", "exclude", "setRole", "transfer", "mute", "unmute", "disband"});
+  constexpr auto GuildActionNames = std::to_array<std::string_view>(
+    {"create",
+     "invite",
+     "answer",
+     "leave",
+     "exclude",
+     "setRole",
+     "transfer",
+     "mute",
+     "unmute",
+     "disband",
+     "createTitle",
+     "renameTitle",
+     "deleteTitle",
+     "setTitle"});
   static_assert(GuildActionNames.size() == std::variant_size_v<Dreamsleeve::Client::GuildAction>);
 
   // names[value - first]; a value outside the table (Unspecified, a newer
@@ -111,7 +124,7 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr std::size_t MaxErrorBytes = 512;
   // Bytes of a moderator's reason; the server applies its own, smaller limit.
   constexpr std::size_t MaxReasonBytes = 1024;
-  // Bytes of a requested guild name; the server applies its own, smaller limit.
+  // Bytes of a requested guild or custom role name; the server applies its own, smaller limit.
   constexpr std::size_t MaxGuildNameBytes = 1024;
 
   // ---- UI -> host ----------------------------------------------------------
@@ -285,12 +298,12 @@ export namespace Dreamsleeve::Host::Bridge
 
     // The page of the Steam sign-in in progress onto the clipboard.
     struct CopySteamLink
-    {
-    };
+    {};
 
     // A guild request: action is GuildActionNames and decides which values
-    // count (role: member or officer; no minutes: until lifted). The server
-    // judges the roles, the name and the limits.
+    // count (role: member or officer; no minutes: until lifted; name: of the
+    // guild or the custom role; no titleId in setTitle: the member holds
+    // none). The server judges the roles, the name and the limits.
     struct Guild
     {
       std::string                  requestId;
@@ -302,6 +315,7 @@ export namespace Dreamsleeve::Host::Bridge
       std::string                  role;
       std::optional<std::uint32_t> minutes;
       std::string                  reason;
+      UiId                         titleId;
     };
 
   }
@@ -702,7 +716,7 @@ export namespace Dreamsleeve::Host::Bridge
 
   // A member as guildmates see them: name is the host's label of the real
   // profile for the current settings (the local alias in streamer mode).
-  // role: GuildRoleNames.
+  // role: GuildRoleNames; title: the ID of the guild's custom role they hold.
   struct UiGuildMember
   {
     std::string                id;
@@ -711,6 +725,14 @@ export namespace Dreamsleeve::Host::Bridge
     bool                       online{};
     std::int64_t               joinedAt{};
     std::optional<UiGuildMute> mute;
+    std::optional<std::string> title;
+  };
+
+  // A custom role of the guild: cosmetic, the master's to create and assign.
+  struct UiGuildTitle
+  {
+    std::string id;
+    std::string name;
   };
 
   struct UiGuild
@@ -720,6 +742,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::string                channelId;
     std::int64_t               createdAt{};
     std::vector<UiGuildMember> members;
+    std::vector<UiGuildTitle>  titles;  // Oldest first.
   };
 
   // An invitation waiting for the player's answer; inviter is the host's
@@ -734,12 +757,14 @@ export namespace Dreamsleeve::Host::Bridge
   };
 
   // The server's limits; a lowered limit removes nobody.
+  // nameMin and nameMax bound custom role names too.
   struct UiGuildLimits
   {
     std::uint32_t perPlayer{};
     std::uint32_t members{};
     std::uint32_t nameMin{};
     std::uint32_t nameMax{};
+    std::uint32_t titles{};
   };
 
   // A guild the player left since the last guilds event; reason: GuildRemovalNames.
@@ -1284,6 +1309,17 @@ export namespace Dreamsleeve::Host::Bridge
         .joinedAt = member.joinedAtUnixMs,
     };
     if (member.mute) result.mute = UiGuildMute{member.mute->reason, member.mute->untilUnixMs};
+    if (member.titleId) result.title = Id(*member.titleId);
+    return result;
+  }
+
+  UiGuild ToUiGuild(const Domain::Guild& guild, Names& names, const UiSettings& settings)
+  {
+    UiGuild result{Id(guild.guildId), guild.name, Id(guild.channelId), guild.createdAtUnixMs, {}, {}};
+    for (const auto& member : guild.members)
+      result.members.push_back(ToUiGuildMember(member, names, settings));
+    for (const auto& title : guild.titles)
+      result.titles.push_back({Id(title.titleId), title.name});
     return result;
   }
 
@@ -1299,11 +1335,25 @@ export namespace Dreamsleeve::Host::Bridge
     if (action == "leave") return Client::LeaveGuild{guild};
     if (action == "exclude") return Client::ExcludeGuildMember{guild, player};
     if (action == "setRole")
-      return Client::SetGuildRole{guild, player, command.role == GuildRoleNames[1] ? Domain::GuildRole::Officer : Domain::GuildRole::Member};
+      return Client::SetGuildRole{
+          guild,
+          player,
+          command.role == GuildRoleNames[1] ? Domain::GuildRole::Officer : Domain::GuildRole::Member
+      };
     if (action == "transfer") return Client::TransferGuild{guild, player};
     if (action == "mute") return Client::MuteGuildMember{guild, player, command.minutes, std::move(command.reason)};
     if (action == "unmute") return Client::UnmuteGuildMember{guild, player};
     if (action == "disband") return Client::DisbandGuild{guild};
+    const auto title = command.titleId.value;
+    if (action == "createTitle") return Client::CreateGuildTitle{guild, std::move(command.name)};
+    if (action == "renameTitle") return Client::RenameGuildTitle{guild, title, std::move(command.name)};
+    if (action == "deleteTitle") return Client::DeleteGuildTitle{guild, title};
+    if (action == "setTitle")
+      return Client::SetGuildMemberTitle{
+          guild,
+          player,
+          title == Domain::InvalidId ? std::nullopt : std::optional<Domain::GuildTitleId>{title}
+      };
     return Client::CreateGuild{std::move(command.name)};
   }
 
@@ -1523,10 +1573,11 @@ export namespace Dreamsleeve::Host::Bridge
     event.error          = ClipError(status.error);
     event.savedLogin     = status.savedLogin;
     event.savedUsername  = ShownUsername(status, streamerMode);
-    event.registration   = NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
-    event.steam          = status.methods.steam;
-    event.browserFailed  = !status.steamBrowserError.empty();
-    event.phase          = PhaseName(status);
+    event.registration =
+      NameOf(RegistrationNames, status.methods.registration, ClientAuth::RegistrationMode::Unknown, RegistrationNames.front());
+    event.steam         = status.methods.steam;
+    event.browserFailed = !status.steamBrowserError.empty();
+    event.phase         = PhaseName(status);
     return event;
   }
 
@@ -1657,8 +1708,9 @@ export namespace Dreamsleeve::Host::Bridge
         // "The name color can be changed again in N s."
         constexpr std::string_view prefix = "The name color can be changed again in ";
         std::uint64_t              seconds{};
-        if (message.starts_with(prefix) &&
-            std::from_chars(message.data() + prefix.size(), message.data() + message.size(), seconds).ec == std::errc{} && seconds > 0)
+        if (
+          message.starts_with(prefix) &&
+          std::from_chars(message.data() + prefix.size(), message.data() + message.size(), seconds).ec == std::errc{} && seconds > 0)
           return std::format("Цвет можно сменить снова через {} с", seconds);
         return "Цвет меняли только что. Попробуйте чуть позже";
       }
@@ -1702,6 +1754,10 @@ export namespace Dreamsleeve::Host::Bridge
         return "Игрок уже приглашён";
       case Code::GuildMasterStays:
         return "Глава не может выйти: сначала передайте роль или распустите гильдию";
+      case Code::GuildTitleNameTaken:
+        return "В гильдии уже есть роль с таким названием";
+      case Code::GuildTitlesFull:
+        return "В гильдии уже предельное число ролей";
       case Code::NotPermitted:
         return "Ваша роль в гильдии этого не позволяет";
       case Code::TextNotAllowed:
@@ -1709,11 +1765,17 @@ export namespace Dreamsleeve::Host::Bridge
       case Code::TargetNotFound:
         if (message.starts_with("The player is not online")) return "Игрок не в сети";
         if (message.starts_with("No such guild")) return "Гильдия не найдена";
+        if (message.starts_with("No such custom role")) return "Такой роли в гильдии уже нет";
         return "Игрок не в гильдии или приглашения уже нет";
       case Code::InvalidRequest:
         if (const auto minimum = count("A guild name has at least ")) return std::format("Название не короче {} символов", *minimum);
         if (const auto maximum = count("A guild name has at most ")) return std::format("Название не длиннее {} символов", *maximum);
         if (message.starts_with("A guild name has letters")) return "В названии только буквы, цифры и пробелы";
+        if (const auto minimum = count("A custom role name has at least "))
+          return std::format("Название роли не короче {} символов", *minimum);
+        if (const auto maximum = count("A custom role name has at most "))
+          return std::format("Название роли не длиннее {} символов", *maximum);
+        if (message.starts_with("A custom role name has letters")) return "В названии роли только буквы, цифры и пробелы";
         if (message.starts_with("A guild role")) return "Роль: участник или офицер";
         break;
       case Code::Overloaded:

@@ -98,6 +98,35 @@ TEST_CASE("A guild book holds each guild, member and invitation once and refuses
   CHECK(book->Removals().back().revision == book->Revision());
 }
 
+TEST_CASE("A guild's custom roles are replaced whole and a member keeps the one the server gave")
+{
+  auto book = GuildBook::TryCreate({MakeGuild(4)}, {}, {3, 64, 3, 24, 10});
+  REQUIRE(book);
+  CHECK(book->Limits().maxTitles == 10);
+
+  const std::vector<Domain::GuildTitle> titles{
+      {1, "Казначей"  },
+      {2, "Новобранец"}
+  };
+  const auto before = book->Revision();
+  REQUIRE(book->PutTitles(4, titles));
+  CHECK(book->Revision() == before + 1);
+  CHECK(book->Find(4)->titles == titles);
+  CHECK_FALSE(book->PutTitles(6, titles));
+
+  auto holder    = MakeMember(8);
+  holder.titleId = 2;
+  REQUIRE(book->PutMember(4, holder));
+  CHECK(book->Find(4)->members[1].titleId == 2);
+
+  // A deletion: the holder loses the role first, then the list.
+  holder.titleId.reset();
+  REQUIRE(book->PutMember(4, holder));
+  REQUIRE(book->PutTitles(4, {titles[0]}));
+  CHECK_FALSE(book->Find(4)->members[1].titleId);
+  CHECK(book->Find(4)->titles.size() == 1);
+}
+
 TEST_CASE("A removed channel takes its undelivered content along and the next delta reports it absent")
 {
   ClientModel model;

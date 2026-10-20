@@ -193,6 +193,7 @@ export interface GuildMute {
 }
 // A member as guildmates see them: `name` is the host's label of the real
 // profile (the local alias in streamer mode); never a server pseudonym.
+// `title` is the ID of the guild's custom role the member holds.
 export interface GuildMember {
   id: Id;
   name: string;
@@ -200,6 +201,12 @@ export interface GuildMember {
   online: boolean;
   joinedAt: number;
   mute?: GuildMute;
+  title?: Id;
+}
+// A custom role of a guild: cosmetic, the master's to create and assign.
+export interface GuildTitle {
+  id: Id;
+  name: string;
 }
 export interface Guild {
   id: Id;
@@ -207,6 +214,8 @@ export interface Guild {
   channelId: Id;
   createdAt: number;
   members: GuildMember[];
+  // Oldest first.
+  titles: GuildTitle[];
 }
 // An invitation waiting for the player's answer; inviter is the host's name
 // for the inviting player when it has met them.
@@ -217,12 +226,14 @@ export interface GuildInvite {
   inviter?: string;
   expires: number;
 }
-// The server's limits; a lowered limit removes nobody.
+// The server's limits; a lowered limit removes nobody. nameMin and nameMax
+// bound custom role names too; titles: custom roles of one guild.
 export interface GuildLimits {
   perPlayer: number;
   members: number;
   nameMin: number;
   nameMax: number;
+  titles: number;
 }
 // What a guild command asks; the server judges roles, the name and limits.
 export type GuildAction =
@@ -247,7 +258,13 @@ export type GuildAction =
       reason: string;
     }
   | { action: "unmute"; guildId: Id; playerId: Id }
-  | { action: "disband"; guildId: Id };
+  | { action: "disband"; guildId: Id }
+  // Custom roles, the master's.
+  | { action: "createTitle"; guildId: Id; name: string }
+  | { action: "renameTitle"; guildId: Id; titleId: Id; name: string }
+  | { action: "deleteTitle"; guildId: Id; titleId: Id }
+  // No titleId: the member holds none.
+  | { action: "setTitle"; guildId: Id; playerId: Id; titleId?: Id };
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }

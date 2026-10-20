@@ -443,7 +443,7 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     " \001(\0132).Dreamsleeve.Protocol.Chat.Movemen"
     "tSample\"l\n\024ServerMovementPacket\022\030\n\020proto"
     "col_version\030\001 \001(\r\022:\n\tmovements\030\002 \001(\0132\'.D"
-    "reamsleeve.Protocol.Chat.PlayersMoved*\253\n"
+    "reamsleeve.Protocol.Chat.PlayersMoved*\214\013"
     "\n\024RequestRejectionCode\022&\n\"REQUEST_REJECT"
     "ION_CODE_UNSPECIFIED\020\000\022*\n&REQUEST_REJECT"
     "ION_CODE_INVALID_REQUEST\020\001\022,\n(REQUEST_RE"
@@ -477,7 +477,9 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "DE_GUILD_ALREADY_INVITED\020\031\022-\n)REQUEST_RE"
     "JECTION_CODE_GUILD_MASTER_STAYS\020\032\0220\n,REQ"
     "UEST_REJECTION_CODE_NAME_COLOR_UNREADABL"
-    "E\020\033b\006proto3"
+    "E\020\033\0221\n-REQUEST_REJECTION_CODE_GUILD_TITL"
+    "E_NAME_TAKEN\020\034\022,\n(REQUEST_REJECTION_CODE"
+    "_GUILD_TITLES_FULL\020\035b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_protocol_2eproto_deps[6] = {
@@ -492,7 +494,7 @@ static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    5291,
+    5388,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -513,7 +515,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL RequestRejectionCode_
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t RequestRejectionCode_internal_data_[] = {
-    1835008u, 0u, };
+    1966080u, 0u, };
 // ===================================================================
 
 class ClientPacket::_Internal {

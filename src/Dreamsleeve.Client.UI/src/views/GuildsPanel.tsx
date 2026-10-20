@@ -1,12 +1,19 @@
 import { useState } from "react";
 import type { Chat, ChatState } from "../state/chat";
-import type { Guild, GuildMember, GuildRole } from "../bridge/types";
+import type {
+  Guild,
+  GuildLimits,
+  GuildMember,
+  GuildRole,
+  GuildTitle,
+} from "../bridge/types";
 import {
   mayInvite,
   memberOf,
   outranks,
   roleLabels,
   roleOf,
+  titleName,
 } from "../state/guilds";
 import { term } from "../state/moderation";
 import { playerName } from "../state/names";
@@ -39,6 +46,179 @@ function nameProblem(name: string, minimum: number, maximum: number) {
   if (minimum && length < minimum) return `Не короче ${minimum} символов`;
   if (maximum && length > maximum) return `Не длиннее ${maximum} символов`;
   return "";
+}
+const NO_TITLE = "";
+// The master's choice of a member's custom role; one role at most.
+function TitleChoice({
+  chat,
+  guild,
+  member,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  member: GuildMember;
+  busy: boolean;
+}) {
+  return (
+    <Select
+      label={`Роль: ${member.name}`}
+      variant="plain"
+      value={member.title ?? NO_TITLE}
+      disabled={busy}
+      options={[
+        { value: NO_TITLE, label: "без роли" },
+        ...guild.titles.map((t) => ({ value: t.id, label: t.name })),
+      ]}
+      onChange={(value) =>
+        chat.guilds.setTitle(
+          guild.id,
+          member.id,
+          value === NO_TITLE ? undefined : value,
+          member.name,
+        )
+      }
+    />
+  );
+}
+// One custom role in the master's list: rename in place or delete.
+function TitleRow({
+  chat,
+  guild,
+  title,
+  limits,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  title: GuildTitle;
+  limits: GuildLimits;
+  busy: boolean;
+}) {
+  const [name, setName] = useState<string | null>(null);
+  const holders = guild.members.filter((m) => m.title === title.id).length;
+  if (name === null)
+    return (
+      <li>
+        <span className={styles.title}>{title.name}</span>
+        <small className={styles.muted}>
+          {holders ? `у ${holders}` : "ни у кого"}
+        </small>
+        <span className={styles.rowActions}>
+          <button disabled={busy} onClick={() => setName(title.name)}>
+            Переименовать
+          </button>
+          <Confirm
+            label="Удалить"
+            confirm="Удалить роль"
+            disabled={busy}
+            onConfirm={() =>
+              chat.guilds.deleteTitle(guild.id, title.id, title.name)
+            }
+          />
+        </span>
+      </li>
+    );
+  const problem = nameProblem(name, limits.nameMin, limits.nameMax);
+  return (
+    <li>
+      <form
+        className={styles.create}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (busy || problem || !name.trim()) return;
+          chat.guilds.renameTitle(guild.id, title.id, name, title.name);
+          setName(null);
+        }}
+      >
+        <input
+          aria-label={`Новое название роли ${title.name}`}
+          value={name}
+          maxLength={limits.nameMax || 64}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button type="submit" disabled={busy || !!problem || !name.trim()}>
+          Сохранить
+        </button>
+        <button type="button" onClick={() => setName(null)}>
+          Отмена
+        </button>
+      </form>
+      {problem && <p className={styles.error}>{problem}</p>}
+    </li>
+  );
+}
+// The master's custom roles: cosmetic names such as «Казначей», no rights.
+function GuildTitles({
+  chat,
+  guild,
+  limits,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  limits: GuildLimits;
+  busy: boolean;
+}) {
+  const [name, setName] = useState("");
+  const full = guild.titles.length >= limits.titles;
+  const problem = nameProblem(name, limits.nameMin, limits.nameMax);
+  return (
+    <section className={styles.section} aria-label="Роли гильдии">
+      <h4>
+        Роли гильдии{" "}
+        <small className={styles.muted}>
+          {guild.titles.length} / {limits.titles}
+        </small>
+      </h4>
+      {guild.titles.length > 0 && (
+        <ul className={styles.members}>
+          {guild.titles.map((t) => (
+            <TitleRow
+              key={t.id}
+              chat={chat}
+              guild={guild}
+              title={t}
+              limits={limits}
+              busy={busy}
+            />
+          ))}
+        </ul>
+      )}
+      {full ? (
+        <p className={styles.muted}>
+          {guild.titles.length}/{limits.titles} — новых ролей не создать
+        </p>
+      ) : (
+        <form
+          className={styles.create}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (busy || problem || !name.trim()) return;
+            chat.guilds.createTitle(guild.id, name);
+            setName("");
+          }}
+        >
+          <input
+            aria-label="Название новой роли"
+            placeholder="Например, Казначей"
+            value={name}
+            maxLength={limits.nameMax || 64}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button type="submit" disabled={busy || !!problem || !name.trim()}>
+            Создать роль
+          </button>
+        </form>
+      )}
+      {problem && <p className={styles.error}>{problem}</p>}
+      <p className={styles.muted}>
+        Роль — только название: прав она не даёт. Буквы, цифры и пробелы,{" "}
+        {limits.nameMin}–{limits.nameMax} символов, без повторов в гильдии. У
+        участника одна роль; удалённая роль снимается со всех.
+      </p>
+    </section>
+  );
 }
 // A button that asks once more before an action that cannot be taken back.
 function Confirm({
@@ -199,6 +379,15 @@ function GuildCard({
               {m.id === s.selfId ? " (вы)" : ""}
             </button>
             <span className={styles.role}>{roleLabels[m.role]}</span>
+            {own === "master" && guild.titles.length > 0 ? (
+              <TitleChoice chat={chat} guild={guild} member={m} busy={busy} />
+            ) : (
+              titleName(guild, m.title) && (
+                <span className={styles.title}>
+                  {titleName(guild, m.title)}
+                </span>
+              )
+            )}
             <small className={styles.muted}>
               {m.online ? "в сети" : "не в сети"}
             </small>
@@ -219,6 +408,14 @@ function GuildCard({
           </li>
         ))}
       </ul>
+      {own === "master" && (
+        <GuildTitles
+          chat={chat}
+          guild={guild}
+          limits={s.guildLimits}
+          busy={busy}
+        />
+      )}
       {mayInvite(own) &&
         (limit > 0 && count >= limit ? (
           <p className={styles.muted}>

@@ -66,6 +66,17 @@
 .members li[data-role="member"] .role {
   color: var(--muted);
 }
+/* A custom role: the guild's own name for the member, no rights. */
+.title {
+  padding: 0 6px;
+  border: 1px solid var(--guild);
+  color: var(--guild);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.section h4 {
+  margin: 0;
+}
 .muted {
   margin: 0;
   color: var(--muted);

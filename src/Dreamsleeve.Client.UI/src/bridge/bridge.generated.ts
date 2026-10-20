@@ -165,6 +165,10 @@ export const guildActions = [
   "mute",
   "unmute",
   "disband",
+  "createTitle",
+  "renameTitle",
+  "deleteTitle",
+  "setTitle",
 ] as const;
 
 // Bounds of text the host sends: chat and mark text, snapshot lines per

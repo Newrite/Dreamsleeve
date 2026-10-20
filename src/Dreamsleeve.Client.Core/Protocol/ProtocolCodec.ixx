@@ -8,7 +8,7 @@ export import DreamNet.Packet;
 export namespace Dreamsleeve::Client::Wire
 {
 
-  inline constexpr std::uint32_t Version = 20;
+  inline constexpr std::uint32_t Version = 21;
 
   enum class ErrorCode
   {
@@ -363,9 +363,17 @@ private:
     Domain::GuildId guildId{};
   };
 
+  // The guild's custom roles, complete, after one was created, renamed or deleted.
+  struct GuildTitlesChanged
+  {
+    Domain::GuildId                 guildId{};
+    std::vector<Domain::GuildTitle> titles;
+  };
+
   struct GuildChanged
   {
-    std::variant<GuildAdded, GuildRemoved, GuildMemberUpdated, GuildMemberRemoved, GuildInvited, GuildInviteRemoved> change;
+    std::variant<GuildAdded, GuildRemoved, GuildMemberUpdated, GuildMemberRemoved, GuildInvited, GuildInviteRemoved, GuildTitlesChanged>
+      change;
   };
 
   // Settles a GuildRequest; its effect arrived before as GuildChanged.

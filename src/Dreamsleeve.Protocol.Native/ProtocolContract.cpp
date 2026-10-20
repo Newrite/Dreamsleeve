@@ -47,7 +47,9 @@ static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::Guild
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildAlreadyInvited) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_ALREADY_INVITED));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildMasterStays) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_MASTER_STAYS));
 static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::NameColorUnreadable) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_NAME_COLOR_UNREADABLE));
-static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 28);
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildTitleNameTaken) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_TITLE_NAME_TAKEN));
+static_assert(static_cast<long long>(Protocol::Chat::RequestRejectionCode::GuildTitlesFull) == static_cast<long long>(Dreamsleeve::Protocol::Chat::REQUEST_REJECTION_CODE_GUILD_TITLES_FULL));
+static_assert(Dreamsleeve::Protocol::Chat::RequestRejectionCode_ARRAYSIZE == 30);
 
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Unknown) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_UNKNOWN));
 static_assert(static_cast<long long>(Protocol::Chat::ActivityKind::Exploring) == static_cast<long long>(Dreamsleeve::Protocol::Chat::ACTIVITY_KIND_EXPLORING));

@@ -896,7 +896,9 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
   P::ClientPacket opening;
   REQUIRE(opening.ParseFromArray(hidden->DataBytesView().data(), static_cast<int>(hidden->Size())));
   CHECK(opening.open_session().hidden_identity() == P::HIDDEN_IDENTITY_EVERYWHERE);
-  const auto request = W::ClientRequest{SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}};
+  const auto request = W::ClientRequest{
+      SetIdentityVisibility{4, Domain::HiddenIdentity::ExceptGroundMarks}
+  };
   const auto encoded = codec.Encode(request);
   REQUIRE(encoded);
   P::ClientPacket sent;
@@ -942,8 +944,9 @@ TEST_CASE("Pseudonymous profiles carry no username and the identity switch round
 TEST_CASE("A name color travels in SetNameColor, its answer and profiles, never with a pseudonym")
 {
   const auto codec   = MakeCodec();
-  const auto encoded = codec.Encode(W::ClientRequest{
-      SetNameColor{8, 0xE57373}
+  const auto encoded = codec.Encode(
+    W::ClientRequest{
+        SetNameColor{8, 0xE57373}
   });
   REQUIRE(encoded);
   P::ClientPacket sent;
@@ -1111,6 +1114,15 @@ TEST_CASE(
   CHECK(mute.reason() == "Флуд");
   CHECK(sent(AnswerGuildInvite{4, true}).answer().accept());
   CHECK(sent(DisbandGuild{4}).disband().guild_id() == 4);
+  const auto create = sent(CreateGuildTitle{4, "Казначей"}).create_title();
+  CHECK((create.guild_id() == 4 && create.name() == "Казначей"));
+  const auto rename = sent(RenameGuildTitle{4, 2, "Хранитель"}).rename_title();
+  CHECK((rename.guild_id() == 4 && rename.title_id() == 2 && rename.name() == "Хранитель"));
+  const auto deleted = sent(DeleteGuildTitle{4, 2}).delete_title();
+  CHECK((deleted.guild_id() == 4 && deleted.title_id() == 2));
+  const auto assigned = sent(SetGuildMemberTitle{4, 9, 2}).set_title();
+  CHECK((assigned.guild_id() == 4 && assigned.player_id() == 9 && assigned.has_title_id() && assigned.title_id() == 2));
+  CHECK_FALSE(sent(SetGuildMemberTitle{4, 9, std::nullopt}).set_title().has_title_id());
 
   constexpr std::uint64_t channel = Domain::GuildChannelBase + 4;
   P::ServerPacket         snapshot;
@@ -1129,6 +1141,10 @@ TEST_CASE(
   master->set_online(true);
   master->mutable_mute()->set_reason("Флуд");
   master->set_joined_at_unix_ms(1000);
+  master->set_title_id(2);
+  auto* title = guild->add_titles();
+  title->set_title_id(2);
+  title->set_name("Казначей");
   auto message = Published().chat_published().message();
   message.set_channel_id(channel);
   *guild->add_recent_messages() = message;
@@ -1141,6 +1157,7 @@ TEST_CASE(
   guilds->mutable_limits()->set_max_members(64);
   guilds->mutable_limits()->set_name_min_length(3);
   guilds->mutable_limits()->set_name_max_length(24);
+  guilds->mutable_limits()->set_max_titles(10);
   const auto decoded = codec.Decode(Bytes(snapshot));
   REQUIRE(decoded);
   const auto& book = std::get<W::GuildsSnapshot>(*decoded);
@@ -1149,12 +1166,32 @@ TEST_CASE(
   REQUIRE(book.guilds[0].guild.members.size() == 1);
   const auto& member = book.guilds[0].guild.members[0];
   CHECK((member.role == Domain::GuildRole::Master && member.online && member.mute && member.profile.username == "player"));
+  CHECK(member.titleId == 2);
+  CHECK(
+    book.guilds[0].guild.titles == std::vector<Domain::GuildTitle>{
+                                       {2, "Казначей"}
+  });
   REQUIRE(book.guilds[0].recentMessages.size() == 1);
   CHECK(
     book.invites == std::vector<Domain::GuildInvite>{
                         {5, "Гильдия", 9, 2000}
   });
-  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24});
+  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24, 10});
+
+  // A custom role has an ID, once, and a name; a member's role has an ID.
+  title->set_title_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  title->set_title_id(2);
+  *guild->add_titles() = *title;
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  guild->mutable_titles()->RemoveLast();
+  title->clear_name();
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  title->set_name("Казначей");
+  master->set_title_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  master->clear_title_id();
+  REQUIRE(codec.Decode(Bytes(snapshot)));
 
   // The channel follows from the guild; guildmates never see a pseudonym.
   guild->set_channel_id(channel + 1);
@@ -1188,6 +1225,20 @@ TEST_CASE(
   CHECK_FALSE(codec.Decode(Bytes(changed)));
   changed.mutable_guild_changed()->set_invite_removed(5);
   REQUIRE(codec.Decode(Bytes(changed)));
+  auto* titles = changed.mutable_guild_changed()->mutable_titles();
+  titles->set_guild_id(4);
+  auto* listed = titles->add_titles();
+  listed->set_title_id(3);
+  listed->set_name("Летописец");
+  const auto retitled = codec.Decode(Bytes(changed));
+  REQUIRE(retitled);
+  const auto& list = std::get<W::GuildTitlesChanged>(std::get<W::GuildChanged>(*retitled).change);
+  CHECK(
+    (list.guildId == 4 && list.titles == std::vector<Domain::GuildTitle>{
+                                             {3, "Летописец"}
+  }));
+  titles->set_guild_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
   changed.mutable_guild_changed()->clear_change();
   CHECK_FALSE(codec.Decode(Bytes(changed)));
 
