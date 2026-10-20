@@ -44,20 +44,31 @@ namespace Nameplates
     }
   };
 
+  // A phantom on its way, drawn as a small ring beside the name: the share of
+  // the model received fills it; a stage with nothing to measure (waiting,
+  // checking, building) spins an arc instead.
+  export struct Loading
+  {
+    std::optional<float> share;
+
+    bool operator==(const Loading&) const = default;
+  };
+
   // All texts are plain UTF-8. An empty name hides the name field but keeps
   // its baseline, so the bubble never jumps when names are switched off. A
   // header is a smaller line on top inside the same box (a mark's date).
   export struct Label
   {
-    LabelKey      key{};
-    std::string   name;
-    float         nameSize{};
-    std::uint32_t nameColor{Dreamsleeve::Host::Hud::DefaultTextColor};
-    std::string   header;
-    std::string   bubble;
-    float         bubbleAlpha{1.0f};
-    BubbleStyle   style;
-    float         x{}, y{};  // Filled by Add: normalized screen position of the anchor.
+    LabelKey               key{};
+    std::string            name;
+    float                  nameSize{};
+    std::uint32_t          nameColor{Dreamsleeve::Host::Hud::DefaultTextColor};
+    std::string            header;
+    std::string            bubble;
+    float                  bubbleAlpha{1.0f};
+    BubbleStyle            style;
+    std::optional<Loading> loading;
+    float                  x{}, y{};  // Filled by Add: normalized screen position of the anchor.
   };
 
   export struct Frame
@@ -83,7 +94,7 @@ namespace Nameplates
   {
     // A VR HUD is a world-space plane: a flat camera projection would drift
     // between the eyes. Do not install the flat renderer on that runtime.
-    if (REL::Module::IsVR() || (label.name.empty() && label.bubble.empty() && label.header.empty())) return;
+    if (REL::Module::IsVR() || (label.name.empty() && label.bubble.empty() && label.header.empty() && !label.loading)) return;
     auto* camera = RE::Main::WorldRootCamera();
     if (!camera) return;
     float x{}, y{}, z{};
@@ -114,6 +125,17 @@ namespace Nameplates
   constexpr double        LineHeightFactor  = 1.25;  // Estimated line advance relative to the font size.
   constexpr int           BubbleMaxLines    = 6;
   constexpr std::size_t   BubbleMaxChars    = 320;   // Code points before trimming starts.
+
+  constexpr double RingRadius      = 0.4;            // Loading ring radius relative to the name font size.
+  constexpr double RingStroke      = 0.15;           // Its stroke relative to the font size.
+  constexpr double RingMinStroke   = 2;              // Pixels: thinner strokes vanish behind the outline.
+  constexpr double RingGap         = 5;              // Between the name and the ring.
+  constexpr double RingTrackAlpha  = 30;             // Percent: the empty part of the ring.
+  constexpr double SpinArc         = 100;            // Degrees of the arc a measureless stage spins.
+  constexpr double SpinTurnSeconds = 0.9;            // One turn of that arc.
+  constexpr double EaseRate        = 6;              // Per second: how fast the drawn share follows the reported one.
+  constexpr double RedrawShare     = 0.005;          // A smaller change of the drawn share is not redrawn.
+  constexpr double ArcStepDegrees  = 10;             // One straight segment of a drawn arc.
 
   // Height reserved for the name line, from the font size only: the same value
   // whether the name is drawn or hidden.
@@ -158,10 +180,23 @@ namespace Nameplates
     double       alpha{-1};
   };
 
+  struct LoadingRing
+  {
+    using Clock = std::chrono::steady_clock;
+
+    RE::GFxValue      clip;
+    float             size{};
+    std::uint32_t     color{};
+    bool              spinning{};  // The measureless arc is on screen.
+    double            shown{};     // The share on screen, easing towards the reported one.
+    Clock::time_point updated{};
+  };
+
   struct Entry
   {
-    NameField  name;
-    BubbleClip bubble;
+    NameField   name;
+    BubbleClip  bubble;
+    LoadingRing ring;
   };
 
   struct Renderer
@@ -244,6 +279,19 @@ namespace Nameplates
     {
       if (bubble.clip.IsDisplayObject()) bubble.clip.Invoke("removeMovieClip", nullptr);
       bubble = {};
+    }
+
+    static void Remove(LoadingRing& ring)
+    {
+      if (ring.clip.IsDisplayObject()) ring.clip.Invoke("removeMovieClip", nullptr);
+      ring = {};
+    }
+
+    static void Remove(Entry& entry)
+    {
+      Remove(entry.name);
+      Remove(entry.bubble);
+      Remove(entry.ring);
     }
 
     bool CreateName(NameField& field, const LabelKey& key, float size, std::uint32_t color)
@@ -409,10 +457,7 @@ public:
     void Reset()
     {
       for (auto& [id, entry] : entries)
-      {
-        Remove(entry.name);
-        Remove(entry.bubble);
-      }
+        Remove(entry);
       entries.clear();
       if (layer.IsDisplayObject()) layer.Invoke("removeMovieClip", nullptr);
       layer.SetUndefined();
@@ -466,6 +511,106 @@ public:
       bubble.clip.SetDisplayInfo(info);
     }
 
+    // Straight segments along a circle around the clip's origin; angles in
+    // degrees, clockwise on screen from the right.
+    static void Arc(RE::GFxValue& clip, double radius, double from, double sweep)
+    {
+      const int steps = std::max(1, static_cast<int>(std::ceil(std::abs(sweep) / ArcStepDegrees)));
+      for (int step = 0; step <= steps; ++step)
+      {
+        const double       angle = (from + sweep * step / steps) * std::numbers::pi / 180;
+        const RE::GFxValue point[]{RE::GFxValue(radius * std::cos(angle)), RE::GFxValue(radius * std::sin(angle))};
+        clip.Invoke(step == 0 ? "moveTo" : "lineTo", nullptr, point, 2);
+      }
+    }
+
+    // A faint full track and, from the top, the arc of the share: the whole
+    // ring is the name's color, the track a fraction of its opacity.
+    static void DrawRing(LoadingRing& ring, double sweep)
+    {
+      const double radius = ring.size * RingRadius;
+      const double stroke = std::max(RingMinStroke, ring.size * RingStroke);
+      const auto   line   = [&](double alpha) {
+        const RE::GFxValue style[]{
+            RE::GFxValue(stroke),
+            RE::GFxValue(static_cast<double>(ring.color & 0xFFFFFF)),
+            RE::GFxValue(alpha),
+            RE::GFxValue(false),
+            RE::GFxValue("normal"),
+            RE::GFxValue("round")
+        };
+        ring.clip.Invoke("lineStyle", nullptr, style, 6);
+      };
+      ring.clip.Invoke("clear", nullptr);
+      line(RingTrackAlpha);
+      Arc(ring.clip, radius, 0, 360);
+      if (sweep <= 0) return;
+      line(100);
+      Arc(ring.clip, radius, -90, sweep);
+    }
+
+    // Beside the end of the name, on its middle line; without a name, where
+    // the name would stand. A measureless stage turns its arc with the clock.
+    void DrawLoading(Entry& entry, const Label& label, double x, double y)
+    {
+      auto& ring = entry.ring;
+      if (!label.loading)
+      {
+        Remove(ring);
+        return;
+      }
+      if (ring.clip.IsDisplayObject() && (ring.size != label.nameSize || ring.color != label.nameColor)) Remove(ring);
+      if (!ring.clip.IsDisplayObject())
+      {
+        if (!layer.CreateEmptyMovieClip(&ring.clip, ObjectName("loading", label.key).c_str()) || !ring.clip.IsDisplayObject()) return;
+        ring.clip.SetMember("tabEnabled", RE::GFxValue(false));
+        Outline(ring.clip);
+        ring.size  = label.nameSize;
+        ring.color = label.nameColor;
+      }
+
+      // A ring created this frame has no elapsed time and is drawn at once.
+      const auto   now = LoadingRing::Clock::now();
+      const double elapsed =
+        ring.updated == LoadingRing::Clock::time_point{} ? 0 : std::chrono::duration<double>(now - ring.updated).count();
+      ring.updated    = now;
+      double rotation = 0;
+      if (const auto share = label.loading->share)
+      {
+        // A fresh ring or one that spun starts at the share; later ones ease.
+        const double target = std::clamp(static_cast<double>(*share), 0.0, 1.0);
+        const bool   fresh  = ring.spinning || elapsed == 0;
+        const double eased  = fresh ? target : ring.shown + (target - ring.shown) * std::min(1.0, elapsed * EaseRate);
+        const double next   = std::abs(target - eased) < RedrawShare ? target : eased;
+        if (fresh || std::abs(next - ring.shown) >= RedrawShare || (next == target && ring.shown != target))
+        {
+          DrawRing(ring, next * 360);
+          ring.shown    = next;
+          ring.spinning = false;
+        }
+      }
+      else
+      {
+        if (!ring.spinning)
+        {
+          DrawRing(ring, SpinArc);
+          ring.spinning = true;
+        }
+        const double seconds = std::chrono::duration<double>(now.time_since_epoch()).count();
+        rotation             = std::fmod(seconds / SpinTurnSeconds, 1.0) * 360;
+      }
+
+      const double              radius = label.nameSize * RingRadius;
+      const bool                named  = entry.name.value.IsDisplayObject();
+      const double              left   = named ? x + entry.name.width / 2 + RingGap + radius : x;
+      const double              middle = named ? y - entry.name.height / 2 : y - NameBlock(label.nameSize) / 2;
+      RE::GFxValue::DisplayInfo info;
+      info.SetPosition(left, middle);
+      info.SetRotation(rotation);
+      info.SetVisible(true);
+      ring.clip.SetDisplayInfo(info);
+    }
+
     void Draw(RE::GFxMovieView* current, const Frame& frame)
     {
       if (!Bind(current)) return;
@@ -475,8 +620,7 @@ public:
         visible.insert(label.key);
       std::erase_if(entries, [&](auto& entry) {
         if (visible.contains(entry.first)) return false;
-        Remove(entry.second.name);
-        Remove(entry.second.bubble);
+        Remove(entry.second);
         return true;
       });
 
@@ -490,7 +634,9 @@ public:
         const double y     = rect.top + label.y * (rect.bottom - rect.top);
         DrawName(entry, label, x, y);
         DrawBubble(entry, label, x, y);
-        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject()) entries.erase(label.key);
+        DrawLoading(entry, label, x, y);
+        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject() && !entry.ring.clip.IsDisplayObject())
+          entries.erase(label.key);
       }
     }
   };

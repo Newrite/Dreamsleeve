@@ -180,6 +180,44 @@ TEST_CASE("Phantom exchange clears old work and bounds remote admission")
   CHECK_FALSE(exchange.TakeOutput().publication);
 }
 
+TEST_CASE("A remote reports the share of its model received while it loads")
+{
+  P::Exchange exchange;
+  exchange.Configure({});
+  P::Wire::Offer offer{
+      7,
+      1,
+      {P::Digest{}, P::Generation{1}, P::AssetVersion, 200, 800, 2}
+  };
+  REQUIRE(exchange.Offer(offer));
+  // Before its transfer starts there is nothing to measure.
+  CHECK_FALSE(exchange.Find(7)->Downloaded());
+  exchange.Received(offer, 50, 200);
+  REQUIRE(exchange.Find(7)->Downloaded());
+  CHECK(*exchange.Find(7)->Downloaded() == doctest::Approx(0.25));
+  // Another view or model of the player ignores the stale report and starts over.
+  auto stale = offer;
+  stale.view = 0;
+  exchange.Received(stale, 200, 200);
+  CHECK(*exchange.Find(7)->Downloaded() == doctest::Approx(0.25));
+  offer.view = 2;
+  REQUIRE(exchange.Offer(offer));
+  CHECK_FALSE(exchange.Find(7)->Downloaded());
+  exchange.Received(offer, 200, 200);
+  CHECK(*exchange.Find(7)->Downloaded() == doctest::Approx(1));
+  // A ready or refused model is no longer loading.
+  auto asset = P::ValidatedAsset::Parse(Triangle());
+  REQUIRE(asset);
+  exchange.Loaded(exchange.Epoch(), offer, std::make_shared<const P::ValidatedAsset>(std::move(*asset)), false);
+  CHECK(exchange.Find(7)->State() == P::Representation::Ready);
+  CHECK_FALSE(exchange.Find(7)->Downloaded());
+  offer.view = 3;
+  REQUIRE(exchange.Offer(offer));
+  exchange.Received(offer, 20, 200);
+  exchange.Unavailable(exchange.Epoch(), offer, "refused");
+  CHECK_FALSE(exchange.Find(7)->Downloaded());
+}
+
 TEST_CASE("Phantom admission reserves aggregate working memory and server sampling rate")
 {
   P::Exchange     exchange;
@@ -262,10 +300,10 @@ TEST_CASE("Pose extrapolation preserves articulation and translates matching bou
 {
   P::Playback     playback;
   P::ViewSettings settings;
-  settings.delayMs         = 50;
-  settings.extrapolationMs = 50;
-  auto a = Pose(1, 1000000, 0);
-  auto b = Pose(2, 1100000, 10);
+  settings.delayMs             = 50;
+  settings.extrapolationMs     = 50;
+  auto a                       = Pose(1, 1000000, 0);
+  auto b                       = Pose(2, 1100000, 10);
   a.channels[1].world.position = {0, 10, 0};
   b.channels[1].world.position = {20, 0, 0};
   REQUIRE(playback.Push(std::make_shared<const P::Snapshot>(a), 2000000, settings));
@@ -282,7 +320,7 @@ TEST_CASE("Pose extrapolation preserves articulation and translates matching bou
 TEST_CASE("Adaptive playout is continuous at insertion and recovers from persistent latency changes")
 {
   Dreamsleeve::Client::PlayoutClock clock;
-  std::uint64_t                     source = 1000000;
+  std::uint64_t                     source  = 1000000;
   std::uint64_t                     arrival = 2000000;
   clock.Push(source, arrival, 1, 100000, 8);
   for (unsigned i = 1; i < 1500; ++i)
@@ -326,12 +364,12 @@ TEST_CASE("Production playout reduces missing right endpoints under jitter and l
     }
 
     Dreamsleeve::Client::PlayoutClock clock;
-    std::size_t                       next = 0;
-    std::size_t                       fixedMissing = 0;
+    std::size_t                       next            = 0;
+    std::size_t                       fixedMissing    = 0;
     std::size_t                       adaptiveMissing = 0;
-    std::size_t                       frames = 0;
-    std::uint64_t                     previous = 0;
-    std::uint64_t                     latest = 0;
+    std::size_t                       frames          = 0;
+    std::uint64_t                     previous        = 0;
+    std::uint64_t                     latest          = 0;
     for (auto now = packets.front().arrival; now < packets.back().arrival; now += 16667)
     {
       while (next < packets.size() && packets[next].arrival <= now)

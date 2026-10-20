@@ -68,6 +68,8 @@ namespace Phantoms
     Capture::Context               context;
     bool                           waiting{};
     std::uint64_t                  cursor{};
+    // Players whose phantom is on its way this frame, for the firefly that stands in.
+    std::unordered_map<Domain::PlayerId, Nameplates::Loading> loading;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
     bool                                     publishing{};
@@ -385,6 +387,15 @@ namespace Phantoms
     return state.settings->fallback;
   }
 
+  // How far the phantom of a player shown as a firefly has loaded; absent when
+  // it is not loading (shown, refused, out of reach or phantoms switched off).
+  export std::optional<Nameplates::Loading> Loading(Domain::PlayerId id)
+  {
+    const auto& loading = Get().loading;
+    const auto  found   = loading.find(id);
+    return found == loading.end() ? std::nullopt : std::optional{found->second};
+  }
+
   export std::size_t Count()
   {
     return std::ranges::count_if(Get().visuals, [](const auto& entry) { return entry.second.active; });
@@ -452,6 +463,7 @@ namespace Phantoms
 #endif
     auto& runtime = Runtime::Get();
     auto& state   = Get();
+    state.loading.clear();
     if (!runtime.app || !state.engine.mainThread) return;
     auto&      exchange = runtime.app->Exchange().Phantoms();
     const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
@@ -794,6 +806,18 @@ namespace Phantoms
       }
 
       PlayerLabels::Add(names, remote.player, visual.current->scene->LabelAnchor(), online->second, now);
+    }
+
+    // A model on its way reports the share received; a ready one still
+    // building its scene is complete. A refused model shows no progress.
+    for (const auto& remote : display.remotes)
+    {
+      const auto visual = state.visuals.find(remote.player);
+      if (!retained.contains(remote.player) || visual == state.visuals.end() || visual->second.active) continue;
+      if (remote.State() == P::Representation::Loading)
+        state.loading.emplace(remote.player, Nameplates::Loading{remote.Downloaded()});
+      else if (remote.State() == P::Representation::Ready && visual->second.candidate)
+        state.loading.emplace(remote.player, Nameplates::Loading{1.0f});
     }
 
     std::erase_if(state.visuals, [&](const auto& entry) {

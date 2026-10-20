@@ -84,9 +84,9 @@ export namespace Dreamsleeve::Client::Phantom
       }
     };
 
-    Exchange&                   exchange;
-    Worker                      worker;
-    Http                        http;
+    Exchange& exchange;
+    Worker    worker;
+    Http      http;
 
     std::optional<Wire::Policy> policy;
     std::optional<Local>        local;
@@ -98,11 +98,11 @@ export namespace Dreamsleeve::Client::Phantom
     std::unordered_map<std::uint64_t, DownloadPlan> plans;
     std::deque<Wire::Request>                       requests;
 
-    std::uint64_t                                   context{}, lastPoseSequence{}, localRevision{};
-    RequestId                                       lastRequest;
-    bool                                            active{};
-    Clock::time_point                               lastBudget{Clock::now()}, nextPose{};
-    double                                          poseCredit{};
+    std::uint64_t     context{}, lastPoseSequence{}, localRevision{};
+    RequestId         lastRequest;
+    bool              active{};
+    Clock::time_point lastBudget{Clock::now()}, nextPose{};
+    double            poseCredit{};
 
     bool Request(Wire::Request request)
     {
@@ -325,6 +325,7 @@ export namespace Dreamsleeve::Client::Phantom
         return;
       }
       plan->second.state = Receiving{value.transfer};
+      exchange.Received(entry->second.offer, 0, entry->second.BodyBytes());
 
       if (!http.Start(value, {}, std::min(policy->modelBytesPerSecond, exchange.Settings().downloadBytesPerSecond)))
       {
@@ -661,6 +662,7 @@ public:
         if (progress > download.progress)
         {
           exchange.Count(progress - download.progress, 0);
+          exchange.Received(download.offer, progress, download.BodyBytes());
           download.progress = progress;
           download.touched  = now;
         }

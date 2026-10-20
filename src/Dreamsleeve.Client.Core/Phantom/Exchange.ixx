@@ -41,9 +41,20 @@ export namespace Dreamsleeve::Client::Phantom
       return Asset() ? Representation::Ready : Representation::Unavailable;
     }
 
+    // The share of the model received while it loads; absent before its
+    // transfer starts (waiting, a cached model) and once it is ready or refused.
+    std::optional<float> Downloaded() const
+    {
+      if (State() != Representation::Loading || expected == 0) return std::nullopt;
+      return std::min(1.0f, static_cast<float>(received) / static_cast<float>(expected));
+    }
+
 private:
 
     friend class Exchange;
+
+    // Bytes of the current transfer as Streaming last reported them.
+    std::uint32_t received{}, expected{};
 
     // Exchange alone can install a non-null validated model. Readiness is
     // derived from this variant, never a separate flag beside a nullable model.
@@ -94,22 +105,22 @@ private:
       Settled,
       Rejected
     };
-    PublicationPhase                                     phase{PublicationPhase::Preparing};
-    mutable std::mutex                                   mutex;
-    ViewSettings                                         settings;
+    PublicationPhase   phase{PublicationPhase::Preparing};
+    mutable std::mutex mutex;
+    ViewSettings       settings;
 
-    std::uint64_t                                        epoch{1};
-    std::uint64_t                                        context{};
-    std::uint64_t                                        localRevision{1};
-    std::uint64_t                                        poseRevision{1};
-    std::optional<Generation>                            localGeneration, previousGeneration;
-    std::optional<Domain::LocationId>                    space;
-    std::uint64_t                                        previousReservation{};
-    std::shared_ptr<const Snapshot>                      previousSnapshot;
-    std::vector<Wire::Displayed>                         displayed;
-    bool                                                 available{}, changed{true};
-    std::optional<Wire::PoseDemand>                      poseDemand;
-    std::uint32_t                                        serverSampleRate{50};
+    std::uint64_t                     epoch{1};
+    std::uint64_t                     context{};
+    std::uint64_t                     localRevision{1};
+    std::uint64_t                     poseRevision{1};
+    std::optional<Generation>         localGeneration, previousGeneration;
+    std::optional<Domain::LocationId> space;
+    std::uint64_t                     previousReservation{};
+    std::shared_ptr<const Snapshot>   previousSnapshot;
+    std::vector<Wire::Displayed>      displayed;
+    bool                              available{}, changed{true};
+    std::optional<Wire::PoseDemand>   poseDemand;
+    std::uint32_t                     serverSampleRate{50};
 
     std::optional<std::pair<Generation, ValidatedAsset>> capture;
     std::shared_ptr<const Snapshot>                      snapshot;
@@ -117,9 +128,9 @@ private:
     std::shared_ptr<const PreparedAsset>                 localAsset, previousAsset;
     std::optional<Wire::Pose>                            encoded;
 
-    std::unordered_map<std::uint64_t, Remote>            remotes;
-    Metrics                                              metrics;
-    std::uint64_t                                        localReservation{};
+    std::unordered_map<std::uint64_t, Remote> remotes;
+    Metrics                                   metrics;
+    std::uint64_t                             localReservation{};
 
     bool DemandAllowsPoses() const
     {
@@ -603,6 +614,17 @@ public:
 
       found->second.content = std::move(asset);
       if (cached) ++metrics.cacheHits;
+    }
+
+    // Streaming reports a model transfer as its bytes arrive; a new offer of the
+    // player starts from nothing again.
+    void Received(const Wire::Offer& offer, std::uint32_t bytes, std::uint32_t total)
+    {
+      std::lock_guard lock(mutex);
+      const auto      found = remotes.find(offer.player);
+      if (found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset) return;
+      found->second.received = bytes;
+      found->second.expected = total;
     }
 
     std::shared_ptr<const ValidatedAsset> AssetFor(const Wire::Descriptor& descriptor) const

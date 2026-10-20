@@ -14,7 +14,8 @@ export namespace PlayerLabels
     Domain::PlayerId                      id,
     const RE::NiPoint3&                   position,
     const Domain::Player&                 remote,
-    std::chrono::steady_clock::time_point now)
+    std::chrono::steady_clock::time_point now,
+    std::optional<Nameplates::Loading>    loading = std::nullopt)
   {
     auto&             runtime = Runtime::Get();
     const auto&       ui      = runtime.ui.ui.chat;
@@ -24,7 +25,8 @@ export namespace PlayerLabels
         .key       = {Nameplates::LabelKind::Player, id},
         .nameSize  = static_cast<float>(ui.fireflyNameFontSize),
         .nameColor = Dreamsleeve::Host::Hud::NameColor(ui),
-        .style     = Dreamsleeve::Host::Hud::PlayerBubble(ui)
+        .style     = Dreamsleeve::Host::Hud::PlayerBubble(ui),
+        .loading   = loading
     };
 
     if (ui.showFireflyNames && !(combat && ui.combatHideNames))
