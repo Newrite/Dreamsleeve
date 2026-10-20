@@ -127,6 +127,20 @@ TEST_CASE("A guild's custom roles are replaced whole and a member keeps the one 
   CHECK(book->Find(4)->titles.size() == 1);
 }
 
+TEST_CASE("A guild's information is replaced as the server sent it, empty when cleared")
+{
+  auto book = GuildBook::TryCreate({MakeGuild(4)}, {}, {});
+  REQUIRE(book);
+  CHECK(book->Find(4)->info.empty());
+  const auto before = book->Revision();
+  REQUIRE(book->PutInfo(4, "Сбор по пятницам"));
+  CHECK(book->Revision() == before + 1);
+  CHECK(book->Find(4)->info == "Сбор по пятницам");
+  REQUIRE(book->PutInfo(4, ""));
+  CHECK(book->Find(4)->info.empty());
+  CHECK_FALSE(book->PutInfo(6, "x"));
+}
+
 TEST_CASE("A removed channel takes its undelivered content along and the next delta reports it absent")
 {
   ClientModel model;

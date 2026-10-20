@@ -433,10 +433,10 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   treasurer.titleId = 3;
   auto book         = GuildBook::TryCreate(
     {
-        {4, "Вороны", channel, 1000, {member(1, "Alice", Domain::GuildRole::Master), treasurer}, {{3, "Казначей"}}}
+        {4, "Вороны", channel, 1000, {member(1, "Alice", Domain::GuildRole::Master), treasurer}, {{3, "Казначей"}}, "О нас"}
   },
     {{5, "Соратники", 2, 2000}},
-    {3, 64, 3, 24, 10});
+    {3, 64, 3, 24, 10, 500});
   REQUIRE(book);
   REQUIRE(model.RegisterChannel(channel, 16, Domain::ChatChannelKind::Guild));
   REQUIRE(model.Apply(model.Generation(), ChatMessagesReceived{channel, {MakeMessage(1, channel, "в гильдии")}}));
@@ -466,6 +466,8 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   CHECK(guilds["guilds"][0]["titles"][0]["id"].get<std::string>() == "3");
   CHECK(guilds["guilds"][0]["titles"][0]["name"].get<std::string>() == "Казначей");
   CHECK(guilds["limits"]["titles"].get<double>() == 10);
+  CHECK(guilds["limits"]["infoMax"].get<double>() == 500);
+  CHECK(guilds["guilds"][0]["info"].get<std::string>() == "О нас");
   CHECK(guilds["invites"][0]["guildName"].get<std::string>() == "Соратники");
   CHECK(guilds["invites"][0].contains("inviter"));
   CHECK(guilds["limits"]["members"].get<double>() == 64);

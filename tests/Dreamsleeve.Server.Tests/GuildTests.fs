@@ -416,10 +416,42 @@ let private agentTests = testSequenced <| testList "Guild owner" [
             equal (GuildWrite.RemoveTitle treasurer.Id) deleted
         }))
 
+    case "only the master writes the guild information; members hear it and empty text clears it" (fun () ->
+        withGuilds (fun fixture -> task {
+            let! guild = founded fixture
+            for _ in 1 .. 4 do
+                let! _ = receive fixture.Writes
+                ()
+            do! act fixture fixture.Bob 40UL (GuildAction.SetInfo(guild, "Мы лучшие"))
+            let! _ = expectRefused fixture.Bob 40UL RequestRejectionCode.NotPermitted
+            do! act fixture fixture.Alice 41UL (GuildAction.SetInfo(guild, String('а', 501)))
+            let! long = expectRefused fixture.Alice 41UL RequestRejectionCode.InvalidRequest
+            equal "info" long.Field
+            equal "The guild information has at most 500 characters." long.Message
+            do! act fixture fixture.Alice 42UL (GuildAction.SetInfo(guild, "тут badword"))
+            let! _ = expectRefused fixture.Alice 42UL RequestRejectionCode.TextNotAllowed
+            do! act fixture fixture.Alice 43UL (GuildAction.SetInfo(guild, "Сбор по пятницам\nу Йоррваскра"))
+            let info = ValueSome(GuildInfo.create 500 "Сбор по пятницам\nу Йоррваскра" |> ok)
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! changed = expectChange who
+                equal (GuildChange.Info(guild, info)) changed
+            let! _ = expectDone fixture.Alice 43UL
+            let! written = receive fixture.Writes
+            equal (GuildWrite.PutInfo(guild, info)) written
+            do! act fixture fixture.Alice 44UL (GuildAction.SetInfo(guild, "  "))
+            for who in [ fixture.Alice; fixture.Bob ] do
+                let! cleared = expectChange who
+                equal (GuildChange.Info(guild, ValueNone)) cleared
+            let! _ = expectDone fixture.Alice 44UL
+            let! panel = fixture.Guilds.AskAsync(fun reply -> GuildCommand.Admin(GuildAdminCommand.Card guild, reply)) |> awaitResult
+            check (match panel with GuildAdminResult.Card(ValueSome card) -> card.Summary.Info.IsNone | _ -> false) "the panel sees the cleared text"
+        }))
+
     case "stored guilds come back with their members, profiles and the next ID" (fun () ->
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
             Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]
+            Info = ValueSome(GuildInfo.create 500 "Летописцы Скайрима" |> ok)
             Members = [ { Player = pid 2UL; Role = GuildRole.Master; JoinedAt = DateTimeOffset.UnixEpoch; Mute = ValueNone; Title = ValueSome(tid 3UL) } ]
         }
         let loaded (writer: Agent<GuildWrite>) =
@@ -433,6 +465,7 @@ let private agentTests = testSequenced <| testList "Guild owner" [
                 equal (gid 4UL) guild.Guild
                 equal "Player 2" (DisplayName.value guild.Members.Head.Profile.DisplayName)
                 equal stored.Titles guild.Titles
+                equal stored.Info guild.Info
                 equal (ValueSome(tid 3UL)) guild.Members.Head.Membership.Title
             | other -> failtestf "%A" other
             do! act fixture fixture.Alice 70UL (GuildAction.Create "Совы")
@@ -449,7 +482,7 @@ let private agentTests = testSequenced <| testList "Guild owner" [
         use host = Agent.Start(AgentOptions.create "host", fun (_: AgentContext<SessionHostCommand>) (_: SessionHostCommand) -> task { () })
         let stored = {
             Id = gid 4UL; Name = GuildName.create 1 64 "Вороны" |> ok; CreatedAt = DateTimeOffset.UnixEpoch; Invites = []
-            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]; Members = []
+            Titles = [ { Id = tid 3UL; Name = titleName "Летописец" } ]; Members = []; Info = ValueNone
         }
         let persistence = { empty writer with Loaded = [ stored ]; NextId = 5UL; NextTitleId = 3UL }
         let limits = GuildOptions.rules options |> ok
@@ -491,6 +524,11 @@ let private storeTests = testSequenced <| testList "SQLite guilds" [
         let changed = SqliteGuildStore.loadAll database.Config token |> ok
         equal [ ValueNone ] (changed.Guilds.Head.Members |> List.filter (fun item -> item.Player = bob.PlayerId) |> List.map _.Mute)
         check changed.Guilds.Head.Invites.IsEmpty "the invitation is gone"
+        let info = ValueSome(GuildInfo.create 500 "Сбор по пятницам\nу Йоррваскра" |> ok)
+        write (GuildWrite.PutInfo(gid 1UL, info))
+        equal info (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.Info
+        write (GuildWrite.PutInfo(gid 1UL, ValueNone))
+        equal ValueNone (SqliteGuildStore.loadAll database.Config token |> ok).Guilds.Head.Info
         write (GuildWrite.Delete(gid 1UL))
         let gone = SqliteGuildStore.loadAll database.Config token |> ok
         check gone.Guilds.IsEmpty "the guild is gone"
@@ -581,6 +619,7 @@ let private codecTests = testList "Guild codec" [
                           Profile = profile 2UL; Online = true } ]
             Messages = []
             Titles = [ { Id = tid 3UL; Name = titleName "Казначей" } ]
+            Info = ValueSome(GuildInfo.create 500 "О нас" |> ok)
         }
         let encoded = ProtocolCodec.encode codec Int32.MaxValue (ServerResponse.GuildsSnapshot { Guilds = [ view ]; Invites = []; Limits = limits }) |> ok
         let packet = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(List.exactlyOne encoded)
@@ -593,6 +632,8 @@ let private codecTests = testList "Guild codec" [
         equal 3u packet.GuildsSnapshot.Limits.MaxGuildsPerPlayer
         equal 64u packet.GuildsSnapshot.Limits.MaxMembers
         equal 10u packet.GuildsSnapshot.Limits.MaxTitles
+        equal 500u packet.GuildsSnapshot.Limits.InfoMaxLength
+        equal "О нас" guild.Info
         equal 3UL guild.Members[0].TitleId
         equal [ 3UL, "Казначей" ] [ for title in guild.Titles -> title.TitleId, title.Name ]
         let wrong = { view with ChannelId = ChatChannels.globalId }

@@ -480,6 +480,9 @@ InviteDays = 7
 # Custom roles of one guild, such as "Treasurer": cosmetic, the master creates and assigns
 # them, a member holds at most one. 0..100; 0 leaves guilds without custom roles.
 MaxTitles = 10
+# The guild information its master writes, in characters (Unicode scalar values), 1..2000:
+# chat text rules (line breaks allowed) and the word list. Every member's snapshot carries it.
+InfoMaxLength = 500
 # Chat messages each guild keeps in memory, >= 1 and at most Server.MaxRecentMessages.
 HistoryCapacity = 200
 # Owner mailbox, messages, >= 1.

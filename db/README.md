@@ -156,8 +156,13 @@ Schema 15 (`1791676800000_guild_titles.sql`) adds custom roles of a guild (docs/
 and `guild_members.title_id`, the one role a member holds. Roles go with their guild
 (`ON DELETE CASCADE`); AUTOINCREMENT never reuses an ID. `title_id` has no foreign key, so
 DOWN can drop the column: `SqliteGuildStore` clears the holders in the same transaction that
-deletes a role and refuses to load a member holding a role of another guild. This is the
-schema version the server supports (`SqliteDatabase.SchemaVersion`).
+deletes a role and refuses to load a member holding a role of another guild.
+
+Schema 16 (`1791763200000_guild_info.sql`) adds `guilds.info`, the text the master writes
+about the guild (docs/GuildsRu.md), NULL when there is none. `[Guilds] InfoMaxLength`
+bounds it when the master writes; a stored text loads up to the largest bound the server
+allows. DOWN drops the column. This is the schema version the server supports
+(`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

@@ -71,6 +71,8 @@ type GuildAction =
     | DeleteTitle of GuildId * GuildTitleId
     /// ValueNone takes the member's custom role away.
     | SetTitle of GuildId * PlayerId * GuildTitleId voption
+    /// The master's; empty clears it. Checked against [Guilds] InfoMaxLength and the word list.
+    | SetInfo of GuildId * info: string
 
 /// A member as guildmates see them: the real profile after the word list,
 /// never a pseudonym, and whether they are online.
@@ -90,6 +92,7 @@ type GuildView = {
     Messages: ChatMessage list
     /// Custom roles, oldest first.
     Titles: GuildTitle list
+    Info: GuildInfo voption
 }
 
 /// An invitation as the invited player sees it: the inviter is named only by
@@ -125,6 +128,8 @@ type GuildChange =
     | InviteRemoved of GuildId
     /// The guild's custom roles, complete, after one was created, renamed or deleted.
     | Titles of GuildId * GuildTitle list
+    /// The master wrote or cleared the guild information.
+    | Info of GuildId * GuildInfo voption
 
 [<RequireQualifiedAccess>]
 type ClientCommand =

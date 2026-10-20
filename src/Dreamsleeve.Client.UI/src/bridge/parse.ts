@@ -167,7 +167,8 @@ function guild(v: unknown): boolean {
     id(v.channelId) &&
     time(v.createdAt) &&
     list(v.members, guildMember, 4096) &&
-    list(v.titles, guildTitle, 128)
+    list(v.titles, guildTitle, 128) &&
+    body(v.info)
   );
 }
 function guildInvite(v: unknown): boolean {
@@ -186,7 +187,8 @@ const guildLimits = (v: unknown) =>
   count(v.members) &&
   count(v.nameMin) &&
   count(v.nameMax) &&
-  count(v.titles);
+  count(v.titles) &&
+  count(v.infoMax);
 const guildRemoval = (v: unknown) =>
   object(v) &&
   id(v.guildId) &&

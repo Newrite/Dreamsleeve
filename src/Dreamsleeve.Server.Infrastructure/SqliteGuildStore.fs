@@ -101,9 +101,13 @@ module SqliteGuildStore =
                 use reader = statement.ExecuteReader()
                 readAll reader row
             let guilds =
-                rows "SELECT id, name, created_at FROM guilds ORDER BY id" (fun reader ->
-                    match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1) with
-                    | Ok id, Ok name -> Ok(id, name, time (reader.GetInt64 2))
+                rows "SELECT id, name, created_at, info FROM guilds ORDER BY id" (fun reader ->
+                    let info =
+                        match optional reader 3 reader.GetString with
+                        | ValueSome text -> GuildInfo.create GuildOptions.MaxInfoLength text |> Result.map ValueSome
+                        | ValueNone -> Ok ValueNone
+                    match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1), info with
+                    | Ok id, Ok name, Ok info -> Ok(id, name, time (reader.GetInt64 2), info)
                     | _ -> invalidData "A stored guild is invalid.")
             let members =
                 rows "SELECT guild_id, player_id, role, joined_at, mute_reason, muted_by, muted_at, muted_until, title_id FROM guild_members" memberOf
@@ -122,10 +126,11 @@ module SqliteGuildStore =
                 let invitesOf = invites |> List.groupBy _.Guild |> Map.ofList
                 let titlesOf = titles |> List.groupBy fst |> Map.ofList
                 let stored =
-                    guilds |> List.map (fun (id, name, createdAt) ->
+                    guilds |> List.map (fun (id, name, createdAt, info) ->
                         { Id = id
                           Name = name
                           CreatedAt = createdAt
+                          Info = info
                           Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
                           Invites = invitesOf |> Map.tryFind id |> Option.defaultValue []
                           Titles = titlesOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd })
@@ -197,6 +202,11 @@ module SqliteGuildStore =
                   "@guild", guild id
                   "@name", box (GuildTitleName.value created.Name)
                   "@key", box (GuildTitleName.key created.Name) ]
+            |> ignore
+            Ok()
+        | GuildWrite.PutInfo(id, info) ->
+            execute context "UPDATE guilds SET info=@info WHERE id=@guild"
+                [ "@guild", guild id; "@info", nullable (info |> ValueOption.map GuildInfo.value) ]
             |> ignore
             Ok()
         // The holders lose the role with it: title_id has no foreign key.

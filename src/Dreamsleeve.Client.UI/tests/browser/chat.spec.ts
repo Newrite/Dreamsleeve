@@ -1552,6 +1552,39 @@ test("guilds have their tabs and send target, a panel by role, invitations and a
   );
 });
 
+test("the master writes the guild information; members read it with its line breaks", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const about = page.getByRole("region", { name: "О гильдии" });
+  await expect(about).toContainText("Сбор по пятницам у Скайфорджа");
+  await about.getByRole("button", { name: "Изменить" }).click();
+  const text = about.getByRole("textbox", { name: "Информация о гильдии" });
+  await text.fill("а".repeat(501));
+  await expect(about).toContainText("501 / 500");
+  await expect(about.getByRole("button", { name: "Сохранить" })).toBeDisabled();
+  await text.fill("Новичкам рады.\nПишите главе.");
+  await about.getByRole("button", { name: "Сохранить" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Информация о гильдии «Соратники» сохранена");
+  await expect(about.locator("p")).toHaveText("Новичкам рады.\nПишите главе.");
+  // A member of another guild reads it without editing.
+  await page
+    .getByRole("group", { name: "Выбор гильдии" })
+    .getByRole("button", { name: "Вороны" })
+    .click();
+  await expect(about).toContainText(
+    "Глава пока ничего не рассказал о гильдии.",
+  );
+  await expect(about.getByRole("button", { name: "Изменить" })).toHaveCount(0);
+});
+
 test("an invitation finds online players outside the guild by name", async ({
   page,
 }) => {

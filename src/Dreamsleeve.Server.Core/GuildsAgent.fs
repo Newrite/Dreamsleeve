@@ -102,7 +102,8 @@ module GuildsAgent =
           CreatedAt = guild.CreatedAt
           Members = ordered guild |> List.map (memberView state now)
           Messages = messages
-          Titles = guild.Titles }
+          Titles = guild.Titles
+          Info = guild.Info }
 
     let private inviteView state (invite: GuildInvite) =
         GuildBook.tryFind invite.Guild state.Book
@@ -119,6 +120,7 @@ module GuildsAgent =
     let private summary state (guild: Guild) : GuildSummary =
         { Guild = guild.Id
           Name = guild.Name
+          Info = guild.Info
           CreatedAt = guild.CreatedAt
           Members = guild.MemberCount
           Master = guild.Master |> ValueOption.map (fun master -> profileOf state master.Player) }
@@ -268,6 +270,26 @@ module GuildsAgent =
             persist state context (GuildWrite.PutMember(guild, membership))
             broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild, memberView state at membership))))
 
+    // Empty text clears the information; otherwise the chat text rules and the word list.
+    let private infoText state (raw: string) =
+        let invalid message = Error { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "info" }
+        if String.IsNullOrWhiteSpace raw then Ok ValueNone
+        else
+            match GuildInfo.create state.Book.Limits.InfoMaxLength raw with
+            | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"The guild information has at most {maximum} characters."
+            | Error _ -> invalid "The guild information contains control characters."
+            | Ok info when not (Moderation.allows state.Moderation (GuildInfo.value info)) ->
+                Error { Code = RequestRejectionCode.TextNotAllowed; Message = "The guild information contains words that are not allowed."; Field = "info" }
+            | Ok info -> Ok(ValueSome info)
+
+    let private setInfo state context actor guild raw =
+        infoText state raw
+        |> Result.bind (fun info -> GuildBook.setInfo actor guild info state.Book |> Result.mapError rejection)
+        |> Result.map (fun entry ->
+            persist state context (GuildWrite.PutInfo(guild, entry.Info))
+            state.Logger.LogInformation("Information of guild {GuildId} changed by player {PlayerId}", guildKey guild, player actor)
+            broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.Info(guild, entry.Info))))
+
     let private act state context (request: GuildRequest) =
         match state.Subscribers.TryGetValue request.ConnectionId with
         | false, _ -> ()
@@ -383,6 +405,7 @@ module GuildsAgent =
             | GuildAction.RenameTitle(guild, title, raw) -> renameTitle state context actor guild title raw |> settle guild
             | GuildAction.DeleteTitle(guild, title) -> deleteTitle state context actor guild title at |> settle guild
             | GuildAction.SetTitle(guild, target, title) -> setTitle state context actor guild target title at |> settle guild
+            | GuildAction.SetInfo(guild, raw) -> setInfo state context actor guild raw |> settle guild
 
     let private rejectChat state context connectionId (replyTo: ReliableAgentRef<ChatRoomEvent>) requestId code message field =
         respond state context connectionId replyTo (ChatRoomEvent.Rejected(requestId, { Code = code; Message = message; Field = field }))

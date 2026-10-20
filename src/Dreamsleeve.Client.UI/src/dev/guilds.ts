@@ -16,6 +16,7 @@ const LIMITS: GuildLimits = {
   nameMin: 3,
   nameMax: 24,
   titles: 10,
+  infoMax: 500,
 };
 type GuildRemoval = Extract<HostEvent, { type: "guilds" }>["removed"][number];
 type GuildCommand = Extract<Command, { type: "guild" }>;
@@ -56,6 +57,7 @@ export function makeGuildStand(
         { id: "1", name: "Казначей" },
         { id: "2", name: "Новобранец" },
       ],
+      info: "Соратники Йоррваскра.\nСбор по пятницам у Скайфорджа.",
     },
     {
       id: "2",
@@ -67,6 +69,7 @@ export function makeGuildStand(
         { ...member(self, "member"), mute: undefined },
       ],
       titles: [],
+      info: "",
     },
   ];
   const invites: GuildInvite[] = [
@@ -132,6 +135,7 @@ export function makeGuildStand(
           createdAt: Date.now(),
           members: [member(self, "master")],
           titles: [],
+          info: "",
         });
         changed(true);
         return undefined;
@@ -148,6 +152,7 @@ export function makeGuildStand(
             createdAt: Date.now() - 365 * 86400000,
             members: [member(players[1], "master"), member(self, "member")],
             titles: [],
+            info: "",
           });
         changed(c.accept);
         return undefined;
@@ -183,6 +188,13 @@ export function makeGuildStand(
         changed(false);
         return undefined;
       }
+      case "setInfo":
+        if (!guild) return "Гильдия не найдена";
+        if ([...c.info].length > LIMITS.infoMax)
+          return `Не длиннее ${LIMITS.infoMax} символов`;
+        guild.info = c.info;
+        changed(false);
+        return undefined;
       case "deleteTitle":
         if (!guild?.titles.some((t) => t.id === c.titleId))
           return "Такой роли в гильдии уже нет";

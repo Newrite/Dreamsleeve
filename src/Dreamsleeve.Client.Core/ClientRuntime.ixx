@@ -523,6 +523,11 @@ private:
       return Checked(book.PutTitles(changed.guildId, std::move(changed.titles)));
     }
 
+    Result<void> Change(GuildBook& book, Wire::GuildInfoChanged& changed)
+    {
+      return Checked(book.PutInfo(changed.guildId, std::move(changed.info)));
+    }
+
     static Result<void> Checked(Domain::OperationResult result)
     {
       if (!result) return std::unexpected{std::move(result.error())};

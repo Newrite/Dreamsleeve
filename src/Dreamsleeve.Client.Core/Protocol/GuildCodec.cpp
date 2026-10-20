@@ -114,6 +114,13 @@ namespace Dreamsleeve::Client::Wire::Detail
         assignment.set_player_id(value.playerId);
         if (value.titleId) assignment.set_title_id(*value.titleId);
       }
+
+      void operator()(const SetGuildInfo& value) const
+      {
+        auto& info = *target.mutable_set_info();
+        info.set_guild_id(value.guildId);
+        info.set_info(value.info);
+      }
     };
 
     Result<Domain::GuildRemovalReason> Removal(int value)
@@ -169,7 +176,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (static_cast<std::size_t>(source.recent_messages_size()) > config.maxRecentMessages) return Invalid("initial_count");
 
       GuildOpened result{
-          {guildId, source.name(), source.channel_id(), source.created_at_unix_ms()}
+          {guildId, source.name(), source.channel_id(), source.created_at_unix_ms(), {}, {}, source.info()}
       };
       for (const auto& value : source.members())
       {
@@ -212,7 +219,12 @@ namespace Dreamsleeve::Client::Wire::Detail
     GuildsSnapshot result{
         {},
         {},
-        {limits.max_guilds_per_player(), limits.max_members(), limits.name_min_length(), limits.name_max_length(), limits.max_titles()}
+        {limits.max_guilds_per_player(),
+         limits.max_members(),
+         limits.name_min_length(),
+         limits.name_max_length(),
+         limits.max_titles(),
+         limits.info_max_length()}
     };
     for (const auto& value : source.guilds())
     {
@@ -282,6 +294,13 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!titles) return std::unexpected{titles.error()};
         return GuildChanged{
             GuildTitlesChanged{changed.guild_id(), std::move(*titles)}
+        };
+      }
+      case P::GuildChanged::kInfo: {
+        const auto& changed = source.info();
+        if (changed.guild_id() == Domain::InvalidId) return Invalid("guild_id");
+        return GuildChanged{
+            GuildInfoChanged{changed.guild_id(), changed.info()}
         };
       }
       case P::GuildChanged::CHANGE_NOT_SET:

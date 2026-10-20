@@ -36,7 +36,14 @@ export interface GuildsState {
 export const idleGuilds: GuildsState = {
   guilds: [],
   invites: [],
-  guildLimits: { perPlayer: 0, members: 0, nameMin: 0, nameMax: 0, titles: 0 },
+  guildLimits: {
+    perPlayer: 0,
+    members: 0,
+    nameMin: 0,
+    nameMax: 0,
+    titles: 0,
+    infoMax: 0,
+  },
   guildsKnown: false,
   guildRequests: {},
   selectedGuild: null,
@@ -215,6 +222,10 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
         return action.titleId === undefined
           ? `${label}: роль снята`
           : `${label}: роль выдана`;
+      case "setInfo":
+        return action.info
+          ? `Информация о гильдии «${name}» сохранена`
+          : `Информация о гильдии «${name}» очищена`;
     }
   }
   function result(event: GuildResult) {
@@ -321,6 +332,10 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
     },
     deleteTitle(guildId: string, titleId: string, name: string) {
       request({ action: "deleteTitle", guildId, titleId }, name);
+    },
+    // Blank text clears the information.
+    setInfo(guildId: string, info: string) {
+      request({ action: "setInfo", guildId, info: info.trim() ? info : "" });
     },
     // No titleId takes the member's custom role away.
     setTitle(

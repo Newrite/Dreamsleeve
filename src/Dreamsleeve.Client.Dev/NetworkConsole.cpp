@@ -194,7 +194,7 @@ namespace
   // guild exclude|transfer|unmute <guild> <player> | guild role <guild> <player> <member|officer> |
   // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id> |
   // guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | guild title-delete <guild> <title> |
-  // guild title <guild> <player> <title|none>
+  // guild title <guild> <player> <title|none> | guild info <guild> <text, empty clears>
   std::optional<ClientCommand> ParseGuild(std::string_view line, std::uint64_t requestId, const GuildBook* book)
   {
     std::istringstream input{std::string{line.substr(6)}};
@@ -220,6 +220,11 @@ namespace
       return GuildRequest{
           requestId,
           CreateGuildTitle{*guild, rest()}
+      };
+    if (action == "info")
+      return GuildRequest{
+          requestId,
+          SetGuildInfo{*guild, rest()}
       };
     // The guild's channel follows from the book; an unknown guild sends nothing.
     if (action == "say" || action == "delete")
@@ -309,20 +314,22 @@ namespace
     return std::nullopt;
   }
 
-  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max> titles=<n>", then
+  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max> titles=<n> info=<n>", then
   // "guild <id> name=<name> channel=<id> members=<n>" with "title <guild> <title> name=<name>" per custom role and
-  // "member <guild> <player> <role> online=<0|1>[ muted][ title=<title>] name=<name>" per member, and
+  // "member <guild> <player> <role> online=<0|1>[ muted][ title=<title>] name=<name>" per member,
+  // "info <guild> <text>" when the master wrote some, and
   // "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
   void PrintGuilds(std::ostream& output, const GuildBook& book)
   {
     const auto& limits = book.Limits();
     output << "guilds " << book.Guilds().size() << " invites " << book.Invites().size() << " per-player=" << limits.maxGuildsPerPlayer
            << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength
-           << " titles=" << limits.maxTitles << '\n';
+           << " titles=" << limits.maxTitles << " info=" << limits.infoMaxLength << '\n';
     for (const auto& guild : book.Guilds())
     {
       output << "guild " << guild.guildId << " name=" << guild.name << " channel=" << guild.channelId << " members=" << guild.members.size()
              << '\n';
+      if (!guild.info.empty()) output << "info " << guild.guildId << ' ' << guild.info << '\n';
       for (const auto& title : guild.titles)
         output << "title " << guild.guildId << ' ' << title.titleId << " name=" << title.name << '\n';
       for (const auto& member : guild.members)
@@ -363,7 +370,7 @@ namespace
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)

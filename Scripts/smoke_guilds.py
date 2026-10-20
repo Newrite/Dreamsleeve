@@ -3,8 +3,9 @@
 name rules, an invitation and its acceptance, guild chat with the real name
 of a member who hides it elsewhere, a guild mute and its lift, an officer
 who removes a member's message and excludes them, custom roles the master
-creates, gives and deletes, the master who cannot leave and hands the guild
-over, the stored rows, disbanding and the name free again.
+creates, gives and deletes, the guild information only the master writes, the
+master who cannot leave and hands the guild over, the stored rows, disbanding
+and the name free again.
 """
 import argparse
 import os
@@ -93,7 +94,7 @@ def smoke(args, log, directory: Path):
         carol, carol_id = client("carol", "smoke_carol", "Smoke Carol")
 
         name = f"Вороны{nonce}"
-        expect(alice, r"^guilds 0 invites 0 per-player=3 members=64 name=3\.\.24 titles=10$", 0)
+        expect(alice, r"^guilds 0 invites 0 per-player=3 members=64 name=3\.\.24 titles=10 info=500$", 0)
         start_alice = alice.mark()
         guild = done(alice, f"guild create {name}")
         channel = expect(alice, rf"^guild {guild} name={name} channel=(\d+) members=1$", start_alice).group(1)
@@ -161,6 +162,16 @@ def smoke(args, log, directory: Path):
         stored("SELECT title_id FROM guild_members WHERE guild_id = ? AND player_id = ?", (int(guild), int(bob_id)),
                [(None,)], "The holder of a deleted custom role still holds it")
         stage("only the master creates a custom role, unique in any case, gives it and deletes it from its holder")
+
+        command(bob, f"guild info {guild} Мы лучшие", rf"rejected \({NOT_PERMITTED}\)")
+        start_bob = bob.mark()
+        done(alice, f"guild info {guild} Сбор по пятницам {nonce}")
+        expect(bob, rf"^info {guild} Сбор по пятницам {nonce}$", start_bob)
+        stored("SELECT info FROM guilds WHERE id = ?", (int(guild),), [(f"Сбор по пятницам {nonce}",)],
+               "The guild information is not stored")
+        done(alice, f"guild info {guild}")
+        stored("SELECT info FROM guilds WHERE id = ?", (int(guild),), [(None,)], "Cleared guild information is still stored")
+        stage("only the master writes the guild information, members read it and empty text clears it")
 
         command(alice, f"guild leave {guild}", rf"rejected \({GUILD_MASTER_STAYS}\)")
         start_alice = alice.mark()

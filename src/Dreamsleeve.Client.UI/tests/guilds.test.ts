@@ -59,6 +59,7 @@ const guild = (
   createdAt: 0,
   members,
   titles: [],
+  info: "",
 });
 const guildsEvent = (
   guilds: Guild[],
@@ -67,7 +68,14 @@ const guildsEvent = (
   type: "guilds",
   guilds,
   invites: [],
-  limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24, titles: 10 },
+  limits: {
+    perPlayer: 3,
+    members: 64,
+    nameMin: 3,
+    nameMax: 24,
+    titles: 10,
+    infoMax: 500,
+  },
   removed: [],
   ...extra,
 });
@@ -332,6 +340,21 @@ describe("guilds in the chat", () => {
       action: "deleteTitle",
       titleId: "3",
     });
+    chat.guilds.setInfo("4", "Сбор по пятницам\n");
+    expect(sent().at(-1)).toEqual({
+      type: "guild",
+      requestId: "g6",
+      action: "setInfo",
+      guildId: "4",
+      info: "Сбор по пятницам\n",
+    });
+    chat.receive({ type: "guildResult", requestId: "g6", guildId: "4" });
+    expect(chat.store.getState().notice).toBe(
+      "Информация о гильдии «Вороны» сохранена",
+    );
+    // Blank text clears it.
+    chat.guilds.setInfo("4", "  ");
+    expect(sent().at(-1)).toMatchObject({ action: "setInfo", info: "" });
 
     // The member's own role: given, then taken away with its deletion.
     const [ravensGuild, companionsGuild] = guilds;
@@ -423,12 +446,20 @@ describe("guild events at the bridge", () => {
           },
         ],
         titles: [{ id: "2", name: "Казначей" }],
+        info: "Сбор по пятницам\nу Йоррваскра",
       },
     ],
     invites: [
       { guildId: "5", guildName: "Соратники", invitedBy: "7", expires: 0 },
     ],
-    limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24, titles: 10 },
+    limits: {
+      perPlayer: 3,
+      members: 64,
+      nameMin: 3,
+      nameMax: 24,
+      titles: 10,
+      infoMax: 500,
+    },
     removed: [{ guildId: "6", name: "Изгнанники", reason: "disbanded" }],
   };
   it("accept what the host sends and refuse what it never would", () => {

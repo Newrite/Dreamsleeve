@@ -6,7 +6,7 @@ import "common.proto";
 import "chat.proto";
 import "session.proto";
 
-// Guilds (version 19, custom roles since 21; docs/GuildsRu.md,
+// Guilds (version 19, custom roles and information since 21; docs/GuildsRu.md,
 // docs/DomainSpecRu.MD §4.7). A guild has
 // one chat channel (ChatChannelKind GUILD): members write in it with SendChat
 // and receive ChatPublished like in any channel; the master and officers remove
@@ -48,6 +48,7 @@ message Guild {
   repeated GuildMember members = 5;
   repeated ChatMessage recent_messages = 6; // Retained history, oldest first.
   repeated GuildTitle titles = 7; // Oldest first.
+  string info = 8; // What the master tells about the guild; empty: nothing.
 }
 
 message GuildInvite {
@@ -64,6 +65,7 @@ message GuildLimits {
   uint32 name_min_length = 3; // Unicode scalar values.
   uint32 name_max_length = 4;
   uint32 max_titles = 5; // Custom roles of one guild; their names follow name_*_length.
+  uint32 info_max_length = 6; // Unicode scalar values of the guild information.
 }
 
 // After SessionOpened: every guild of the player and their invitations; it
@@ -105,6 +107,12 @@ message GuildTitles {
   repeated GuildTitle titles = 2;
 }
 
+// The master wrote or cleared the guild information.
+message GuildInfoChanged {
+  uint64 guild_id = 1;
+  string info = 2; // Empty: none.
+}
+
 message GuildChanged {
   oneof change {
     Guild added = 1; // The player created or joined it.
@@ -114,6 +122,7 @@ message GuildChanged {
     GuildInvite invited = 5;
     uint64 invite_removed = 6; // Guild ID: accepted, declined, expired or disbanded.
     GuildTitles titles = 7;
+    GuildInfoChanged info = 8;
   }
 }
 
@@ -141,6 +150,8 @@ message SetGuildMemberTitle {
   uint64 player_id = 2;
   optional uint64 title_id = 3; // Absent: the member holds none.
 }
+// The master only: the chat text rules and the word list; empty clears it.
+message SetGuildInfo { uint64 guild_id = 1; string info = 2; }
 
 message GuildCommand {
   oneof action {
@@ -158,6 +169,7 @@ message GuildCommand {
     RenameGuildTitle rename_title = 12;
     DeleteGuildTitle delete_title = 13;
     SetGuildMemberTitle set_title = 14;
+    SetGuildInfo set_info = 15;
   }
 }
 

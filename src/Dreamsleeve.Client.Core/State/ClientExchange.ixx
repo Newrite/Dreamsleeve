@@ -231,6 +231,13 @@ export namespace Dreamsleeve::Client
     std::optional<Domain::GuildTitleId> titleId;
   };
 
+  // The master's text about the guild; empty clears it.
+  struct SetGuildInfo
+  {
+    Domain::GuildId guildId{};
+    std::string     info;
+  };
+
   using GuildAction = std::variant<
     CreateGuild,
     InviteToGuild,
@@ -245,7 +252,8 @@ export namespace Dreamsleeve::Client
     CreateGuildTitle,
     RenameGuildTitle,
     DeleteGuildTitle,
-    SetGuildMemberTitle>;
+    SetGuildMemberTitle,
+    SetGuildInfo>;
 
   struct GuildRequest
   {

@@ -290,7 +290,7 @@ namespace Dreamsleeve.Protocol.Chat {
 
   #region Messages
   /// <summary>
-  /// Control/chat envelope. Version 21 gives guilds custom roles;
+  /// Control/chat envelope. Version 21 gives guilds custom roles and information;
   /// version 20 colors player names in chat;
   /// version 19 adds guilds;
   /// version 18 lets a moderator's ban cover the player's devices;

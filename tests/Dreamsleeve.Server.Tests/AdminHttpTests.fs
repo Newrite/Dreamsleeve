@@ -379,7 +379,8 @@ let tests = testSequenced (testList "Admin HTTP" [
             let carol = profile 9UL "carol" "Кэрол"
             let membership (player: PlayerData) role : GuildMember = { Player = player.PlayerId; Role = role; JoinedAt = at; Mute = ValueNone; Title = ValueNone }
             // The master's account is gone: the guild waits for the panel.
-            let summary master : GuildSummary = { Guild = guild; Name = name; CreatedAt = at; Members = 2; Master = master }
+            let info = GuildInfo.create 500 "<b>Сбор</b> по пятницам" |> ok
+            let summary master : GuildSummary = { Guild = guild; Name = name; Info = ValueSome info; CreatedAt = at; Members = 2; Master = master }
             let card bobRole master : GuildCard =
                 { Summary = summary master
                   Members = [ { Membership = membership bob bobRole; Profile = bob; Online = true }
@@ -404,6 +405,7 @@ let tests = testSequenced (testList "Admin HTTP" [
             status 200 page
             let! html = page.Content.ReadAsStringAsync()
             check (html.Contains "&lt;i&gt;Боб&lt;/i&gt;" && not (html.Contains "<i>Боб")) "Member names are encoded."
+            check (html.Contains "&lt;b&gt;Сбор&lt;/b&gt; по пятницам") "The guild information shows, encoded."
             check (html.Contains "/guilds/5/appoint" && html.Contains "/guilds/5/dissolve") "The card offers both actions."
             use! missing = panel.Http.GetAsync "/guilds/6"
             status 404 missing

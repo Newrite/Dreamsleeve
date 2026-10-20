@@ -85,6 +85,7 @@ module internal GuildCodec =
                 match pair assignment.GuildId assignment.PlayerId (fun guild player -> struct (guild, player)), assigned with
                 | Ok(struct (guild, player)), Ok assigned -> Ok(GuildAction.SetTitle(guild, player, assigned))
                 | Error error, _ | _, Error error -> Error error
+            | WireAction.SetInfo -> guild source.SetInfo.GuildId |> Result.map (fun guild -> GuildAction.SetInfo(guild, source.SetInfo.Info))
             | WireAction.None -> Error(ProtocolCodecFailure.InvalidPayload "action")
             | unknown when not (Enum.IsDefined unknown) -> Error(ProtocolCodecFailure.InvalidPayload "action")
         action |> Result.map ClientCommand.Guild
@@ -108,13 +109,19 @@ module internal GuildCodec =
     let titleOf (title: GuildTitle) =
         Dreamsleeve.Protocol.Chat.GuildTitle(TitleId = GuildTitleId.value title.Id, Name = GuildTitleName.value title.Name)
 
+    let private infoText (info: GuildInfo voption) =
+        match info with
+        | ValueSome text -> GuildInfo.value text
+        | ValueNone -> ""
+
     let guildOf (view: GuildView) =
         let result =
             Dreamsleeve.Protocol.Chat.Guild(
                 GuildId = GuildId.value view.Guild,
                 Name = GuildName.value view.Name,
                 ChannelId = ChatChannelId.value view.ChannelId,
-                CreatedAtUnixMs = unixMs view.CreatedAt)
+                CreatedAtUnixMs = unixMs view.CreatedAt,
+                Info = infoText view.Info)
         result.Members.AddRange(view.Members |> Seq.map memberOf)
         result.RecentMessages.AddRange(view.Messages |> Seq.map ChatCodec.message)
         result.Titles.AddRange(view.Titles |> Seq.map titleOf)
@@ -137,7 +144,8 @@ module internal GuildCodec =
                 MaxMembers = uint32 state.Limits.MaxMembers,
                 NameMinLength = uint32 state.Limits.NameMinLength,
                 NameMaxLength = uint32 state.Limits.NameMaxLength,
-                MaxTitles = uint32 state.Limits.MaxTitles)
+                MaxTitles = uint32 state.Limits.MaxTitles,
+                InfoMaxLength = uint32 state.Limits.InfoMaxLength)
         result
 
     let changed (change: GuildChange) =
@@ -157,6 +165,8 @@ module internal GuildCodec =
             let list = Dreamsleeve.Protocol.Chat.GuildTitles(GuildId = GuildId.value guild)
             list.Titles.AddRange(titles |> Seq.map titleOf)
             result.Titles <- list
+        | GuildChange.Info(guild, info) ->
+            result.Info <- Dreamsleeve.Protocol.Chat.GuildInfoChanged(GuildId = GuildId.value guild, Info = infoText info)
         result
 
     // A guild's tail belongs to its channel, ascends and fits the per-channel budget.
@@ -172,4 +182,4 @@ module internal GuildCodec =
         match change with
         | GuildChange.Added view -> validGuild config view
         | GuildChange.Removed _ | GuildChange.MemberChanged _ | GuildChange.MemberRemoved _
-        | GuildChange.Invited _ | GuildChange.InviteRemoved _ | GuildChange.Titles _ -> true
+        | GuildChange.Invited _ | GuildChange.InviteRemoved _ | GuildChange.Titles _ | GuildChange.Info _ -> true

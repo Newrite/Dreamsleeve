@@ -312,6 +312,10 @@ Control-канале ENet.
   `set_title = 14` (`SetGuildMemberTitle`, без `title_id` — снять). Коды отказа
   `GUILD_TITLE_NAME_TAKEN = 28`, `GUILD_TITLES_FULL = 29`; нет такой роли — `TARGET_NOT_FOUND` с
   полем `title_id`. Клиент отвергает роль с нулевым ID, без имени и повтор ID в списке.
+  Информация о гильдии: `Guild.info = 8` (пусто — нет), `GuildLimits.info_max_length = 6`,
+  действие `set_info = 15` (`SetGuildInfo{guild_id, info}`, только глава, пусто — убрать; длина и
+  управляющие символы — `INVALID_REQUEST` с полем `info`, словарь — `TEXT_NOT_ALLOWED`),
+  изменение `GuildChanged.info = 8` (`GuildInfoChanged{guild_id, info}`).
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

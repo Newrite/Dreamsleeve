@@ -137,6 +137,16 @@ public:
       return {};
     }
 
+    // The master wrote or cleared (empty) the guild information.
+    Domain::OperationResult PutInfo(Domain::GuildId guildId, std::string info)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->info = std::move(info);
+      ++revision;
+      return {};
+    }
+
     // A member joined, or their role, custom role, mute, online state or name changed.
     Domain::OperationResult PutMember(Domain::GuildId guildId, Domain::GuildMember member)
     {

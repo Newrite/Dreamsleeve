@@ -365,6 +365,8 @@ type GuildOptions = {
     InviteDays: int
     /// Custom roles of one guild; 0 leaves guilds without them.
     MaxTitles: int
+    /// The guild information the master writes, in Unicode scalar values.
+    InfoMaxLength: int
     /// Chat messages each guild keeps in memory; at most Server.MaxRecentMessages.
     HistoryCapacity: int
     MailboxCapacity: int
@@ -390,9 +392,14 @@ module GuildOptions =
     [<Literal>]
     let MaxTitlesLimit = 100
 
+    /// The longest guild information a server may allow: every snapshot of
+    /// every member carries it, so it stays well inside a welcome packet.
+    [<Literal>]
+    let MaxInfoLength = 2000
+
     let defaults = {
         MaxGuilds = 10000; MaxGuildsPerPlayer = 3; MaxMembers = 64; MaxInvites = 32
-        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; MaxTitles = 10; HistoryCapacity = 200
+        NameMinLength = 3; NameMaxLength = 24; InviteDays = 7; MaxTitles = 10; InfoMaxLength = 500; HistoryCapacity = 200
         MailboxCapacity = 2048; ControlReserve = 64; MaxControlDeliveries = 128; MaxPendingWrites = 1024
         InviteCheckIntervalMs = 60000
     }
@@ -401,6 +408,7 @@ module GuildOptions =
     let rules options =
         GuildLimits.create options.MaxGuilds options.MaxGuildsPerPlayer options.MaxMembers options.MaxInvites
             options.NameMinLength options.NameMaxLength (TimeSpan.FromDays(float options.InviteDays)) options.MaxTitles
+            options.InfoMaxLength
 
     let validate options = [
         let range name value low high =
@@ -413,7 +421,8 @@ module GuildOptions =
               range "NameMinLength" options.NameMinLength 1 MaxNameLength
               range "NameMaxLength" options.NameMaxLength (max 1 options.NameMinLength) MaxNameLength
               range "InviteDays" options.InviteDays 1 365
-              range "MaxTitles" options.MaxTitles 0 MaxTitlesLimit ]
+              range "MaxTitles" options.MaxTitles 0 MaxTitlesLimit
+              range "InfoMaxLength" options.InfoMaxLength 1 MaxInfoLength ]
             |> List.choose id
         if options.HistoryCapacity < 1 then "Guilds.HistoryCapacity must be positive."
         if options.MailboxCapacity < 1 || options.ControlReserve < 1 || options.MaxControlDeliveries < 1 || options.MaxPendingWrites < 1 then
@@ -442,10 +451,11 @@ type GuildEvent =
     /// A message published in or removed from one of the player's guild channels.
     | Chat of ChatRoomEvent
 
-/// A guild for the panel: its name, size and master.
+/// A guild for the panel: its name, size, master and information.
 type GuildSummary = {
     Guild: GuildId
     Name: GuildName
+    Info: GuildInfo voption
     CreatedAt: DateTimeOffset
     Members: int
     Master: PlayerData voption
@@ -507,6 +517,8 @@ type GuildWrite =
     | PutTitle of GuildId * GuildTitle
     /// A deleted custom role; its holders were put without it first.
     | RemoveTitle of GuildTitleId
+    /// The guild information, or none.
+    | PutInfo of GuildId * GuildInfo voption
 
 /// Stored guilds, the profiles their members and invited players have now,
 /// the storage high-water mark and the writer; supplied at runtime start.

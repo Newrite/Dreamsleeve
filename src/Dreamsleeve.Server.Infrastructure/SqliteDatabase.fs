@@ -29,7 +29,7 @@ module SqliteAccountStoreConfig =
 [<RequireQualifiedAccess>]
 module internal SqliteDatabase =
     [<Literal>]
-    let SchemaVersion = 15L
+    let SchemaVersion = 16L
 
     [<Literal>]
     let ApplicationId = 1146309718L

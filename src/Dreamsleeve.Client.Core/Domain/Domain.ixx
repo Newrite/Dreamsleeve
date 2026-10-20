@@ -355,6 +355,7 @@ export namespace Domain
     std::int64_t             createdAtUnixMs{};
     std::vector<GuildMember> members;
     std::vector<GuildTitle>  titles;  // Oldest first.
+    std::string              info;    // What the master tells about it; empty: nothing.
 
     bool operator==(const Guild&) const = default;
   };
@@ -379,6 +380,7 @@ export namespace Domain
     std::uint32_t nameMinLength{};       // Unicode scalar values; custom role names too.
     std::uint32_t nameMaxLength{};
     std::uint32_t maxTitles{};           // Custom roles of one guild.
+    std::uint32_t infoMaxLength{};       // Unicode scalar values of the guild information.
 
     bool operator==(const GuildLimits&) const = default;
   };

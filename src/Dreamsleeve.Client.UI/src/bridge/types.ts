@@ -216,6 +216,8 @@ export interface Guild {
   members: GuildMember[];
   // Oldest first.
   titles: GuildTitle[];
+  // What the master tells about the guild; empty: nothing.
+  info: string;
 }
 // An invitation waiting for the player's answer; inviter is the host's name
 // for the inviting player when it has met them.
@@ -227,13 +229,15 @@ export interface GuildInvite {
   expires: number;
 }
 // The server's limits; a lowered limit removes nobody. nameMin and nameMax
-// bound custom role names too; titles: custom roles of one guild.
+// bound custom role names too; titles: custom roles of one guild; infoMax:
+// characters of the guild information.
 export interface GuildLimits {
   perPlayer: number;
   members: number;
   nameMin: number;
   nameMax: number;
   titles: number;
+  infoMax: number;
 }
 // What a guild command asks; the server judges roles, the name and limits.
 export type GuildAction =
@@ -264,7 +268,9 @@ export type GuildAction =
   | { action: "renameTitle"; guildId: Id; titleId: Id; name: string }
   | { action: "deleteTitle"; guildId: Id; titleId: Id }
   // No titleId: the member holds none.
-  | { action: "setTitle"; guildId: Id; playerId: Id; titleId?: Id };
+  | { action: "setTitle"; guildId: Id; playerId: Id; titleId?: Id }
+  // The master's; empty clears it.
+  | { action: "setInfo"; guildId: Id; info: string };
 export type Command =
   | { type: "sendChat"; channelId: Id; text: string; requestId: string }
   | { type: "close" }

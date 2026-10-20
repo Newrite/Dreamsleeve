@@ -118,6 +118,21 @@
   align-items: center;
   gap: 10px;
 }
+/* The master's text about the guild, line breaks kept. */
+.about {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aboutForm {
+  display: grid;
+  gap: 6px;
+}
+.aboutForm textarea {
+  width: 100%;
+  max-width: 560px;
+  resize: vertical;
+}
 .inviteSearch {
   display: grid;
   gap: 6px;

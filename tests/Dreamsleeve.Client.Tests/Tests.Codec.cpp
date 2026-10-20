@@ -1123,6 +1123,8 @@ TEST_CASE(
   const auto assigned = sent(SetGuildMemberTitle{4, 9, 2}).set_title();
   CHECK((assigned.guild_id() == 4 && assigned.player_id() == 9 && assigned.has_title_id() && assigned.title_id() == 2));
   CHECK_FALSE(sent(SetGuildMemberTitle{4, 9, std::nullopt}).set_title().has_title_id());
+  const auto info = sent(SetGuildInfo{4, "Сбор\nпо пятницам"}).set_info();
+  CHECK((info.guild_id() == 4 && info.info() == "Сбор\nпо пятницам"));
 
   constexpr std::uint64_t channel = Domain::GuildChannelBase + 4;
   P::ServerPacket         snapshot;
@@ -1158,6 +1160,8 @@ TEST_CASE(
   guilds->mutable_limits()->set_name_min_length(3);
   guilds->mutable_limits()->set_name_max_length(24);
   guilds->mutable_limits()->set_max_titles(10);
+  guilds->mutable_limits()->set_info_max_length(500);
+  guild->set_info("О нас");
   const auto decoded = codec.Decode(Bytes(snapshot));
   REQUIRE(decoded);
   const auto& book = std::get<W::GuildsSnapshot>(*decoded);
@@ -1176,7 +1180,8 @@ TEST_CASE(
     book.invites == std::vector<Domain::GuildInvite>{
                         {5, "Гильдия", 9, 2000}
   });
-  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24, 10});
+  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24, 10, 500});
+  CHECK(book.guilds[0].guild.info == "О нас");
 
   // A custom role has an ID, once, and a name; a member's role has an ID.
   title->set_title_id(0);
@@ -1238,6 +1243,15 @@ TEST_CASE(
                                              {3, "Летописец"}
   }));
   titles->set_guild_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  auto* about = changed.mutable_guild_changed()->mutable_info();
+  about->set_guild_id(4);
+  about->set_info("Сбор по пятницам");
+  const auto informed = codec.Decode(Bytes(changed));
+  REQUIRE(informed);
+  const auto& text = std::get<W::GuildInfoChanged>(std::get<W::GuildChanged>(*informed).change);
+  CHECK((text.guildId == 4 && text.info == "Сбор по пятницам"));
+  about->set_guild_id(0);
   CHECK_FALSE(codec.Decode(Bytes(changed)));
   changed.mutable_guild_changed()->clear_change();
   CHECK_FALSE(codec.Decode(Bytes(changed)));

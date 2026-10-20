@@ -19,6 +19,9 @@ module GuildUMX =
     [<Measure>]
     type guildTitleId
 
+    [<Measure>]
+    type guildInfo
+
 type GuildName = string<guildName>
 
 /// A custom role's name (docs/GuildsRu.md): the same rules as a guild name.
@@ -26,6 +29,9 @@ type GuildTitleName = string<guildTitleName>
 
 /// Storage-issued and never reused across guilds.
 type GuildTitleId = uint64<guildTitleId>
+
+/// What the master tells about the guild (docs/GuildsRu.md): the chat text rules.
+type GuildInfo = string<guildInfo>
 
 /// The rules guild names and custom role names share.
 module internal GuildText =
@@ -83,6 +89,16 @@ module GuildTitleId =
     /// A storage row ID: positive and within SQLite's INTEGER.
     let create raw : Result<GuildTitleId, DomainError> =
         if raw = 0UL || raw > uint64 Int64.MaxValue then Error(DomainError.InvalidId "GuildTitleId") else Ok(UMX.tag<guildTitleId> raw)
+
+[<RequireQualifiedAccess>]
+module GuildInfo =
+    let value (info: GuildInfo) : string = UMX.untag info
+
+    /// The chat text rules: kept as written, line breaks and tabs allowed,
+    /// other controls and blank text refused. The word list is the owner's check.
+    let create maxLength raw : Result<GuildInfo, DomainError> =
+        PrimitiveValidation.text "GuildInfo" maxLength id true PrimitiveValidation.unrestricted raw
+        |> Result.map UMX.tag<guildInfo>
 
 /// A custom role of one guild, such as "Казначей": cosmetic, it grants no
 /// rights; the master creates and assigns it.
@@ -177,6 +193,7 @@ type GuildLimits =
         nameMaxLength: int
         inviteLifetime: TimeSpan
         maxTitles: int
+        infoMaxLength: int
     }
 
     member this.MaxGuilds = this.maxGuilds
@@ -191,10 +208,12 @@ type GuildLimits =
     member this.InviteLifetime = this.inviteLifetime
     /// Custom roles of one guild; 0 leaves guilds without them.
     member this.MaxTitles = this.maxTitles
+    /// Bound of the guild information in Unicode scalar values.
+    member this.InfoMaxLength = this.infoMaxLength
 
 [<RequireQualifiedAccess>]
 module GuildLimits =
-    let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) maxTitles =
+    let create maxGuilds maxGuildsPerPlayer maxMembers maxInvites nameMinLength nameMaxLength (inviteLifetime: TimeSpan) maxTitles infoMaxLength =
         let positive field value = if value < 1 then Error(DomainError.InvalidLimit(field, value)) else Ok value
         positive "MaxGuilds" maxGuilds
         |> Result.bind (fun _ -> positive "MaxGuildsPerPlayer" maxGuildsPerPlayer)
@@ -207,6 +226,7 @@ module GuildLimits =
             if inviteLifetime <= TimeSpan.Zero then Error(DomainError.InvalidLimit("InviteLifetime", int inviteLifetime.TotalSeconds))
             else Ok inviteLifetime)
         |> Result.bind (fun _ -> if maxTitles < 0 then Error(DomainError.InvalidLimit("MaxTitles", maxTitles)) else Ok maxTitles)
+        |> Result.bind (fun _ -> positive "InfoMaxLength" infoMaxLength)
         |> Result.map (fun _ -> {
             maxGuilds = maxGuilds
             maxGuildsPerPlayer = maxGuildsPerPlayer
@@ -216,6 +236,7 @@ module GuildLimits =
             nameMaxLength = nameMaxLength
             inviteLifetime = inviteLifetime
             maxTitles = maxTitles
+            infoMaxLength = infoMaxLength
         })
 
 [<RequireQualifiedAccess>]
@@ -257,10 +278,13 @@ type Guild =
         members: Dictionary<PlayerId, GuildMember>
         invites: Dictionary<PlayerId, GuildInvite>
         titles: Dictionary<GuildTitleId, GuildTitle>
+        mutable info: GuildInfo voption
     }
 
     member this.Id = this.id
     member this.Name = this.name
+    /// Absent: the master wrote none.
+    member this.Info = this.info
     member this.CreatedAt = this.createdAt
     member this.MemberCount = this.members.Count
     member this.Members = List.ofSeq this.members.Values
@@ -283,6 +307,7 @@ type StoredGuild = {
     Members: GuildMember list
     Invites: GuildInvite list
     Titles: GuildTitle list
+    Info: GuildInfo voption
 }
 
 /// What a disbanded guild leaves: who was in it and who was invited.
@@ -346,6 +371,7 @@ module GuildBook =
                 members = Dictionary()
                 invites = Dictionary()
                 titles = Dictionary()
+                info = guild.Info
             }
             for title in guild.Titles do
                 entry.titles[title.Id] <- title
@@ -428,7 +454,15 @@ module GuildBook =
         elif book.guilds.Count >= book.limits.MaxGuilds then Error GuildError.ServerFull
         elif indexed book.memberships creator >= book.limits.MaxGuildsPerPlayer then Error GuildError.PlayerLimit
         else
-            let entry = { id = id; name = name; createdAt = now; members = Dictionary(); invites = Dictionary(); titles = Dictionary() }
+            let entry = {
+                id = id
+                name = name
+                createdAt = now
+                members = Dictionary()
+                invites = Dictionary()
+                titles = Dictionary()
+                info = ValueNone
+            }
             book.guilds[id] <- entry
             book.names[GuildName.key name] <- id
             let master = { Player = creator; Role = GuildRole.Master; JoinedAt = now; Mute = ValueNone; Title = ValueNone }
@@ -634,6 +668,13 @@ module GuildBook =
                 let changed = { current with Title = id }
                 entry.members[player] <- changed
                 entry, changed))
+
+    /// The master writes the guild information or clears it (ValueNone).
+    let setInfo actor guild (info: GuildInfo voption) (book: GuildBook) =
+        mastered actor guild book
+        |> Result.map (fun entry ->
+            entry.info <- info
+            entry)
 
     let private remove (book: GuildBook) (entry: Guild) =
         let disbanded = { Guild = entry.id; Name = entry.name; Members = entry.Members; Invites = entry.Invites }

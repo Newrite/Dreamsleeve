@@ -89,7 +89,8 @@ export namespace Dreamsleeve::Host::Bridge
      "createTitle",
      "renameTitle",
      "deleteTitle",
-     "setTitle"});
+     "setTitle",
+     "setInfo"});
   static_assert(GuildActionNames.size() == std::variant_size_v<Dreamsleeve::Client::GuildAction>);
 
   // names[value - first]; a value outside the table (Unspecified, a newer
@@ -126,6 +127,8 @@ export namespace Dreamsleeve::Host::Bridge
   constexpr std::size_t MaxReasonBytes = 1024;
   // Bytes of a requested guild or custom role name; the server applies its own, smaller limit.
   constexpr std::size_t MaxGuildNameBytes = 1024;
+  // Bytes of requested guild information; the server applies its own, smaller limit.
+  constexpr std::size_t MaxGuildInfoBytes = 16000;
 
   // ---- UI -> host ----------------------------------------------------------
 
@@ -316,6 +319,7 @@ export namespace Dreamsleeve::Host::Bridge
       std::optional<std::uint32_t> minutes;
       std::string                  reason;
       UiId                         titleId;
+      std::string                  info;
     };
 
   }
@@ -743,6 +747,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::int64_t               createdAt{};
     std::vector<UiGuildMember> members;
     std::vector<UiGuildTitle>  titles;  // Oldest first.
+    std::string                info;    // The master's text; empty: nothing.
   };
 
   // An invitation waiting for the player's answer; inviter is the host's
@@ -765,6 +770,7 @@ export namespace Dreamsleeve::Host::Bridge
     std::uint32_t nameMin{};
     std::uint32_t nameMax{};
     std::uint32_t titles{};
+    std::uint32_t infoMax{};
   };
 
   // A guild the player left since the last guilds event; reason: GuildRemovalNames.
@@ -1028,6 +1034,7 @@ export namespace Dreamsleeve::Host::Bridge
         return std::unexpected{"guild setRole requires role member or officer"};
       if (command.name.size() > MaxGuildNameBytes) return std::unexpected{"guild name is too long"};
       if (command.reason.size() > MaxReasonBytes) return std::unexpected{"guild reason is too long"};
+      if (command.info.size() > MaxGuildInfoBytes) return std::unexpected{"guild info is too long"};
       return Correlated(command, "guild");
     }
 
@@ -1315,7 +1322,7 @@ export namespace Dreamsleeve::Host::Bridge
 
   UiGuild ToUiGuild(const Domain::Guild& guild, Names& names, const UiSettings& settings)
   {
-    UiGuild result{Id(guild.guildId), guild.name, Id(guild.channelId), guild.createdAtUnixMs, {}, {}};
+    UiGuild result{Id(guild.guildId), guild.name, Id(guild.channelId), guild.createdAtUnixMs, {}, {}, guild.info};
     for (const auto& member : guild.members)
       result.members.push_back(ToUiGuildMember(member, names, settings));
     for (const auto& title : guild.titles)
@@ -1354,6 +1361,7 @@ export namespace Dreamsleeve::Host::Bridge
           player,
           title == Domain::InvalidId ? std::nullopt : std::optional<Domain::GuildTitleId>{title}
       };
+    if (action == "setInfo") return Client::SetGuildInfo{guild, std::move(command.info)};
     return Client::CreateGuild{std::move(command.name)};
   }
 
@@ -1761,6 +1769,7 @@ export namespace Dreamsleeve::Host::Bridge
       case Code::NotPermitted:
         return "Ваша роль в гильдии этого не позволяет";
       case Code::TextNotAllowed:
+        if (message.starts_with("The guild information")) return "Текст содержит запрещённые слова";
         return "Название содержит запрещённые слова";
       case Code::TargetNotFound:
         if (message.starts_with("The player is not online")) return "Игрок не в сети";
@@ -1777,6 +1786,9 @@ export namespace Dreamsleeve::Host::Bridge
           return std::format("Название роли не длиннее {} символов", *maximum);
         if (message.starts_with("A custom role name has letters")) return "В названии роли только буквы, цифры и пробелы";
         if (message.starts_with("A guild role")) return "Роль: участник или офицер";
+        if (const auto maximum = count("The guild information has at most "))
+          return std::format("Информация о гильдии не длиннее {} символов", *maximum);
+        if (message.starts_with("The guild information contains")) return "В тексте недопустимые символы";
         break;
       case Code::Overloaded:
         return "Сервер занят. Попробуйте позже";

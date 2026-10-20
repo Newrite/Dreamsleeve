@@ -370,9 +370,24 @@ private:
     std::vector<Domain::GuildTitle> titles;
   };
 
+  // The master wrote or cleared the guild information (empty).
+  struct GuildInfoChanged
+  {
+    Domain::GuildId guildId{};
+    std::string     info;
+  };
+
   struct GuildChanged
   {
-    std::variant<GuildAdded, GuildRemoved, GuildMemberUpdated, GuildMemberRemoved, GuildInvited, GuildInviteRemoved, GuildTitlesChanged>
+    std::variant<
+      GuildAdded,
+      GuildRemoved,
+      GuildMemberUpdated,
+      GuildMemberRemoved,
+      GuildInvited,
+      GuildInviteRemoved,
+      GuildTitlesChanged,
+      GuildInfoChanged>
       change;
   };
 

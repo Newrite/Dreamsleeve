@@ -16,7 +16,7 @@ let private at minutes = DateTimeOffset(2026, 10, 2, 12, 0, 0, TimeSpan.Zero).Ad
 let private reason = SanctionReason.create "Флуд" |> ok
 let private maxTitles = 2
 let private limits maxGuilds perPlayer members invites =
-    GuildLimits.create maxGuilds perPlayer members invites 3 24 (TimeSpan.FromDays 7.0) maxTitles |> ok
+    GuildLimits.create maxGuilds perPlayer members invites 3 24 (TimeSpan.FromDays 7.0) maxTitles 100 |> ok
 let private tid raw = GuildTitleId.create raw |> ok
 let private titleName text = GuildTitleName.create 3 24 text |> ok
 let private book () = GuildBook.empty (limits 10 3 4 4)
@@ -113,7 +113,7 @@ let tests = testList "Guild domain" [
         GuildBook.invite (pid 1UL) (gid 1UL) (pid 4UL) (at 3) lowered |> ok |> ignore
         let restored =
             GuildBook.restore (limits 1 1 2 1)
-                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []
+                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []; Info = ValueNone
                     Titles = [ for id in 1UL .. 3UL -> { Id = tid id; Name = titleName $"Роль {id}" } ]
                     Members = [ for player in 1UL .. 5UL ->
                                     { Player = pid player; JoinedAt = at 0; Mute = ValueNone; Title = ValueSome(tid 1UL)
@@ -198,6 +198,18 @@ let tests = testList "Guild domain" [
         Expect.equal (titleOf guilds 1UL) ValueNone "lost it"
         GuildBook.setTitle (pid 1UL) (gid 1UL) (pid 3UL) ValueNone guilds |> ok |> ignore
         Expect.equal (titleOf guilds 3UL) ValueNone "taken away"
+
+    testCase "guild information keeps the chat text rules and only the master writes or clears it" <| fun _ ->
+        let info = GuildInfo.create 100 "Собираемся по пятницам.\nНовичкам рады!" |> ok
+        Expect.equal (GuildInfo.value info) "Собираемся по пятницам.\nНовичкам рады!" "kept as written, line breaks included"
+        Expect.isError (GuildInfo.create 100 "   ") "blank"
+        Expect.isError (GuildInfo.create 100 "звонок\u0007") "a control character"
+        Expect.equal (GuildInfo.create 5 "шесть!") (Error(DomainError.InvalidText("GuildInfo", TextError.TooLong 5))) "too long"
+        let guilds = staffed ()
+        GuildBook.setInfo (pid 2UL) (gid 1UL) (ValueSome info) guilds |> refused GuildError.NotPermitted
+        GuildBook.setInfo (pid 9UL) (gid 1UL) (ValueSome info) guilds |> refused GuildError.NotFound
+        Expect.equal (GuildBook.setInfo (pid 1UL) (gid 1UL) (ValueSome info) guilds |> ok).Info (ValueSome info) "written"
+        Expect.equal (GuildBook.setInfo (pid 1UL) (gid 1UL) ValueNone guilds |> ok).Info ValueNone "cleared"
 
     testCase "the master removes any message, an officer a member's, a member none" <| fun _ ->
         let guilds = staffed ()

@@ -719,7 +719,8 @@ private:
            KnownName(invite.invitedBy, settings),
            invite.expiresAtUnixMs});
       const auto& limits = guilds->Limits();
-      event.limits       = {limits.maxGuildsPerPlayer, limits.maxMembers, limits.nameMinLength, limits.nameMaxLength, limits.maxTitles};
+      event.limits =
+        {limits.maxGuildsPerPlayer, limits.maxMembers, limits.nameMinLength, limits.nameMaxLength, limits.maxTitles, limits.infoMaxLength};
       for (const auto& removal : guilds->Removals())
         if (removal.revision > removalsSeen)
           event.removed.push_back({Bridge::Id(removal.guildId), removal.name, std::string{Bridge::GuildRemovalName(removal.reason)}});

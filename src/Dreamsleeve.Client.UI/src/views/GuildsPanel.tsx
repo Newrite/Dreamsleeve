@@ -128,6 +128,79 @@ function InviteSearch({
     </div>
   );
 }
+// What the master tells about the guild: everyone in it reads, the master
+// edits in place. The server counts characters and checks the word list.
+function GuildAbout({
+  chat,
+  guild,
+  limits,
+  master,
+  busy,
+}: {
+  chat: Chat;
+  guild: Guild;
+  limits: GuildLimits;
+  master: boolean;
+  busy: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null)
+    return (
+      <section className={styles.section} aria-label="О гильдии">
+        <h4>О гильдии</h4>
+        {guild.info ? (
+          <p className={styles.about}>{guild.info}</p>
+        ) : (
+          <p className={styles.muted}>
+            {master
+              ? "Расскажите, чем живёт гильдия: это увидят участники и, позже, игроки в каталоге."
+              : "Глава пока ничего не рассказал о гильдии."}
+          </p>
+        )}
+        {master && (
+          <div className={styles.actions}>
+            <button disabled={busy} onClick={() => setDraft(guild.info)}>
+              Изменить
+            </button>
+          </div>
+        )}
+      </section>
+    );
+  const length = [...draft].length;
+  const over = limits.infoMax > 0 && length > limits.infoMax;
+  return (
+    <section className={styles.section} aria-label="О гильдии">
+      <h4>О гильдии</h4>
+      <form
+        className={styles.aboutForm}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (busy || over) return;
+          chat.guilds.setInfo(guild.id, draft);
+          setDraft(null);
+        }}
+      >
+        <textarea
+          aria-label="Информация о гильдии"
+          rows={5}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <small className={over ? styles.error : styles.muted}>
+          {length} / {limits.infoMax}
+        </small>
+        <div className={styles.actions}>
+          <button type="submit" disabled={busy || over}>
+            Сохранить
+          </button>
+          <button type="button" onClick={() => setDraft(null)}>
+            Отмена
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
 const NO_TITLE = "";
 // The master's choice of a member's custom role; one role at most.
 function TitleChoice({
@@ -447,6 +520,13 @@ function GuildCard({
           Создана: <b>{createdFormat.format(guild.createdAt)}</b>
         </span>
       </p>
+      <GuildAbout
+        chat={chat}
+        guild={guild}
+        limits={s.guildLimits}
+        master={own === "master"}
+        busy={busy}
+      />
       <ul
         className={styles.members}
         aria-label={`Участники гильдии ${guild.name}`}

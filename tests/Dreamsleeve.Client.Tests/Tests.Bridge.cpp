@@ -209,9 +209,10 @@ namespace
                    {{9, "nine", "Nine"}, Domain::GuildRole::Member, false, Domain::MuteState{"Флуд", 1700000900000}, 1700000500000},
                    names,
                    settings)},
-                {{"2", "Казначей"}}}},
+                {{"2", "Казначей"}},
+                "Сбор по пятницам"}},
                               .invites = {{"5", "Соратники", "8", "Eight", 1700604800000}},
-                              .limits  = {3, 64, 3, 24, 10},
+                              .limits  = {3, 64, 3, 24, 10, 500},
                               .removed = {{"6", "Изгнанники", "excluded"}}
         },
         Bridge::GuildResultEvent{.requestId = "g1", .guildId = "4"},
@@ -306,6 +307,23 @@ TEST_CASE("Every web UI command sample is accepted")
     if (parsed) kinds.insert(parsed->index());
   }
   CHECK(kinds.size() == Bridge::CommandNames.size());
+}
+
+TEST_CASE("Refusals of the guild information read as such, not as a name's")
+{
+  using Code = RequestRejectionCode;
+  CHECK(
+    Bridge::GuildRejectionText(Code::TextNotAllowed, "The guild information contains words that are not allowed.") ==
+    "Текст содержит запрещённые слова");
+  CHECK(
+    Bridge::GuildRejectionText(Code::TextNotAllowed, "The guild name contains words that are not allowed.") ==
+    "Название содержит запрещённые слова");
+  CHECK(
+    Bridge::GuildRejectionText(Code::InvalidRequest, "The guild information has at most 500 characters.") ==
+    "Информация о гильдии не длиннее 500 символов");
+  CHECK(
+    Bridge::GuildRejectionText(Code::InvalidRequest, "The guild information contains control characters.") ==
+    "В тексте недопустимые символы");
 }
 
 TEST_SUITE_END();
