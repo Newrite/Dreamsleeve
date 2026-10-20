@@ -310,6 +310,42 @@ test("connection status stays hidden until activation and hides again on Escape"
   }
 });
 
+test("the online list sorts by a column header and remembers the choice", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "48 игроков онлайн" }).click();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page.getByRole("button", { name: "Список", exact: true }).click();
+  const table = page.getByRole("table");
+  const header = (name: string) =>
+    table.getByRole("columnheader", { name: new RegExp(`^${name}`) });
+  const levels = async () =>
+    (await table.locator("tbody tr td:nth-child(2)").allTextContents())
+      .filter((t) => t !== "—")
+      .map(Number);
+  // Names come first, from А to Я.
+  await expect(header("Игрок")).toHaveAttribute("aria-sort", "ascending");
+  await header("Ур.").getByRole("button").click();
+  await expect(header("Ур.")).toHaveAttribute("aria-sort", "ascending");
+  await expect(header("Игрок")).toHaveAttribute("aria-sort", "none");
+  const rising = await levels();
+  expect(rising).toEqual([...rising].sort((a, b) => a - b));
+  // The same header again turns the direction; the search keeps the order.
+  await header("Ур.").getByRole("button").click();
+  await expect(header("Ур.")).toHaveAttribute("aria-sort", "descending");
+  const falling = await levels();
+  expect(falling).toEqual([...falling].sort((a, b) => b - a));
+  await page.getByLabel("Поиск игроков").fill("Странник 4");
+  const found = await levels();
+  expect(found.length).toBeLessThan(falling.length);
+  expect(found).toEqual([...found].sort((a, b) => b - a));
+  await page.reload();
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await expect(header("Ур.")).toHaveAttribute("aria-sort", "descending");
+});
+
 test("compact online handles dozens of players and remembers the selected view", async ({
   page,
 }) => {
@@ -331,7 +367,7 @@ test("compact online handles dozens of players and remembers the selected view",
   await page.screenshot({ path: "test-results/online-compact.png" });
   await page.getByLabel("Поиск игроков").fill("Странник 48");
   await expect(table.locator("tbody tr")).toHaveCount(1);
-  await table.getByRole("button").click();
+  await table.locator("tbody").getByRole("button").click();
   await expect(page.getByRole("dialog")).toContainText("Странник 48");
   await page.reload();
   await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
@@ -623,16 +659,18 @@ test("Skyrim actor value keys retain colors and values in cards and list", async
     );
   expect(new Set(colors).size).toBe(3);
   await page.getByRole("button", { name: "Список", exact: true }).click();
-  await expect(
-    dialog.locator('[data-resource="health"]').first(),
-  ).toContainText("153 / 153");
-  await expect(
-    dialog.locator('[data-resource="magicka"]').first(),
-  ).toContainText("72 / 100");
-  await expect(
-    dialog.locator('[data-resource="stamina"]').first(),
-  ).toContainText("420 / 569");
-  await expect(dialog.locator('[data-resource="health"] b').first()).toHaveCSS(
+  // The own row, wherever the list order puts it.
+  const own = dialog.locator("tbody tr", { hasText: "Северный" });
+  await expect(own.locator('[data-resource="health"]').first()).toContainText(
+    "153 / 153",
+  );
+  await expect(own.locator('[data-resource="magicka"]').first()).toContainText(
+    "72 / 100",
+  );
+  await expect(own.locator('[data-resource="stamina"]').first()).toContainText(
+    "420 / 569",
+  );
+  await expect(own.locator('[data-resource="health"] b').first()).toHaveCSS(
     "font-size",
     "13px",
   );

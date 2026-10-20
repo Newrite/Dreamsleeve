@@ -1,7 +1,16 @@
 import { resourceKey } from "./resources";
 import type { Player, Settings } from "../bridge/types";
 import { characterLine, playerName, realNames } from "../state/names";
+import type { OnlineSort } from "../state/onlineSort";
 import styles from "../styles/OnlineList.module.css";
+// The columns in their order, each with what it orders by.
+const columns: { sort: OnlineSort; label: string; title: string }[] = [
+  { sort: "name", label: "Игрок / персонаж", title: "по имени" },
+  { sort: "level", label: "Ур.", title: "по уровню" },
+  { sort: "place", label: "Зона / локация", title: "по зоне и локации" },
+  { sort: "activity", label: "Занятие", title: "по занятию" },
+  { sort: "health", label: "Ресурсы", title: "по доле здоровья" },
+];
 const resources = [
   ["health", "HP"],
   ["magicka", "MP"],
@@ -52,13 +61,17 @@ export function OnlineList({
   connected,
   settings,
   openProfile,
+  onSort,
 }: {
   players: Player[];
   selfId: string;
   connected: boolean;
   settings: Settings;
   openProfile: (id: string) => void;
+  onSort: (sort: OnlineSort) => void;
 }) {
+  const sort = settings.onlineSort;
+  const descending = settings.onlineSortDescending;
   return (
     <div className={styles.scroll} tabIndex={0} aria-label="Компактный онлайн">
       <table className={styles.table}>
@@ -71,11 +84,30 @@ export function OnlineList({
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Игрок / персонаж</th>
-            <th scope="col">Ур.</th>
-            <th scope="col">Зона / локация</th>
-            <th scope="col">Занятие</th>
-            <th scope="col">Ресурсы</th>
+            {columns.map((c) => {
+              const current = c.sort === sort;
+              return (
+                <th
+                  key={c.sort}
+                  scope="col"
+                  aria-sort={
+                    current ? (descending ? "descending" : "ascending") : "none"
+                  }
+                >
+                  <button
+                    className={styles.sort}
+                    data-current={current || undefined}
+                    title={`Сортировать ${c.title}`}
+                    onClick={() => onSort(c.sort)}
+                  >
+                    {c.label}
+                    <span aria-hidden="true">
+                      {current ? (descending ? " ▼" : " ▲") : ""}
+                    </span>
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
