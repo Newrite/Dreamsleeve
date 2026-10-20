@@ -34,6 +34,9 @@ export namespace Dreamsleeve::Host
     double      bubbleMaxWidth{320};      // HUD units, including padding.
     double      bubbleBackground{0.65};   // Background fill only; the text stays opaque.
     std::string onlineView{"cards"};
+    // The column the online list is ordered by, and the direction.
+    std::string onlineSort{"name"};
+    bool        onlineSortDescending{false};
     bool        fade{true};
     double      delay{12.0};
     double      duration{1.0};
@@ -79,8 +82,8 @@ export namespace Dreamsleeve::Host
     // Height of the glow above the pose origin, game units.
     double fireflyHeightOffset{110};
     // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
-    bool        showGroundNotes{true};
-    bool        showDeathMarks{true};
+    bool showGroundNotes{true};
+    bool showDeathMarks{true};
     // Notes and death marks only of players who share a guild with you; your own always.
     bool        markGuildmatesOnly{false};
     double      maxVisibleNotes{16};
@@ -163,14 +166,15 @@ export namespace Dreamsleeve::Host
 
   // Words the UI chooses from; anything else is the default.
   const auto ChoiceRules = std::to_array<ChoiceRule>({
-      {"onlineView",           {"cards", "list"}                   },
-      {"font",                 {"serif", "sans"}                   },
-      {"nameMode",             {"username", "display", "character"}},
-      {"textFilter",           {"off", "mask", "hide"}             },
-      {"activationKey",        {"Enter", "F2"}                     },
-      {"theme",                {"skyrim", "contrast"}              },
-      {"announcementChannels", {"tab", "all", "current"}           },
-      {"markDateStyle",        {"tamriel", "earth"}                },
+      {"onlineView",           {"cards", "list"}                               },
+      {"onlineSort",           {"name", "level", "place", "activity", "health"}},
+      {"font",                 {"serif", "sans"}                               },
+      {"nameMode",             {"username", "display", "character"}            },
+      {"textFilter",           {"off", "mask", "hide"}                         },
+      {"activationKey",        {"Enter", "F2"}                                 },
+      {"theme",                {"skyrim", "contrast"}                          },
+      {"announcementChannels", {"tab", "all", "current"}                       },
+      {"markDateStyle",        {"tamriel", "earth"}                            },
   });
 
   // "#RRGGBB"; anything else is the default.

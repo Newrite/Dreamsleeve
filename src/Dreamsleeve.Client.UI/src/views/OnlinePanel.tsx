@@ -3,6 +3,7 @@ import type { Chat, ChatState } from "../state/chat";
 import { OnlineList } from "./OnlineList";
 import { PlayerDetails } from "./PlayerDetails";
 import { playerName, realNames } from "../state/names";
+import { sortPlayers, type OnlineSort } from "../state/onlineSort";
 import styles from "../styles/Workspace.module.css";
 export function OnlinePanel({
   chat,
@@ -25,6 +26,15 @@ export function OnlinePanel({
       p.zone,
     ].some((v) => v?.toLocaleLowerCase("ru").includes(normalized));
   });
+  // The same column again turns the direction; another starts from the top.
+  const sortBy = (sort: OnlineSort) => {
+    chat.configure({
+      onlineSort: sort,
+      onlineSortDescending:
+        sort === s.settings.onlineSort && !s.settings.onlineSortDescending,
+    });
+    chat.save();
+  };
   return (
     <>
       <div className={styles.toolbar}>
@@ -64,11 +74,17 @@ export function OnlinePanel({
       </div>
       {s.settings.onlineView === "list" ? (
         <OnlineList
-          players={players}
+          players={sortPlayers(
+            players,
+            s.settings.onlineSort,
+            s.settings.onlineSortDescending,
+            s.settings,
+          )}
           selfId={s.selfId}
           connected={s.connected}
           settings={s.settings}
           openProfile={(id) => chat.open("profile", id)}
+          onSort={sortBy}
         />
       ) : (
         <div className={styles.players}>
