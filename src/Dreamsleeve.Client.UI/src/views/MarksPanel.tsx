@@ -9,9 +9,12 @@ const timeFormat = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 const coordinate = (value: number) => Math.round(value).toString();
+const levelText = (level?: number) =>
+  level === undefined ? undefined : `${level} ур.`;
 // One row per mark: kind, text, author (nearby only), character snapshot,
-// the in-game date, the real time and the place. Text is a React text node,
-// never HTML.
+// the in-game date, the real time and the place. A death adds the killer's
+// level to its label and the character's to its name; an old mark has none.
+// Text is a React text node, never HTML.
 export function MarkRow({
   mark,
   action,
@@ -24,10 +27,19 @@ export function MarkRow({
       <span className={styles.markKind}>{kindLabels[mark.kind]}</span>
       <span className={styles.markText}>
         {mark.text || (mark.kind === "death" ? "Без подписи" : "")}
+        {mark.killerLevel !== undefined && (
+          <span title="Уровень убийцы">, {levelText(mark.killerLevel)}</span>
+        )}
       </span>
       <span className={styles.markMeta}>
         {mark.author !== undefined && <b>{mark.author}</b>}
-        {mark.character !== undefined && <i>{mark.character}</i>}
+        {(mark.character !== undefined || mark.level !== undefined) && (
+          <i title={mark.kind === "death" ? "Погибший персонаж" : "Персонаж"}>
+            {[mark.character, levelText(mark.level)]
+              .filter((part) => part !== undefined)
+              .join(", ")}
+          </i>
+        )}
         {mark.gameDate !== undefined && (
           <span title="Игровая дата у автора">{mark.gameDate}</span>
         )}

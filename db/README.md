@@ -167,6 +167,12 @@ Schema 17 (`1791849600000_guild_catalog.sql`) adds the public guild catalog: `gu
 (1 by default, so every existing guild shows) and `guild_join_requests`, the players' pending
 requests to join with their expiry. A request goes with its guild and with the player's
 profile (`ON DELETE CASCADE`); its answer, withdrawal or expiry deletes it. DOWN drops both.
+
+Schema 18 (`1791936000000_death_mark_levels.sql`) adds `ground_marks.character_level` and
+`killer_level`: the dead character's level and the killer's at the moment of death
+(docs/GroundMarksRu.md). Only death marks hold them (CHECK `kind = 2`), at least 1, no upper
+bound; marks stored before keep NULL in both and are shown without levels, and a NULL
+`killer_level` also means no killer or one without a level. DOWN drops both columns.
 This is the schema version the server supports (`SqliteDatabase.SchemaVersion`).
 
 ## Verification

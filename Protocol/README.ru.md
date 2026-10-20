@@ -176,7 +176,7 @@ Added/Removed из модели. Полная история не копируе
 Control-канале ENet.
 
 - `GroundMark{mark_id, author, kind, text, flagged, placement, created_at_unix_ms,
-  character_name, game_date}`: `author` — снимок `PlayerProfile` (имя и у офлайн-автора),
+  character_name, game_date, character_level, killer_level}`: `author` — снимок `PlayerProfile` (имя и у офлайн-автора),
   `character_name` — optional снимок имени персонажа при размещении, `kind` —
   `GROUND_MARK_KIND_NOTE` (1) / `DEATH` (2), `text` пуст только у смерти, `flagged` — как у
   сообщения, `placement` — `FormKey` пространства, `Position` и `heading` (угол Z, радианы).
@@ -186,6 +186,11 @@ Control-канале ENet.
   сохранённых до версии 12. Диапазоны: эра 1–99 (4 — Четвёртая), год 1–99999, месяц 1–12
   (1 — Утренней звезды), день 1–длина месяца (без високосных), день недели 0–6 (0 — Сандас),
   час 0–23, минута 0–59. Сервер проверяет только диапазоны: это оформление, не метка времени.
+- Уровни смерти (версия 22): `ReportDeath.character_level = 4` — уровень погибшего персонажа,
+  обязателен (0 — `INVALID_REQUEST` с полем `character_level`); `ReportDeath.killer_level = 5` —
+  уровень убийцы, 0 — убийцы нет или у него нет уровня (ловушка). Сверху уровни не ограничены:
+  моды поднимают их выше ванильных. `GroundMark.character_level = 10` и `killer_level = 11`
+  отдаются у смертей; 0 — уровня нет: надпись, метка до версии 22, смерть без убийцы.
 - `ClientPacket.place_ground_note = 14`, `report_death = 15`, `remove_ground_mark = 16` —
   команды с RequestId. Ответ — `ServerPacket.ground_mark_placed = 22`
   (`GroundMark` и `evicted_id`, 0 — ничего не вытеснено), `ground_mark_removed = 23`
@@ -304,6 +309,8 @@ Control-канале ENet.
   `guild_changed = 39`. `CHAT_CHANNEL_KIND_GUILD = 3`. `ChatPublished`, принятие `SendChat` и
   `ChatMessageRemoved` в канале гильдии идут по Control, а не по Chat. Коды отказа
   `GUILD_NAME_TAKEN = 19` … `GUILD_MASTER_STAYS = 26`.
+- v22: уровни в метке смерти (см. «Метки на земле»): `ReportDeath.character_level = 4`,
+  `killer_level = 5`, `GroundMark.character_level = 10`, `killer_level = 11`.
 - v21: кастомные роли гильдии ([GuildsRu](../docs/GuildsRu.md#правила)). `Guild.titles = 7`
   (`GuildTitle{title_id, name}`, старые первыми), `GuildMember.title_id = 6` (optional: роли нет),
   `GuildLimits.max_titles = 5`, изменение `GuildChanged.titles = 7` (`GuildTitles{guild_id,

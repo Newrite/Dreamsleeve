@@ -50,6 +50,11 @@ message GroundMark {
   optional string character_name = 8;
   // The author's in-game date at placement; absent on marks stored before version 12.
   GameDate game_date = 9;
+  // A death: the dead character's level and the killer's at the moment of
+  // death. Zero is none: a note, a mark stored before version 22, a death
+  // without a killer or by something that has no level.
+  uint32 character_level = 10;
+  uint32 killer_level = 11;
 }
 
 // Control lane, settled with GroundMarkPlaced or RequestRejected.
@@ -60,11 +65,14 @@ message PlaceGroundNote {
 }
 
 // Control lane. The label is the killer's name or one word of cause as the
-// client saw it; the server checks length and word list only.
+// client saw it; the server checks length and word list only. Levels are not
+// bounded: mods raise them past the vanilla range.
 message ReportDeath {
   string label = 1;
   GroundMarkPlacement placement = 2;
   GameDate game_date = 3; // Required: the game date of the death.
+  uint32 character_level = 4; // Required: at least 1.
+  uint32 killer_level = 5; // Zero: no killer, or one without a level (a trap).
 }
 
 // Control lane; only the author's own mark. Settled with GroundMarkRemoved.

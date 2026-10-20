@@ -49,7 +49,11 @@ module SqliteGroundMarkStore =
             let body =
                 match mark.kind with
                 | 1L -> GroundNoteText.create Int32.MaxValue mark.text |> Result.map GroundMarkBody.Note
-                | 2L -> DeathMarkText.create Int32.MaxValue mark.text |> Result.map GroundMarkBody.Death
+                | 2L ->
+                    let level = Option.map uint32 >> ValueOption.ofOption
+                    DeathMarkText.create Int32.MaxValue mark.text
+                    |> Result.map (fun label ->
+                        GroundMarkBody.Death(DeathReport.restore label (level mark.character_level) (level mark.killer_level)))
                 | _ -> Error(DomainError.InvalidLimit("kind", 0))
             let characterName =
                 match mark.character_name with
@@ -123,6 +127,10 @@ module SqliteGroundMarkStore =
             invalidData "Ground mark identifiers must fit the positive Int64 range of SQLite."
         else
             let date (part: GameDate -> int) = mark.GameDate |> ValueOption.map (part >> int64) |> ValueOption.toOption
+            let death (level: DeathReport -> uint32 voption) =
+                match mark.Body with
+                | GroundMarkBody.Death report -> level report |> ValueOption.map int64 |> ValueOption.toOption
+                | GroundMarkBody.Note _ -> None
             SqliteAccountStore.withContext config token (fun context ->
                 let row: main.ground_marks = {
                     id = int64 id
@@ -145,6 +153,8 @@ module SqliteGroundMarkStore =
                     game_day_of_week = date (fun value -> value.DayOfWeek)
                     game_hour = date (fun value -> value.Hour)
                     game_minute = date (fun value -> value.Minute)
+                    character_level = death (fun value -> value.CharacterLevel)
+                    killer_level = death (fun value -> value.KillerLevel)
                 }
                 let query = insert {
                     for stored in main.ground_marks do

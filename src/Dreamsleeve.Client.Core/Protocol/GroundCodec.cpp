@@ -40,6 +40,8 @@ namespace Dreamsleeve::Client::Wire::Detail
     target.set_label(value.label);
     WritePlacement(*target.mutable_placement(), value.placement);
     WriteGameDate(*target.mutable_game_date(), value.gameDate);
+    target.set_character_level(value.characterLevel);
+    target.set_killer_level(value.killerLevel);
   }
 
   // Absent on marks stored before protocol 12; present means valid.
@@ -84,7 +86,9 @@ namespace Dreamsleeve::Client::Wire::Detail
         std::move(*placement),
         Domain::FromUnixMilliseconds(source.created_at_unix_ms()),
         source.has_character_name() ? std::optional{source.character_name()} : std::nullopt,
-        *gameDate
+        *gameDate,
+        source.character_level(),
+        source.killer_level()
     };
   }
 

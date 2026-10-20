@@ -166,7 +166,9 @@ module main =
           game_day: Option<int64>
           game_day_of_week: Option<int64>
           game_hour: Option<int64>
-          game_minute: Option<int64> }
+          game_minute: Option<int64>
+          character_level: Option<int64>
+          killer_level: Option<int64> }
 
         interface IWriteColumns with
             member this.WriteColumns =
@@ -189,7 +191,9 @@ module main =
                   { WriteColumn.Name = "game_day"; Value = box this.game_day; ProviderDbType = None }
                   { WriteColumn.Name = "game_day_of_week"; Value = box this.game_day_of_week; ProviderDbType = None }
                   { WriteColumn.Name = "game_hour"; Value = box this.game_hour; ProviderDbType = None }
-                  { WriteColumn.Name = "game_minute"; Value = box this.game_minute; ProviderDbType = None } ]
+                  { WriteColumn.Name = "game_minute"; Value = box this.game_minute; ProviderDbType = None }
+                  { WriteColumn.Name = "character_level"; Value = box this.character_level; ProviderDbType = None }
+                  { WriteColumn.Name = "killer_level"; Value = box this.killer_level; ProviderDbType = None } ]
 
     let ground_marks = table<ground_marks>
 

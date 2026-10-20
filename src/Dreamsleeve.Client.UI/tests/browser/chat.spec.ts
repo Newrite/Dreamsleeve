@@ -1293,7 +1293,9 @@ test("my marks lists own marks and removes one", async ({ page }) => {
   const list = page.getByLabel("Мои метки");
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Место смерти");
-  await expect(list).toContainText("Убийца: Морозный тролль");
+  // A death names the killer and the character with their levels.
+  await expect(list).toContainText("Убийца: Морозный тролль, 45 ур.");
+  await expect(list).toContainText("Довакин, 32 ур.");
   // The in-game date as the host formatted it, next to the real time.
   await expect(list).toContainText("Миддас, 18 Последнего зерна 4Э 201, 02:40");
   // The far death mark is listed with its place, without walking up to it.
@@ -1301,7 +1303,8 @@ test("my marks lists own marks and removes one", async ({ page }) => {
   const nearby = page.getByLabel("Метки рядом");
   await expect(nearby.getByRole("listitem")).toHaveCount(3);
   await expect(nearby).toContainText("Мира");
-  await expect(nearby).toContainText("Эйра");
+  await expect(nearby).toContainText("Эйра, 12 ур.");
+  await expect(nearby).toContainText("Убийца: Медведь, 6 ур.");
   await expect(nearby).toContainText("Сундук за водопадом");
   await expect(nearby.locator("img")).toHaveCount(0);
   await page.screenshot({ path: "test-results/my-marks.png" });

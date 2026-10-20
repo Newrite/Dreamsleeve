@@ -17,7 +17,7 @@ Username, DisplayName может совпадать. Регистрация со
 |---|---|
 | `accounts`, `profiles`, `account_passwords`, `account_identities` | Аккаунт, профиль игрока, хеш пароля, привязки способов входа |
 | `auth_tokens` | SHA-256 сохранённых входов, кодов сброса и установки пароля |
-| `ground_marks` | Метки на земле, псевдоним автора и игровая дата |
+| `ground_marks` | Метки на земле, псевдоним автора, игровая дата и уровни смерти |
 | `display_name_changes` | История смен отображаемого имени |
 | `admin_accounts`, `admin_sessions`, `admin_api_tokens`, `admin_audit` | Администраторы веб-админки, их сессии, токены REST и аудит (в том числе действия модераторов) |
 | `player_roles` | Роль игрока: 0 — игрок, 1 — модератор |
@@ -29,7 +29,8 @@ Username, DisplayName может совпадать. Регистрация со
 Гильдии — `guilds`, `guild_members` и `guild_invites` (схема 13, [GuildsRu.md](GuildsRu.md)),
 их кастомные роли — `guild_titles` и `guild_members.title_id` (схема 15), информация —
 `guilds.info` (схема 16), показ в каталоге и заявки — `guilds.listed` и `guild_join_requests`
-(схема 17).
+(схема 17). Уровни погибшего и убийцы в метке смерти — `ground_marks.character_level` и
+`killer_level` (схема 18).
 Цвет имени в чате — `profiles.name_color`, `0xRRGGBB` (схема 14,
 [ModerationAndNamesRu.md](ModerationAndNamesRu.md#цвет-имени-в-чате)).
 Друзей, блоклиста, партий, сессий и ключей идентичности в БД нет. Время —

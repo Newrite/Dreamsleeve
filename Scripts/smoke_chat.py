@@ -533,9 +533,9 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, f"smoke-after-announcements-{nonce}", args.timeout)
         stage("the announcement rate limit refused the third one while chat stayed available")
 
-        # Marks on the ground: "mark <id> kind=<1|2> author=<name> x=<x> character=<name> date=<date> text=<text>", "mark-removed <id>",
+        # Marks on the ground: "mark <id> kind=<1|2> author=<name> x=<x> character=<name> date=<date> levels=<c>/<k> text=<text>", "mark-removed <id>",
         # "marks-cleared", "request <n> placed mark <id>[ evicted <id>]", "request <n> removed mark <id>".
-        mark_line = re.compile(r"mark (\d+) kind=(\d) author=(.+?) x=(\S+) character=(.*?) date=(\S+) text=(.*)")
+        mark_line = re.compile(r"mark (\d+) kind=(\d) author=(.+?) x=(\S+) character=(.*?) date=(\S+) levels=(\d+)/(\d+) text=(.*)")
         # Client.Dev dates every mark it places with the same game date.
         console_date = "4E201-08-17T14:05"
         placed_line = re.compile(r"request \d+ placed mark (\d+)(?: evicted (\d+))?")
@@ -545,11 +545,12 @@ def smoke(args, log, directory: Path):
             match = next(placed_line.fullmatch(line) for line in lines if placed_line.fullmatch(line))
             return match.group(1), match.group(2)
 
-        def saw_mark(child: Child, mark_id: str, start: int, text=None, kind="1"):
+        def saw_mark(child: Child, mark_id: str, start: int, text=None, kind="1", levels=None):
             def found(lines):
                 for line in lines:
                     match = mark_line.fullmatch(line)
-                    if match and match.group(1) == mark_id and match.group(2) == kind and (text is None or match.group(7) == text):
+                    if (match and match.group(1) == mark_id and match.group(2) == kind and (text is None or match.group(9) == text)
+                            and (levels is None or (match.group(7), match.group(8)) == levels)):
                         return True
                 return False
             child.wait_for(found, args.timeout, start, read=True)
@@ -631,12 +632,14 @@ def smoke(args, log, directory: Path):
         stage("another WRLD/CELL clears visible marks and returning restores them as a new baseline")
 
         alice_start, bob_start = alice.mark(), bob.mark()
-        alice.send("death Alduin")
+        mark_refused(alice, "death 0 5 nolevel", 1)
+        alice.send("death 32 81 Alduin")
         death_id, _ = placed(alice, alice_start)
-        saw_mark(alice, death_id, alice_start, "Alduin", kind="2")
-        saw_mark(bob, death_id, bob_start, "Alduin", kind="2")
-        mark_refused(alice, "death again", 10)
-        stage("a death mark carries its label to author and observer; a second death too soon is rate limited")
+        saw_mark(alice, death_id, alice_start, "Alduin", kind="2", levels=("32", "81"))
+        saw_mark(bob, death_id, bob_start, "Alduin", kind="2", levels=("32", "81"))
+        mark_refused(alice, "death 32 0 again", 10)
+        stage("a death mark carries its label and levels to author and observer; one without the character's level "
+              "is refused; a second death too soon is rate limited")
 
         note3 = f"smoke-note-3-{nonce}"
         alice_start, bob_start = alice.mark(), bob.mark()
@@ -693,7 +696,7 @@ def smoke(args, log, directory: Path):
         hidden.send("note " + hidden_note)
         hidden_mark, _ = placed(hidden, hidden_start)
         bob.wait_for(lambda lines: any(line.startswith(f"mark {hidden_mark} kind=1 author=Тень [pseudonymous] x=")
-                                       and line.endswith(f"character= date={console_date} text={hidden_note}") for line in lines),
+                                       and line.endswith(f"character= date={console_date} levels=0/0 text={hidden_note}") for line in lines),
                      args.timeout, bob_start, read=True)
         settle_reads(bob, args.timeout)
         for name in real_names:
@@ -776,7 +779,7 @@ def smoke(args, log, directory: Path):
         partial.send("note " + partial_note)
         partial_mark, _ = placed(partial, partial_start)
         bob.wait_for(lambda lines: any(line.startswith(f"mark {partial_mark} kind=1 author=Smoke Partial x=")
-                                       and line.endswith(f"character=Partial Hero date={console_date} text={partial_note}") for line in lines),
+                                       and line.endswith(f"character=Partial Hero date={console_date} levels=0/0 text={partial_note}") for line in lines),
                      args.timeout, bob_start, read=True)
         settle_reads(bob, args.timeout)
         check(not any("Smoke Partial" in line and "mark " not in line for line in bob.output(bob_start)),
@@ -845,7 +848,7 @@ def smoke(args, log, directory: Path):
         message_once(alice, bob, f"smoke-persisted-{nonce}", args.timeout)
         stage("server restart retained SQLite identities and fresh login tickets reopen working sessions")
 
-        # "own-marks <n>" then "own <id> kind=<k> text=<t>": the server's complete list of the
+        # "own-marks <n>" then "own <id> kind=<k> date=<d> levels=<c>/<k> text=<t>": the server's complete list of the
         # player's marks arrives right after the session opened, before any position is sent.
         def own_marks(child: Child, start: int):
             # The snapshot taken before the list arrives prints "own-marks 0"; the newest
@@ -857,7 +860,7 @@ def smoke(args, log, directory: Path):
                         count = int(match.group(1))
                         rows = lines[index + 1:index + 1 + count]
                         if len(rows) == count and all(row.startswith("own ") for row in rows):
-                            return [re.fullmatch(r"own (\d+) kind=(\d) date=(\S+) text=(.*)", row).groups() for row in rows]
+                            return [re.fullmatch(r"own (\d+) kind=(\d) date=(\S+) levels=(\d+/\d+) text=(.*)", row).groups() for row in rows]
                         return False
                 return False
             return listed(child.wait_for(listed, args.timeout, start, read=True))
@@ -865,7 +868,8 @@ def smoke(args, log, directory: Path):
         own = own_marks(alice, alice_start)
         check(sorted(row[0] for row in own) == sorted([second_id, death_id]),
               f"Own list after restart must hold {second_id} and {death_id}, got {[row[0] for row in own]}")
-        check(any(row[0] == death_id and row[1] == "2" and row[3] == "Alduin" for row in own), "Own death mark lost its label")
+        check(any(row[0] == death_id and row[1] == "2" and row[3] == "32/81" and row[4] == "Alduin" for row in own),
+              "Own death mark lost its label or levels")
         check(all(row[2] == console_date for row in own), f"Own marks must keep their game date across the restart, got {own}")
         own_bob = own_marks(bob, bob_start)
         check([row[0] for row in own_bob] == [bob_mark_id], f"Bob's own list must hold only {bob_mark_id}, got {own_bob}")

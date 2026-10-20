@@ -315,7 +315,9 @@ ID и `SentAt`; фабрика сообщения приводит время к
 Модель — [DomainSpecRu.MD §4.9](../../docs/DomainSpecRu.MD). Примитивы в `Primitives.fs`:
 `GroundMarkId` (ненулевой uint64), `GroundNoteText.create` (правила текста чата),
 `DeathMarkText.create` (одна строка без управляющих, пустая допустима). В `GroundMarks.fs`:
-`GroundMarkBody = Note | Death` (вид выводится из тела), `GroundMarkPlacement`
+`DeathReport` (подпись, уровень персонажа — обязателен у новой смерти, `MissingLevel` при нуле, —
+и уровень убийцы; `restore` — смерть из хранилища без уровней), `GroundMarkBody = Note | Death`
+(вид выводится из тела), `GroundMarkPlacement`
 (`isNear` — мягкая проверка положения по последней известной позиции, `isVisibleFrom` —
 то же пространство и радиус с включённой границей), `GroundMarkRules.create` (квоты ≥ 1,
 сроки в днях, 0 — бессрочно, конечные радиусы), `GameDate.create` (игровая дата у автора:

@@ -1446,7 +1446,7 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
       {4, 201, 8, 17, 2, 14, 5}
   };
   REQUIRE(session.PlaceGroundNote(*exchange, "ui-1", "hello", here));
-  REQUIRE(session.ReportDeath(*exchange, "Bear", here));
+  REQUIRE(session.ReportDeath(*exchange, "Bear", 32, 45, here));
   REQUIRE(session.RemoveGroundMark(*exchange, "ui-2", 77));
   CHECK(session.PendingMarkCount() == 3);
   std::vector<QueuedClientCommand> commands;
@@ -1461,6 +1461,8 @@ TEST_CASE("Session correlates note, removal and death requests with their outcom
   REQUIRE(death);
   CHECK(death->label == "Bear");
   CHECK(death->gameDate == here.gameDate);
+  CHECK(death->characterLevel == 32);
+  CHECK(death->killerLevel == 45);
   const auto* removal = std::get_if<RemoveGroundMark>(&commands[2].command);
   REQUIRE(removal);
   CHECK(removal->markId == 77);
@@ -1538,6 +1540,15 @@ TEST_CASE("Bridge validates ground mark commands")
   CHECK(mark.z == 300);
   CHECK_FALSE(mark.author);
   CHECK_FALSE(mark.gameDate);
+  // Levels a mark lacks stay off the bridge: an old mark, no killer or one without a level.
+  CHECK_FALSE(mark.level);
+  CHECK_FALSE(mark.killerLevel);
+  auto leveled           = MakeMark(5, 1, Domain::GroundMarkKind::Death, "Wolf");
+  leveled.characterLevel = 32;
+  CHECK(Bridge::ToUiGroundMark(leveled, UiSettings{}, true).level == 32u);
+  CHECK_FALSE(Bridge::ToUiGroundMark(leveled, UiSettings{}, true).killerLevel);
+  leveled.killerLevel = 4000000000u;
+  CHECK(Bridge::ToUiGroundMark(leveled, UiSettings{}, true).killerLevel == 4000000000u);
   auto dated     = MakeMark(4, 1, Domain::GroundMarkKind::Death, "Wolf");
   dated.gameDate = Domain::GameDate{4, 201, 8, 17, 2, 14, 5};
   CHECK(Bridge::ToUiGroundMark(dated, UiSettings{}, true).gameDate == "Тирдас, 17 Последнего зерна 4Э 201, 14:05");

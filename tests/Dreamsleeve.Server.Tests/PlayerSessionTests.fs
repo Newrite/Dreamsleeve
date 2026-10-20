@@ -1313,7 +1313,7 @@ let tests = testList "PlayerSession" ([
             do! post fixture.Player (PlayerSessionMessage.PlaceGroundNote(7UL, GroundNoteText.create 200 "note" |> ok, placement, date))
             do! muted 7UL
             // The game writes a death label, not the player.
-            do! post fixture.Player (PlayerSessionMessage.ReportDeath(8UL, DeathMarkText.create 64 "Убийца: волк" |> ok, placement, date))
+            do! post fixture.Player (PlayerSessionMessage.ReportDeath(8UL, DeathReport.create (DeathMarkText.create 64 "Убийца: волк" |> ok) 12u 3u |> ok, placement, date))
             let! death = nextMarkPlacement fixture
             equal GroundMarkKind.Death (GroundMarkBody.kind death.Body)
             equal 0 fixture.Chat.Reader.Count
