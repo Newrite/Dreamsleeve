@@ -1552,6 +1552,32 @@ test("guilds have their tabs and send target, a panel by role, invitations and a
   );
 });
 
+test("an invitation finds online players outside the guild by name", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const guild = page.getByRole("region", { name: "Мои гильдии" });
+  const search = guild.getByRole("textbox", { name: "Кого пригласить" });
+  const found = guild.getByRole("list", { name: "Найденные игроки" });
+  // Nothing is listed until the player types.
+  await expect(found).toHaveCount(0);
+  // A member of the guild is not offered.
+  await search.fill("мира");
+  await expect(guild).toContainText("такого имени нет");
+  await search.fill("страж");
+  await expect(found.getByRole("listitem")).toHaveText(["Страж 2Пригласить"]);
+  await found.getByRole("button", { name: "Пригласить" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Приглашение отправлено: Страж 2");
+  await expect(search).toHaveValue("");
+});
+
 test("the master creates custom roles, gives one to a member and deletes it", async ({
   page,
 }) => {

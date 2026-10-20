@@ -6,6 +6,7 @@ import type {
   GuildMember,
   GuildRole,
   GuildTitle,
+  Player,
 } from "../bridge/types";
 import {
   mayInvite,
@@ -16,7 +17,7 @@ import {
   titleName,
 } from "../state/guilds";
 import { term } from "../state/moderation";
-import { playerName } from "../state/names";
+import { nameMatches, playerName } from "../state/names";
 import { Select } from "./Select";
 import styles from "../styles/Guilds.module.css";
 const createdFormat = new Intl.DateTimeFormat("ru-RU", {
@@ -46,6 +47,86 @@ function nameProblem(name: string, minimum: number, maximum: number) {
   if (minimum && length < minimum) return `Не короче ${minimum} символов`;
   if (maximum && length > maximum) return `Не длиннее ${maximum} символов`;
   return "";
+}
+// Players a search shows at once: the online list may hold hundreds.
+const INVITE_RESULTS = 8;
+// An invitation by name: the player types, the page shows a few online
+// players outside the guild whose names match, names starting with the query
+// first. The server checks the rest.
+function InviteSearch({
+  chat,
+  state: s,
+  guild,
+  busy,
+}: {
+  chat: Chat;
+  state: ChatState;
+  guild: Guild;
+  busy: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("ru");
+  const name = (p: Player) => playerName(p, s.settings);
+  const found = normalized
+    ? s.players
+        .filter(
+          (p) =>
+            p.id !== s.selfId &&
+            !memberOf(guild, p.id) &&
+            nameMatches(p, s.settings, normalized),
+        )
+        .map((p) => ({
+          player: p,
+          label: name(p),
+          prefix: name(p).toLocaleLowerCase("ru").startsWith(normalized),
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.prefix) - Number(a.prefix) ||
+            a.label.localeCompare(b.label, "ru"),
+        )
+    : [];
+  const shown = found.slice(0, INVITE_RESULTS);
+  return (
+    <div className={styles.inviteSearch}>
+      <input
+        aria-label="Кого пригласить"
+        placeholder="Имя игрока онлайн…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {normalized && !found.length && (
+        <p className={styles.muted}>
+          Среди игроков онлайн вне гильдии такого имени нет.
+        </p>
+      )}
+      {shown.length > 0 && (
+        <ul className={styles.members} aria-label="Найденные игроки">
+          {shown.map(({ player, label }) => (
+            <li key={player.id}>
+              <span>{label}</span>
+              <span className={styles.rowActions}>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    chat.guilds.invite(guild.id, player.id, label);
+                    setQuery("");
+                  }}
+                >
+                  Пригласить
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {found.length > shown.length && (
+        <p className={styles.muted}>
+          И ещё {found.length - shown.length} — уточните имя.
+        </p>
+      )}
+    </div>
+  );
 }
 const NO_TITLE = "";
 // The master's choice of a member's custom role; one role at most.
@@ -347,11 +428,9 @@ function GuildCard({
   const limit = s.guildLimits.members;
   const count = guild.members.length;
   // An online player outside the guild; the server checks they are still online.
-  const candidates = s.players.filter(
+  const invitable = s.players.some(
     (p) => p.id !== s.selfId && !memberOf(guild, p.id),
   );
-  const [invitee, setInvitee] = useState("");
-  const chosen = candidates.find((p) => p.id === invitee) ?? candidates[0];
   return (
     <div className={styles.section}>
       <p className={styles.facts}>
@@ -421,34 +500,12 @@ function GuildCard({
           <p className={styles.muted}>
             {count}/{limit} — приглашения недоступны
           </p>
-        ) : !chosen ? (
+        ) : !invitable ? (
           <p className={styles.muted}>
             Пригласить некого: все игроки онлайн уже в гильдии.
           </p>
         ) : (
-          <div className={styles.invite}>
-            <Select
-              label="Кого пригласить"
-              value={chosen.id}
-              options={candidates.map((p) => ({
-                value: p.id,
-                label: playerName(p, s.settings),
-              }))}
-              onChange={setInvitee}
-            />
-            <button
-              disabled={busy}
-              onClick={() =>
-                guilds.invite(
-                  guild.id,
-                  chosen.id,
-                  playerName(chosen, s.settings),
-                )
-              }
-            >
-              Пригласить
-            </button>
-          </div>
+          <InviteSearch chat={chat} state={s} guild={guild} busy={busy} />
         ))}
       <div className={styles.actions}>
         {own === "master" ? (

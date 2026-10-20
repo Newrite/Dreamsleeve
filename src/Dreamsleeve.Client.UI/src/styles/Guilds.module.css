@@ -118,6 +118,13 @@
   align-items: center;
   gap: 10px;
 }
+.inviteSearch {
+  display: grid;
+  gap: 6px;
+}
+.inviteSearch input {
+  width: 260px;
+}
 .warning {
   margin: 0;
   padding: 8px 12px;
