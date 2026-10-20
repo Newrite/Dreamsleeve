@@ -245,8 +245,15 @@ public:
     // judges the roles, the name and the limits.
     std::expected<void, std::string> Guild(ClientExchange& exchange, std::string uiRequestId, GuildAction action)
     {
-      return Posted(Submit(exchange, PendingGuild{std::move(uiRequestId)}, [&](std::uint64_t id) {
-        return GuildRequest{id, std::move(action)};
+      return Posted(
+        Submit(exchange, PendingGuild{std::move(uiRequestId)}, [&](std::uint64_t id) { return GuildRequest{id, std::move(action)}; }));
+    }
+
+    // A page of the public catalog for the web UI, answered with guildCatalog.
+    std::expected<void, std::string> GuildCatalog(ClientExchange& exchange, std::string uiRequestId, Domain::GuildCatalogQuery query)
+    {
+      return Posted(Submit(exchange, PendingGuildCatalog{std::move(uiRequestId)}, [&](std::uint64_t id) {
+        return GuildCatalogRequest{id, std::move(query)};
       }));
     }
 
@@ -257,14 +264,15 @@ public:
       needsSnapshot     = true;
       snapshotRequested = false;
       shownGeneration.reset();
-      guildsShown       = false;
+      guildsShown = false;
       // Chat sends, mark, moderator and guild requests lose their view. Death
       // reports have no UI correlation and settle silently either way.
       std::erase_if(pending, [](const auto& entry) {
         const auto* mark = std::get_if<PendingMark>(&entry.second.request);
         return std::holds_alternative<PendingChat>(entry.second.request) ||
                std::holds_alternative<PendingModeration>(entry.second.request) ||
-               std::holds_alternative<PendingGuild>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
+               std::holds_alternative<PendingGuild>(entry.second.request) ||
+               std::holds_alternative<PendingGuildCatalog>(entry.second.request) || (mark && mark->request != MarkRequest::Death);
       });
       lastStatus.reset();
       lastIdentity.reset();
@@ -466,8 +474,21 @@ private:
       std::string uiRequestId;
     };
 
-    using PendingRequest =
-      std::variant<PendingChat, PendingAnnouncement, PendingMark, PendingIdentity, PendingName, PendingColor, PendingModeration, PendingGuild>;
+    struct PendingGuildCatalog
+    {
+      std::string uiRequestId;
+    };
+
+    using PendingRequest = std::variant<
+      PendingChat,
+      PendingAnnouncement,
+      PendingMark,
+      PendingIdentity,
+      PendingName,
+      PendingColor,
+      PendingModeration,
+      PendingGuild,
+      PendingGuildCatalog>;
 
     struct Pending
     {
@@ -698,6 +719,22 @@ private:
       Emit(frame, std::move(event));
     }
 
+    void Resolve(Frame& frame, PendingGuildCatalog& catalog, const CommandResult::Outcome& outcome, const UiSettings&)
+    {
+      Bridge::GuildCatalogEvent event{.requestId = std::move(catalog.uiRequestId)};
+      if (const auto* listed = std::get_if<GuildCatalogListed>(&outcome))
+      {
+        event.guilds = Bridge::ToUiCatalog(listed->page);
+        event.more   = listed->page.more;
+        event.total  = listed->page.total;
+      }
+      else if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
+        event.error = Bridge::ClipError(Bridge::GuildRejectionText(rejection->code, rejection->message));
+      else
+        event.error = Bridge::ClipError(Reason(outcome));
+      Emit(frame, std::move(event));
+    }
+
     // The guild book as the UI shows it: after a change or a new view, and
     // only once the server sent it, so a session never starts with "no
     // guilds". The guilds left since the last event ride along for notices.
@@ -711,23 +748,34 @@ private:
       if (!ready || needsSnapshot || (guildsShown && guilds == shownGuilds)) return;
       Bridge::GuildsEvent event;
       for (const auto& guild : guilds->Guilds())
-      {
-        Bridge::UiGuild entry{Bridge::Id(guild.guildId), guild.name, Bridge::Id(guild.channelId), guild.createdAtUnixMs, {}};
-        for (const auto& member : guild.members)
-          entry.members.push_back(Bridge::ToUiGuildMember(member, names, settings));
-        event.guilds.push_back(std::move(entry));
-      }
+        event.guilds.push_back(Bridge::ToUiGuild(guild, names, settings));
       for (const auto& invite : guilds->Invites())
-        event.invites.push_back({Bridge::Id(invite.guildId),
-                                 invite.guildName,
-                                 Bridge::Id(invite.invitedBy),
-                                 KnownName(invite.invitedBy, settings),
-                                 invite.expiresAtUnixMs});
+        event.invites.push_back(
+          {Bridge::Id(invite.guildId),
+           invite.guildName,
+           Bridge::Id(invite.invitedBy),
+           KnownName(invite.invitedBy, settings),
+           invite.expiresAtUnixMs});
       const auto& limits = guilds->Limits();
-      event.limits       = {limits.maxGuildsPerPlayer, limits.maxMembers, limits.nameMinLength, limits.nameMaxLength};
+      event.limits       = {
+          limits.maxGuildsPerPlayer,
+          limits.maxMembers,
+          limits.nameMinLength,
+          limits.nameMaxLength,
+          limits.maxTitles,
+          limits.infoMaxLength,
+          limits.maxJoinRequests,
+          limits.maxApplications
+      };
       for (const auto& removal : guilds->Removals())
         if (removal.revision > removalsSeen)
           event.removed.push_back({Bridge::Id(removal.guildId), removal.name, std::string{Bridge::GuildRemovalName(removal.reason)}});
+      for (const auto& application : guilds->Applications())
+        event.applications.push_back({Bridge::Id(application.guildId), application.guildName, application.expiresAtUnixMs});
+      for (const auto& ended : guilds->ApplicationEnds())
+        if (ended.revision > removalsSeen)
+          event.applicationsEnded.push_back(
+            {Bridge::Id(ended.guildId), ended.name, std::string{Bridge::GuildApplicationEndName(ended.reason)}});
       removalsSeen = guilds->Revision();
       Emit(frame, std::move(event));
       shownGuilds = guilds;
@@ -857,7 +905,7 @@ private:
         channels.insert_or_assign(chat.channelId, chat.kind);
       // Bubbles follow the global channel; retained history sets the floor:
       // only later IDs are live.
-      globalChannel      = ChannelOf(Domain::ChatChannelKind::Global);
+      globalChannel = ChannelOf(Domain::ChatChannelKind::Global);
       // The page already shows this session: a refresh (settings, ignore list,
       // or Core recovering from a full queue while the game thread stood still).
       const bool refresh = shownGeneration == snapshot.generation;
@@ -886,9 +934,9 @@ private:
       frame.playersChanged = false;
       // Requested: the host asked for it (new page, refresh, missed delta);
       // otherwise the core sent it on its own (first state, queue overflow).
-      frame.notes.push_back(std::format(
-        "Snapshot applied: generation {}, refresh {}, requested {}, ready {}", generation, refresh, snapshotRequested, ready));
-      snapshotRequested    = false;
+      frame.notes.push_back(
+        std::format("Snapshot applied: generation {}, refresh {}, requested {}, ready {}", generation, refresh, snapshotRequested, ready));
+      snapshotRequested = false;
       if (!ready)
       {
         // A disconnect/reconnect snapshot: the UI still needs one once Ready.
@@ -1079,7 +1127,8 @@ private:
       }
       if (routeNames.size() > 1 && status.route < routeNames.size())
       {
-        Bridge::RoutesEvent routes{.routes = routeNames, .active = routeNames[status.route], .chosen = routeChoice, .reached = status.routeReached};
+        Bridge::RoutesEvent
+          routes{.routes = routeNames, .active = routeNames[status.route], .chosen = routeChoice, .reached = status.routeReached};
         if (first || routes != lastRoutes)
         {
           Emit(frame, routes);
@@ -1126,13 +1175,13 @@ private:
     std::optional<ClientStatus>                                        lastStatus;
     // The guild book of the session, the one the UI shows, whether this view
     // has had it, and the book revision whose removals the UI has heard of.
-    std::shared_ptr<const GuildBook> guilds;
+    std::shared_ptr<const GuildBook>     guilds;
     std::unordered_set<Domain::PlayerId> guildmates;
-    std::shared_ptr<const GuildBook> shownGuilds;
-    bool                             guildsShown{};
-    std::uint64_t                    removalsSeen{};
-    bool                                                               needsSnapshot{true};
-    bool                                                               snapshotRequested{};
+    std::shared_ptr<const GuildBook>     shownGuilds;
+    bool                                 guildsShown{};
+    std::uint64_t                        removalsSeen{};
+    bool                                 needsSnapshot{true};
+    bool                                 snapshotRequested{};
     // The session whose snapshot the current page holds; none for a new page.
     std::optional<std::uint64_t> shownGeneration;
     // Profiles of retained authors, so offline players can be ignored by name.

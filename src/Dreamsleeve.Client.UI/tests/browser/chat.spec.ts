@@ -1589,3 +1589,212 @@ test("guilds have their tabs and send target, a panel by role, invitations and a
     "Чтобы выйти, передайте роль главы",
   );
 });
+
+test("the newest guild line of the login stays the message of the day", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  // A guild line later in the session is chat, not the message of the day.
+  await page
+    .getByRole("button", { name: "Сообщение гильдии", exact: true })
+    .click();
+  await expect(page.locator('[data-part="messages"]')).toContainText(
+    "Сбор гильдии у Йоррваскра через час.",
+  );
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const motd = page.getByRole("region", { name: "Сообщение дня" });
+  await expect(motd.getByRole("button", { name: "Седобородый" })).toBeVisible();
+  await expect(motd).toContainText("не опаздывайте!\nВозьмите зелья.", {
+    useInnerText: true,
+  });
+  await expect(motd).not.toContainText("Йоррваскра");
+});
+
+test("the master writes the guild information; members read it with its line breaks", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const about = page.getByRole("region", { name: "О гильдии" });
+  await expect(about).toContainText("Сбор по пятницам у Скайфорджа");
+  await about.getByRole("button", { name: "Изменить" }).click();
+  const text = about.getByRole("textbox", { name: "Информация о гильдии" });
+  await text.fill("а".repeat(501));
+  await expect(about).toContainText("501 / 500");
+  await expect(about.getByRole("button", { name: "Сохранить" })).toBeDisabled();
+  await text.fill("Новичкам рады.\nПишите главе.");
+  await about.getByRole("button", { name: "Сохранить" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Информация о гильдии «Соратники» сохранена");
+  await expect(about.locator("p")).toHaveText("Новичкам рады.\nПишите главе.");
+  // A member of another guild reads it without editing.
+  await page
+    .getByRole("group", { name: "Выбор гильдии" })
+    .getByRole("button", { name: "Вороны" })
+    .click();
+  await expect(about).toContainText(
+    "Глава пока ничего не рассказал о гильдии.",
+  );
+  await expect(about.getByRole("button", { name: "Изменить" })).toHaveCount(0);
+});
+
+test("the catalog loads pages as the list scrolls, filters them and takes a join request", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  const guildsTab = page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ });
+  // One invitation and two join requests wait.
+  await expect(guildsTab).toContainText("3");
+  await guildsTab.click();
+  await page
+    .getByRole("group", { name: "Раздел гильдий" })
+    .getByRole("button", { name: "Каталог" })
+    .click();
+  const catalog = page.getByRole("region", { name: "Каталог гильдий" });
+  const entries = catalog
+    .getByRole("list", { name: "Гильдии каталога" })
+    .getByRole("listitem");
+  await expect(catalog).toContainText("Найдено: 47");
+  await expect(entries).toHaveCount(20);
+  await expect(entries.first()).toContainText("Волки 1");
+  // The list grows in the panel's own scroll; the next page comes when its
+  // end is in sight.
+  await entries.last().scrollIntoViewIfNeeded();
+  await expect(entries).toHaveCount(40);
+  await entries.last().scrollIntoViewIfNeeded();
+  await expect(entries).toHaveCount(47);
+  await expect(entries.first()).not.toBeInViewport();
+
+  await catalog.getByRole("textbox", { name: "Поиск гильдии" }).fill("волки");
+  await expect(catalog).toContainText("Найдено: 5");
+  await expect(entries).toHaveCount(5);
+  await catalog.getByRole("textbox", { name: "Участников от" }).fill("5");
+  await expect(catalog).toContainText("Найдено: 4");
+  const wolves = entries.filter({ hasText: "Волки 2" });
+  await wolves.getByRole("button", { name: "Подать заявку" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Заявка в гильдию «Волки 2» отправлена");
+  await expect(wolves).toContainText("Заявка отправлена");
+
+  // The own requests wait under «Мои гильдии»; the master answers others'.
+  await page
+    .getByRole("group", { name: "Раздел гильдий" })
+    .getByRole("button", { name: "Мои гильдии" })
+    .click();
+  await expect(page.getByRole("region", { name: "Мои заявки" })).toContainText(
+    "«Волки 2»",
+  );
+  const requests = page.getByRole("region", { name: "Заявки на вступление" });
+  await expect(requests).toContainText("Ингрид");
+  await requests
+    .getByRole("listitem")
+    .filter({ hasText: "Ингрид" })
+    .getByRole("button", { name: "Принять" })
+    .click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Ингрид принят(а) в гильдию «Соратники»");
+  await expect(requests).not.toContainText("Ингрид");
+  await expect(
+    page.getByRole("list", { name: "Участники гильдии Соратники" }),
+  ).toContainText("Ингрид");
+  await requests
+    .getByRole("listitem")
+    .filter({ hasText: "Бьорн" })
+    .getByRole("button", { name: "Отклонить" })
+    .click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Заявка Бьорн отклонена");
+  // The flag follows the server: it changes once the answer arrives.
+  const listed = requests.getByRole("checkbox", {
+    name: "Показывать гильдию в каталоге",
+  });
+  await listed.click({ force: true });
+  await expect(listed).not.toBeChecked();
+  await expect(requests).toContainText("Гильдия скрыта из каталога");
+});
+
+test("an invitation finds online players outside the guild by name", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const guild = page.getByRole("region", { name: "Мои гильдии" });
+  const search = guild.getByRole("textbox", { name: "Кого пригласить" });
+  const found = guild.getByRole("list", { name: "Найденные игроки" });
+  // Nothing is listed until the player types.
+  await expect(found).toHaveCount(0);
+  // A member of the guild is not offered.
+  await search.fill("мира");
+  await expect(guild).toContainText("такого имени нет");
+  await search.fill("страж");
+  await expect(found.getByRole("listitem")).toHaveText(["Страж 2Пригласить"]);
+  await found.getByRole("button", { name: "Пригласить" }).click();
+  await expect(
+    page.getByRole("status", { name: "Результат операции" }),
+  ).toHaveText("Приглашение отправлено: Страж 2");
+  await expect(search).toHaveValue("");
+});
+
+test("the master creates custom roles, gives one to a member and deletes it", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const titles = page.getByRole("region", { name: "Роли гильдии" });
+  await expect(titles).toContainText("2 / 10");
+  await expect(titles).toContainText("Казначей");
+  const result = page.getByRole("status", { name: "Результат операции" });
+  const mira = page
+    .getByRole("list", { name: "Участники гильдии Соратники" })
+    .getByRole("listitem")
+    .filter({ hasText: "Мира" });
+  const choice = mira.getByRole("combobox", { name: "Роль: Мира" });
+  await expect(choice).toHaveText("Казначей");
+
+  const name = titles.getByRole("textbox", { name: "Название новой роли" });
+  const create = titles.getByRole("button", { name: "Создать роль" });
+  await name.fill("Каз!");
+  await expect(titles).toContainText("Только буквы, цифры и пробелы");
+  await expect(create).toBeDisabled();
+  await name.fill("Летописец");
+  await create.click();
+  await expect(result).toHaveText("Роль «Летописец» создана");
+  await expect(titles).toContainText("3 / 10");
+
+  await choice.click();
+  await page.getByRole("option", { name: "Летописец" }).click();
+  await expect(result).toHaveText("Мира: роль выдана");
+  await expect(choice).toHaveText("Летописец");
+
+  const chronicler = titles
+    .getByRole("listitem")
+    .filter({ hasText: "Летописец" });
+  await chronicler.getByRole("button", { name: "Удалить" }).click();
+  await chronicler.getByRole("button", { name: "Удалить роль" }).click();
+  await expect(result).toHaveText("Роль «Летописец» удалена");
+  await expect(choice).toHaveText("без роли");
+  await expect(titles).toContainText("2 / 10");
+});

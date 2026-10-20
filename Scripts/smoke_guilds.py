@@ -2,9 +2,11 @@
 """Guilds over the real server and three native Dev clients: creation and the
 name rules, an invitation and its acceptance, guild chat with the real name
 of a member who hides it elsewhere, a guild mute and its lift, an officer
-who removes a member's message and excludes them, the master who cannot
-leave and hands the guild over, the stored rows, disbanding and the name
-free again.
+who removes a member's message and excludes them, custom roles the master
+creates, gives and deletes, the guild information only the master writes, the
+public catalog with a join request an officer accepts and a hidden guild, the
+master who cannot leave and hands the guild over, the stored rows, disbanding
+and the name free again.
 """
 import argparse
 import os
@@ -23,7 +25,7 @@ import tomli_w
 from smoke_chat import ROOT, Child, check, free_tcp_port, free_udp_port
 
 # Protocol::Chat::RequestRejectionCode values the checks name.
-INVALID_REQUEST, MUTED, GUILD_NAME_TAKEN, GUILD_MASTER_STAYS = 1, 16, 19, 26
+INVALID_REQUEST, MUTED, NOT_PERMITTED, GUILD_NAME_TAKEN, GUILD_MASTER_STAYS, GUILD_TITLE_NAME_TAKEN = 1, 16, 17, 19, 26, 28
 
 
 def smoke(args, log, directory: Path):
@@ -93,7 +95,7 @@ def smoke(args, log, directory: Path):
         carol, carol_id = client("carol", "smoke_carol", "Smoke Carol")
 
         name = f"Вороны{nonce}"
-        expect(alice, r"^guilds 0 invites 0 per-player=3 members=64 name=3\.\.24$", 0)
+        expect(alice, r"^guilds 0 invites 0 per-player=3 members=64 name=3\.\.24 titles=10 info=500$", 0)
         start_alice = alice.mark()
         guild = done(alice, f"guild create {name}")
         channel = expect(alice, rf"^guild {guild} name={name} channel=(\d+) members=1$", start_alice).group(1)
@@ -143,6 +145,53 @@ def smoke(args, log, directory: Path):
         done(bob, f"guild exclude {guild} {carol_id}")
         expect(carol, r"^guilds 0 invites 0 ", start_carol)
         stage("an officer removes a member's message and excludes the member")
+
+        command(bob, f"guild title-create {guild} Казначей", rf"rejected \({NOT_PERMITTED}\)")
+        start_bob = bob.mark()
+        done(alice, f"guild title-create {guild}  Казначей ")
+        title = expect(bob, rf"^title {guild} (\d+) name=Казначей$", start_bob).group(1)
+        command(alice, f"guild title-create {guild} КАЗНАЧЕЙ", rf"rejected \({GUILD_TITLE_NAME_TAKEN}\)")
+        start_bob = bob.mark()
+        done(alice, f"guild title {guild} {bob_id} {title}")
+        expect(bob, rf"^member {guild} {bob_id} officer online=1 title={title} name=Smoke Bob$", start_bob)
+        stored("SELECT title_id FROM guild_members WHERE guild_id = ? AND player_id = ?", (int(guild), int(bob_id)),
+               [(int(title),)], "The custom role is not stored with its holder")
+        start_bob = bob.mark()
+        done(alice, f"guild title-delete {guild} {title}")
+        expect(bob, rf"^member {guild} {bob_id} officer online=1 name=Smoke Bob$", start_bob)
+        stored("SELECT id FROM guild_titles WHERE guild_id = ?", (int(guild),), [], "A deleted custom role is still stored")
+        stored("SELECT title_id FROM guild_members WHERE guild_id = ? AND player_id = ?", (int(guild), int(bob_id)),
+               [(None,)], "The holder of a deleted custom role still holds it")
+        stage("only the master creates a custom role, unique in any case, gives it and deletes it from its holder")
+
+        command(bob, f"guild info {guild} Мы лучшие", rf"rejected \({NOT_PERMITTED}\)")
+        start_bob = bob.mark()
+        done(alice, f"guild info {guild} Сбор по пятницам {nonce}")
+        expect(bob, rf"^info {guild} Сбор по пятницам {nonce}$", start_bob)
+        stored("SELECT info FROM guilds WHERE id = ?", (int(guild),), [(f"Сбор по пятницам {nonce}",)],
+               "The guild information is not stored")
+        done(alice, f"guild info {guild}")
+        stored("SELECT info FROM guilds WHERE id = ?", (int(guild),), [(None,)], "Cleared guild information is still stored")
+        stage("only the master writes the guild information, members read it and empty text clears it")
+
+        command(carol, "guild catalog", r"catalog total=1 more=0$")
+        expect(carol, rf"^catalog-guild {guild} members=2 name={name}$", 0)
+        start_alice = alice.mark()
+        start_carol = carol.mark()
+        done(carol, f"guild apply {guild}")
+        expect(carol, rf"^application {guild} name={name} expires=\d+$", start_carol)
+        expect(alice, rf"^request {guild} {carol_id} name=Smoke Carol$", start_alice)
+        stored("SELECT player_id FROM guild_join_requests WHERE guild_id = ?", (int(guild),), [(int(carol_id),)],
+               "The join request is not stored")
+        start_carol = carol.mark()
+        done(bob, f"guild request {guild} {carol_id} accept")
+        expect(carol, rf"^guild {guild} name={name} channel={channel} members=3$", start_carol)
+        stored("SELECT player_id FROM guild_join_requests WHERE guild_id = ?", (int(guild),), [],
+               "An accepted join request is still stored")
+        done(alice, f"guild listed {guild} off")
+        command(carol, "guild catalog", r"catalog total=0 more=0$")
+        done(alice, f"guild exclude {guild} {carol_id}")
+        stage("the catalog lists the guild, an officer accepts a join request, and a hidden guild leaves the catalog")
 
         command(alice, f"guild leave {guild}", rf"rejected \({GUILD_MASTER_STAYS}\)")
         start_alice = alice.mark()

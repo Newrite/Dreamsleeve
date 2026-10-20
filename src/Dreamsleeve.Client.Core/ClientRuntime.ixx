@@ -197,7 +197,7 @@ private:
       Update,
       Mark,
       Identity,
-      Profile, // A display name or a name color: the server takes one at a time.
+      Profile,  // A display name or a name color: the server takes one at a time.
       Moderation,
       Deletion,
       Guild
@@ -456,7 +456,7 @@ private:
       list.reserve(snapshot.guilds.size());
       for (const auto& opened : snapshot.guilds)
         list.push_back(opened.guild);
-      auto book = GuildBook::TryCreate(std::move(list), std::move(snapshot.invites), snapshot.limits);
+      auto book = GuildBook::TryCreate(std::move(list), std::move(snapshot.invites), snapshot.limits, std::move(snapshot.applications));
       if (!book) return std::unexpected{book.error()};
 
       if (guilds)
@@ -518,6 +518,36 @@ private:
       return Checked(book.RemoveInvite(removed.guildId));
     }
 
+    Result<void> Change(GuildBook& book, Wire::GuildTitlesChanged& changed)
+    {
+      return Checked(book.PutTitles(changed.guildId, std::move(changed.titles)));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildInfoChanged& changed)
+    {
+      return Checked(book.PutInfo(changed.guildId, std::move(changed.info)));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildJoinRequestsChanged& changed)
+    {
+      return Checked(book.PutJoinRequests(changed.guildId, std::move(changed.requests)));
+    }
+
+    Result<void> Change(GuildBook& book, Wire::GuildApplied& applied)
+    {
+      return Checked(book.PutApplication(std::move(applied.application)));
+    }
+
+    Result<void> Change(GuildBook& book, const Wire::GuildApplicationRemoved& removed)
+    {
+      return Checked(book.RemoveApplication(removed.guildId, removed.reason));
+    }
+
+    Result<void> Change(GuildBook& book, const Wire::GuildListedChanged& changed)
+    {
+      return Checked(book.PutListed(changed.guildId, changed.listed));
+    }
+
     static Result<void> Checked(Domain::OperationResult result)
     {
       if (!result) return std::unexpected{std::move(result.error())};
@@ -536,6 +566,12 @@ private:
     {
       if (!TakePending(done.requestId, PendingKind::Guild)) return Unexpected("request_id");
       return Settle(done.requestId, GuildDone{done.guildId});
+    }
+
+    Result<void> Receive(Wire::GuildCatalogPageReceived& received)
+    {
+      if (!TakePending(received.requestId, PendingKind::Guild)) return Unexpected("request_id");
+      return Settle(received.requestId, GuildCatalogListed{std::move(received.page)});
     }
 
     Result<void> Receive(Wire::MuteChanged& changed)
@@ -987,6 +1023,16 @@ private:
       return SendRequest(generation, command, {PendingKind::Guild});
     }
 
+    // The catalog shares the guild requests' budget: one pending kind, one answer each.
+    Result<void> Process(std::uint64_t generation, GuildCatalogRequest& command)
+    {
+      if (auto failure = Admit(generation, command.requestId)) return RejectCommand(generation, command.requestId, *failure);
+      if (PendingCount(PendingKind::Guild) >= config.maxPendingChatRequests)
+        return RejectCommand(generation, command.requestId, CommandFailureCode::Busy);
+
+      return SendRequest(generation, command, {PendingKind::Guild});
+    }
+
     // A deletion settles with the chat of its channel, which must exist.
     Result<void> Process(std::uint64_t generation, DeleteChatMessage& command)
     {
@@ -1120,16 +1166,18 @@ private:
     // The kind table is swept when it reaches this size, then twice the kinds left.
     static constexpr std::size_t KindSweepFloor = 64;
 
-    Configuration                                     config;
-    Wire::ProtocolCodec                               codec;
-    ClientExchange&                                   exchange;
-    DreamNetClient::Ptr                               transport;
+    Configuration       config;
+    Wire::ProtocolCodec codec;
+    ClientExchange&     exchange;
+    DreamNetClient::Ptr transport;
+
     // The route's game port, the main one until the application picks another.
     struct
     {
       std::string host;
       Port        port{};
     } endpoint{config.serverHost, config.serverPort};
+
     std::size_t                                       unreachable{};  // See TakeUnreachable.
     bool                                              reached{};      // See Reached.
     bool                                              keepGuest{};

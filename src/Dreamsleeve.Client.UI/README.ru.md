@@ -56,8 +56,9 @@ dev-данных, localStorage и стенда. `npm run build:demo` отдел�
   «Модерация» (`views/ModeratorPanel.tsx`) — наказания в силе со снятием и метки выбранного игрока.
 
 На стенде Enter или кнопка открывает чат; новая публикация не захватывает фокус.
-Гильдии на стенде имитирует `src/dev/guilds.ts`: игрок — глава «Соратников» и участник
-«Воронов», у него есть приглашение; кнопки стенда присылают сообщение гильдии, приглашение,
+Гильдии на стенде имитирует `src/dev/guilds.ts`: игрок — глава «Соратников» с ролями «Казначей» и
+«Новобранец» и двумя заявками на вступление и участник «Воронов», у него есть приглашение; каталог
+стенда — 45 чужих гильдий и свои, страницами по 20; кнопки стенда присылают сообщение гильдии, приглашение,
 мут в гильдии и исключение. Кнопка «Отклонить следующую отправку» проверяет ошибку в строке
 и ручной повтор. Настройки стенда сохраняются локально в браузере. В игре сохранение
 передаётся native host, который пишет `ui.toml` и отвечает `settingsResult`.
@@ -119,15 +120,17 @@ Native host создаёт view, регистрирует JS listener `dreamslee
 | `role` | moderator: роль игрока в сессии; только модератор видит пункты модератора и вкладку «Модерация» |
 | `messagesRemoved` | channelId, messageIds: сообщения, удалённые модератором, уходят из истории у всех |
 | `moderationResult` | Ответ на запрос модератора по requestId: error при отказе, иначе поля своего вида — sanction, sanctions (игрок по playerId, name — если host его встречал), playerId, marks, removed |
-| `guilds` | Гильдии игрока целиком: guilds (id, name, channelId, createdAt, members — id, name, role `member`/`officer`/`master`, online, joinedAt, mute), invites (guildId, guildName, invitedBy, inviter), limits (perPlayer, members, nameMin, nameMax) и removed — гильдии, из которых игрок вышел с прошлого события, с причиной `left`/`excluded`/`disbanded`. Приходит только после того, как сервер прислал гильдии; первое событие сессии — точка отсчёта без уведомлений |
+| `guilds` | Гильдии игрока целиком: guilds (id, name, channelId, createdAt, members — id, name, role `member`/`officer`/`master`, online, joinedAt, mute, title — ID кастомной роли; titles — id, name; info — текст главы, пусто — нет; listed — в каталоге; joinRequests — id, name, createdAt, expires, только главе и офицерам), invites (guildId, guildName, invitedBy, inviter), limits (perPlayer, members, nameMin, nameMax, titles, infoMax, joinRequests, applications), applications (guildId, guildName, expires) — свои заявки, applicationsEnded (guildId, name, reason `withdrawn`/`accepted`/`rejected`/`expired`/`disbanded`) — закрытые с прошлого события и removed — гильдии, из которых игрок вышел с прошлого события, с причиной `left`/`excluded`/`disbanded`. Приходит только после того, как сервер прислал гильдии; первое событие сессии — точка отсчёта без уведомлений |
 | `guildResult` | Ответ на команду `guild` по requestId: guildId (у create — новой гильдии) или error |
+| `guildCatalog` | Ответ на команду `guildCatalog` по requestId: guilds (id, name, info, members, createdAt), more и total или error |
 | `channels` | Полный список каналов, когда гильдия пришла или ушла: строки, черновик и непрочитанное ушедшего канала пропадают, выбор отправки и вкладка возвращаются к доступным |
 | `identity` | «Скрывать моё имя от других игроков»: mode (`off`/`everywhere`/`exceptGroundMarks`; во время ожидания — запрошенный), pending (ждём сервер), pseudonym (что видят другие, только в Ready-сессии), error (последний отказ); приходит при каждом изменении, после (пере)создания view и в ответ на `setIdentityVisibility` |
 
 | UI → host | Смысл |
 |---|---|
 | `sendChat` | channelId, text, requestId корреляции UI |
-| `guild` | requestId и action: `create` (name), `invite`/`exclude`/`transfer`/`unmute` (guildId, playerId), `answer` (guildId, accept), `leave`/`disband` (guildId), `setRole` (guildId, playerId, role `member`/`officer`), `mute` (guildId, playerId, minutes — нет: до снятия, reason); ответ — `guildResult` |
+| `guild` | requestId и action: `create` (name), `invite`/`exclude`/`transfer`/`unmute` (guildId, playerId), `answer` (guildId, accept), `leave`/`disband` (guildId), `setRole` (guildId, playerId, role `member`/`officer`), `mute` (guildId, playerId, minutes — нет: до снятия, reason), `createTitle` (guildId, name), `renameTitle` (guildId, titleId, name), `deleteTitle` (guildId, titleId), `setTitle` (guildId, playerId, titleId — нет: снять роль), `setInfo` (guildId, info — пусто: убрать), `setListed` (guildId, listed), `apply`/`withdraw` (guildId), `answerRequest` (guildId, playerId, accept); ответ — `guildResult` |
+| `guildCatalog` | requestId, search, minMembers, maxMembers (нет — без верхней границы), openOnly, sort `name`/`members`, after (guildId, name, members последней полученной записи; нет — первая страница); ответ — `guildCatalog` |
 | `close` | Освободить native focus; игру не ставить на паузу |
 | `saveSettings` | Полный набор UI settings и монотонная revision |
 | `signIn` | username, password, remember; непустой displayName — сначала регистрация, затем вход |
