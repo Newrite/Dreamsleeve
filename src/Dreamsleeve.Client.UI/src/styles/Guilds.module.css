@@ -146,8 +146,8 @@
   max-width: 560px;
   resize: vertical;
 }
-/* The public catalog: filters above a list that scrolls by itself, so the
-   next page loads as its end comes into sight. */
+/* The public catalog: filters above a list that grows in the panel's
+   scroll, the next page loading as its end comes into sight. */
 .catalogFilters {
   display: flex;
   flex-wrap: wrap;
@@ -175,11 +175,6 @@
   align-items: center;
   gap: 6px;
   font-size: 0.9em;
-}
-.catalogList {
-  max-height: 55vh;
-  overflow-y: auto;
-  padding-right: 6px;
 }
 .catalogEntry {
   display: grid !important;

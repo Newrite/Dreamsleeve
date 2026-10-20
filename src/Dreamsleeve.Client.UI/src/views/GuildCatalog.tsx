@@ -3,7 +3,7 @@ import type { Chat, ChatState } from "../state/chat";
 import type { GuildCatalogGuild, GuildCatalogSort } from "../bridge/types";
 import { Select } from "./Select";
 import styles from "../styles/Guilds.module.css";
-// The list asks for the next page while its end is this close.
+// The next page is asked for while the end of the list is this close to sight.
 const NEAR_END_PX = 120;
 // Typing settles before the search goes out.
 const SEARCH_DELAY_MS = 300;
@@ -14,6 +14,12 @@ const sorts: { value: GuildCatalogSort; label: string }[] = [
 // A bound the player typed: empty is none, anything else a whole count.
 const bound = (text: string) =>
   text.trim() === "" ? undefined : Math.max(0, Math.floor(Number(text)) || 0);
+// The box the list scrolls in: the panel around it, or the page.
+function scroller(node: HTMLElement) {
+  for (let box = node.parentElement; box; box = box.parentElement)
+    if (/(auto|scroll)/.test(getComputedStyle(box).overflowY)) return box;
+  return null;
+}
 // What the player can do about one catalog guild, from their own book.
 function Entry({
   chat,
@@ -83,7 +89,8 @@ function Entry({
   );
 }
 // The public catalog: filters, then the pages the server sends, the next one
-// asked for while the end of the list is in sight.
+// asked for while the end of the list comes into sight in the panel's own
+// scroll.
 export function GuildCatalog({
   chat,
   state: s,
@@ -100,7 +107,7 @@ export function GuildCatalog({
   const [maximum, setMaximum] = useState(
     filters.maxMembers === undefined ? "" : String(filters.maxMembers),
   );
-  const list = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
   const busy = !s.connected || Object.keys(s.guildRequests).length > 0;
   useEffect(() => chat.catalog.open(), [chat, s.connected]);
   // Search and the member bounds go out once the player stops typing.
@@ -119,16 +126,20 @@ export function GuildCatalog({
     );
     return () => clearTimeout(timer);
   }, [chat, search, minimum, maximum, filters]);
-  // The next page while the end is near, also when a page does not fill the box.
-  const nearEnd = () => {
-    const box = list.current;
-    if (
-      box &&
-      box.scrollTop + box.clientHeight >= box.scrollHeight - NEAR_END_PX
-    )
-      chat.catalog.more();
-  };
-  useEffect(nearEnd, [catalog.guilds.length, catalog.loading]);
+  // The next page while the end is near; observed anew after every page, so a
+  // page that does not fill the panel asks for one more.
+  useEffect(() => {
+    const node = end.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (seen) => {
+        if (seen.some((e) => e.isIntersecting)) chat.catalog.more();
+      },
+      { root: scroller(node), rootMargin: `0px 0px ${NEAR_END_PX}px 0px` },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [chat, catalog.guilds.length, catalog.loading]);
   return (
     <section className={styles.section} aria-label="Каталог гильдий">
       <div className={styles.catalogFilters}>
@@ -181,12 +192,7 @@ export function GuildCatalog({
         {catalog.loaded ? `Найдено: ${catalog.total}. ` : ""}
         Глава и офицеры гильдии увидят ваше настоящее имя в заявке.
       </p>
-      <div
-        ref={list}
-        className={styles.catalogList}
-        aria-busy={catalog.loading !== null}
-        onScroll={nearEnd}
-      >
+      <div aria-busy={catalog.loading !== null}>
         {catalog.loaded && catalog.guilds.length === 0 && (
           <p className={styles.muted}>Гильдий по этим условиям нет.</p>
         )}
@@ -206,6 +212,7 @@ export function GuildCatalog({
             <button onClick={() => chat.catalog.refresh()}>Повторить</button>
           </p>
         )}
+        <div ref={end} aria-hidden="true" />
       </div>
     </section>
   );

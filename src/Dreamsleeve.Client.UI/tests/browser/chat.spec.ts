@@ -1631,9 +1631,13 @@ test("the catalog loads pages as the list scrolls, filters them and takes a join
   await expect(catalog).toContainText("Найдено: 47");
   await expect(entries).toHaveCount(20);
   await expect(entries.first()).toContainText("Волки 1");
-  // The next page comes when the end of the list is in sight.
+  // The list grows in the panel's own scroll; the next page comes when its
+  // end is in sight.
   await entries.last().scrollIntoViewIfNeeded();
   await expect(entries).toHaveCount(40);
+  await entries.last().scrollIntoViewIfNeeded();
+  await expect(entries).toHaveCount(47);
+  await expect(entries.first()).not.toBeInViewport();
 
   await catalog.getByRole("textbox", { name: "Поиск гильдии" }).fill("волки");
   await expect(catalog).toContainText("Найдено: 5");
