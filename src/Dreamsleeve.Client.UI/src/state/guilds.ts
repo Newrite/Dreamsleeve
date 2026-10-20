@@ -7,6 +7,7 @@ import type {
   GuildLimits,
   GuildRole,
   HostEvent,
+  Message,
   Send,
 } from "../bridge/types";
 import type { ChatState } from "./chat";
@@ -35,7 +36,12 @@ export interface GuildsState {
   // The guild open in the guilds panel.
   selectedGuild: string | null;
   guildMute: GuildMuteDialog | null;
+  // The message of the day by guild ID: the newest line of the guild's chat
+  // when the session's guilds came. It stays for the session and goes with
+  // its line or its guild.
+  guildMotd: Record<string, PlayerLine>;
 }
+export type PlayerLine = Extract<Message, { source: "player" }>;
 export const idleGuilds: GuildsState = {
   guilds: [],
   invites: [],
@@ -54,6 +60,7 @@ export const idleGuilds: GuildsState = {
   guildRequests: {},
   selectedGuild: null,
   guildMute: null,
+  guildMotd: {},
 };
 export const roleLabels: Record<GuildRole, string> = {
   member: "участник",
@@ -78,6 +85,19 @@ export const titleName = (guild: Guild, titleId?: string) =>
     : guild.titles.find((t) => t.id === titleId)?.name;
 export const guildOfChannel = (guilds: Guild[], channelId: string) =>
   guilds.find((g) => g.channelId === channelId);
+// The newest player line of each guild's channel; the history is in time
+// order and the host sends a guild's tail before the guild.
+export function newestLines(guilds: Guild[], messages: Message[]) {
+  const lines: Record<string, PlayerLine> = {};
+  for (const guild of guilds)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.channelId !== guild.channelId || m.source !== "player") continue;
+      lines[guild.id] = m;
+      break;
+    }
+  return lines;
+}
 // The rules of the server's guild owner, so the page offers only what it
 // would accept; the server decides anyway.
 export const mayInvite = (role?: GuildRole) =>
@@ -295,9 +315,17 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
         ? s.selectedGuild
         : (event.guilds[0]?.id ?? null);
     const dialog = s.guildMute;
+    const motd = s.guildsKnown
+      ? Object.fromEntries(
+          Object.entries(s.guildMotd).filter(([id]) =>
+            event.guilds.some((g) => g.id === id),
+          ),
+        )
+      : newestLines(event.guilds, s.messages);
     store.setState({
       guilds: event.guilds,
       invites: event.invites,
+      guildMotd: motd,
       applications: event.applications,
       guildLimits: event.limits,
       guildsKnown: true,

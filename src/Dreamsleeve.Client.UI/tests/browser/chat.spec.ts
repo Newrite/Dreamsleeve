@@ -1552,6 +1552,30 @@ test("guilds have their tabs and send target, a panel by role, invitations and a
   );
 });
 
+test("the newest guild line of the login stays the message of the day", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Открыть чат · Enter" }).click();
+  // A guild line later in the session is chat, not the message of the day.
+  await page
+    .getByRole("button", { name: "Сообщение гильдии", exact: true })
+    .click();
+  await expect(page.locator('[data-part="messages"]')).toContainText(
+    "Сбор гильдии у Йоррваскра через час.",
+  );
+  await page.getByRole("button", { name: "Открыть меню Dreamsleeve" }).click();
+  await page
+    .getByRole("navigation", { name: "Разделы меню" })
+    .getByRole("button", { name: /Гильдии/ })
+    .click();
+  const motd = page.getByRole("region", { name: "Сообщение дня" });
+  await expect(motd.getByRole("button", { name: "Седобородый" })).toBeVisible();
+  await expect(motd).toContainText("не опаздывайте!\nВозьмите зелья.", {
+    useInnerText: true,
+  });
+  await expect(motd).not.toContainText("Йоррваскра");
+});
+
 test("the master writes the guild information; members read it with its line breaks", async ({
   page,
 }) => {

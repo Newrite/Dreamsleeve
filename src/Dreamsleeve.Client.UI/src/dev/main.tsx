@@ -215,7 +215,7 @@ function snapshot(settings = chat.store.getState().settings, refresh = false) {
     type: "snapshot",
     serverName: "Голоса Тамриэля",
     channels: [...channels, ...guildStand.channels()],
-    messages: projectMessages(history, settings),
+    messages: projectMessages([...history, ...guildStand.history()], settings),
     players: players.map((p) => project(p, settings)),
     selfId: players[0].id,
     refresh,

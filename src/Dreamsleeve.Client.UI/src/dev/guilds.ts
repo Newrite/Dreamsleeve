@@ -8,6 +8,7 @@ import type {
   GuildLimits,
   GuildMember,
   HostEvent,
+  Message,
   Player,
 } from "../bridge/types";
 // A guild channel's ID follows from the guild, above every server channel.
@@ -458,6 +459,24 @@ export function makeGuildStand(
       if (!own) return;
       own.mute = { reason: "Флуд в гильдии", until: Date.now() + 15 * 60000 };
       changed(false);
+    },
+    // The first guild's chat history: its newest line is the message of the day.
+    history(): Message[] {
+      const guild = guilds[0];
+      return [
+        [self, "Завтра идём в Ветреный пик, кто с нами?"],
+        [
+          players[2],
+          "Сбор в пятницу у Скайфорджа, не опаздывайте!\nВозьмите зелья.",
+        ],
+      ].map(([author, text], i) => ({
+        id: String(i + 1),
+        channelId: guild.channelId,
+        source: "player",
+        author: author as Player,
+        text: text as string,
+        time: now - (2 - i) * 3600000,
+      }));
     },
     // A guild a message from another member can go to, with its author.
     speaker() {

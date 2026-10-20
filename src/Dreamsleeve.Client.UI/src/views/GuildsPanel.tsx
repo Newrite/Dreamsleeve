@@ -7,11 +7,13 @@ import type {
   GuildRole,
   GuildTitle,
   Player,
+  Settings,
 } from "../bridge/types";
 import {
   mayInvite,
   memberOf,
   outranks,
+  type PlayerLine,
   roleLabels,
   roleOf,
   titleName,
@@ -25,6 +27,12 @@ const createdFormat = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
   year: "numeric",
+});
+const motdFormat = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 const order: Record<GuildRole, number> = { master: 0, officer: 1, member: 2 };
 // The master first, then officers, the online before the offline, by name.
@@ -127,6 +135,32 @@ function InviteSearch({
         </p>
       )}
     </div>
+  );
+}
+// The newest line of the guild's chat when the player came in.
+function MessageOfDay({
+  chat,
+  line,
+  settings,
+}: {
+  chat: Chat;
+  line: PlayerLine;
+  settings: Settings;
+}) {
+  return (
+    <section className={styles.section} aria-label="Сообщение дня">
+      <h4>Сообщение дня</h4>
+      <p className={styles.motdBy}>
+        <button
+          style={{ color: line.author.color }}
+          onClick={() => chat.open("profile", line.author.id)}
+        >
+          {playerName(line.author, settings)}
+        </button>
+        <time className={styles.muted}>{motdFormat.format(line.time)}</time>
+      </p>
+      <p className={styles.about}>{line.text}</p>
+    </section>
   );
 }
 // What the master tells about the guild: everyone in it reads, the master
@@ -590,6 +624,13 @@ function GuildCard({
           Создана: <b>{createdFormat.format(guild.createdAt)}</b>
         </span>
       </p>
+      {s.guildMotd[guild.id] && (
+        <MessageOfDay
+          chat={chat}
+          line={s.guildMotd[guild.id]}
+          settings={s.settings}
+        />
+      )}
       <GuildAbout
         chat={chat}
         guild={guild}

@@ -302,10 +302,19 @@ export function makeChat(send: Send, now = () => Date.now()) {
           const receivedAt = Object.fromEntries(
             Object.entries(state.receivedAt).filter(([id]) => retained.has(id)),
           );
+          // The message of the day follows its line: a new filter or name.
+          const lines = new Map(messages.map((m) => [keyOf(m), m]));
+          const guildMotd = Object.fromEntries(
+            Object.entries(state.guildMotd).flatMap(([id, line]) => {
+              const shown = lines.get(keyOf(line));
+              return shown?.source === "player" ? [[id, shown]] : [];
+            }),
+          );
           store.setState({
             channels,
             messages,
             receivedAt,
+            guildMotd,
             players: event.players,
             groundMarksSupported: event.groundMarksSupported ?? false,
             groundMarks: event.groundMarks ?? state.groundMarks,
@@ -401,6 +410,11 @@ export function makeChat(send: Send, now = () => Date.now()) {
         store.setState({
           messages: state.messages.filter((m) => !gone.has(keyOf(m))),
           receivedAt,
+          guildMotd: Object.fromEntries(
+            Object.entries(state.guildMotd).filter(
+              ([, line]) => !gone.has(keyOf(line)),
+            ),
+          ),
           pending: Object.fromEntries(
             Object.entries(state.pending).filter(
               ([, p]) => !gone.has(confirmedKey(p) ?? ""),

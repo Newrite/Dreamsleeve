@@ -124,6 +124,19 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.motdBy {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.motdBy button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  cursor: pointer;
+}
 .aboutForm {
   display: grid;
   gap: 6px;

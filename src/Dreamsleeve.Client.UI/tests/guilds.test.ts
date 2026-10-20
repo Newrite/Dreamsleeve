@@ -461,6 +461,48 @@ describe("guilds in the chat", () => {
     chat.receive({ type: "moderationResult", requestId: "gd1" });
     expect(chat.store.getState().notice).toBe("Сообщение удалено");
   });
+
+  it("keep the newest guild line of the login as the message of the day", () => {
+    const { chat, guilds } = inGuilds();
+    const [ravensGuild] = guilds;
+    const motd = () =>
+      Object.fromEntries(
+        Object.entries(chat.store.getState().guildMotd).map(([id, m]) => [
+          id,
+          m.id,
+        ]),
+      );
+    expect(motd()).toEqual({ "4": "2", "5": "3" });
+    // A line later in the session is chat, not the message of the day.
+    chat.receive({ type: "messages", messages: [line("9", ravens.id)] });
+    chat.receive(guildsEvent(guilds));
+    expect(motd()).toEqual({ "4": "2", "5": "3" });
+    // It goes with its line and with its guild.
+    chat.receive({
+      type: "messagesRemoved",
+      channelId: companions.id,
+      messageIds: ["3"],
+    });
+    expect(motd()).toEqual({ "4": "2" });
+    chat.receive(guildsEvent([]));
+    expect(motd()).toEqual({});
+    chat.receive(guildsEvent([ravensGuild]));
+    expect(motd()).toEqual({});
+    // A refresh of the same session keeps it as the host now shows it.
+    const { chat: fresh } = inGuilds();
+    fresh.receive({
+      type: "snapshot",
+      refresh: true,
+      serverName: "Голоса Тамриэля",
+      channels: [global, system, ravens, companions],
+      messages: [{ ...line("2", ravens.id), text: "***" }],
+      players: [],
+      selfId: SELF,
+    });
+    const kept = fresh.store.getState().guildMotd;
+    expect(Object.keys(kept)).toEqual(["4"]);
+    expect(kept["4"].text).toBe("***");
+  });
 });
 
 describe("guild events at the bridge", () => {
