@@ -32,6 +32,9 @@ already running native call still has to finish, bounded by the provider timeout
 `Migrondi.Core` includes other supported database drivers transitively. This is
 the cost of using its existing migration runner during startup; the application
 uses only the SQLite provider. The SQL schema remains the source of truth.
+Its Microsoft.Data.SqlClient brings System.Security.Cryptography.Pkcs 9.0.11, which
+GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7 affect; Server.Infrastructure pins the
+patched **10.0.13** directly so NuGet audit passes.
 
 ## Migrations and generated types
 
