@@ -2,44 +2,15 @@ export module Dreamsleeve.Client.Phantom.Playback;
 
 import std;
 import Dreamsleeve.Client.PlayoutClock;
-export import Dreamsleeve.Client.Phantom.Types;
+export import Dreamsleeve.Client.Phantom.Geometry;
 
 export namespace Dreamsleeve::Client::Phantom
 {
   namespace Motion
   {
 
-    Vec3 Mix(const Vec3& a, const Vec3& b, float t)
-    {
-      return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t};
-    }
-
-    Quaternion Mix(Quaternion a, Quaternion b, float t)
-    {
-      if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0)
-      {
-        b.x = -b.x;
-        b.y = -b.y;
-        b.z = -b.z;
-        b.w = -b.w;
-      }
-
-      Quaternion q{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
-      const auto length = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-      if (length < 0.00001f) return a;
-
-      q.x /= length;
-      q.y /= length;
-      q.z /= length;
-      q.w /= length;
-      return q;
-    }
-
-    float Distance(const Vec3& a, const Vec3& b)
-    {
-      const auto x = a.x - b.x, y = a.y - b.y, z = a.z - b.z;
-      return std::sqrt(x * x + y * y + z * z);
-    }
+    using Geometry::Distance;
+    using Geometry::Mix;
 
     // Conservative sphere containing both poses, including interpolated vertices.
     Bound Cover(const Bound& a, const Bound& b)

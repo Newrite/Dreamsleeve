@@ -10,6 +10,7 @@ export module Dreamsleeve.Client.Phantom.Payload;
 
 import std;
 export import Dreamsleeve.Client.Phantom.Nif;
+import Dreamsleeve.Client.Phantom.Geometry;
 
 export namespace Dreamsleeve::Client::Phantom
 {
@@ -246,10 +247,7 @@ namespace Dreamsleeve::Client::Phantom
             records[b * count + i] = copy[i * Width + b];
     }
 
-    bool Finite(const Vec3& v)
-    {
-      return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-    }
+    using Geometry::Finite;
 
     bool Valid(const Transform& t)
     {

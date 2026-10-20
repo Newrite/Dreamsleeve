@@ -2,7 +2,7 @@ module;
 #include "Prelude.hpp"
 export module Dreamsleeve.Game.Phantom.Math;
 import std;
-import Dreamsleeve.Client.Phantom.Types;
+import Dreamsleeve.Client.Phantom.Geometry;
 
 export namespace Dreamsleeve::Game::PhantomMath
 {
@@ -13,35 +13,12 @@ export namespace Dreamsleeve::Game::PhantomMath
     return std::unexpected(P::Error{reason, std::move(field)});
   }
 
-  inline bool Finite(P::Vec3 v)
-  {
-    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-  }
-
-  inline P::Vec3 Add(P::Vec3 a, P::Vec3 b)
-  {
-    return {a.x + b.x, a.y + b.y, a.z + b.z};
-  }
-
-  inline P::Vec3 Sub(P::Vec3 a, P::Vec3 b)
-  {
-    return {a.x - b.x, a.y - b.y, a.z - b.z};
-  }
-
-  inline P::Vec3 Mul(P::Vec3 a, float b)
-  {
-    return {a.x * b, a.y * b, a.z * b};
-  }
-
-  inline float Dot(P::Vec3 a, P::Vec3 b)
-  {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-  }
-
-  inline P::Vec3 Cross(P::Vec3 a, P::Vec3 b)
-  {
-    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
-  }
+  using P::Geometry::Add;
+  using P::Geometry::Cross;
+  using P::Geometry::Dot;
+  using P::Geometry::Finite;
+  using P::Geometry::Mul;
+  using P::Geometry::Sub;
 
   inline P::Vec3 Value(const RE::NiPoint3& v)
   {
