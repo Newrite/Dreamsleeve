@@ -124,41 +124,23 @@ export namespace Dreamsleeve::Client::Phantom
 
       if (job.delta)
       {
-        Diagnostics::Trace::Span deltaSpan(Diagnostics::Trace::Metric::DeltaApply);
-        const auto               digest = Hash(*bytes);
-        auto                     basis  = Cached(job.delta->baseHash);
-        const auto baseDigest = basis ? Hash(*basis) : Result<Digest>{std::unexpected(Error{Failure::InvalidFormat, "delta.base"})};
-        auto       full       = basis && baseDigest && *baseDigest == job.delta->baseHash && digest && *digest == job.delta->hash
-                                ? Delta::Apply(*basis, *bytes, job.offer.asset.rawBytes)
-                                : Result<Bytes>{std::unexpected(Error{Failure::InvalidFormat, "delta.base"})};
+        auto full = ApplyDelta(job, *bytes);
         if (!full)
         {
           Miss(job, false);
           return;
         }
-        bytes = std::make_shared<const Bytes>(std::move(*full));
+        bytes = std::move(*full);
       }
 
-      const auto digest = Hash(*bytes);
-      if (!digest || *digest != job.offer.asset.hash)
+      if (const auto digest = Hash(*bytes); !digest || *digest != job.offer.asset.hash)
       {
-        if (job.delta)
-        {
-          Miss(job, false);
-          return;
-        }
-        if (!job.bytes)
-        {
-          CacheFailure(Error{Failure::HashMismatch, "cache.hash"});
-          if (auto erased = cache.Erase(job.offer.asset.hash); !erased) CacheFailure(erased.error());
-          Miss(job);
-          return;
-        }
-        exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверная контрольная сумма");
+        Mismatched(job);
         return;
       }
+
       auto decoded = [&] {
-        Dreamsleeve::Client::Diagnostics::Trace::Span span(Dreamsleeve::Client::Diagnostics::Trace::Metric::AssetDecode);
+        Diagnostics::Trace::Span span(Diagnostics::Trace::Metric::AssetDecode);
         return ReadAsset(*bytes, job.offer.asset.rawBytes);
       }();
       if (!decoded || decoded->Layout().requiredChannels.size() != job.offer.asset.channels)
@@ -180,6 +162,42 @@ export namespace Dreamsleeve::Client::Phantom
       if (previousAssets.size() >= MaxDeltaBases && !previousAssets.contains(job.offer.player))
         previousAssets.erase(previousAssets.begin());
       previousAssets.insert_or_assign(job.offer.player, job.offer.asset);
+    }
+
+    // The full compressed model from a delta over the cached basis; the delta
+    // and the basis must both hash as the offer announced.
+    Result<std::shared_ptr<const Bytes>> ApplyDelta(const AssetJob& job, const Bytes& patch)
+    {
+      Diagnostics::Trace::Span span(Diagnostics::Trace::Metric::DeltaApply);
+      const auto               invalid = std::unexpected(Error{Failure::InvalidFormat, "delta.base"});
+      if (const auto digest = Hash(patch); !digest || *digest != job.delta->hash) return invalid;
+
+      const auto basis = Cached(job.delta->baseHash);
+      if (!basis) return invalid;
+      if (const auto digest = Hash(*basis); !digest || *digest != job.delta->baseHash) return invalid;
+
+      auto full = Delta::Apply(*basis, patch, job.offer.asset.rawBytes);
+      if (!full) return std::unexpected(full.error());
+      return std::make_shared<const Bytes>(std::move(*full));
+    }
+
+    // The model does not hash as announced. A delta and a stale cache file ask
+    // the network again (the file goes); a downloaded model is refused.
+    void Mismatched(const AssetJob& job)
+    {
+      if (job.delta)
+      {
+        Miss(job, false);
+        return;
+      }
+      if (!job.bytes)
+      {
+        CacheFailure(Error{Failure::HashMismatch, "cache.hash"});
+        if (auto erased = cache.Erase(job.offer.asset.hash); !erased) CacheFailure(erased.error());
+        Miss(job);
+        return;
+      }
+      exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверная контрольная сумма");
     }
 
     void Miss(const AssetJob& job, bool allowDelta = true)
