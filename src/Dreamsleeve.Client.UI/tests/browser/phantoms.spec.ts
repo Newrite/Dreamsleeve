@@ -232,3 +232,60 @@ test("built phantom settings apply visibility before save and keep controls stab
   ]);
   expect(errors).toEqual([]);
 });
+
+test("a swatch opens a picker: the square, the hue and the ready colors set the color", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/demo.html");
+  await openSettings(page);
+  const group = page.getByRole("group", { name: "Фантомы", exact: true });
+  const code = group.getByLabel("Цвет фантомов", { exact: true });
+  await group
+    .getByRole("button", { name: "Выбрать цвет: Цвет фантомов", exact: true })
+    .click();
+  const picker = page.getByRole("dialog", {
+    name: "Выбор цвета: Цвет фантомов",
+    exact: true,
+  });
+  await expect(picker).toBeVisible();
+  // The top right corner of the square is the pure hue.
+  // The hue strip dragged past its left end is red.
+  const hue = (await picker
+    .getByRole("slider", { name: "Оттенок" })
+    .boundingBox())!;
+  await page.mouse.move(hue.x + hue.width / 2, hue.y + hue.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hue.x - 30, hue.y);
+  await page.mouse.up();
+  await expect(picker.getByRole("slider", { name: "Оттенок" })).toHaveAttribute(
+    "aria-valuenow",
+    "0",
+  );
+  const square = picker.getByRole("slider", {
+    name: "Насыщенность и яркость",
+  });
+  const box = (await square.boundingBox())!;
+  // A drag past the corner keeps following the mouse and stops at the edge.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 40, box.y - 40);
+  await page.mouse.up();
+  await expect(code).toHaveValue("#FF0000");
+  // The keyboard walks the square; a ready color applies at once.
+  await square.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(code).not.toHaveValue("#FF0000");
+  await picker.getByRole("button", { name: "#D9534F" }).click();
+  await expect(code).toHaveValue("#D9534F");
+  await page.screenshot({ path: testInfo.outputPath("color-picker.png") });
+  await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
+  // A click elsewhere closes it as well; the panel stays open.
+  await group
+    .getByRole("button", { name: "Выбрать цвет: Цвет фантомов", exact: true })
+    .click();
+  await expect(picker).toBeVisible();
+  await group.getByText("Цвет фантомов согильдейцев").click();
+  await expect(picker).toHaveCount(0);
+  await expect(group).toBeVisible();
+});

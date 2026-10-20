@@ -5,54 +5,13 @@ import type {
   NameColorState,
   Settings,
 } from "../bridge/types";
-import { isColor } from "../state/settings";
 import { nameColorPalette, hueColor, hueOf } from "../state/nameColor";
 import { defaults, limits } from "../bridge/settings.generated";
 import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
+import { ColorField } from "./ColorField";
 import { useEffect, useState } from "react";
 import styles from "../styles/Settings.module.css";
-// A "#RRGGBB" text field with a swatch: an incomplete value is kept while
-// typing and applied only once it is a valid colour.
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return (
-    <label className={styles.color}>
-      <span>{label}</span>
-      <span
-        className={styles.swatch}
-        aria-hidden="true"
-        style={{ background: isColor(text) ? text : value }}
-      />
-      <input
-        type="text"
-        aria-label={label}
-        maxLength={7}
-        spellCheck={false}
-        value={text}
-        data-valid={isColor(text)}
-        onChange={(e) => {
-          const next = e.target.value.trim();
-          setText(next);
-          if (isColor(next) && next.toUpperCase() !== value.toUpperCase())
-            onChange(next.toUpperCase());
-        }}
-        onBlur={() => {
-          if (!isColor(text)) setText(value);
-        }}
-      />
-    </label>
-  );
-}
 // The own name color in chat: a server setting, applied with its own button.
 // The server refuses a color too dark to read; the preview shows the chat line.
 function NameColorPicker({
@@ -116,7 +75,12 @@ function NameColorPicker({
           onChange={(e) => setDraft(hueColor(Number(e.target.value)))}
         />
       </label>
-      <ColorField label="Свой цвет" value={draft} onChange={setDraft} />
+      <ColorField
+        label="Свой цвет"
+        value={draft}
+        onChange={setDraft}
+        presets={nameColorPalette}
+      />
       <button
         type="button"
         className={`${styles.primary} ${styles.apply}`}
