@@ -22,7 +22,7 @@ world transforms/bounds. Своих вершинных буферов, CPU skinn
 | Двоичные форматы модели и позы, хэш, сжатие | Client.Core `Phantom/Payload` |
 | Проверка NIF и проверенный asset | Client.Core `Phantom/Nif`: `Inspect`, `ValidatedAsset` |
 | Рабочая очередь/отмена и отделённые данные | `Worker`; epoch/revision от Exchange |
-| Reliable передачи/ACK/request correlation | `Streaming` |
+| Reliable передачи/ACK/request correlation | `Streaming` (маршрутизация и порядок запросов), `Publisher` (своя публикация и позы), `Downloader` (чужие модели); общее — `Link` |
 | Файлы и кеш | Server Infrastructure storage; Client Core `Cache`, только ModelRun, без игрового доступа |
 | AOI, subscribers, ready/pending publication | существующий серверный `PhantomAgent`, один actor |
 | Игровой источник/handle и завершение обновления | Game `Phantom/Capture` (`PhantomCapture::Source`) |
