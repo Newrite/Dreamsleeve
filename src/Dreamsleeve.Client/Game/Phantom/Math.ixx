@@ -1,6 +1,6 @@
 module;
 #include "Prelude.hpp"
-export module Dreamsleeve.Game.PhantomMath;
+export module Dreamsleeve.Game.Phantom.Math;
 import std;
 import Dreamsleeve.Client.Phantom.Types;
 

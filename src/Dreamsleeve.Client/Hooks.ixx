@@ -10,8 +10,8 @@ import Dreamsleeve.Runtime;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Game.Input;
 import Dreamsleeve.Game.Phantoms;
-import Dreamsleeve.Game.PhantomNative;
-import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Game.Phantom.Native;
+import Dreamsleeve.Game.Phantom.Capture;
 import Dreamsleeve.Client.Phantom.NifOutput;
 
 // Every patch of the game binary lives here: Address Library IDs, call-site

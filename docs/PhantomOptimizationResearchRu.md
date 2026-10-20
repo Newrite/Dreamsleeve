@@ -205,14 +205,14 @@ endpoints в буфере:120секунд,60render frames/s, startup2s искл�
 
 ### Где остаётся дорогая работа
 
-1. [PhantomCapture.ixx](../src/Dreamsleeve.Client/Game/PhantomCapture.ixx), `Open`,
+1. [Phantom/Capture.ixx](../src/Dreamsleeve.Client/Game/Phantom/Capture.ixx), `Open`,
    синхронно вызывает Prepare/Clone/Save и Parse, создаёт bindings/Source и первую
    позу. В27начальных кадрах записей агрегат capture-stage42,35–64,55ms; обычный
    capture-stage p95 по семи записям0,252–0,290ms. Эти архивы protocol22 сделаны
    до последних исправлений. Таймер начинается с переданного frame time и охватывает
    несколько операций: это НЕ чистое время Clone/Save и НЕ GPU timing.
    Но такой агрегат уже сопоставим с несколькими кадрами по16,67ms.
-2. [PhantomScene.ixx](../src/Dreamsleeve.Client/Game/PhantomScene.ixx), `Advance`,
+2. [Phantom/Scene.ixx](../src/Dreamsleeve.Client/Game/Phantom/Scene.ixx), `Advance`,
    за один вызов выполняет весь native Load и подготовку связей/материалов.
    `buildSteps=1` в Game ограничивает число загрузок за кадр, не их длительность.
    `remainingChannels=65536` ограничивает объём Apply, но не миллисекунды.

@@ -1,4 +1,4 @@
-export module Dreamsleeve.Game.PhantomCaptureRules;
+export module Dreamsleeve.Game.Phantom.CaptureRules;
 
 import std;
 import Dreamsleeve.Client.Utils;

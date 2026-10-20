@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 import std;
-import Dreamsleeve.Game.PhantomCaptureRules;
+import Dreamsleeve.Game.Phantom.CaptureRules;
 
 namespace C = Dreamsleeve::Game::PhantomCapture;
 

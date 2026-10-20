@@ -1,11 +1,11 @@
 module;
 #include "Prelude.hpp"
-export module Dreamsleeve.Game.PhantomReplay;
+export module Dreamsleeve.Game.Phantom.Replay;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import std;
 import Dreamsleeve.Client.Diagnostics.PhantomReplay;
 import Dreamsleeve.Client.Phantom.Playback;
-import Dreamsleeve.Game.PhantomScene;
+import Dreamsleeve.Game.Phantom.Scene;
 
 export namespace Dreamsleeve::Game::PhantomReplay
 {

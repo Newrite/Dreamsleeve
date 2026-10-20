@@ -18,14 +18,16 @@ world transforms/bounds. Своих вершинных буферов, CPU skinn
 |---|---|
 | Неизменяемая идентичность содержимого, поколение, доступность публикации | Server.Domain `Phantoms`; клиентские `Types` |
 | Текущая сессия/публикация и данные remote | Client.Core `Exchange` |
-| Кодек и проверенный asset | Client.Core `Codec`, `Nif`, `ValidatedAsset` |
+| Сообщения протокола фантомов и их кодирование | Client.Core `Protocol/PhantomProtocol` (`PhantomCodec.cpp` — единственный `.cpp` с `phantom.pb.h`) |
+| Двоичные форматы модели и позы, хэш, сжатие | Client.Core `Phantom/Payload` |
+| Проверка NIF и проверенный asset | Client.Core `Phantom/Nif`: `Inspect`, `ValidatedAsset` |
 | Рабочая очередь/отмена и отделённые данные | `Worker`; epoch/revision от Exchange |
 | Reliable передачи/ACK/request correlation | `Streaming` |
 | Файлы и кеш | Server Infrastructure storage; Client Core `Cache`, только ModelRun, без игрового доступа |
 | AOI, subscribers, ready/pending publication | существующий серверный `PhantomAgent`, один actor |
-| Игровой источник/handle и завершение обновления | Game `PhantomCapture::Source` |
-| Владение восстановленной NiPointer-сценой | Game `PhantomScene::Scene` |
-| Выбор current/candidate и представление | Game `Phantoms`; UI читает состояние |
+| Игровой источник/handle и завершение обновления | Game `Phantom/Capture` (`PhantomCapture::Source`) |
+| Владение восстановленной NiPointer-сценой | Game `Phantom/Scene` (`PhantomScene::Scene`) |
+| Выбор current/candidate и представление | Game `Phantoms` — вход фантомов для остальной игры, внутренности в `Game/Phantom/`; UI читает состояние |
 | Адреса, ABI, выделение NiStream/нормализация bone cookie | `Hooks.ixx` |
 
 `ValidatedAsset` нельзя создать в обход Parse: он объединяет NIF с проверенной

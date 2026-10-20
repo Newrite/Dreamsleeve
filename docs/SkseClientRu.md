@@ -24,6 +24,8 @@
 | `Game/Fireflies.ixx` | Placed reference на каждого видимого игрока из `MovementView` |
 | `Game/GroundMarks.ixx` | Метки на земле: отбор ближайших из снимка Core, статики со снапом на пол, подписи, отправка `ReportDeath` один раз на смерть |
 | `Game/Input.ixx` | Состояние захвата клавиатуры и фильтрация цепочки `InputEvent` до всех sinks; адресов не содержит |
+| `Game/Phantoms.ixx` | Вход фантомов для остальной игры: захват и публикация своего, выбор текущей и ожидающей сцены чужих, бюджет кадра, кольцо загрузки у светлячка |
+| `Game/Phantom/*.ixx` | Внутренности фантомов: `Capture` (источник и снимок позы), `CaptureRules` (что из дерева идёт в модель), `Native` (подготовка клона), `Scene` (загрузка NIF и применение поз), `Math`, `Replay` (локальное воспроизведение, только диагностика) |
 | `UI/PrismaUI.ixx` | View, listener, разбор команды и передача её `Host::Handle`, доставка событий, focus/visibility |
 | `UI/Nameplates.ixx` | Scaleform-слой в HUD: имена и облачки над светлячками, подписи меток (см. ниже) |
 | `UI/SKSEMenu.ixx` | Страница настроек и статуса |
@@ -796,7 +798,7 @@ host берёт положение и дату из `World::Spot()` (порт `n
 | Размер имени над меткой | `groundFontSize` (общий с текстом), не `fireflyNameFontSize` |
 
 
-## Живые фантомы (protocol 22)
+## Живые фантомы (protocol 26)
 
 Контракт и границы подтверждения: [PhantomsRu](PhantomsRu.md).
 Runtime владеет ClientExchange.phantoms; Core streaming/worker работают с
@@ -805,7 +807,7 @@ owner. Hooks вызывает кадр после Main::Update и предост
 NiStream Save/Load, alpha factory и нормализацию cloned flattened bone arrays.
 Все собственные runtime IDs/offsets/ABI adapters находятся в Hooks.
 
-Game/PhantomCapture читает третьеличное дерево даже при первом лице.
+Game/Phantom/Capture читает третьеличное дерево даже при первом лице.
 Камерное скрытие — это kHidden корня (vanilla) или `BSFaceGenNiNode` (камеры
 с телом в первом лице); оба флага в видимость фантома не входят. kHidden
 отдельной части головы (волосы под шлемом, `TESNPC` head part update) и
@@ -814,7 +816,7 @@ Game/PhantomCapture читает третьеличное дерево даже 
 лицо сохраняет последнее третьеличное состояние. Видимость dismember-партиций
 (`editorVisible`, броня и расчленение) сохраняется в NIF при захвате; камера
 её не меняет.
-PhantomNative подготавливает clone; PhantomScene загружает проверенный NIF и
+Phantom/Native подготавливает clone; Phantom/Scene загружает проверенный NIF и
 применяет transforms/bounds к native nodes. Один NiStream Load за frame build
 turn; сама native операция атомарна и остаётся на игровом потоке. Phantoms
 владеет lifecycle текущей/ожидающей сцены и общим бюджетом кадра. Local replay

@@ -15,7 +15,7 @@ export import Dreamsleeve.Host.Notices;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 export import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 export import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-export import Dreamsleeve.Game.PhantomReplay;
+export import Dreamsleeve.Game.Phantom.Replay;
 #endif
 
 // Single owner of the Core application, the interpolation view, the UI session

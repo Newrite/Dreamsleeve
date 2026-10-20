@@ -6,7 +6,7 @@ export module Dreamsleeve.Events;
 
 import std;
 import Dreamsleeve.Runtime;
-import Dreamsleeve.Game.PhantomCapture;
+import Dreamsleeve.Game.Phantom.Capture;
 
 // Game event sinks. They only post notices; ScriptEventSourceHolder events can
 // arrive from AI or script threads, so no game state is touched here.

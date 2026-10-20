@@ -1,14 +1,14 @@
 module;
 #include "Prelude.hpp"
-export module Dreamsleeve.Game.PhantomCapture;
+export module Dreamsleeve.Game.Phantom.Capture;
 import std;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
 import Dreamsleeve.Client.Phantom.Payload;
-import Dreamsleeve.Game.PhantomNative;
-import Dreamsleeve.Game.PhantomMath;
-export import Dreamsleeve.Game.PhantomCaptureRules;
+import Dreamsleeve.Game.Phantom.Native;
+import Dreamsleeve.Game.Phantom.Math;
+export import Dreamsleeve.Game.Phantom.CaptureRules;
 
 export namespace Dreamsleeve::Game::PhantomCapture
 {
