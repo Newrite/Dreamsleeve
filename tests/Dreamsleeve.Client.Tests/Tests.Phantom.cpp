@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 import std;
 import Dreamsleeve.Client.PlayoutClock;
-import Dreamsleeve.Client.Phantom.Codec;
+import Dreamsleeve.Client.Phantom.Payload;
 import Dreamsleeve.Client.Phantom.Playback;
 import Dreamsleeve.Client.Phantom.Streaming;
 

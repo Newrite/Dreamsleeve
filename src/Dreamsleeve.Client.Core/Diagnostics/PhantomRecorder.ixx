@@ -1,6 +1,6 @@
 export module Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import std;
-export import Dreamsleeve.Client.Phantom.Codec;
+export import Dreamsleeve.Client.Phantom.Payload;
 
 export namespace Dreamsleeve::Client::Diagnostics
 {

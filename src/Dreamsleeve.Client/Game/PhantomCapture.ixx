@@ -5,7 +5,7 @@ import std;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif
-import Dreamsleeve.Client.Phantom.Types;
+import Dreamsleeve.Client.Phantom.Payload;
 import Dreamsleeve.Game.PhantomNative;
 import Dreamsleeve.Game.PhantomMath;
 export import Dreamsleeve.Game.PhantomCaptureRules;

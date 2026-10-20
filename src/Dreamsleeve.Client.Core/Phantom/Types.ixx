@@ -108,40 +108,6 @@ export namespace Dreamsleeve::Client::Phantom
   template <class T>
   using Result = std::expected<T, Error>;
 
-  class ValidatedAsset final
-  {
-public:
-
-    const Asset& Value() const noexcept
-    {
-      return *asset;
-    }
-
-    std::uint64_t MemoryBytes() const noexcept
-    {
-      return memory;
-    }
-
-    const NativeLayout& Layout() const noexcept
-    {
-      return *layout;
-    }
-
-    static Result<ValidatedAsset> Parse(Asset asset, const Limits& limits = {});
-
-private:
-
-    explicit ValidatedAsset(Asset value, NativeLayout shape, std::uint64_t bytes)
-        : asset(std::make_shared<const Asset>(std::move(value))),
-          layout(std::make_shared<const NativeLayout>(std::move(shape))),
-          memory(bytes)
-    {}
-
-    std::shared_ptr<const Asset>        asset;
-    std::shared_ptr<const NativeLayout> layout;
-    std::uint64_t                       memory{};
-  };
-
   struct Channel
   {
     Transform world;
@@ -167,9 +133,6 @@ private:
   {
     return 2ULL * limits.poseBytes + limits.nodes * sizeof(Channel) + limits.nodes * sizeof(Bound) + sizeof(Snapshot);
   }
-
-  // A complete pose is atomic. Geometry revisions publish a new native asset.
-  Result<void> CheckSnapshot(const Snapshot& snapshot, const ValidatedAsset& asset);
 
   enum class Representation
   {

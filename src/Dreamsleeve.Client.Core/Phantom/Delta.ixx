@@ -5,7 +5,7 @@ module;
 export module Dreamsleeve.Client.Phantom.Delta;
 
 import std;
-export import Dreamsleeve.Client.Phantom.Codec;
+export import Dreamsleeve.Client.Phantom.Payload;
 
 namespace Dreamsleeve::Client::Phantom::Delta
 {

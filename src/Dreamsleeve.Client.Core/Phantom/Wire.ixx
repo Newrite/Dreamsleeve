@@ -1,7 +1,7 @@
 export module Dreamsleeve.Client.Phantom.Wire;
 
 import std;
-export import Dreamsleeve.Client.Phantom.Codec;
+export import Dreamsleeve.Client.Phantom.Payload;
 import Dreamsleeve.Client.ProtocolChannels;
 
 export namespace Dreamsleeve::Client::Phantom::Wire

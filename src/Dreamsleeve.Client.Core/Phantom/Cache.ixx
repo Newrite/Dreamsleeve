@@ -1,7 +1,7 @@
 export module Dreamsleeve.Client.Phantom.Cache;
 
 import std;
-export import Dreamsleeve.Client.Phantom.Codec;
+export import Dreamsleeve.Client.Phantom.Payload;
 
 export namespace Dreamsleeve::Client::Phantom
 {
