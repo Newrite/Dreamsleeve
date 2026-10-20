@@ -2,7 +2,7 @@ export module Dreamsleeve.Client.Phantom.Exchange;
 
 import std;
 import Dreamsleeve.Client.Domain;
-export import Dreamsleeve.Client.Phantom.Wire;
+export import Dreamsleeve.Client.PhantomProtocol;
 export import Dreamsleeve.Client.Phantom.Playback;
 
 export namespace Dreamsleeve::Client::Phantom

@@ -4,7 +4,7 @@ import std;
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 import Dreamsleeve.Client.Diagnostics.PhantomReplay;
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
-import Dreamsleeve.Client.Phantom.Wire;
+import Dreamsleeve.Client.PhantomProtocol;
 
 #include "PhantomFixture.hpp"
 

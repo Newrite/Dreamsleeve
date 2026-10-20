@@ -4,7 +4,7 @@
 import std;
 import Dreamsleeve.Client.Phantom.Nif;
 import Dreamsleeve.Client.Phantom.NifOutput;
-import Dreamsleeve.Client.Phantom.Wire;
+import Dreamsleeve.Client.PhantomProtocol;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 #endif

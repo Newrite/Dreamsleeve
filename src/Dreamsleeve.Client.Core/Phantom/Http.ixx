@@ -7,7 +7,7 @@ module;
 export module Dreamsleeve.Client.Phantom.Http;
 import std;
 import Dreamsleeve.Client.Auth;
-import Dreamsleeve.Client.Phantom.Wire;
+import Dreamsleeve.Client.PhantomProtocol;
 #ifdef DREAMSLEEVE_DIAGNOSTICS
 import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 #endif

@@ -1,4 +1,6 @@
-export module Dreamsleeve.Client.Phantom.Wire;
+// The phantom protocol: its messages on the model and pose lanes and their
+// encoding (PhantomCodec.cpp, phantom.proto), apart from the session codec.
+export module Dreamsleeve.Client.PhantomProtocol;
 
 import std;
 export import Dreamsleeve.Client.Phantom.Payload;
