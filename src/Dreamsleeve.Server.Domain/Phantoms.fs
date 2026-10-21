@@ -80,8 +80,12 @@ module PhantomAssetLimits =
     [<Literal>]
     let assetPacketBytes = 4096
 
+    // Room for both protobuf envelopes around the snapshots of a pose packet.
+    [<Literal>]
+    let private poseEnvelopeBytes = 256
+
     // Two independently decodable snapshots plus both protobuf envelopes.
-    let posePacketBytes (limits: PhantomAssetLimits) = 2 * limits.PoseBytes + 256
+    let posePacketBytes (limits: PhantomAssetLimits) = 2 * limits.PoseBytes + poseEnvelopeBytes
 
 /// The server validates the envelope and compressed content identity, never engine data.
 type PhantomManifest = private {
@@ -97,12 +101,14 @@ type PhantomManifest = private {
     member this.CompressedBytes = this.compressedBytes
     member this.RawBytes = this.rawBytes
     member this.Channels = this.channels
-    member _.FormatVersion = 2u
+    /// The native model format both clients and the server read.
+    static member CurrentFormat = 2u
+    member _.FormatVersion = PhantomManifest.CurrentFormat
 
 [<RequireQualifiedAccess>]
 module PhantomManifest =
     let create (limits: PhantomAssetLimits) hash generation version compressed raw channels =
-        if version <> 2u then
+        if version <> PhantomManifest.CurrentFormat then
             Error "unsupported format_version"
         elif compressed = 0u || uint64 compressed > uint64 limits.CompressedBytes then
             Error "compressed_bytes exceeds limit"
@@ -278,13 +284,21 @@ module PhantomPolicy =
         else
             Some ((x * dx + y * dy) / (magnitude * distance))
 
+    // Within this distance an observer sees a source whatever the camera faces.
+    let private nearZone = 512.0
+    // Cosines of half the entry (105 degrees) and retained (120 degrees) sectors.
+    let private enteringCosine = -0.2588190451
+    let private retainedCosine = -0.5
+    // A selected source keeps its place until a newcomer is 10% nearer.
+    let private retainedDistanceSquaredFactor = 0.9 * 0.9
+
     /// A 210-degree entry sector, 240-degree retained sector and 512-unit near zone
     /// accommodate third-person camera offset and prevent boundary chatter.
-    let inView retained distance facing =
-        distance <= 512.0 * 512.0
+    let inView retained distanceSquared facing =
+        distanceSquared <= nearZone * nearZone
         || match facing with
            | None -> true
-           | Some cosine -> cosine >= (if retained then -0.5 else -0.2588190451)
+           | Some cosine -> cosine >= (if retained then retainedCosine else enteringCosine)
 
     let effective maximum distance (preferences: PhantomPreferences) =
         { preferences with
@@ -309,7 +323,7 @@ module PhantomPolicy =
             candidates
             |> Seq.filter (fun (_, squared) -> squared <= radius)
             |> Seq.sortBy (fun (id, squared) ->
-                not (transferring.Contains id), (if selected.Contains id then squared * 0.81 else squared), id)
+                not (transferring.Contains id), (if selected.Contains id then squared * retainedDistanceSquaredFactor else squared), id)
             |> Seq.truncate preferences.Maximum
             |> Seq.map fst
             |> Set.ofSeq

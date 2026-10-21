@@ -29,6 +29,12 @@ type private HttpByteBudget(rate: int) =
 module PhantomHttp =
     let private meter = new System.Diagnostics.Metrics.Meter("Dreamsleeve.PhantomHttp")
     let private events = meter.CreateCounter<int64>("phantom.http")
+    // A transfer reports an operation this slow, and its progress this often.
+    let private slowOperationMs = 250.
+    let private progressIntervalMs = 1000.
+    // Where a transfer accumulates the time spent waiting on each stage.
+    let private peerBudgetTiming, globalBudgetTiming, storageTiming, bodyTiming = 0, 1, 2, 3
+
     type private Transfer = {
         Id: PhantomTransferId
         Owner: Guid
@@ -62,24 +68,33 @@ module PhantomHttp =
             lock gate (fun () ->
                 closed <- true
                 failure.TrySetResult error |> ignore)
+
+        // Transfers of one owner share its byte budget while any is admitted.
+        let acquirePeer owner =
+            match peers.TryGetValue owner with
+            | true, existing ->
+                existing.Users <- existing.Users + 1
+                existing.Value
+            | _ ->
+                let value = HttpByteBudget(options.PlayerModelBytesPerSecond)
+                peers[owner] <- {
+                    Value = value
+                    Users = 1
+                }
+                value
+
+        let releasePeer owner =
+            let peer = peers[owner]
+            peer.Users <- peer.Users - 1
+            if peer.Users = 0 then peers.Remove owner |> ignore
+
         let admit (owner, id, manifest: PhantomManifest, upload, change: PhantomDelta option) =
             lock gate (fun () ->
                 let token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes 32)
                 let lease = PhantomHttpLease(token, change |> Option.map _.CompressedBytes |> Option.defaultValue manifest.CompressedBytes)
                 if closed then lease.Finish(Error PhantomHttpError.Closed)
                 else
-                    let budget =
-                        match peers.TryGetValue owner with
-                        | true, existing ->
-                            existing.Users <- existing.Users + 1
-                            existing.Value
-                        | _ ->
-                            let value = HttpByteBudget(options.PlayerModelBytesPerSecond)
-                            peers[owner] <- {
-                                Value = value
-                                Users = 1
-                            }
-                            value
+                    let budget = acquirePeer owner
                     let transfer = {
                         Id = id
                         Owner = owner
@@ -120,7 +135,7 @@ module PhantomHttp =
             let mutable outcome = Ok ()
             let enabled = events.Enabled
             let mutable emitted = Stopwatch.GetTimestamp()
-            let totals = Array.zeroCreate<float> 4
+            let totals = Array.zeroCreate<float> (bodyTiming + 1)
 
             let emit phase operation =
                 if enabled then
@@ -130,15 +145,16 @@ module PhantomHttp =
                     tags.Add("generation", transfer.Generation); tags.Add("upload", transfer.Upload)
                     tags.Add("body_bytes", transfer.Lease.Size); tags.Add("progress", offset)
                     tags.Add("elapsed_ms", Stopwatch.GetElapsedTime(transfer.Admitted).TotalMilliseconds)
-                    tags.Add("operation_ms", operation); tags.Add("peer_budget_ms", totals[0])
-                    tags.Add("global_budget_ms", totals[1]); tags.Add("storage_ms", totals[2]); tags.Add("body_ms", totals[3])
+                    tags.Add("operation_ms", operation); tags.Add("peer_budget_ms", totals[peerBudgetTiming])
+                    tags.Add("global_budget_ms", totals[globalBudgetTiming]); tags.Add("storage_ms", totals[storageTiming])
+                    tags.Add("body_ms", totals[bodyTiming])
                     events.Add(1L, &tags)
                     emitted <- Stopwatch.GetTimestamp()
             let measured index phase before =
                 if enabled then
                     let elapsed = Stopwatch.GetElapsedTime(before).TotalMilliseconds
                     totals[index] <- totals[index] + elapsed
-                    if elapsed >= 250. || Stopwatch.GetElapsedTime(emitted).TotalMilliseconds >= 1000. then emit phase elapsed
+                    if elapsed >= slowOperationMs || Stopwatch.GetElapsedTime(emitted).TotalMilliseconds >= progressIntervalMs then emit phase elapsed
             let stamp () = if enabled then Stopwatch.GetTimestamp() else 0L
             emit "claimed" 0.
             use finish = {
@@ -152,59 +168,68 @@ module PhantomHttp =
             }
             // One bounded body buffer, never a model-sized HTTP/protobuf string.
             let buffer = Array.zeroCreate<byte> options.ChunkBytes
-            request.BeginResponse transfer.Lease.Size
 
+            // Reads the next `count` bytes of the request body into storage.
+            let receiveChunk offset count = task {
+                let mutable read = 0
+                let mutable ended = false
+                let mutable failed = None
+                while read < count && not ended do
+                    let bodyAt = stamp ()
+                    let! received = readBody request.Body (buffer.AsMemory(read, count - read)) cancellation
+                    measured bodyTiming "read" bodyAt
+                    match received with
+                    | Error error ->
+                        failed <- Some error
+                        ended <- true
+                    | Ok 0 -> ended <- true
+                    | Ok bytes -> read <- read + bytes
+                match failed with
+                | Some error -> return Error error
+                | None when read <> count -> return Error PhantomHttpError.Truncated
+                | None ->
+                    // The current storage port retains each chunk until its
+                    // completion; reuse only after that task has completed.
+                    let bytes = if count = buffer.Length then buffer else buffer[..count-1]
+                    let storageAt = stamp ()
+                    let! written = storage.WriteChunk(transfer.Id, offset, bytes)
+                    measured storageTiming "storage_write" storageAt
+                    match written with
+                    | Error reason -> return Error (PhantomHttpError.Storage reason)
+                    | Ok complete when complete <> (offset + count = transfer.Lease.Size) -> return Error PhantomHttpError.StorageCompletion
+                    | Ok _ -> return Ok ()
+            }
+
+            // Writes the next `count` stored bytes to the response body.
+            let sendChunk offset count = task {
+                let storageAt = stamp ()
+                let! content = storage.ReadChunk(transfer.Id, offset, buffer.AsMemory(0, count))
+                measured storageTiming "storage_read" storageAt
+                match content with
+                | Error reason -> return Error (PhantomHttpError.Storage reason)
+                | Ok read when read <> count -> return Error PhantomHttpError.StorageLength
+                | Ok _ ->
+                    let bodyAt = stamp ()
+                    let! written = writeBody request.Body (buffer.AsMemory(0, count)) cancellation
+                    measured bodyTiming "write" bodyAt
+                    return written
+            }
+
+            request.BeginResponse transfer.Lease.Size
             while offset < transfer.Lease.Size && Result.isOk outcome && not cancellation.IsCancellationRequested do
                 let count = min options.ChunkBytes (transfer.Lease.Size - offset)
                 let peerAt = stamp ()
                 do! transfer.Budget.Wait(count, cancellation)
-                measured 0 "peer_budget" peerAt
+                measured peerBudgetTiming "peer_budget" peerAt
 
                 let globalAt = stamp ()
                 do! globalBudget.Wait(count, cancellation)
-                measured 1 "global_budget" globalAt
+                measured globalBudgetTiming "global_budget" globalAt
 
-                if transfer.Upload then
-                    let mutable read = 0
-                    let mutable ended = false
-                    while read < count && not ended do
-                        let bodyAt = stamp ()
-                        let! received = readBody request.Body (buffer.AsMemory(read, count - read)) cancellation
-                        measured 3 "read" bodyAt
-                        match received with
-                        | Error error ->
-                            outcome <- Error error
-                            ended <- true
-                        | Ok 0 -> ended <- true
-                        | Ok count -> read <- read + count
-
-                    if Result.isError outcome then ()
-                    elif read <> count then outcome <- Error PhantomHttpError.Truncated
-                    else
-                        // The current storage port retains each chunk until its
-                        // completion; reuse only after that task has completed.
-                        let bytes = if count = buffer.Length then buffer else buffer[..count-1]
-                        let storageAt = stamp ()
-                        let! written = storage.WriteChunk(transfer.Id, offset, bytes)
-                        measured 2 "storage_write" storageAt
-                        match written with
-                        | Error reason -> outcome <- Error (PhantomHttpError.Storage reason)
-                        | Ok complete when complete <> (offset + count = transfer.Lease.Size) -> outcome <- Error PhantomHttpError.StorageCompletion
-                        | Ok _ -> offset <- offset + count
-                else
-                    let storageAt = stamp ()
-                    let! content = storage.ReadChunk(transfer.Id, offset, buffer.AsMemory(0, count))
-                    measured 2 "storage_read" storageAt
-                    match content with
-                    | Error reason -> outcome <- Error (PhantomHttpError.Storage reason)
-                    | Ok read when read <> count -> outcome <- Error PhantomHttpError.StorageLength
-                    | Ok _ ->
-                        let bodyAt = stamp ()
-                        let! written = writeBody request.Body (buffer.AsMemory(0, count)) cancellation
-                        measured 3 "write" bodyAt
-                        match written with
-                        | Error error -> outcome <- Error error
-                        | Ok () -> offset <- offset + count
+                let! moved = if transfer.Upload then receiveChunk offset count else sendChunk offset count
+                match moved with
+                | Ok () -> offset <- offset + count
+                | Error error -> outcome <- Error error
                 if offset = count then emit "first_body" 0.
                 transfer.Lease.Advance offset
 
@@ -248,9 +273,7 @@ module PhantomHttp =
                 | true, transfer ->
                     transfers.Remove id |> ignore
                     tokens.Remove transfer.Lease.Token |> ignore
-                    let peer = peers[transfer.Owner]
-                    peer.Users <- peer.Users - 1
-                    if peer.Users = 0 then peers.Remove transfer.Owner |> ignore
+                    releasePeer transfer.Owner
                     if not transfer.Claimed then transfer.Finished.TrySetResult() |> ignore
                     Some transfer
                 | _ -> None)
