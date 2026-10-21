@@ -283,7 +283,14 @@ module PhantomAgent =
             let outcome =
                 match error with
                 | PhantomStorageError.DeltaBaseUnavailable -> PhantomOutcome.DeltaBaseUnavailable
-                | _ -> PhantomOutcome.StorageFailure
+                | PhantomStorageError.Closed | PhantomStorageError.QueueFull | PhantomStorageError.TransferLimit
+                | PhantomStorageError.CacheHashMismatch | PhantomStorageError.AssetUnavailable | PhantomStorageError.DiskQuota
+                | PhantomStorageError.HashMismatch | PhantomStorageError.HashSizeConflict | PhantomStorageError.DeltaHashMismatch
+                | PhantomStorageError.DeltaReconstruction | PhantomStorageError.DeltaTargetHash
+                | PhantomStorageError.UnknownUpload | PhantomStorageError.UploadClosed | PhantomStorageError.ChunkOffsetOrSize
+                | PhantomStorageError.ReadBounds | PhantomStorageError.UnknownDownload | PhantomStorageError.DownloadClosed
+                | PhantomStorageError.CacheSizeChanged | PhantomStorageError.CacheTruncated | PhantomStorageError.Io _ ->
+                    PhantomOutcome.StorageFailure
             outcome, PhantomStorageError.message error, PhantomStorageError.retryable error
         | HttpFailure error -> PhantomOutcome.HttpFailure, PhantomHttpError.message error, PhantomHttpError.retryable error
 

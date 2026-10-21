@@ -414,7 +414,7 @@ namespace
 
 }
 
-// Opt-in: normal pure test runs need no listening server. run.ps1 starts the
+// Opt-in: normal pure test runs need no listening server. run.py starts the
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {

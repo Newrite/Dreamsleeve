@@ -227,12 +227,12 @@ let private run (arguments: string array) = task {
                     File.WriteAllText(
                         readyFile,
                         JsonSerializer.Serialize(
-                            {| protocolVersion = 26
+                            {| protocolVersion = ProtocolCodec.Version
                                port = int port
                                stateDirectory = directory
                                aliceTicket = ticket "alice"
                                bobTicket = ticket "bob" |}))
-                    printfn "PHANTOM_SMOKE_READY protocol26 127.0.0.1:%d" port
+                    printfn "PHANTOM_SMOKE_READY protocol%d 127.0.0.1:%d" ProtocolCodec.Version port
                     // Console.In may not support canceling a pending read. There
                     // is one process-scoped reader; the runner owns stdin/exit.
                     let input = task {

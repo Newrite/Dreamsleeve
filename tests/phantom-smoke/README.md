@@ -1,18 +1,16 @@
-Reusable protocol26 native Streaming / production server UDP smoke
+Reusable native Streaming / production server UDP smoke
 
 Run from S:/Programming/Dreamsleeve after the parent has serialized the native build:
 
 ```powershell
 # Parent-owned native build; this fixture never invokes xmake itself.
 xmake build Dreamsleeve.Client.Tests
-# Build the isolated controlled-auth host (production Server is unchanged).
-dotnet build tests/Dreamsleeve.Phantom.Smoke.Server/Dreamsleeve.Phantom.Smoke.Server.fsproj -v minimal
-pwsh -NoProfile -File tests/phantom-smoke/run.ps1 -NativeTests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe -NoBuild
+python tests/phantom-smoke/run.py --native-tests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe
 ```
 
-run.ps1 chooses an ephemeral loopback UDP port, starts the fixture with hidden redirected processes, passes bounded per-child environment values, selects only the new opt-in test, requires PHANTOM_NATIVE_UDP_PASS, then requests graceful server shutdown. Existing native test gates and normal pure runs are unchanged. Use -Artifacts to choose an output directory. Logs, result.json, readiness and both cache files are retained under build/phantom-native-smoke/run-* by default. There are no recursive deletes or inherited environment changes.
+run.py (Python standard library only) builds the isolated controlled-auth host, chooses an ephemeral loopback UDP port, starts the fixture as a hidden child, passes per-child environment values, selects only the opt-in test, requires PHANTOM_NATIVE_UDP_PASS, then requests graceful server shutdown. Existing native test gates and normal pure runs are unchanged. Use --artifacts to choose an output directory. server.log, native.log, result.json, readiness and both cache files are retained under build/phantom-native-smoke/run-* by default. There are no recursive deletes or changes to the invoking shell's environment.
 
-Without the two smoke environment variables, the new test is skipped. The script never builds native code. -NoBuild skips the F# build as well. An old binary with no matching test cannot silently pass: the success sentinel is mandatory.
+Without the two smoke environment variables, the new test is skipped. The script never builds native code. --no-build skips the F# build as well. An old binary with no matching test cannot silently pass: the success sentinel is mandatory.
 
 The controlled-auth host uses production ServerRuntime, Presence, PhantomAgent, PhantomStorage, TransportOwner and EnetTransport. Only the account authenticator is replaced with loopback-only alice/bob fixture identities and fixed valid tickets; ancillary persistence writers are inert. No production Server source, configuration, schema or benchmark source is changed.
 
@@ -37,7 +35,7 @@ A winning stdin task is observed for failures. A pending Console.In read is proc
 ## Concurrent mutual scenario
 
 ```powershell
-pwsh -NoProfile -File tests/phantom-smoke/run.ps1 -NativeTests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe -NoBuild -Scenario Mutual -Players 8
+python tests/phantom-smoke/run.py --native-tests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe --scenario Mutual --players 8
 ```
 
 The same controlled-auth host serves `p1`..`p16`. Every client publishes at once and
@@ -49,9 +47,9 @@ Sentinel: `PHANTOM_MUTUAL_UDP_PASS`. Per-phase times are printed as `PHANTOM_MUT
 
 Options:
 
-- `-HeavyVertices 1100` gives `p1` a ~12.6 MB compressed model; `PHANTOM_MUTUAL_LATENCY`
+- `--heavy-vertices 1100` gives `p1` a ~12.6 MB compressed model; `PHANTOM_MUTUAL_LATENCY`
   reports light and heavy models separately.
-- `-ModelBytesPerSecond <n>` overrides the server-wide `ModelBytesPerSecond` for A/B runs.
+- `--model-bytes-per-second <n>` overrides the server-wide `ModelBytesPerSecond` for A/B runs.
 - `DREAMSLEEVE_PHANTOM_SMOKE_TRAFFIC=1` places players on a circle beyond the frustum
   near-protection radius, sends movement/camera on the realtime lane and 10 Hz poses,
   and acknowledges display only once a pose plays. `DREAMSLEEVE_PHANTOM_SMOKE_SPIN_SECONDS`
@@ -86,7 +84,7 @@ warm generation replacement. User assets remain local and are not part of the re
 No protocol/schema changes are involved in the bounded 512 KiB sender flight
 window. Native bandwidth limits, when explicitly configured, retain ENet's window.
 
-Set `DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS=1` before run.ps1 to record production server meters and phantom lifecycle under the artifact directory. The collector is the same as the production Logging.DiagnosticsEnabled path; every session part is retained.
+Set `DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS=1` before run.py to record production server meters and phantom lifecycle under the artifact directory. The collector is the same as the production Logging.DiagnosticsEnabled path; every session part is retained.
 
 
 ## Real reverse proxy coverage
@@ -94,7 +92,7 @@ Set `DREAMSLEEVE_PHANTOM_SMOKE_DIAGNOSTICS=1` before run.ps1 to record productio
 Pass an existing nginx executable (not bundled or automatically installed):
 
 ```powershell
-pwsh -NoProfile -File tests/phantom-smoke/run.ps1 -NativeTests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe -NoBuild -Nginx C:/tools/nginx/nginx.exe
+python tests/phantom-smoke/run.py --native-tests build/windows/x64/releasedbg/Dreamsleeve.Client.Tests.exe --nginx C:/tools/nginx/nginx.exe
 ```
 
 The runner extracts the two nginx server examples from `docs/DeploymentRu.md`,
