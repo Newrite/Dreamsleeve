@@ -320,7 +320,7 @@ type Probe(config: Config, authUrl: Uri, allIds: uint64 array, offset: int, stri
             let complete = packet.Complete
             if complete.Upload then
                 if complete.RequestId<>peer.PublishRequest then fail "Upload completion request mismatch"
-                if complete.Accepted then
+                if complete.Outcome = TransferOutcome.Accepted then
                     peer.Ready <- true
                     peer.ReadyAt <- now()
                     peer.Due <- now()
@@ -328,16 +328,16 @@ type Probe(config: Config, authUrl: Uri, allIds: uint64 array, offset: int, stri
                 else
                     peer.Upload |> Option.iter releaseJob
                     peer.Upload <- None
-                    refusal complete.Reason
+                    refusal complete.Detail
                     peer.PublishDue <- if complete.RetryAfterMs>0u then now()+float complete.RetryAfterMs else Double.PositiveInfinity
             else
                 if complete.RequestId<>peer.DownloadRequest then fail "Download completion request mismatch"
-                if complete.Accepted then
+                if complete.Outcome = TransferOutcome.Accepted then
                     match peer.Download with
                     | Some download when download.Id = complete.TransferId -> download.Accepted <- true
                     | _ -> fail "Unknown completed HTTP download"
                 else
-                    refusal complete.Reason
+                    refusal complete.Detail
                     finishDownload peer
                     peer.DownloadDue <- now()+max 1000. (float complete.RetryAfterMs)
         | ServerAssetPacket.PayloadOneofCase.Offer ->

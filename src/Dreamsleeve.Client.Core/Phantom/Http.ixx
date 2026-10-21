@@ -13,6 +13,72 @@ import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 export namespace Dreamsleeve::Client::Phantom
 {
 
+  // Why an HTTP transfer ended without its body.
+  enum class HttpFailure
+  {
+    Canceled,
+    // The configured server URL is unusable.
+    Url,
+    Session,
+    Connection,
+    Request,
+    Options,
+    // WinHTTP reported an error; the code is its error number.
+    WinHttp,
+    // The response status was wrong or unreadable; the code is the status.
+    Status,
+    WriteLength,
+    ContentLength,
+    Truncated,
+    Oversized,
+  };
+
+  struct HttpError
+  {
+    HttpFailure   reason;
+    std::uint32_t code{};
+    // Diagnostic text for logs only.
+    std::string detail;
+
+    std::string Describe() const
+    {
+      constexpr auto name = [](HttpFailure reason) -> std::string_view {
+        switch (reason)
+        {
+          case HttpFailure::Canceled:
+            return "HTTP canceled";
+          case HttpFailure::Url:
+            return "HTTP URL";
+          case HttpFailure::Session:
+            return "WinHTTP session unavailable";
+          case HttpFailure::Connection:
+            return "HTTP connection";
+          case HttpFailure::Request:
+            return "HTTP request";
+          case HttpFailure::Options:
+            return "HTTP options";
+          case HttpFailure::WinHttp:
+            return "WinHTTP error";
+          case HttpFailure::Status:
+            return "HTTP status";
+          case HttpFailure::WriteLength:
+            return "HTTP write length";
+          case HttpFailure::ContentLength:
+            return "HTTP content length";
+          case HttpFailure::Truncated:
+            return "HTTP truncated";
+          case HttpFailure::Oversized:
+            return "HTTP oversized";
+        }
+        return "HTTP failure";
+      };
+      auto text = std::string(name(reason));
+      if (code) text += std::format(" {}", code);
+      if (!detail.empty()) text += std::format(": {}", detail);
+      return text;
+    }
+  };
+
   // The networking owner only starts, cancels and polls bounded jobs. WinHTTP
   // callbacks signal the job owner; they never touch Exchange or game objects.
   class Http final
@@ -140,7 +206,7 @@ export namespace Dreamsleeve::Client::Phantom
       std::shared_ptr<const Bytes> input;
       std::shared_ptr<Bytes>       output;
       std::atomic<std::uint32_t>   progress{};
-      std::optional<std::string>   error;
+      std::optional<HttpError>     error;
       std::atomic<bool>            done{};
       std::jthread                 thread;
     };
@@ -152,24 +218,24 @@ export namespace Dreamsleeve::Client::Phantom
     std::string                       origin;
     bool                              allowInsecure{};
 
-    std::optional<std::string> Run(Job& job, std::string url, bool insecure, std::uint32_t rate, std::stop_token stop, Trace& trace)
+    std::optional<HttpError> Run(Job& job, std::string url, bool insecure, std::uint32_t rate, std::stop_token stop, Trace& trace)
     {
-      if (auto valid = Auth::ValidateUrl(url, insecure); !valid) return valid.error();
-      if (!session) return "WinHTTP session unavailable";
+      if (auto valid = Auth::ValidateUrl(url, insecure); !valid) return HttpError{HttpFailure::Url, 0, valid.error()};
+      if (!session) return HttpError{HttpFailure::Session};
 
       int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url.data(), static_cast<int>(url.size()), nullptr, 0);
-      if (!length) return "HTTP URL encoding";
+      if (!length) return HttpError{HttpFailure::Url, 0, "encoding"};
       std::wstring wide(length, L'\0');
       if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url.data(), static_cast<int>(url.size()), wide.data(), length))
-        return "HTTP URL encoding";
+        return HttpError{HttpFailure::Url, 0, "encoding"};
 
       URL_COMPONENTS parts{};
       parts.dwStructSize     = sizeof(parts);
       parts.dwHostNameLength = DWORD(-1);
-      if (!WinHttpCrackUrl(wide.c_str(), static_cast<DWORD>(wide.size()), 0, &parts)) return "HTTP URL";
+      if (!WinHttpCrackUrl(wide.c_str(), static_cast<DWORD>(wide.size()), 0, &parts)) return HttpError{HttpFailure::Url};
       std::wstring host(parts.lpszHostName, parts.dwHostNameLength);
       Handle       connection{WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0)};
-      if (!connection) return "HTTP connection";
+      if (!connection) return HttpError{HttpFailure::Connection};
 
       std::array<std::uint8_t, 1> tail{};
       // Buffers belong to job; request drains callbacks before Run returns.
@@ -182,7 +248,7 @@ export namespace Dreamsleeve::Client::Phantom
         WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES,
         parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
-      if (!request.handle || !request.Attach()) return "HTTP request";
+      if (!request.handle || !request.Attach()) return HttpError{HttpFailure::Request};
 
       DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
       DWORD disabled  = WINHTTP_DISABLE_COOKIES | WINHTTP_DISABLE_AUTHENTICATION;
@@ -190,13 +256,13 @@ export namespace Dreamsleeve::Client::Phantom
         !WinHttpSetTimeouts(request.handle, ConnectTimeoutMs, ConnectTimeoutMs, TransferTimeoutMs, TransferTimeoutMs) ||
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects)) ||
         !WinHttpSetOption(request.handle, WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
-        return "HTTP options";
+        return HttpError{HttpFailure::Options};
 
       std::wstring headers = L"Authorization: Bearer " + std::wstring(job.transfer.httpToken.begin(), job.transfer.httpToken.end()) +
                              L"\r\nContent-Type: application/octet-stream\r\n";
       const auto   fail    = [&] {
         std::lock_guard lock(request.mutex);
-        return stop.stop_requested() ? std::string("HTTP canceled") : "WinHTTP error " + std::to_string(request.error);
+        return stop.stop_requested() ? HttpError{HttpFailure::Canceled} : HttpError{HttpFailure::WinHttp, request.error};
       };
 
       if (!trace.Step(0, "send", [&] {
@@ -219,14 +285,14 @@ export namespace Dreamsleeve::Client::Phantom
         {
           auto offset = job.progress.load();
           auto count  = static_cast<DWORD>(std::min<std::size_t>(ChunkBytes, job.input->size() - offset));
-          if (!trace.Step(2, "budget", [&] { return uploadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
+          if (!trace.Step(2, "budget", [&] { return uploadBudget.Wait(count, rate, stop); })) return HttpError{HttpFailure::Canceled};
           if (!trace.Step(3, "write", [&] {
                 return request.Step(stop, WINHTTP_CALLBACK_STATUS_WRITE_COMPLETE, [&] {
                   return WinHttpWriteData(request.handle, job.input->data() + offset, count, nullptr);
                 });
               }))
             return fail();
-          if (!request.count || request.count > count) return "HTTP write length";
+          if (!request.count || request.count > count) return HttpError{HttpFailure::WriteLength};
           job.progress = offset + request.count;
           trace.Progress(job.progress.load());
         }
@@ -246,8 +312,8 @@ export namespace Dreamsleeve::Client::Phantom
             &status,
             &statusSize,
             nullptr))
-        return "HTTP status";
-      if (status != (job.transfer.upload ? 204u : 200u)) return "HTTP status " + std::to_string(status);
+        return HttpError{HttpFailure::Status};
+      if (status != (job.transfer.upload ? 204u : 200u)) return HttpError{HttpFailure::Status, status};
       if (job.transfer.upload) return {};
 
       DWORD contentLength{}, headerSize = sizeof(contentLength);
@@ -260,20 +326,20 @@ export namespace Dreamsleeve::Client::Phantom
           &headerSize,
           nullptr) ||
         contentLength != job.transfer.BodyBytes())
-        return "HTTP content length";
+        return HttpError{HttpFailure::ContentLength};
       job.output = std::make_shared<Bytes>(contentLength);
       while (job.progress < contentLength)
       {
         auto offset = job.progress.load();
         auto count  = std::min<DWORD>(ChunkBytes, contentLength - offset);
-        if (!trace.Step(2, "budget", [&] { return downloadBudget.Wait(count, rate, stop); })) return "HTTP canceled";
+        if (!trace.Step(2, "budget", [&] { return downloadBudget.Wait(count, rate, stop); })) return HttpError{HttpFailure::Canceled};
         if (!trace.Step(3, "read", [&] {
               return request.Step(stop, WINHTTP_CALLBACK_STATUS_READ_COMPLETE, [&] {
                 return WinHttpReadData(request.handle, job.output->data() + offset, count, nullptr);
               });
             }))
           return fail();
-        if (!request.count || request.count > count) return "HTTP truncated";
+        if (!request.count || request.count > count) return HttpError{HttpFailure::Truncated};
         job.progress = offset + request.count;
         trace.Progress(job.progress.load());
       }
@@ -284,7 +350,7 @@ export namespace Dreamsleeve::Client::Phantom
             });
           }))
         return fail();
-      if (request.count) return "HTTP oversized";
+      if (request.count) return HttpError{HttpFailure::Oversized};
       return {};
     }
 
@@ -292,9 +358,9 @@ public:
 
     struct Completion
     {
-      Wire::Transfer             transfer;
-      std::shared_ptr<Bytes>     bytes;
-      std::optional<std::string> error;
+      Wire::Transfer           transfer;
+      std::shared_ptr<Bytes>   bytes;
+      std::optional<HttpError> error;
     };
 
     ~Http()

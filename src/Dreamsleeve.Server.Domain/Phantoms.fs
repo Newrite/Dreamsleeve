@@ -234,6 +234,31 @@ type PhantomTarget = {
     Generation: AppearanceGeneration
 }
 
+/// How a transfer, or the request for one, ended.
+[<RequireQualifiedAccess>]
+type PhantomOutcome =
+    | Accepted
+    // An admitted transfer ended early.
+    | SourceChanged
+    | ContextChanged
+    | ViewRemoved
+    | Disconnected
+    | Cancelled
+    | Stale
+    | Superseded
+    | Timeout
+    | StorageFailure
+    | HttpFailure
+    // The request was refused before a transfer began.
+    | DeltaBaseUnavailable
+    | PublishRefused
+    | ReplacementPending
+    | InitialDisplayPending
+    | PublishCooldown
+    | SourceLimit
+    | TransferLimit
+    | ViewUnavailable
+
 type PhantomCompletion = {
     Target: PhantomTarget
     Upload: bool
@@ -244,7 +269,8 @@ type PhantomCompletion = {
 type PhantomResponse =
     | Offer of PlayerId * viewRevision: uint64 * PhantomManifest
     | Transfer of PhantomTransferId * PhantomManifest * PlayerId * upload: bool * PhantomRequestId * token: string * PhantomDelta option
-    | Complete of PhantomTransferId * accepted: bool * reason: string * PhantomRequestId * PhantomCompletion option
+    /// The detail is diagnostic text for logs only.
+    | Complete of PhantomTransferId * PhantomOutcome * detail: string * PhantomRequestId * PhantomCompletion option
     | Remove of PlayerId * viewRevision: uint64
     | Policy of PhantomServerPolicy
     | Settled of AppearanceGeneration * context: uint64

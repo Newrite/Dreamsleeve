@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -56,6 +57,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_phan
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Phantom {
+enum TransferOutcome : int;
+extern const uint32_t TransferOutcome_internal_data_[];
 class AssetDelta;
 struct AssetDeltaDefaultTypeInternal;
 extern AssetDeltaDefaultTypeInternal _AssetDelta_default_instance_;
@@ -141,12 +144,69 @@ extern const ::google::protobuf::internal::ClassDataFull Withdraw_class_data_;
 }  // namespace Dreamsleeve
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::Dreamsleeve::Protocol::Phantom::TransferOutcome_internal_data_>
+    internal::EnumTraitsImpl::value<::Dreamsleeve::Protocol::Phantom::TransferOutcome>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Phantom {
+enum TransferOutcome : int {
+  TRANSFER_OUTCOME_UNSPECIFIED = 0,
+  TRANSFER_OUTCOME_ACCEPTED = 1,
+  TRANSFER_OUTCOME_SOURCE_CHANGED = 2,
+  TRANSFER_OUTCOME_CONTEXT_CHANGED = 3,
+  TRANSFER_OUTCOME_VIEW_REMOVED = 4,
+  TRANSFER_OUTCOME_DISCONNECTED = 5,
+  TRANSFER_OUTCOME_CANCELLED = 6,
+  TRANSFER_OUTCOME_STALE = 7,
+  TRANSFER_OUTCOME_SUPERSEDED = 8,
+  TRANSFER_OUTCOME_TIMEOUT = 9,
+  TRANSFER_OUTCOME_STORAGE_FAILURE = 10,
+  TRANSFER_OUTCOME_HTTP_FAILURE = 11,
+  TRANSFER_OUTCOME_DELTA_BASE_UNAVAILABLE = 12,
+  TRANSFER_OUTCOME_PUBLISH_REFUSED = 13,
+  TRANSFER_OUTCOME_REPLACEMENT_PENDING = 14,
+  TRANSFER_OUTCOME_INITIAL_DISPLAY_PENDING = 15,
+  TRANSFER_OUTCOME_PUBLISH_COOLDOWN = 16,
+  TRANSFER_OUTCOME_SOURCE_LIMIT = 17,
+  TRANSFER_OUTCOME_TRANSFER_LIMIT = 18,
+  TRANSFER_OUTCOME_VIEW_UNAVAILABLE = 19,
+  TransferOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TransferOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TransferOutcome_internal_data_[];
+inline constexpr TransferOutcome TransferOutcome_MIN =
+    static_cast<TransferOutcome>(0);
+inline constexpr TransferOutcome TransferOutcome_MAX =
+    static_cast<TransferOutcome>(19);
+inline bool TransferOutcome_IsValid(int value) {
+  return 0 <= value && value <= 19;
+}
+inline constexpr int TransferOutcome_ARRAYSIZE = 19 + 1;
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL TransferOutcome_descriptor();
+template <typename T>
+const ::std::string& TransferOutcome_Name(T value) {
+  static_assert(::std::is_same<T, TransferOutcome>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TransferOutcome_Name().");
+  return TransferOutcome_Name(static_cast<TransferOutcome>(value));
+}
+template <>
+inline const ::std::string& TransferOutcome_Name(TransferOutcome value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TransferOutcome_descriptor, 0, 19>(
+      static_cast<int>(value));
+}
+inline bool TransferOutcome_Parse(
+    ::absl::string_view name, TransferOutcome* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TransferOutcome>(TransferOutcome_descriptor(), name,
+                                           value);
+}
 
 // ===================================================================
 
@@ -2271,28 +2331,28 @@ class Complete final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kReasonFieldNumber = 3,
+    kDetailFieldNumber = 3,
     kTransferIdFieldNumber = 1,
     kPlayerIdFieldNumber = 4,
     kGenerationFieldNumber = 5,
-    kAcceptedFieldNumber = 2,
-    kUploadFieldNumber = 7,
     kRetryAfterMsFieldNumber = 6,
+    kUploadFieldNumber = 7,
     kRequestIdFieldNumber = 8,
+    kOutcomeFieldNumber = 9,
   };
-  // string reason = 3;
-  void clear_reason() ;
-  const ::std::string& reason() const;
+  // string detail = 3;
+  void clear_detail() ;
+  const ::std::string& detail() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_reason(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_reason();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
-  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+  void set_detail(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_detail();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_detail();
+  void set_allocated_detail(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_reason() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+  const ::std::string& _internal_detail() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_detail(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_detail();
 
   public:
   // uint64 transfer_id = 1;
@@ -2325,14 +2385,14 @@ class Complete final : public ::google::protobuf::Message
   void _internal_set_generation(::uint64_t value);
 
   public:
-  // bool accepted = 2;
-  void clear_accepted() ;
-  bool accepted() const;
-  void set_accepted(bool value);
+  // uint32 retry_after_ms = 6;
+  void clear_retry_after_ms() ;
+  ::uint32_t retry_after_ms() const;
+  void set_retry_after_ms(::uint32_t value);
 
   private:
-  bool _internal_accepted() const;
-  void _internal_set_accepted(bool value);
+  ::uint32_t _internal_retry_after_ms() const;
+  void _internal_set_retry_after_ms(::uint32_t value);
 
   public:
   // bool upload = 7;
@@ -2345,16 +2405,6 @@ class Complete final : public ::google::protobuf::Message
   void _internal_set_upload(bool value);
 
   public:
-  // uint32 retry_after_ms = 6;
-  void clear_retry_after_ms() ;
-  ::uint32_t retry_after_ms() const;
-  void set_retry_after_ms(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_retry_after_ms() const;
-  void _internal_set_retry_after_ms(::uint32_t value);
-
-  public:
   // uint64 request_id = 8;
   void clear_request_id() ;
   ::uint64_t request_id() const;
@@ -2365,11 +2415,21 @@ class Complete final : public ::google::protobuf::Message
   void _internal_set_request_id(::uint64_t value);
 
   public:
+  // .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+  void clear_outcome() ;
+  ::Dreamsleeve::Protocol::Phantom::TransferOutcome outcome() const;
+  void set_outcome(::Dreamsleeve::Protocol::Phantom::TransferOutcome value);
+
+  private:
+  ::Dreamsleeve::Protocol::Phantom::TransferOutcome _internal_outcome() const;
+  void _internal_set_outcome(::Dreamsleeve::Protocol::Phantom::TransferOutcome value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Dreamsleeve.Protocol.Phantom.Complete)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 8,
+  static const ::google::protobuf::internal::TcParseTable<4, 8,
                                    0, 60,
                                    2>
       _table_;
@@ -2391,14 +2451,14 @@ class Complete final : public ::google::protobuf::Message
         const Complete& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::google::protobuf::internal::ArenaStringPtr detail_;
     ::uint64_t transfer_id_;
     ::uint64_t player_id_;
     ::uint64_t generation_;
-    bool accepted_;
-    bool upload_;
     ::uint32_t retry_after_ms_;
+    bool upload_;
     ::uint64_t request_id_;
+    int outcome_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7147,94 +7207,94 @@ inline void Complete::_internal_set_transfer_id(::uint64_t value) {
   _impl_.transfer_id_ = value;
 }
 
-// bool accepted = 2;
-inline void Complete::clear_accepted() {
+// .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+inline void Complete::clear_outcome() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.accepted_ = false;
+  _impl_.outcome_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000080U);
 }
-inline bool Complete::accepted() const {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.accepted)
-  return _internal_accepted();
+inline ::Dreamsleeve::Protocol::Phantom::TransferOutcome Complete::outcome() const {
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.outcome)
+  return _internal_outcome();
 }
-inline void Complete::set_accepted(bool value) {
-  _internal_set_accepted(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.accepted)
+inline void Complete::set_outcome(::Dreamsleeve::Protocol::Phantom::TransferOutcome value) {
+  _internal_set_outcome(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.outcome)
 }
-inline bool Complete::_internal_accepted() const {
+inline ::Dreamsleeve::Protocol::Phantom::TransferOutcome Complete::_internal_outcome() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.accepted_;
+  return static_cast<::Dreamsleeve::Protocol::Phantom::TransferOutcome>(_impl_.outcome_);
 }
-inline void Complete::_internal_set_accepted(bool value) {
+inline void Complete::_internal_set_outcome(::Dreamsleeve::Protocol::Phantom::TransferOutcome value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.accepted_ = value;
+  _impl_.outcome_ = value;
 }
 
-// string reason = 3;
-inline void Complete::clear_reason() {
+// string detail = 3;
+inline void Complete::clear_detail() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.reason_.ClearToEmpty();
+  _impl_.detail_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline const ::std::string& Complete::reason() const
+inline const ::std::string& Complete::detail() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.reason)
-  return _internal_reason();
+  // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.detail)
+  return _internal_detail();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void Complete::set_reason(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void Complete::set_detail(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.reason)
+  _impl_.detail_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.detail)
 }
-inline ::std::string* PROTOBUF_NONNULL Complete::mutable_reason()
+inline ::std::string* PROTOBUF_NONNULL Complete::mutable_detail()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_reason();
-  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Complete.reason)
+  ::std::string* _s = _internal_mutable_detail();
+  // @@protoc_insertion_point(field_mutable:Dreamsleeve.Protocol.Phantom.Complete.detail)
   return _s;
 }
-inline const ::std::string& Complete::_internal_reason() const {
+inline const ::std::string& Complete::_internal_detail() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.reason_.Get();
+  return _impl_.detail_.Get();
 }
-inline void Complete::_internal_set_reason(const ::std::string& value) {
+inline void Complete::_internal_set_detail(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.reason_.Set(value, GetArena());
+  _impl_.detail_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL Complete::_internal_mutable_reason() {
+inline ::std::string* PROTOBUF_NONNULL Complete::_internal_mutable_detail() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.reason_.Mutable( GetArena());
+  return _impl_.detail_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE Complete::release_reason() {
+inline ::std::string* PROTOBUF_NULLABLE Complete::release_detail() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Complete.reason)
+  // @@protoc_insertion_point(field_release:Dreamsleeve.Protocol.Phantom.Complete.detail)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
     return nullptr;
   }
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.reason_.Release();
+  auto* released = _impl_.detail_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.reason_.Set("", GetArena());
+    _impl_.detail_.Set("", GetArena());
   }
   return released;
 }
-inline void Complete::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+inline void Complete::set_allocated_detail(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   } else {
     ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   }
-  _impl_.reason_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
-    _impl_.reason_.Set("", GetArena());
+  _impl_.detail_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.detail_.IsDefault()) {
+    _impl_.detail_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Complete.reason)
+  // @@protoc_insertion_point(field_set_allocated:Dreamsleeve.Protocol.Phantom.Complete.detail)
 }
 
 // uint64 player_id = 4;
@@ -7292,7 +7352,7 @@ inline void Complete::clear_retry_after_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_after_ms_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000010U);
 }
 inline ::uint32_t Complete::retry_after_ms() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.retry_after_ms)
@@ -7300,7 +7360,7 @@ inline ::uint32_t Complete::retry_after_ms() const {
 }
 inline void Complete::set_retry_after_ms(::uint32_t value) {
   _internal_set_retry_after_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.retry_after_ms)
 }
 inline ::uint32_t Complete::_internal_retry_after_ms() const {
@@ -7342,7 +7402,7 @@ inline void Complete::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000040U);
 }
 inline ::uint64_t Complete::request_id() const {
   // @@protoc_insertion_point(field_get:Dreamsleeve.Protocol.Phantom.Complete.request_id)
@@ -7350,7 +7410,7 @@ inline ::uint64_t Complete::request_id() const {
 }
 inline void Complete::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:Dreamsleeve.Protocol.Phantom.Complete.request_id)
 }
 inline ::uint64_t Complete::_internal_request_id() const {
@@ -9014,6 +9074,19 @@ inline void ServerPosePacket::set_allocated_previous_sample(::Dreamsleeve::Proto
 }  // namespace Protocol
 }  // namespace Dreamsleeve
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::Dreamsleeve::Protocol::Phantom::TransferOutcome> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::Dreamsleeve::Protocol::Phantom::TransferOutcome>() {
+  return ::Dreamsleeve::Protocol::Phantom::TransferOutcome_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

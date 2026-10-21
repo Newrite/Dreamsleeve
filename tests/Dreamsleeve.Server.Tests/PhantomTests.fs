@@ -10,6 +10,10 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Core
 open Dreamsleeve.Server.Infrastructure
 
+let private accepted (complete: Dreamsleeve.Protocol.Phantom.Complete) =
+    complete.Outcome = Dreamsleeve.Protocol.Phantom.TransferOutcome.Accepted
+
+
 let private ok = function
     | Ok value -> value
     | Error error -> failwithf "%A" error
@@ -255,7 +259,7 @@ let tests = testList "Phantoms" [
         live[first].Finish(Ok ())
         PhantomAgent.tick state 12L
         Expect.equal (PhantomAgent.snapshot state).Transfers 0 "The download completes behind the camera."
-        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.Accepted)) "Completion reaches the observer."
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && accepted p.Complete)) "Completion reaches the observer."
         PhantomAgent.tick state 13L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 0 "Without a transfer the camera culls the subscription again."
 
@@ -602,7 +606,7 @@ let tests = testList "Phantoms" [
         PhantomAgent.handle state 7L (fst members[0]) (PhantomRequest.Publish(next,10UL,requestId(),None))
         PhantomAgent.tick state 8L
         Expect.equal (PhantomAgent.snapshot state).Transfers 1 "Cold transfer is not canceled or replaced"
-        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.Reason = "initial display pending")) "Retryable admission"
+        Expect.isTrue (models output |> Array.exists (fun p -> not (isNull p.Complete) && p.Complete.Outcome = Dreamsleeve.Protocol.Phantom.TransferOutcome.InitialDisplayPending)) "Retryable admission"
         let live = leases.GetValue(state, fun _ -> failwith "fixture missing")
         live[downloading].Advance 4
         live[downloading].Finish(Ok ())
@@ -745,9 +749,9 @@ let tests = testList "Phantoms" [
         PhantomAgent.tick state 4L
         let complete = models output |> Array.choose (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         let cancelled = complete |> Array.find (fun value -> value.RequestId = 1001UL)
-        Expect.equal (cancelled.TransferId,cancelled.Accepted,cancelled.Generation,cancelled.RetryAfterMs) (0UL,false,1UL,0u) "Only old Awaiting request is rejected."
-        let accepted = complete |> Array.find (fun value -> value.RequestId = 1002UL)
-        Expect.isTrue accepted.Accepted "New same-generation context publication is independent."
+        Expect.equal (cancelled.TransferId,accepted cancelled,cancelled.Generation,cancelled.RetryAfterMs) (0UL,false,1UL,0u) "Only old Awaiting request is rejected."
+        let independent = complete |> Array.find (fun value -> value.RequestId = 1002UL)
+        Expect.isTrue (accepted independent) "New same-generation context publication is independent."
         let assigned = models output |> Array.choose (fun packet -> if isNull packet.Transfer then None else Some packet.Transfer)
         Expect.isEmpty assigned "Cache hit requires no HTTP body or capability."
         old.SetResult(Ok true)
@@ -794,9 +798,9 @@ let tests = testList "Phantoms" [
         output.Clear()
         publish 102L manifest 10UL
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Same generation and immutable descriptor retry succeeds."
-        let accepted = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
-        Expect.isTrue accepted.Accepted "Cache hit publication accepted."
-        Expect.equal accepted.TransferId 0UL "Cache hit completes the correlated request without HTTP."
+        let cached = models output |> Array.pick (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
+        Expect.isTrue (accepted cached) "Cache hit publication accepted."
+        Expect.equal cached.TransferId 0UL "Cache hit completes the correlated request without HTTP."
         PhantomAgent.observe state (PhantomObservation.Member(fst members[0], { snd members[0] with MovementContext = 11UL }))
         publish 202L manifest 11UL
         Expect.equal (PhantomAgent.snapshot state).Sources 1 "Context can republish cached immutable generation."
@@ -805,7 +809,7 @@ let tests = testList "Phantoms" [
         publish 206L (asset 1UL [|1uy|]) 11UL
         let refused = models output |> Array.choose (fun packet -> if isNull packet.Complete then None else Some packet.Complete)
         Expect.equal refused.Length 2 "Conflicting and lower generations rejected."
-        Expect.isTrue (refused |> Array.forall (fun value -> not value.Accepted && value.RetryAfterMs = 0u && value.Upload)) "Terminal generation denials."
+        Expect.isTrue (refused |> Array.forall (fun value -> not (accepted value) && value.RetryAfterMs = 0u && value.Upload)) "Terminal generation denials."
         Expect.equal attempts 3 "No IO for conflicting descriptors."
 
     testCase "capacity denial preserves generation for retry and correlates upload/download requests" <| fun _ ->
@@ -852,7 +856,7 @@ let tests = testList "Phantoms" [
         view state members[2] members[0] 1UL 1.0
         PhantomAgent.tick state 4L
         Expect.equal (PhantomAgent.snapshot state).Subscriptions 1 "Receiver can subscribe at source capacity."
-        Expect.isTrue (models output |> Array.exists (fun packet -> not (isNull packet.Complete) && not packet.Complete.Accepted)) "Excess source refused."
+        Expect.isTrue (models output |> Array.exists (fun packet -> not (isNull packet.Complete) && not (accepted packet.Complete))) "Excess source refused."
 
     testCase "replacement upload does not consume another publisher quota slot" <| fun _ ->
         let pending = TaskCompletionSource<Result<bool,PhantomStorageError>>()
@@ -1480,25 +1484,26 @@ let tests = testList "Phantoms" [
             Expect.equal (Directory.GetFiles(root, "*.zst").Length) 0 "corruption removed"
         finally store.Dispose().GetAwaiter().GetResult()
     })
-    testCase "typed storage failures preserve Complete wire reasons and retry values" <| fun _ ->
+    testCase "typed storage failures complete with their outcome, detail and retry" <| fun _ ->
+        let failure, deltaBase = Dreamsleeve.Protocol.Phantom.TransferOutcome.StorageFailure, Dreamsleeve.Protocol.Phantom.TransferOutcome.DeltaBaseUnavailable
         let cases = [
-            PhantomStorageError.HashMismatch, "hash mismatch", 0u
-            PhantomStorageError.ChunkOffsetOrSize, "chunk offset/size", 0u
-            PhantomStorageError.ReadBounds, "read bounds", 0u
-            PhantomStorageError.CacheHashMismatch, "cache hash mismatch", 27u
-            PhantomStorageError.DeltaHashMismatch, "delta hash mismatch", 27u
-            PhantomStorageError.DeltaBaseUnavailable, "delta base unavailable", 27u
-            PhantomStorageError.QueueFull, "storage queue full", 27u
-            PhantomStorageError.Io (IOException(String('x', 257))), "storage failure", 27u
+            PhantomStorageError.HashMismatch, failure, "hash mismatch", 0u
+            PhantomStorageError.ChunkOffsetOrSize, failure, "chunk offset/size", 0u
+            PhantomStorageError.ReadBounds, failure, "read bounds", 0u
+            PhantomStorageError.CacheHashMismatch, failure, "cache hash mismatch", 27u
+            PhantomStorageError.DeltaHashMismatch, failure, "delta hash mismatch", 27u
+            PhantomStorageError.DeltaBaseUnavailable, deltaBase, "delta base unavailable", 27u
+            PhantomStorageError.QueueFull, failure, "storage queue full", 27u
+            PhantomStorageError.Io (IOException(String('x', 257))), failure, "storage failure", 27u
         ]
-        for error, reason, retry in cases do
+        for error, outcome, reason, retry in cases do
             let store = { memoryStorage with StartUpload = fun _ -> Task.FromResult(Error error) }
             let state, members, output = setup { options with PublishCooldownMs = 27 } store 1
             let request = requestId()
             PhantomAgent.handle state 0L (fst members[0]) (PhantomRequest.Publish(asset 1UL [|1uy|], 10UL, request, None))
             PhantomAgent.tick state 1L
             let completed = models output |> Array.find (fun packet -> not (isNull packet.Complete)) |> _.Complete
-            Expect.equal (completed.TransferId, completed.RequestId, completed.Reason, completed.RetryAfterMs) (0UL, request.Value, reason, retry) "Protocol unchanged across typed outcome."
+            Expect.equal (completed.TransferId, completed.RequestId, completed.Outcome, completed.Detail, completed.RetryAfterMs) (0UL, request.Value, outcome, reason, retry) "Typed outcome with its detail."
             Expect.isNone (PhantomAgent.failure state) "Expected rejection is not owner fault."
 
     case "cleanup retains transfer capacity until acknowledged and faults are not discarded" (fun () -> task {
@@ -1518,7 +1523,7 @@ let tests = testList "Phantoms" [
         publish second
         PhantomAgent.tick state 2L
         let denied = models output |> Array.find (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = second.Value) |> _.Complete
-        Expect.equal denied.Reason "transfer limit" "Removal isn't completed cleanup."
+        Expect.equal denied.Outcome Dreamsleeve.Protocol.Phantom.TransferOutcome.TransferLimit "Removal isn't completed cleanup."
         let original = InvalidOperationException "cleanup failed"
         cleanup.SetException original
         // Wait on observable release work without relying on timing luck.

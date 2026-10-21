@@ -60,45 +60,63 @@ namespace Dreamsleeve.Protocol.Phantom {
             "ZXREZWx0YRITCgt0cmFuc2Zlcl9pZBgBIAEoBBI8CgVhc3NldBgCIAEoCzIt",
             "LkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uQXNzZXREZXNjcmlwdG9y",
             "EhEKCXBsYXllcl9pZBgDIAEoBBIOCgZ1cGxvYWQYBCABKAgSEgoKcmVxdWVz",
-            "dF9pZBgFIAEoBBISCgpodHRwX3Rva2VuGAYgASgJIqQBCghDb21wbGV0ZRIT",
-            "Cgt0cmFuc2Zlcl9pZBgBIAEoBBIQCghhY2NlcHRlZBgCIAEoCBIOCgZyZWFz",
-            "b24YAyABKAkSEQoJcGxheWVyX2lkGAQgASgEEhIKCmdlbmVyYXRpb24YBSAB",
-            "KAQSFgoOcmV0cnlfYWZ0ZXJfbXMYBiABKA0SDgoGdXBsb2FkGAcgASgIEhIK",
-            "CnJlcXVlc3RfaWQYCCABKAQiMgoGUmVtb3ZlEhEKCXBsYXllcl9pZBgBIAEo",
-            "BBIVCg12aWV3X3JldmlzaW9uGAIgASgEItkCCgZQb2xpY3kSDwoHZW5hYmxl",
-            "ZBgBIAEoCBIXCg9yYXdfYXNzZXRfYnl0ZXMYAiABKA0SHgoWY29tcHJlc3Nl",
-            "ZF9hc3NldF9ieXRlcxgDIAEoDRIQCghjaGFubmVscxgEIAEoDRISCgpwb3Nl",
-            "X2J5dGVzGAYgASgNEh0KFWNvbXByZXNzZWRfcG9zZV9ieXRlcxgHIAEoDRIT",
-            "CgtzYW1wbGVfcmF0ZRgIIAEoDRIXCg9tYXhpbXVtX3Zpc2libGUYCSABKA0S",
-            "EAoIZGlzdGFuY2UYCiABKAISHAoUY29uY3VycmVudF90cmFuc2ZlcnMYDCAB",
-            "KA0SHgoWbW9kZWxfYnl0ZXNfcGVyX3NlY29uZBgNIAEoDRIdChVwb3NlX2J5",
-            "dGVzX3Blcl9zZWNvbmQYDiABKA1KBAgFEAZKBAgLEAxSCGdlb21ldHJ5Ug13",
-            "aW5kb3dfY2h1bmtzIu4DChFTZXJ2ZXJBc3NldFBhY2tldBIYChBwcm90b2Nv",
-            "bF92ZXJzaW9uGAEgASgNEjQKBW9mZmVyGAIgASgLMiMuRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuUGhhbnRvbS5PZmZlckgAEjoKCHRyYW5zZmVyGAMgASgLMiYu",
-            "RHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5UcmFuc2ZlckgAEjoKCGNv",
-            "bXBsZXRlGAUgASgLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5D",
-            "b21wbGV0ZUgAEjYKBnJlbW92ZRgGIAEoCzIkLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLlBoYW50b20uUmVtb3ZlSAASNgoGcG9saWN5GAggASgLMiQuRHJlYW1z",
-            "bGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qb2xpY3lIABI4CgdzZXR0bGVkGAkg",
-            "ASgLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5TZXR0bGVkSAAS",
-            "PwoLcG9zZV9kZW1hbmQYCiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5Q",
-            "aGFudG9tLlBvc2VEZW1hbmRIAEIJCgdwYXlsb2FkSgQIBBAFSgQIBxAIUgVj",
-            "aHVua1IIcHJvZ3Jlc3MidAoKUG9zZVNhbXBsZRISCgpnZW5lcmF0aW9uGAEg",
-            "ASgEEhgKEGNvbnRleHRfcmV2aXNpb24YAiABKAQSEAoIc2VxdWVuY2UYAyAB",
-            "KAQSFQoNc2FtcGxlZF9hdF91cxgEIAEoBBIPCgdwYXlsb2FkGAUgASgMIqkB",
-            "ChBDbGllbnRQb3NlUGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0S",
-            "OAoGc2FtcGxlGAIgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRv",
-            "bS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBsZRgDIAEoCzIoLkRyZWFt",
-            "c2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNhbXBsZSLTAQoQU2VydmVy",
-            "UG9zZVBhY2tldBIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEhEKCXBsYXll",
-            "cl9pZBgCIAEoBBIVCg12aWV3X3JldmlzaW9uGAMgASgEEjgKBnNhbXBsZRgE",
-            "IAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNhbXBs",
-            "ZRJBCg9wcmV2aW91c19zYW1wbGUYBSABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5QaGFudG9tLlBvc2VTYW1wbGViBnByb3RvMw=="));
+            "dF9pZBgFIAEoBBISCgpodHRwX3Rva2VuGAYgASgJIuIBCghDb21wbGV0ZRIT",
+            "Cgt0cmFuc2Zlcl9pZBgBIAEoBBI+CgdvdXRjb21lGAkgASgOMi0uRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuUGhhbnRvbS5UcmFuc2Zlck91dGNvbWUSDgoGZGV0",
+            "YWlsGAMgASgJEhEKCXBsYXllcl9pZBgEIAEoBBISCgpnZW5lcmF0aW9uGAUg",
+            "ASgEEhYKDnJldHJ5X2FmdGVyX21zGAYgASgNEg4KBnVwbG9hZBgHIAEoCBIS",
+            "CgpyZXF1ZXN0X2lkGAggASgESgQIAhADUghhY2NlcHRlZCIyCgZSZW1vdmUS",
+            "EQoJcGxheWVyX2lkGAEgASgEEhUKDXZpZXdfcmV2aXNpb24YAiABKAQi2QIK",
+            "BlBvbGljeRIPCgdlbmFibGVkGAEgASgIEhcKD3Jhd19hc3NldF9ieXRlcxgC",
+            "IAEoDRIeChZjb21wcmVzc2VkX2Fzc2V0X2J5dGVzGAMgASgNEhAKCGNoYW5u",
+            "ZWxzGAQgASgNEhIKCnBvc2VfYnl0ZXMYBiABKA0SHQoVY29tcHJlc3NlZF9w",
+            "b3NlX2J5dGVzGAcgASgNEhMKC3NhbXBsZV9yYXRlGAggASgNEhcKD21heGlt",
+            "dW1fdmlzaWJsZRgJIAEoDRIQCghkaXN0YW5jZRgKIAEoAhIcChRjb25jdXJy",
+            "ZW50X3RyYW5zZmVycxgMIAEoDRIeChZtb2RlbF9ieXRlc19wZXJfc2Vjb25k",
+            "GA0gASgNEh0KFXBvc2VfYnl0ZXNfcGVyX3NlY29uZBgOIAEoDUoECAUQBkoE",
+            "CAsQDFIIZ2VvbWV0cnlSDXdpbmRvd19jaHVua3Mi7gMKEVNlcnZlckFzc2V0",
+            "UGFja2V0EhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SNAoFb2ZmZXIYAiAB",
+            "KAsyIy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLk9mZmVySAASOgoI",
+            "dHJhbnNmZXIYAyABKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9t",
+            "LlRyYW5zZmVySAASOgoIY29tcGxldGUYBSABKAsyJi5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5QaGFudG9tLkNvbXBsZXRlSAASNgoGcmVtb3ZlGAYgASgLMiQu",
+            "RHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5SZW1vdmVIABI2CgZwb2xp",
+            "Y3kYCCABKAsyJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5QaGFudG9tLlBvbGlj",
+            "eUgAEjgKB3NldHRsZWQYCSABKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5Q",
+            "aGFudG9tLlNldHRsZWRIABI/Cgtwb3NlX2RlbWFuZBgKIAEoCzIoLkRyZWFt",
+            "c2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZURlbWFuZEgAQgkKB3BheWxv",
+            "YWRKBAgEEAVKBAgHEAhSBWNodW5rUghwcm9ncmVzcyJ0CgpQb3NlU2FtcGxl",
+            "EhIKCmdlbmVyYXRpb24YASABKAQSGAoQY29udGV4dF9yZXZpc2lvbhgCIAEo",
+            "BBIQCghzZXF1ZW5jZRgDIAEoBBIVCg1zYW1wbGVkX2F0X3VzGAQgASgEEg8K",
+            "B3BheWxvYWQYBSABKAwiqQEKEENsaWVudFBvc2VQYWNrZXQSGAoQcHJvdG9j",
+            "b2xfdmVyc2lvbhgBIAEoDRI4CgZzYW1wbGUYAiABKAsyKC5EcmVhbXNsZWV2",
+            "ZS5Qcm90b2NvbC5QaGFudG9tLlBvc2VTYW1wbGUSQQoPcHJldmlvdXNfc2Ft",
+            "cGxlGAMgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wuUGhhbnRvbS5Qb3Nl",
+            "U2FtcGxlItMBChBTZXJ2ZXJQb3NlUGFja2V0EhgKEHByb3RvY29sX3ZlcnNp",
+            "b24YASABKA0SEQoJcGxheWVyX2lkGAIgASgEEhUKDXZpZXdfcmV2aXNpb24Y",
+            "AyABKAQSOAoGc2FtcGxlGAQgASgLMiguRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "UGhhbnRvbS5Qb3NlU2FtcGxlEkEKD3ByZXZpb3VzX3NhbXBsZRgFIAEoCzIo",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLlBoYW50b20uUG9zZVNhbXBsZSroBQoP",
+            "VHJhbnNmZXJPdXRjb21lEiAKHFRSQU5TRkVSX09VVENPTUVfVU5TUEVDSUZJ",
+            "RUQQABIdChlUUkFOU0ZFUl9PVVRDT01FX0FDQ0VQVEVEEAESIwofVFJBTlNG",
+            "RVJfT1VUQ09NRV9TT1VSQ0VfQ0hBTkdFRBACEiQKIFRSQU5TRkVSX09VVENP",
+            "TUVfQ09OVEVYVF9DSEFOR0VEEAMSIQodVFJBTlNGRVJfT1VUQ09NRV9WSUVX",
+            "X1JFTU9WRUQQBBIhCh1UUkFOU0ZFUl9PVVRDT01FX0RJU0NPTk5FQ1RFRBAF",
+            "Eh4KGlRSQU5TRkVSX09VVENPTUVfQ0FOQ0VMTEVEEAYSGgoWVFJBTlNGRVJf",
+            "T1VUQ09NRV9TVEFMRRAHEh8KG1RSQU5TRkVSX09VVENPTUVfU1VQRVJTRURF",
+            "RBAIEhwKGFRSQU5TRkVSX09VVENPTUVfVElNRU9VVBAJEiQKIFRSQU5TRkVS",
+            "X09VVENPTUVfU1RPUkFHRV9GQUlMVVJFEAoSIQodVFJBTlNGRVJfT1VUQ09N",
+            "RV9IVFRQX0ZBSUxVUkUQCxIrCidUUkFOU0ZFUl9PVVRDT01FX0RFTFRBX0JB",
+            "U0VfVU5BVkFJTEFCTEUQDBIkCiBUUkFOU0ZFUl9PVVRDT01FX1BVQkxJU0hf",
+            "UkVGVVNFRBANEigKJFRSQU5TRkVSX09VVENPTUVfUkVQTEFDRU1FTlRfUEVO",
+            "RElORxAOEiwKKFRSQU5TRkVSX09VVENPTUVfSU5JVElBTF9ESVNQTEFZX1BF",
+            "TkRJTkcQDxIlCiFUUkFOU0ZFUl9PVVRDT01FX1BVQkxJU0hfQ09PTERPV04Q",
+            "EBIhCh1UUkFOU0ZFUl9PVVRDT01FX1NPVVJDRV9MSU1JVBAREiMKH1RSQU5T",
+            "RkVSX09VVENPTUVfVFJBTlNGRVJfTElNSVQQEhIlCiFUUkFOU0ZFUl9PVVRD",
+            "T01FX1ZJRVdfVU5BVkFJTEFCTEUQE2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Phantom.TransferOutcome), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Preferences), global::Dreamsleeve.Protocol.Phantom.Preferences.Parser, new[]{ "Publish", "Receive", "Maximum", "Distance" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.AssetDescriptor), global::Dreamsleeve.Protocol.Phantom.AssetDescriptor.Parser, new[]{ "Hash", "Generation", "FormatVersion", "CompressedBytes", "RawBytes", "Channels" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.AssetDelta), global::Dreamsleeve.Protocol.Phantom.AssetDelta.Parser, new[]{ "BaseHash", "Hash", "CompressedBytes" }, null, null, null, null),
@@ -112,7 +130,7 @@ namespace Dreamsleeve.Protocol.Phantom {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket), global::Dreamsleeve.Protocol.Phantom.ClientAssetPacket.Parser, new[]{ "ProtocolVersion", "Preferences", "Publish", "Download", "Cancel", "Withdraw", "Displayed" }, new[]{ "Payload" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Offer), global::Dreamsleeve.Protocol.Phantom.Offer.Parser, new[]{ "PlayerId", "ViewRevision", "Asset" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Transfer), global::Dreamsleeve.Protocol.Phantom.Transfer.Parser, new[]{ "Delta", "TransferId", "Asset", "PlayerId", "Upload", "RequestId", "HttpToken" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Accepted", "Reason", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Complete), global::Dreamsleeve.Protocol.Phantom.Complete.Parser, new[]{ "TransferId", "Outcome", "Detail", "PlayerId", "Generation", "RetryAfterMs", "Upload", "RequestId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Remove), global::Dreamsleeve.Protocol.Phantom.Remove.Parser, new[]{ "PlayerId", "ViewRevision" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.Policy), global::Dreamsleeve.Protocol.Phantom.Policy.Parser, new[]{ "Enabled", "RawAssetBytes", "CompressedAssetBytes", "Channels", "PoseBytes", "CompressedPoseBytes", "SampleRate", "MaximumVisible", "Distance", "ConcurrentTransfers", "ModelBytesPerSecond", "PoseBytesPerSecond" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket), global::Dreamsleeve.Protocol.Phantom.ServerAssetPacket.Parser, new[]{ "ProtocolVersion", "Offer", "Transfer", "Complete", "Remove", "Policy", "Settled", "PoseDemand" }, new[]{ "Payload" }, null, null, null),
@@ -124,6 +142,47 @@ namespace Dreamsleeve.Protocol.Phantom {
     #endregion
 
   }
+  #region Enums
+  /// <summary>
+  /// How a transfer, or the request for one, ended.
+  /// </summary>
+  public enum TransferOutcome {
+    [pbr::OriginalName("TRANSFER_OUTCOME_UNSPECIFIED")] Unspecified = 0,
+    [pbr::OriginalName("TRANSFER_OUTCOME_ACCEPTED")] Accepted = 1,
+    /// <summary>
+    /// An admitted transfer ended early.
+    /// </summary>
+    [pbr::OriginalName("TRANSFER_OUTCOME_SOURCE_CHANGED")] SourceChanged = 2,
+    [pbr::OriginalName("TRANSFER_OUTCOME_CONTEXT_CHANGED")] ContextChanged = 3,
+    [pbr::OriginalName("TRANSFER_OUTCOME_VIEW_REMOVED")] ViewRemoved = 4,
+    [pbr::OriginalName("TRANSFER_OUTCOME_DISCONNECTED")] Disconnected = 5,
+    [pbr::OriginalName("TRANSFER_OUTCOME_CANCELLED")] Cancelled = 6,
+    [pbr::OriginalName("TRANSFER_OUTCOME_STALE")] Stale = 7,
+    [pbr::OriginalName("TRANSFER_OUTCOME_SUPERSEDED")] Superseded = 8,
+    [pbr::OriginalName("TRANSFER_OUTCOME_TIMEOUT")] Timeout = 9,
+    /// <summary>
+    /// detail names the failure.
+    /// </summary>
+    [pbr::OriginalName("TRANSFER_OUTCOME_STORAGE_FAILURE")] StorageFailure = 10,
+    /// <summary>
+    /// detail names the failure.
+    /// </summary>
+    [pbr::OriginalName("TRANSFER_OUTCOME_HTTP_FAILURE")] HttpFailure = 11,
+    /// <summary>
+    /// The request was refused before a transfer began.
+    /// </summary>
+    [pbr::OriginalName("TRANSFER_OUTCOME_DELTA_BASE_UNAVAILABLE")] DeltaBaseUnavailable = 12,
+    [pbr::OriginalName("TRANSFER_OUTCOME_PUBLISH_REFUSED")] PublishRefused = 13,
+    [pbr::OriginalName("TRANSFER_OUTCOME_REPLACEMENT_PENDING")] ReplacementPending = 14,
+    [pbr::OriginalName("TRANSFER_OUTCOME_INITIAL_DISPLAY_PENDING")] InitialDisplayPending = 15,
+    [pbr::OriginalName("TRANSFER_OUTCOME_PUBLISH_COOLDOWN")] PublishCooldown = 16,
+    [pbr::OriginalName("TRANSFER_OUTCOME_SOURCE_LIMIT")] SourceLimit = 17,
+    [pbr::OriginalName("TRANSFER_OUTCOME_TRANSFER_LIMIT")] TransferLimit = 18,
+    [pbr::OriginalName("TRANSFER_OUTCOME_VIEW_UNAVAILABLE")] ViewUnavailable = 19,
+  }
+
+  #endregion
+
   #region Messages
   /// <summary>
   /// Reliable Models carries lifecycle/capabilities only; opaque bodies use HTTP. Poses use Poses.
@@ -4133,8 +4192,8 @@ namespace Dreamsleeve.Protocol.Phantom {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public Complete(Complete other) : this() {
       transferId_ = other.transferId_;
-      accepted_ = other.accepted_;
-      reason_ = other.reason_;
+      outcome_ = other.outcome_;
+      detail_ = other.detail_;
       playerId_ = other.playerId_;
       generation_ = other.generation_;
       retryAfterMs_ = other.retryAfterMs_;
@@ -4161,27 +4220,30 @@ namespace Dreamsleeve.Protocol.Phantom {
       }
     }
 
-    /// <summary>Field number for the "accepted" field.</summary>
-    public const int AcceptedFieldNumber = 2;
-    private bool accepted_;
+    /// <summary>Field number for the "outcome" field.</summary>
+    public const int OutcomeFieldNumber = 9;
+    private global::Dreamsleeve.Protocol.Phantom.TransferOutcome outcome_ = global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Accepted {
-      get { return accepted_; }
+    public global::Dreamsleeve.Protocol.Phantom.TransferOutcome Outcome {
+      get { return outcome_; }
       set {
-        accepted_ = value;
+        outcome_ = value;
       }
     }
 
-    /// <summary>Field number for the "reason" field.</summary>
-    public const int ReasonFieldNumber = 3;
-    private string reason_ = "";
+    /// <summary>Field number for the "detail" field.</summary>
+    public const int DetailFieldNumber = 3;
+    private string detail_ = "";
+    /// <summary>
+    /// Diagnostic text for logs only; never decides behavior.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public string Reason {
-      get { return reason_; }
+    public string Detail {
+      get { return detail_; }
       set {
-        reason_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+        detail_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
       }
     }
 
@@ -4264,8 +4326,8 @@ namespace Dreamsleeve.Protocol.Phantom {
         return true;
       }
       if (TransferId != other.TransferId) return false;
-      if (Accepted != other.Accepted) return false;
-      if (Reason != other.Reason) return false;
+      if (Outcome != other.Outcome) return false;
+      if (Detail != other.Detail) return false;
       if (PlayerId != other.PlayerId) return false;
       if (Generation != other.Generation) return false;
       if (RetryAfterMs != other.RetryAfterMs) return false;
@@ -4279,8 +4341,8 @@ namespace Dreamsleeve.Protocol.Phantom {
     public override int GetHashCode() {
       int hash = 1;
       if (TransferId != 0UL) hash ^= TransferId.GetHashCode();
-      if (Accepted != false) hash ^= Accepted.GetHashCode();
-      if (Reason.Length != 0) hash ^= Reason.GetHashCode();
+      if (Outcome != global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified) hash ^= Outcome.GetHashCode();
+      if (Detail.Length != 0) hash ^= Detail.GetHashCode();
       if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
       if (Generation != 0UL) hash ^= Generation.GetHashCode();
       if (RetryAfterMs != 0) hash ^= RetryAfterMs.GetHashCode();
@@ -4308,13 +4370,9 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(8);
         output.WriteUInt64(TransferId);
       }
-      if (Accepted != false) {
-        output.WriteRawTag(16);
-        output.WriteBool(Accepted);
-      }
-      if (Reason.Length != 0) {
+      if (Detail.Length != 0) {
         output.WriteRawTag(26);
-        output.WriteString(Reason);
+        output.WriteString(Detail);
       }
       if (PlayerId != 0UL) {
         output.WriteRawTag(32);
@@ -4335,6 +4393,10 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (RequestId != 0UL) {
         output.WriteRawTag(64);
         output.WriteUInt64(RequestId);
+      }
+      if (Outcome != global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified) {
+        output.WriteRawTag(72);
+        output.WriteEnum((int) Outcome);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -4350,13 +4412,9 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(8);
         output.WriteUInt64(TransferId);
       }
-      if (Accepted != false) {
-        output.WriteRawTag(16);
-        output.WriteBool(Accepted);
-      }
-      if (Reason.Length != 0) {
+      if (Detail.Length != 0) {
         output.WriteRawTag(26);
-        output.WriteString(Reason);
+        output.WriteString(Detail);
       }
       if (PlayerId != 0UL) {
         output.WriteRawTag(32);
@@ -4378,6 +4436,10 @@ namespace Dreamsleeve.Protocol.Phantom {
         output.WriteRawTag(64);
         output.WriteUInt64(RequestId);
       }
+      if (Outcome != global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified) {
+        output.WriteRawTag(72);
+        output.WriteEnum((int) Outcome);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -4391,11 +4453,11 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (TransferId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TransferId);
       }
-      if (Accepted != false) {
-        size += 1 + 1;
+      if (Outcome != global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Outcome);
       }
-      if (Reason.Length != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeStringSize(Reason);
+      if (Detail.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Detail);
       }
       if (PlayerId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
@@ -4427,11 +4489,11 @@ namespace Dreamsleeve.Protocol.Phantom {
       if (other.TransferId != 0UL) {
         TransferId = other.TransferId;
       }
-      if (other.Accepted != false) {
-        Accepted = other.Accepted;
+      if (other.Outcome != global::Dreamsleeve.Protocol.Phantom.TransferOutcome.Unspecified) {
+        Outcome = other.Outcome;
       }
-      if (other.Reason.Length != 0) {
-        Reason = other.Reason;
+      if (other.Detail.Length != 0) {
+        Detail = other.Detail;
       }
       if (other.PlayerId != 0UL) {
         PlayerId = other.PlayerId;
@@ -4471,12 +4533,8 @@ namespace Dreamsleeve.Protocol.Phantom {
             TransferId = input.ReadUInt64();
             break;
           }
-          case 16: {
-            Accepted = input.ReadBool();
-            break;
-          }
           case 26: {
-            Reason = input.ReadString();
+            Detail = input.ReadString();
             break;
           }
           case 32: {
@@ -4497,6 +4555,10 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 64: {
             RequestId = input.ReadUInt64();
+            break;
+          }
+          case 72: {
+            Outcome = (global::Dreamsleeve.Protocol.Phantom.TransferOutcome) input.ReadEnum();
             break;
           }
         }
@@ -4522,12 +4584,8 @@ namespace Dreamsleeve.Protocol.Phantom {
             TransferId = input.ReadUInt64();
             break;
           }
-          case 16: {
-            Accepted = input.ReadBool();
-            break;
-          }
           case 26: {
-            Reason = input.ReadString();
+            Detail = input.ReadString();
             break;
           }
           case 32: {
@@ -4548,6 +4606,10 @@ namespace Dreamsleeve.Protocol.Phantom {
           }
           case 64: {
             RequestId = input.ReadUInt64();
+            break;
+          }
+          case 72: {
+            Outcome = (global::Dreamsleeve.Protocol.Phantom.TransferOutcome) input.ReadEnum();
             break;
           }
         }

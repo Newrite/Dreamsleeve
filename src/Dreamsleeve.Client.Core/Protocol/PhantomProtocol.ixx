@@ -96,16 +96,104 @@ export namespace Dreamsleeve::Client::Phantom::Wire
     }
   };
 
+  // How a transfer, or the request for one, ended (TransferOutcome in phantom.proto).
+  enum class Outcome
+  {
+    Accepted,
+    // An admitted transfer ended early.
+    SourceChanged,
+    ContextChanged,
+    ViewRemoved,
+    Disconnected,
+    Cancelled,
+    Stale,
+    Superseded,
+    Timeout,
+    StorageFailure,
+    HttpFailure,
+    // The request was refused before a transfer began.
+    DeltaBaseUnavailable,
+    PublishRefused,
+    ReplacementPending,
+    InitialDisplayPending,
+    PublishCooldown,
+    SourceLimit,
+    TransferLimit,
+    ViewUnavailable,
+  };
+
+  // A short name for logs.
+  constexpr std::string_view Name(Outcome outcome)
+  {
+    switch (outcome)
+    {
+      case Outcome::Accepted:
+        return "accepted";
+      case Outcome::SourceChanged:
+        return "source changed";
+      case Outcome::ContextChanged:
+        return "context changed";
+      case Outcome::ViewRemoved:
+        return "view removed";
+      case Outcome::Disconnected:
+        return "disconnected";
+      case Outcome::Cancelled:
+        return "cancelled";
+      case Outcome::Stale:
+        return "stale transfer";
+      case Outcome::Superseded:
+        return "superseded";
+      case Outcome::Timeout:
+        return "transfer timeout";
+      case Outcome::StorageFailure:
+        return "storage failure";
+      case Outcome::HttpFailure:
+        return "HTTP failure";
+      case Outcome::DeltaBaseUnavailable:
+        return "delta base unavailable";
+      case Outcome::PublishRefused:
+        return "publish refused";
+      case Outcome::ReplacementPending:
+        return "replacement pending";
+      case Outcome::InitialDisplayPending:
+        return "initial display pending";
+      case Outcome::PublishCooldown:
+        return "publish cooldown";
+      case Outcome::SourceLimit:
+        return "source limit";
+      case Outcome::TransferLimit:
+        return "transfer limit";
+      case Outcome::ViewUnavailable:
+        return "view unavailable";
+    }
+    return "unknown";
+  }
+
+  // Server-supplied detail longer than this is a malformed packet.
+  constexpr std::size_t MaxDetailBytes = 256;
+
   struct Complete
   {
-    TransferId    transfer;
-    bool          accepted{};
-    std::string   reason;
+    TransferId transfer;
+    Outcome    outcome{};
+    // Diagnostic text for logs only.
+    std::string   detail;
     std::uint64_t player{};
     Generation    generation;
     std::uint32_t retryAfterMs{};
     bool          upload{};
     RequestId     request;
+
+    bool Accepted() const
+    {
+      return outcome == Outcome::Accepted;
+    }
+
+    // The outcome and its detail for a log line.
+    std::string Describe() const
+    {
+      return detail.empty() ? std::string(Name(outcome)) : std::format("{} ({})", Name(outcome), detail);
+    }
   };
 
   struct Remove

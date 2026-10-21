@@ -268,18 +268,24 @@ module PhantomAgent =
         | StorageFailure of PhantomStorageError
         | HttpFailure of PhantomHttpError
 
+    // The outcome the client acts on, a log text and whether a retry may succeed.
     let private completion = function
-        | Accepted -> true, "", false
-        | SourceChanged -> false, "source changed", false
-        | ContextChanged -> false, "context changed", false
-        | ViewRemoved -> false, "view removed", false
-        | Disconnected -> false, "disconnected", false
-        | Cancelled -> false, "cancelled", false
-        | StaleTransfer -> false, "stale transfer", false
-        | Superseded -> false, "superseded", false
-        | TransferTimeout -> false, "transfer timeout", true
-        | StorageFailure error -> false, PhantomStorageError.message error, PhantomStorageError.retryable error
-        | HttpFailure error -> false, PhantomHttpError.message error, PhantomHttpError.retryable error
+        | Accepted -> PhantomOutcome.Accepted, "", false
+        | SourceChanged -> PhantomOutcome.SourceChanged, "source changed", false
+        | ContextChanged -> PhantomOutcome.ContextChanged, "context changed", false
+        | ViewRemoved -> PhantomOutcome.ViewRemoved, "view removed", false
+        | Disconnected -> PhantomOutcome.Disconnected, "disconnected", false
+        | Cancelled -> PhantomOutcome.Cancelled, "cancelled", false
+        | StaleTransfer -> PhantomOutcome.Stale, "stale transfer", false
+        | Superseded -> PhantomOutcome.Superseded, "superseded", false
+        | TransferTimeout -> PhantomOutcome.Timeout, "transfer timeout", true
+        | StorageFailure error ->
+            let outcome =
+                match error with
+                | PhantomStorageError.DeltaBaseUnavailable -> PhantomOutcome.DeltaBaseUnavailable
+                | _ -> PhantomOutcome.StorageFailure
+            outcome, PhantomStorageError.message error, PhantomStorageError.retryable error
+        | HttpFailure error -> PhantomOutcome.HttpFailure, PhantomHttpError.message error, PhantomHttpError.retryable error
 
     // A cleanup boundary observes faults while still trying each ownership release.
     // The result is lifecycle failure, never a successful command rejection.
@@ -339,8 +345,8 @@ module PhantomAgent =
     let private cancel state id outcome =
         match state.Transfers.TryGetValue id with
         | true, transfer ->
-            let accepted, reason, retryable = completion outcome
-            trace (if accepted then "transfer_complete" else "transfer_cancel") transfer.Source transfer.Context transfer.Manifest.Generation.Value transfer.View reason
+            let outcome, reason, retryable = completion outcome
+            trace (if outcome = PhantomOutcome.Accepted then "transfer_complete" else "transfer_cancel") transfer.Source transfer.Context transfer.Manifest.Generation.Value transfer.View reason
             state.Transfers.Remove id |> ignore
             state.Cleanup.Add(releaseTransfer state transfer)
             let completion = {
@@ -357,7 +363,7 @@ module PhantomAgent =
                 match transfer.Phase with
                 | StartingUpload _ | StartingDownload _ -> PhantomTransferId 0UL
                 | StreamingHttp _ -> id
-            emit state transfer.Owner (PhantomResponse.Complete(responseId, accepted, reason, transfer.Request, Some completion))
+            emit state transfer.Owner (PhantomResponse.Complete(responseId, outcome, reason, transfer.Request, Some completion))
         | _ -> ()
 
     let private cancelWhere state outcome (affected: Transfer -> bool) =
@@ -729,7 +735,7 @@ module PhantomAgent =
         let count = state.Transfers.Values |> Seq.filter (fun item -> item.Owner = owner) |> Seq.length
         state.Transfers.Count + state.Cleanup.Count < state.Options.MaxTransfers && count < state.Options.TransfersPerPlayer
 
-    let private refuse state owner player generation upload request retry reason =
+    let private refuse state owner player generation upload request retry outcome reason =
         let completion = {
             Target = {
                 Player = player
@@ -738,12 +744,12 @@ module PhantomAgent =
             Upload = upload
             RetryAfterMs = retry
         }
-        emit state owner (PhantomResponse.Complete(PhantomTransferId 0UL, false, reason, request, Some completion))
+        emit state owner (PhantomResponse.Complete(PhantomTransferId 0UL, outcome, reason, request, Some completion))
         deny()
 
     let private startTransfer state at owner player (manifest: PhantomManifest) character context revision upload request change basis =
         if not (transferAvailable state owner) then
-            refuse state owner player manifest.Generation upload request (transferRetryMs state.Options upload) "transfer limit"
+            refuse state owner player manifest.Generation upload request (transferRetryMs state.Options upload) PhantomOutcome.TransferLimit "transfer limit"
         else
             state.NextTransfer <- state.NextTransfer + 1UL
             let id = PhantomTransferId state.NextTransfer
@@ -785,7 +791,7 @@ module PhantomAgent =
             item.Upload && (match source state item.Source with ValueSome current -> current.Publication.Ready.IsNone | ValueNone -> false)) |> Seq.length
         sources + pending
 
-    // The first rule a publish breaks, with its retry delay; None admits it.
+    // The first rule a publish breaks, with its retry delay and log text; None admits it.
     let private publishRefusal state at id (memberState: Member) (manifest: PhantomManifest) context (change: PhantomDelta option) =
         let publication = memberState.Publication
         let struct (basis, priorBasis) = publication.Bases
@@ -794,19 +800,19 @@ module PhantomAgent =
         let replacing = publication.Ready |> Option.exists (fun ready -> manifest <> ready)
         let existingSource = publication.Ready.IsSome || (state.Transfers.Values |> Seq.exists (fun item -> item.Upload && item.Owner = id))
         if change |> Option.exists (fun d -> basis <> Some d.BaseHash && priorBasis <> Some d.BaseHash) then
-            Some(noRetry, "delta base unavailable")
+            Some(noRetry, PhantomOutcome.DeltaBaseUnavailable, "delta base unavailable")
         elif not memberState.Preferences.Publish || not memberState.Located || context <> memberState.Context || stale then
-            Some(noRetry, "publish admission")
+            Some(noRetry, PhantomOutcome.PublishRefused, "publish admission")
         elif publication.Ready |> Option.exists (fun ready -> publication.Settled <> Some ready.Generation && manifest <> ready) then
-            Some(retryDelayMs, "replacement pending")
+            Some(retryDelayMs, PhantomOutcome.ReplacementPending, "replacement pending")
         elif replacing && awaitingFirstDisplay state at memberState.Player then
-            Some(retryDelayMs, "initial display pending")
+            Some(retryDelayMs, PhantomOutcome.InitialDisplayPending, "initial display pending")
         elif at < publication.NextPublish then
-            Some(int (publication.NextPublish - at), "publish cooldown")
+            Some(int (publication.NextPublish - at), PhantomOutcome.PublishCooldown, "publish cooldown")
         elif not existingSource && sourceCount state >= state.Options.MaxSources then
-            Some(publishRetryMs state.Options, "source limit")
+            Some(publishRetryMs state.Options, PhantomOutcome.SourceLimit, "source limit")
         elif not (transferAvailable state id) then
-            Some(publishRetryMs state.Options, "transfer limit")
+            Some(publishRetryMs state.Options, PhantomOutcome.TransferLimit, "transfer limit")
         else None
 
     // Pending publication owns no visible scene. Supersede only uploads;
@@ -837,7 +843,7 @@ module PhantomAgent =
             | PhantomRequest.Publish(manifest, context, request, change) ->
                 trace "publish_request" memberState.Player context manifest.Generation.Value 0UL ""
                 match publishRefusal state at id memberState manifest context change with
-                | Some(retry, reason) -> refuse state id memberState.Player manifest.Generation true request retry reason
+                | Some(retry, outcome, reason) -> refuse state id memberState.Player manifest.Generation true request retry outcome reason
                 | None -> beginPublish state at id memberState manifest context request change
             | PhantomRequest.Displayed(player, revision, generation) ->
                 match memberState.Selected.TryGetValue player with
@@ -853,7 +859,7 @@ module PhantomAgent =
                     if previous |> Array.forall (fun item -> item.Request <> request) then
                         for transfer in previous do cancel state transfer.Id Superseded
                         startTransfer state at id player selected.Asset current.Character current.Context selected.Revision false request None basis
-                | _ -> refuse state id player generation false request retryDelayMs "view unavailable"
+                | _ -> refuse state id player generation false request retryDelayMs PhantomOutcome.ViewUnavailable "view unavailable"
             | PhantomRequest.Cancel transferId ->
                 match state.Transfers.TryGetValue transferId with
                 | true, transfer when transfer.Owner = id -> cancel state transferId Cancelled

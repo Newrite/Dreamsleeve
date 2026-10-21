@@ -16,6 +16,10 @@ open Google.Protobuf
 open Microsoft.Extensions.Logging.Abstractions
 open Expecto
 
+let private accepted (complete: Dreamsleeve.Protocol.Phantom.Complete) =
+    complete.Outcome = Dreamsleeve.Protocol.Phantom.TransferOutcome.Accepted
+
+
 let private ok = function
     | Ok value -> value
     | Error error -> failwithf "%A" error
@@ -302,7 +306,7 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             wait "HTTP upload completes while ENet keeps pumping." (fun () -> uploading.IsCompleted)
             Expect.equal uploading.Result (Ok ()) "Verified HTTP body."
             wait "Cold upload ready and AOI Offer." (fun () ->
-                alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.Accepted)
+                alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && accepted packet.Complete)
                 && bob.Models |> Seq.exists (fun packet -> not (isNull packet.Offer)))
             let offer = bob.Models |> Seq.pick (fun packet -> if isNull packet.Offer then None else Some packet.Offer)
             Expect.equal offer.PlayerId 1UL "Presence-authorized source."
@@ -359,7 +363,7 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             }
             wait "HTTP download completes." (fun () -> downloading.IsCompleted)
             Expect.equal downloading.Result (Ok ()) "Download succeeds."
-            wait "HTTP completion returns over ENet." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.TransferId = download.TransferId && packet.Complete.Accepted))
+            wait "HTTP completion returns over ENet." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.TransferId = download.TransferId && accepted packet.Complete))
             Expect.equal (received.ToArray()) bytes "Exact compressed-byte round trip."
 
             let pose = Dreamsleeve.Protocol.Phantom.ClientPosePacket(
@@ -392,7 +396,7 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             wait "Fresh Displayed processed before the next publication." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Transfer) && packet.Transfer.RequestId = 203UL))
             let barrier = bob.Models |> Seq.pick (fun packet -> if not (isNull packet.Transfer) && packet.Transfer.RequestId = 203UL then Some packet.Transfer else None)
             asset bob (Dreamsleeve.Protocol.Phantom.ClientAssetPacket(ProtocolVersion = 26u, Cancel = Dreamsleeve.Protocol.Phantom.Cancel(TransferId = barrier.TransferId)))
-            wait "Display barrier transfer canceled and acknowledged." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 203UL && packet.Complete.TransferId = barrier.TransferId && not packet.Complete.Accepted))
+            wait "Display barrier transfer canceled and acknowledged." (fun () -> bob.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 203UL && packet.Complete.TransferId = barrier.TransferId && not (accepted packet.Complete)))
 
             // Bob's response does not order delivery to Alice's separate peer.
             // Check notification existence separately; it is not the fresh-view barrier.
@@ -404,10 +408,10 @@ let tests = testSequenced <| testList "Phantom protocol26 E2E" [
             warm.Generation <- 2UL
             publish 102UL warm
             wait "Warm cached publication ready without any chunks." (fun () ->
-                let rejected = alice.Models |> Seq.tryFind (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 102UL && not packet.Complete.Accepted)
+                let rejected = alice.Models |> Seq.tryFind (fun packet -> not (isNull packet.Complete) && packet.Complete.RequestId = 102UL && not (accepted packet.Complete))
                 match rejected with
-                | Some packet -> failtestf "Warm publication rejected: %s; retry after %d ms" packet.Complete.Reason packet.Complete.RetryAfterMs
-                | None -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && packet.Complete.Accepted && packet.Complete.Generation = 2UL))
+                | Some packet -> failtestf "Warm publication rejected: %s; retry after %d ms" packet.Complete.Detail packet.Complete.RetryAfterMs
+                | None -> alice.Models |> Seq.exists (fun packet -> not (isNull packet.Complete) && accepted packet.Complete && packet.Complete.Generation = 2UL))
 
             let bundle = pose.Clone()
             bundle.Sample.Generation <- 2UL

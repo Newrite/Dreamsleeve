@@ -279,16 +279,16 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 inline constexpr Complete::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        reason_(
+        detail_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         transfer_id_{::uint64_t{0u}},
         player_id_{::uint64_t{0u}},
         generation_{::uint64_t{0u}},
-        accepted_{false},
-        upload_{false},
         retry_after_ms_{0u},
-        request_id_{::uint64_t{0u}} {}
+        upload_{false},
+        request_id_{::uint64_t{0u}},
+        outcome_{static_cast< ::Dreamsleeve::Protocol::Phantom::TransferOutcome >(0)} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR Complete::Complete(::_pbi::ConstantInitialized)
@@ -598,8 +598,8 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 }  // namespace Phantom
 }  // namespace Protocol
 }  // namespace Dreamsleeve
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_phantom_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_phantom_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_phantom_2eproto = nullptr;
 const ::uint32_t
@@ -740,21 +740,21 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_._has_bits_),
         11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.transfer_id_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.accepted_),
-        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.reason_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.outcome_),
+        PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.detail_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.generation_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.retry_after_ms_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.upload_),
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Complete, _impl_.request_id_),
         1,
-        4,
+        7,
         0,
         2,
         3,
-        6,
+        4,
         5,
-        7,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Dreamsleeve::Protocol::Phantom::Remove, _impl_._has_bits_),
         5, // hasbit index offset
@@ -935,52 +935,72 @@ const char descriptor_table_protodef_phantom_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "et\030\002 \001(\0132-.Dreamsleeve.Protocol.Phantom."
     "AssetDescriptor\022\021\n\tplayer_id\030\003 \001(\004\022\016\n\006up"
     "load\030\004 \001(\010\022\022\n\nrequest_id\030\005 \001(\004\022\022\n\nhttp_t"
-    "oken\030\006 \001(\t\"\244\001\n\010Complete\022\023\n\013transfer_id\030\001"
-    " \001(\004\022\020\n\010accepted\030\002 \001(\010\022\016\n\006reason\030\003 \001(\t\022\021"
-    "\n\tplayer_id\030\004 \001(\004\022\022\n\ngeneration\030\005 \001(\004\022\026\n"
-    "\016retry_after_ms\030\006 \001(\r\022\016\n\006upload\030\007 \001(\010\022\022\n"
-    "\nrequest_id\030\010 \001(\004\"2\n\006Remove\022\021\n\tplayer_id"
-    "\030\001 \001(\004\022\025\n\rview_revision\030\002 \001(\004\"\331\002\n\006Policy"
-    "\022\017\n\007enabled\030\001 \001(\010\022\027\n\017raw_asset_bytes\030\002 \001"
-    "(\r\022\036\n\026compressed_asset_bytes\030\003 \001(\r\022\020\n\010ch"
-    "annels\030\004 \001(\r\022\022\n\npose_bytes\030\006 \001(\r\022\035\n\025comp"
-    "ressed_pose_bytes\030\007 \001(\r\022\023\n\013sample_rate\030\010"
-    " \001(\r\022\027\n\017maximum_visible\030\t \001(\r\022\020\n\010distanc"
-    "e\030\n \001(\002\022\034\n\024concurrent_transfers\030\014 \001(\r\022\036\n"
-    "\026model_bytes_per_second\030\r \001(\r\022\035\n\025pose_by"
-    "tes_per_second\030\016 \001(\rJ\004\010\005\020\006J\004\010\013\020\014R\010geomet"
-    "ryR\rwindow_chunks\"\356\003\n\021ServerAssetPacket\022"
-    "\030\n\020protocol_version\030\001 \001(\r\0224\n\005offer\030\002 \001(\013"
-    "2#.Dreamsleeve.Protocol.Phantom.OfferH\000\022"
-    ":\n\010transfer\030\003 \001(\0132&.Dreamsleeve.Protocol"
-    ".Phantom.TransferH\000\022:\n\010complete\030\005 \001(\0132&."
-    "Dreamsleeve.Protocol.Phantom.CompleteH\000\022"
-    "6\n\006remove\030\006 \001(\0132$.Dreamsleeve.Protocol.P"
-    "hantom.RemoveH\000\0226\n\006policy\030\010 \001(\0132$.Dreams"
-    "leeve.Protocol.Phantom.PolicyH\000\0228\n\007settl"
-    "ed\030\t \001(\0132%.Dreamsleeve.Protocol.Phantom."
-    "SettledH\000\022\?\n\013pose_demand\030\n \001(\0132(.Dreamsl"
-    "eeve.Protocol.Phantom.PoseDemandH\000B\t\n\007pa"
-    "yloadJ\004\010\004\020\005J\004\010\007\020\010R\005chunkR\010progress\"t\n\nPo"
-    "seSample\022\022\n\ngeneration\030\001 \001(\004\022\030\n\020context_"
-    "revision\030\002 \001(\004\022\020\n\010sequence\030\003 \001(\004\022\025\n\rsamp"
-    "led_at_us\030\004 \001(\004\022\017\n\007payload\030\005 \001(\014\"\251\001\n\020Cli"
-    "entPosePacket\022\030\n\020protocol_version\030\001 \001(\r\022"
-    "8\n\006sample\030\002 \001(\0132(.Dreamsleeve.Protocol.P"
-    "hantom.PoseSample\022A\n\017previous_sample\030\003 \001"
-    "(\0132(.Dreamsleeve.Protocol.Phantom.PoseSa"
-    "mple\"\323\001\n\020ServerPosePacket\022\030\n\020protocol_ve"
-    "rsion\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\025\n\rview_r"
-    "evision\030\003 \001(\004\0228\n\006sample\030\004 \001(\0132(.Dreamsle"
-    "eve.Protocol.Phantom.PoseSample\022A\n\017previ"
-    "ous_sample\030\005 \001(\0132(.Dreamsleeve.Protocol."
-    "Phantom.PoseSampleb\006proto3"
+    "oken\030\006 \001(\t\"\342\001\n\010Complete\022\023\n\013transfer_id\030\001"
+    " \001(\004\022>\n\007outcome\030\t \001(\0162-.Dreamsleeve.Prot"
+    "ocol.Phantom.TransferOutcome\022\016\n\006detail\030\003"
+    " \001(\t\022\021\n\tplayer_id\030\004 \001(\004\022\022\n\ngeneration\030\005 "
+    "\001(\004\022\026\n\016retry_after_ms\030\006 \001(\r\022\016\n\006upload\030\007 "
+    "\001(\010\022\022\n\nrequest_id\030\010 \001(\004J\004\010\002\020\003R\010accepted\""
+    "2\n\006Remove\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rview_rev"
+    "ision\030\002 \001(\004\"\331\002\n\006Policy\022\017\n\007enabled\030\001 \001(\010\022"
+    "\027\n\017raw_asset_bytes\030\002 \001(\r\022\036\n\026compressed_a"
+    "sset_bytes\030\003 \001(\r\022\020\n\010channels\030\004 \001(\r\022\022\n\npo"
+    "se_bytes\030\006 \001(\r\022\035\n\025compressed_pose_bytes\030"
+    "\007 \001(\r\022\023\n\013sample_rate\030\010 \001(\r\022\027\n\017maximum_vi"
+    "sible\030\t \001(\r\022\020\n\010distance\030\n \001(\002\022\034\n\024concurr"
+    "ent_transfers\030\014 \001(\r\022\036\n\026model_bytes_per_s"
+    "econd\030\r \001(\r\022\035\n\025pose_bytes_per_second\030\016 \001"
+    "(\rJ\004\010\005\020\006J\004\010\013\020\014R\010geometryR\rwindow_chunks\""
+    "\356\003\n\021ServerAssetPacket\022\030\n\020protocol_versio"
+    "n\030\001 \001(\r\0224\n\005offer\030\002 \001(\0132#.Dreamsleeve.Pro"
+    "tocol.Phantom.OfferH\000\022:\n\010transfer\030\003 \001(\0132"
+    "&.Dreamsleeve.Protocol.Phantom.TransferH"
+    "\000\022:\n\010complete\030\005 \001(\0132&.Dreamsleeve.Protoc"
+    "ol.Phantom.CompleteH\000\0226\n\006remove\030\006 \001(\0132$."
+    "Dreamsleeve.Protocol.Phantom.RemoveH\000\0226\n"
+    "\006policy\030\010 \001(\0132$.Dreamsleeve.Protocol.Pha"
+    "ntom.PolicyH\000\0228\n\007settled\030\t \001(\0132%.Dreamsl"
+    "eeve.Protocol.Phantom.SettledH\000\022\?\n\013pose_"
+    "demand\030\n \001(\0132(.Dreamsleeve.Protocol.Phan"
+    "tom.PoseDemandH\000B\t\n\007payloadJ\004\010\004\020\005J\004\010\007\020\010R"
+    "\005chunkR\010progress\"t\n\nPoseSample\022\022\n\ngenera"
+    "tion\030\001 \001(\004\022\030\n\020context_revision\030\002 \001(\004\022\020\n\010"
+    "sequence\030\003 \001(\004\022\025\n\rsampled_at_us\030\004 \001(\004\022\017\n"
+    "\007payload\030\005 \001(\014\"\251\001\n\020ClientPosePacket\022\030\n\020p"
+    "rotocol_version\030\001 \001(\r\0228\n\006sample\030\002 \001(\0132(."
+    "Dreamsleeve.Protocol.Phantom.PoseSample\022"
+    "A\n\017previous_sample\030\003 \001(\0132(.Dreamsleeve.P"
+    "rotocol.Phantom.PoseSample\"\323\001\n\020ServerPos"
+    "ePacket\022\030\n\020protocol_version\030\001 \001(\r\022\021\n\tpla"
+    "yer_id\030\002 \001(\004\022\025\n\rview_revision\030\003 \001(\004\0228\n\006s"
+    "ample\030\004 \001(\0132(.Dreamsleeve.Protocol.Phant"
+    "om.PoseSample\022A\n\017previous_sample\030\005 \001(\0132("
+    ".Dreamsleeve.Protocol.Phantom.PoseSample"
+    "*\350\005\n\017TransferOutcome\022 \n\034TRANSFER_OUTCOME"
+    "_UNSPECIFIED\020\000\022\035\n\031TRANSFER_OUTCOME_ACCEP"
+    "TED\020\001\022#\n\037TRANSFER_OUTCOME_SOURCE_CHANGED"
+    "\020\002\022$\n TRANSFER_OUTCOME_CONTEXT_CHANGED\020\003"
+    "\022!\n\035TRANSFER_OUTCOME_VIEW_REMOVED\020\004\022!\n\035T"
+    "RANSFER_OUTCOME_DISCONNECTED\020\005\022\036\n\032TRANSF"
+    "ER_OUTCOME_CANCELLED\020\006\022\032\n\026TRANSFER_OUTCO"
+    "ME_STALE\020\007\022\037\n\033TRANSFER_OUTCOME_SUPERSEDE"
+    "D\020\010\022\034\n\030TRANSFER_OUTCOME_TIMEOUT\020\t\022$\n TRA"
+    "NSFER_OUTCOME_STORAGE_FAILURE\020\n\022!\n\035TRANS"
+    "FER_OUTCOME_HTTP_FAILURE\020\013\022+\n\'TRANSFER_O"
+    "UTCOME_DELTA_BASE_UNAVAILABLE\020\014\022$\n TRANS"
+    "FER_OUTCOME_PUBLISH_REFUSED\020\r\022(\n$TRANSFE"
+    "R_OUTCOME_REPLACEMENT_PENDING\020\016\022,\n(TRANS"
+    "FER_OUTCOME_INITIAL_DISPLAY_PENDING\020\017\022%\n"
+    "!TRANSFER_OUTCOME_PUBLISH_COOLDOWN\020\020\022!\n\035"
+    "TRANSFER_OUTCOME_SOURCE_LIMIT\020\021\022#\n\037TRANS"
+    "FER_OUTCOME_TRANSFER_LIMIT\020\022\022%\n!TRANSFER"
+    "_OUTCOME_VIEW_UNAVAILABLE\020\023b\006proto3"
 };
 static ::absl::once_flag descriptor_table_phantom_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_phantom_2eproto = {
     false,
     false,
-    3226,
+    4035,
     descriptor_table_protodef_phantom_2eproto,
     "phantom.proto",
     &descriptor_table_phantom_2eproto_once,
@@ -996,6 +1016,12 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_phantom_2eprot
 namespace Dreamsleeve {
 namespace Protocol {
 namespace Phantom {
+const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL TransferOutcome_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_phantom_2eproto);
+  return file_level_enum_descriptors_phantom_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t TransferOutcome_internal_data_[] = {
+    1310720u, 0u, };
 // ===================================================================
 
 class Preferences::_Internal {
@@ -5605,7 +5631,7 @@ PROTOBUF_NDEBUG_INLINE Complete::Impl_::Impl_(
     [[maybe_unused]] const ::Dreamsleeve::Protocol::Phantom::Complete& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        reason_(arena, from.reason_) {}
+        detail_(arena, from.detail_) {}
 
 Complete::Complete(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -5624,9 +5650,9 @@ Complete::Complete(
                offsetof(Impl_, transfer_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, transfer_id_),
-           offsetof(Impl_, request_id_) -
+           offsetof(Impl_, outcome_) -
                offsetof(Impl_, transfer_id_) +
-               sizeof(Impl_::request_id_));
+               sizeof(Impl_::outcome_));
 
   // @@protoc_insertion_point(copy_constructor:Dreamsleeve.Protocol.Phantom.Complete)
 }
@@ -5634,16 +5660,16 @@ PROTOBUF_NDEBUG_INLINE Complete::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        reason_(arena) {}
+        detail_(arena) {}
 
 inline void Complete::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, transfer_id_),
            0,
-           offsetof(Impl_, request_id_) -
+           offsetof(Impl_, outcome_) -
                offsetof(Impl_, transfer_id_) +
-               sizeof(Impl_::request_id_));
+               sizeof(Impl_::outcome_));
 }
 Complete::~Complete() {
   // @@protoc_insertion_point(destructor:Dreamsleeve.Protocol.Phantom.Complete)
@@ -5656,7 +5682,7 @@ inline void Complete::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.reason_.Destroy();
+  this_._impl_.detail_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -5703,14 +5729,14 @@ Complete::GetClassData() const {
   return Complete_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 8, 0, 60, 2>
+const ::_pbi::TcParseTable<4, 8, 0, 60, 2>
 Complete::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(Complete, _impl_._has_bits_),
     0, // no _extensions_
-    8, 56,  // max_field_number, fast_idx_mask
+    9, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967040,  // skipmap
+    4294966786,  // skipmap
     offsetof(decltype(_table_), field_entries),
     8,  // num_field_entries
     0,  // num_aux_entries
@@ -5722,22 +5748,16 @@ Complete::_table_ = {
     ::_pbi::TcParser::GetTable<::Dreamsleeve::Protocol::Phantom::Complete>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // uint64 request_id = 8;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Complete, _impl_.request_id_), 7>(),
-     {64, 7, 0,
-      PROTOBUF_FIELD_OFFSET(Complete, _impl_.request_id_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // uint64 transfer_id = 1;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Complete, _impl_.transfer_id_), 1>(),
      {8, 1, 0,
       PROTOBUF_FIELD_OFFSET(Complete, _impl_.transfer_id_)}},
-    // bool accepted = 2;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(Complete, _impl_.accepted_), 4>(),
-     {16, 4, 0,
-      PROTOBUF_FIELD_OFFSET(Complete, _impl_.accepted_)}},
-    // string reason = 3;
+    {::_pbi::TcParser::MiniParse, {}},
+    // string detail = 3;
     {::_pbi::TcParser::FastUS1,
      {26, 0, 0,
-      PROTOBUF_FIELD_OFFSET(Complete, _impl_.reason_)}},
+      PROTOBUF_FIELD_OFFSET(Complete, _impl_.detail_)}},
     // uint64 player_id = 4;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Complete, _impl_.player_id_), 2>(),
      {32, 2, 0,
@@ -5747,38 +5767,52 @@ Complete::_table_ = {
      {40, 3, 0,
       PROTOBUF_FIELD_OFFSET(Complete, _impl_.generation_)}},
     // uint32 retry_after_ms = 6;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Complete, _impl_.retry_after_ms_), 6>(),
-     {48, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Complete, _impl_.retry_after_ms_), 4>(),
+     {48, 4, 0,
       PROTOBUF_FIELD_OFFSET(Complete, _impl_.retry_after_ms_)}},
     // bool upload = 7;
     {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(Complete, _impl_.upload_), 5>(),
      {56, 5, 0,
       PROTOBUF_FIELD_OFFSET(Complete, _impl_.upload_)}},
+    // uint64 request_id = 8;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Complete, _impl_.request_id_), 6>(),
+     {64, 6, 0,
+      PROTOBUF_FIELD_OFFSET(Complete, _impl_.request_id_)}},
+    // .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Complete, _impl_.outcome_), 7>(),
+     {72, 7, 0,
+      PROTOBUF_FIELD_OFFSET(Complete, _impl_.outcome_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
     // uint64 transfer_id = 1;
     {PROTOBUF_FIELD_OFFSET(Complete, _impl_.transfer_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-    // bool accepted = 2;
-    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.accepted_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-    // string reason = 3;
-    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string detail = 3;
+    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.detail_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // uint64 player_id = 4;
     {PROTOBUF_FIELD_OFFSET(Complete, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // uint64 generation = 5;
     {PROTOBUF_FIELD_OFFSET(Complete, _impl_.generation_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // uint32 retry_after_ms = 6;
-    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.retry_after_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.retry_after_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // bool upload = 7;
     {PROTOBUF_FIELD_OFFSET(Complete, _impl_.upload_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // uint64 request_id = 8;
-    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.request_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.request_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    // .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+    {PROTOBUF_FIELD_OFFSET(Complete, _impl_.outcome_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
   }},
   // no aux_entries
   {{
-    "\45\0\0\6\0\0\0\0\0\0\0\0\0\0\0\0"
+    "\45\0\6\0\0\0\0\0\0\0\0\0\0\0\0\0"
     "Dreamsleeve.Protocol.Phantom.Complete"
-    "reason"
+    "detail"
   }},
 };
 PROTOBUF_NOINLINE void Complete::Clear() {
@@ -5790,12 +5824,12 @@ PROTOBUF_NOINLINE void Complete::Clear() {
 
   cached_has_bits = _impl_._has_bits_[0];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.reason_.ClearNonDefaultToEmpty();
+    _impl_.detail_.ClearNonDefaultToEmpty();
   }
   if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.transfer_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.request_id_) -
-        reinterpret_cast<char*>(&_impl_.transfer_id_)) + sizeof(_impl_.request_id_));
+        reinterpret_cast<char*>(&_impl_.outcome_) -
+        reinterpret_cast<char*>(&_impl_.transfer_id_)) + sizeof(_impl_.outcome_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5829,21 +5863,12 @@ PROTOBUF_NOINLINE void Complete::Clear() {
     }
   }
 
-  // bool accepted = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-    if (this_._internal_accepted() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteBoolToArray(
-          2, this_._internal_accepted(), target);
-    }
-  }
-
-  // string reason = 3;
+  // string detail = 3;
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!this_._internal_reason().empty()) {
-      const ::std::string& _s = this_._internal_reason();
+    if (!this_._internal_detail().empty()) {
+      const ::std::string& _s = this_._internal_detail();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Phantom.Complete.reason");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Dreamsleeve.Protocol.Phantom.Complete.detail");
       target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
@@ -5867,7 +5892,7 @@ PROTOBUF_NOINLINE void Complete::Clear() {
   }
 
   // uint32 retry_after_ms = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_retry_after_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5885,11 +5910,20 @@ PROTOBUF_NOINLINE void Complete::Clear() {
   }
 
   // uint64 request_id = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           8, this_._internal_request_id(), target);
+    }
+  }
+
+  // .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_outcome() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          9, this_._internal_outcome(), target);
     }
   }
 
@@ -5919,11 +5953,11 @@ PROTOBUF_NOINLINE void Complete::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // string reason = 3;
+    // string detail = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!this_._internal_reason().empty()) {
+      if (!this_._internal_detail().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_reason());
+                                        this_._internal_detail());
       }
     }
     // uint64 transfer_id = 1;
@@ -5947,10 +5981,11 @@ PROTOBUF_NOINLINE void Complete::Clear() {
             this_._internal_generation());
       }
     }
-    // bool accepted = 2;
+    // uint32 retry_after_ms = 6;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_accepted() != 0) {
-        total_size += 2;
+      if (this_._internal_retry_after_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_retry_after_ms());
       }
     }
     // bool upload = 7;
@@ -5959,18 +5994,18 @@ PROTOBUF_NOINLINE void Complete::Clear() {
         total_size += 2;
       }
     }
-    // uint32 retry_after_ms = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_retry_after_ms() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_retry_after_ms());
-      }
-    }
     // uint64 request_id = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
+      }
+    }
+    // .Dreamsleeve.Protocol.Phantom.TransferOutcome outcome = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_outcome() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
       }
     }
   }
@@ -5994,11 +6029,11 @@ void Complete::MergeImpl(::google::protobuf::MessageLite& to_msg,
   cached_has_bits = from._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!from._internal_reason().empty()) {
-        _this->_internal_set_reason(from._internal_reason());
+      if (!from._internal_detail().empty()) {
+        _this->_internal_set_detail(from._internal_detail());
       } else {
-        if (_this->_impl_.reason_.IsDefault()) {
-          _this->_internal_set_reason("");
+        if (_this->_impl_.detail_.IsDefault()) {
+          _this->_internal_set_detail("");
         }
       }
     }
@@ -6018,8 +6053,8 @@ void Complete::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_accepted() != 0) {
-        _this->_impl_.accepted_ = from._impl_.accepted_;
+      if (from._internal_retry_after_ms() != 0) {
+        _this->_impl_.retry_after_ms_ = from._impl_.retry_after_ms_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
@@ -6028,13 +6063,13 @@ void Complete::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_retry_after_ms() != 0) {
-        _this->_impl_.retry_after_ms_ = from._impl_.retry_after_ms_;
+      if (from._internal_request_id() != 0) {
+        _this->_impl_.request_id_ = from._impl_.request_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_request_id() != 0) {
-        _this->_impl_.request_id_ = from._impl_.request_id_;
+      if (from._internal_outcome() != 0) {
+        _this->_impl_.outcome_ = from._impl_.outcome_;
       }
     }
   }
@@ -6057,10 +6092,10 @@ void Complete::InternalSwap(Complete* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.detail_, &other->_impl_.detail_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(Complete, _impl_.request_id_)
-      + sizeof(Complete::_impl_.request_id_)
+      PROTOBUF_FIELD_OFFSET(Complete, _impl_.outcome_)
+      + sizeof(Complete::_impl_.outcome_)
       - PROTOBUF_FIELD_OFFSET(Complete, _impl_.transfer_id_)>(
           reinterpret_cast<char*>(&_impl_.transfer_id_),
           reinterpret_cast<char*>(&other->_impl_.transfer_id_));

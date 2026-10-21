@@ -179,7 +179,13 @@ Storage фиксирует содержимое и PhantomAgent фиксируе
 до завершения; последний borrower закрытой lease освобождает semaphore.
 
 Типы `PhantomStorageError` и `PhantomHttpError` описывают ожидаемые исходы.
-Статические wire reason, ограничение256 UTF-8 байт, TransferId=0 до выдачи
+`Complete` несёт исход передачи `TransferOutcome` (`PhantomOutcome` на сервере,
+`Wire::Outcome` на клиенте); ошибки хранилища и HTTP приходят как
+`STORAGE_FAILURE`/`HTTP_FAILURE`, отсутствие базы дельты — отдельным исходом.
+Текст `detail` (до 256 UTF-8 байт) только для журнала. Неизвестный или
+неуказанный исход клиент отвергает как повреждённый пакет. Своя ошибка
+WinHTTP-передачи на клиенте — `HttpError` с причиной `HttpFailure` и кодом;
+она завершает передачу исходом `HttpFailure`. TransferId=0 до выдачи
 capability и прежние retry_after_ms сохраняются. Решение retry больше не
 зависит от текста исключения: hash mismatch, неверное смещение/размер части
 и read bounds терминальны; прежние cache/delta hash mismatch остаются

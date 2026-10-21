@@ -244,30 +244,34 @@ namespace
         {
           policy       = true;
           windowChunks = 0;
-          std::cout << "PHANTOM_POLICY modelBytesPerSecond=" << value.policy().model_bytes_per_second()
-                    << " windowChunks=" << windowChunks << std::endl;
+          std::cout << "PHANTOM_POLICY modelBytesPerSecond=" << value.policy().model_bytes_per_second() << " windowChunks=" << windowChunks
+                    << std::endl;
         }
         if (value.has_transfer())
         {
           if (value.transfer().has_delta())
           {
-            if (value.transfer().upload()) ++deltaUploads;
-            else ++deltaDownloads;
+            if (value.transfer().upload())
+              ++deltaUploads;
+            else
+              ++deltaDownloads;
           }
           REQUIRE(requests.contains(value.transfer().request_id()));
           REQUIRE(value.transfer().player_id() == 1);
           if (value.transfer().upload())
           {
-            uploadId   = value.transfer().transfer_id();
-            uploadSent = value.transfer().has_delta() ? value.transfer().delta().compressed_bytes() : value.transfer().asset().compressed_bytes();
+            uploadId = value.transfer().transfer_id();
+            uploadSent =
+              value.transfer().has_delta() ? value.transfer().delta().compressed_bytes() : value.transfer().asset().compressed_bytes();
             uploadAcknowledged = 0;
           }
-          else if (!firstChunkAt) firstChunkAt = NowUs();
+          else if (!firstChunkAt)
+            firstChunkAt = NowUs();
         }
         if (value.has_complete())
         {
           REQUIRE(requests.contains(value.complete().request_id()));
-          if (value.complete().accepted() && value.complete().upload())
+          if (value.complete().outcome() == Models::TRANSFER_OUTCOME_ACCEPTED && value.complete().upload())
           {
             readyGeneration  = value.complete().generation();
             uploadAcceptedAt = NowUs();
@@ -475,7 +479,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
     if (Loaded(bob, 1) && !bob.downloadedBytes)
     {
       bob.downloadedBytes = alice.uploadSent;
-      bob.lastChunkAt = NowUs();
+      bob.lastChunkAt     = NowUs();
     }
     return alice.readyGeneration == 1 && Loaded(bob, 1) && bob.chatReceived;
   });
@@ -527,8 +531,8 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
 
   const auto oldView    = bob.offerRevision;
   const auto downloaded = bob.downloadedBytes;
-  auto       settings = bob.exchange.Settings();
-  settings.receive    = false;
+  auto       settings   = bob.exchange.Settings();
+  settings.receive      = false;
   bob.exchange.Configure(settings);
   Await(alice, bob, "receive=false authority revocation", [&] { return bob.removeRevision > oldView; });
   CHECK_FALSE(bob.exchange.Find(1));
@@ -567,17 +571,17 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
   settings.downloadBytesPerSecond = 65536;
   bob.exchange.Configure(settings);
   const auto beforeCancel = bob.exchange.Stats().modelBytes;
-  auto changed = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 65));
+  auto       changed      = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 65));
   REQUIRE(changed);
   REQUIRE(alice.exchange.Submit(10, P::Generation{3}, std::move(*changed)));
   Await(alice, bob, "HTTP body in progress", [&] { return bob.exchange.Stats().modelBytes > beforeCancel; });
   CHECK_FALSE(Loaded(bob, 3));
   const auto canceledView = bob.offerRevision;
-  settings.receive = false;
+  settings.receive        = false;
   bob.exchange.Configure(settings);
   Await(alice, bob, "active HTTP cancellation", [&] { return bob.removeRevision > canceledView; });
   CHECK_FALSE(bob.exchange.Find(1));
-  settings.receive = true;
+  settings.receive                = true;
   settings.downloadBytesPerSecond = 5 * 1024 * 1024;
   bob.exchange.Configure(settings);
   Await(alice, bob, "HTTP reentry after canceled callbacks", [&] { return Loaded(bob, 3); });
@@ -586,13 +590,14 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
 
   const auto deltaUp   = alice.deltaUploads;
   const auto deltaDown = bob.deltaDownloads;
-  auto fourth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 66));
+  auto       fourth    = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 66));
   REQUIRE(fourth);
   REQUIRE(alice.exchange.Submit(10, P::Generation{4}, std::move(*fourth)));
   Await(alice, bob, "native delta upload/server reconstruction/download", [&] { return alice.readyGeneration == 4 && Loaded(bob, 4); });
   CHECK(alice.deltaUploads > deltaUp);
   CHECK(bob.deltaDownloads > deltaDown);
-  std::cout << "PHANTOM_DELTA_PASS upload=" << alice.deltaUploads << " download=" << bob.deltaDownloads << " bodyBytes=" << alice.uploadSent << '\n';
+  std::cout << "PHANTOM_DELTA_PASS upload=" << alice.deltaUploads << " download=" << bob.deltaDownloads << " bodyBytes=" << alice.uploadSent
+            << '\n';
   bob.exchange.Displayed({1, bob.offerRevision, P::Generation{4}});
   Await(alice, bob, "fourth generation settled", [&] { return alice.exchange.CanReplace(); });
   settings.downloadBytesPerSecond = 65536;
@@ -610,7 +615,7 @@ TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environ
 
   const auto contextDeltaUp   = alice.deltaUploads;
   const auto contextDeltaDown = bob.deltaDownloads;
-  auto fifth = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 68));
+  auto       fifth            = P::ValidatedAsset::Parse(PhantomFixture::Model(NodeCount, 68));
   REQUIRE(fifth);
   REQUIRE(alice.exchange.Submit(12, P::Generation{6}, std::move(*fifth)));
   Await(alice, bob, "context transition delta upload and download", [&] { return alice.readyGeneration == 6 && Loaded(bob, 6); });
@@ -839,9 +844,11 @@ namespace
           offered.try_emplace(value.offer().player_id(), Clock::now());
         }
         if (value.has_remove()) ++removes;
-        if (value.has_complete() && value.complete().accepted() && value.complete().upload())
+        if (value.has_complete() && value.complete().outcome() == Models::TRANSFER_OUTCOME_ACCEPTED && value.complete().upload())
           readyGeneration = value.complete().generation();
-        if (value.has_complete() && !value.complete().accepted() && !value.complete().upload() && value.complete().transfer_id())
+        if (
+          value.has_complete() && value.complete().outcome() != Models::TRANSFER_OUTCOME_ACCEPTED && !value.complete().upload() &&
+          value.complete().transfer_id())
           ++abandonedDownloads;
         REQUIRE(stream.ReceiveAsset(bytes));
       }

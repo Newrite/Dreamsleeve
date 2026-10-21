@@ -215,7 +215,7 @@ public:
           plan->second.state = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
         else
         {
-          link.exchange.Unavailable(link.exchange.Epoch(), plan->second.offer, "Загрузка фантома отклонена: " + value.reason);
+          link.exchange.Unavailable(link.exchange.Epoch(), plan->second.offer, "Загрузка фантома отклонена: " + value.Describe());
           plans.erase(plan);
         }
         return;
@@ -224,23 +224,23 @@ public:
       const auto found = downloads.find(value.transfer.value);
       if (found == downloads.end() || found->second.request != value.request) return;
       // The receipt may come before the last bytes: it waits for them.
-      if (value.accepted && found->second.bytes->size() != found->second.BodyBytes())
+      if (value.Accepted() && found->second.bytes->size() != found->second.BodyBytes())
       {
         found->second.receipt = value;
         return;
       }
 
-      if (!value.accepted) link.http.Cancel(value.transfer);
+      if (!value.Accepted()) link.http.Cancel(value.transfer);
       auto download = std::move(found->second);
       downloads.erase(found);
-      if (!value.accepted && value.retryAfterMs)
+      if (!value.Accepted() && value.retryAfterMs)
       {
         const auto plan = plans.find(download.offer.player);
         if (plan != plans.end()) plan->second.state = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
         return;
       }
       plans.erase(download.offer.player);
-      if (!value.accepted || download.bytes->size() != download.BodyBytes())
+      if (!value.Accepted() || download.bytes->size() != download.BodyBytes())
       {
         link.exchange.Unavailable(link.exchange.Epoch(), download.offer, "Передача модели фантома не завершена");
         return;

@@ -30,10 +30,37 @@ message ClientAssetPacket {
 }
 message Offer { uint64 player_id = 1; uint64 view_revision = 2; AssetDescriptor asset = 3; }
 message Transfer { AssetDelta delta = 7; uint64 transfer_id = 1; AssetDescriptor asset = 2; uint64 player_id = 3; bool upload = 4; uint64 request_id = 5; string http_token = 6; }
+// How a transfer, or the request for one, ended.
+enum TransferOutcome {
+  TRANSFER_OUTCOME_UNSPECIFIED = 0;
+  TRANSFER_OUTCOME_ACCEPTED = 1;
+  // An admitted transfer ended early.
+  TRANSFER_OUTCOME_SOURCE_CHANGED = 2;
+  TRANSFER_OUTCOME_CONTEXT_CHANGED = 3;
+  TRANSFER_OUTCOME_VIEW_REMOVED = 4;
+  TRANSFER_OUTCOME_DISCONNECTED = 5;
+  TRANSFER_OUTCOME_CANCELLED = 6;
+  TRANSFER_OUTCOME_STALE = 7;
+  TRANSFER_OUTCOME_SUPERSEDED = 8;
+  TRANSFER_OUTCOME_TIMEOUT = 9;
+  TRANSFER_OUTCOME_STORAGE_FAILURE = 10; // detail names the failure.
+  TRANSFER_OUTCOME_HTTP_FAILURE = 11; // detail names the failure.
+  // The request was refused before a transfer began.
+  TRANSFER_OUTCOME_DELTA_BASE_UNAVAILABLE = 12; // Publish the full model instead.
+  TRANSFER_OUTCOME_PUBLISH_REFUSED = 13;
+  TRANSFER_OUTCOME_REPLACEMENT_PENDING = 14;
+  TRANSFER_OUTCOME_INITIAL_DISPLAY_PENDING = 15;
+  TRANSFER_OUTCOME_PUBLISH_COOLDOWN = 16;
+  TRANSFER_OUTCOME_SOURCE_LIMIT = 17;
+  TRANSFER_OUTCOME_TRANSFER_LIMIT = 18;
+  TRANSFER_OUTCOME_VIEW_UNAVAILABLE = 19;
+}
 message Complete {
+  reserved 2; reserved "accepted";
   uint64 transfer_id = 1;
-  bool accepted = 2;
-  string reason = 3;
+  TransferOutcome outcome = 9;
+  // Diagnostic text for logs only; never decides behavior.
+  string detail = 3;
   // Required when admission fails before a transfer ID has been assigned.
   uint64 player_id = 4;
   uint64 generation = 5;

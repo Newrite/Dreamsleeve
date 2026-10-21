@@ -12,6 +12,10 @@ open Dreamsleeve.Protocol.Chat
 open Expecto
 open AgentTests
 
+let private accepted (complete: Dreamsleeve.Protocol.Phantom.Complete) =
+    complete.Outcome = Dreamsleeve.Protocol.Phantom.TransferOutcome.Accepted
+
+
 let private tick () =
     let now = System.Diagnostics.Stopwatch.GetTimestamp()
     ServerRuntimeMessage.Tick {
@@ -453,7 +457,7 @@ let tests = testList "ServerRuntime" [
                 if id = alice && not (isNull packet.Transfer) then
                     equal 1UL packet.Transfer.PlayerId
                 if id = alice && not (isNull packet.Complete) then
-                    check packet.Complete.Accepted "Own upload becomes ready."
+                    check (accepted packet.Complete) "Own upload becomes ready."
                     completed <- true
                 if id = bob && not (isNull packet.Offer) then
                     equal 1UL packet.Offer.PlayerId

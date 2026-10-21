@@ -127,8 +127,8 @@ export namespace Dreamsleeve::Client::Phantom
           Receive(
             Wire::Complete{
                 transfer.transfer,
-                false,
-                *done.error,
+                Wire::Outcome::HttpFailure,
+                done.error->Describe(),
                 transfer.player,
                 transfer.asset.generation,
                 TransferRetryMs,

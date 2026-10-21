@@ -4,6 +4,8 @@ open System
 open Google.Protobuf
 open Dreamsleeve.Server.Domain
 
+type private WireOutcome = Dreamsleeve.Protocol.Phantom.TransferOutcome
+
 [<RequireQualifiedAccess>]
 module PhantomCodec =
 
@@ -112,6 +114,28 @@ module PhantomCodec =
                 Hash = ByteString.CopyFrom(AssetHash.bytes d.Hash),
                 CompressedBytes = uint32 d.CompressedBytes)
 
+    let private wireOutcome outcome =
+        match outcome with
+        | PhantomOutcome.Accepted -> WireOutcome.Accepted
+        | PhantomOutcome.SourceChanged -> WireOutcome.SourceChanged
+        | PhantomOutcome.ContextChanged -> WireOutcome.ContextChanged
+        | PhantomOutcome.ViewRemoved -> WireOutcome.ViewRemoved
+        | PhantomOutcome.Disconnected -> WireOutcome.Disconnected
+        | PhantomOutcome.Cancelled -> WireOutcome.Cancelled
+        | PhantomOutcome.Stale -> WireOutcome.Stale
+        | PhantomOutcome.Superseded -> WireOutcome.Superseded
+        | PhantomOutcome.Timeout -> WireOutcome.Timeout
+        | PhantomOutcome.StorageFailure -> WireOutcome.StorageFailure
+        | PhantomOutcome.HttpFailure -> WireOutcome.HttpFailure
+        | PhantomOutcome.DeltaBaseUnavailable -> WireOutcome.DeltaBaseUnavailable
+        | PhantomOutcome.PublishRefused -> WireOutcome.PublishRefused
+        | PhantomOutcome.ReplacementPending -> WireOutcome.ReplacementPending
+        | PhantomOutcome.InitialDisplayPending -> WireOutcome.InitialDisplayPending
+        | PhantomOutcome.PublishCooldown -> WireOutcome.PublishCooldown
+        | PhantomOutcome.SourceLimit -> WireOutcome.SourceLimit
+        | PhantomOutcome.TransferLimit -> WireOutcome.TransferLimit
+        | PhantomOutcome.ViewUnavailable -> WireOutcome.ViewUnavailable
+
     let encode response =
         let packet = Dreamsleeve.Protocol.Phantom.ServerAssetPacket(ProtocolVersion = ProtocolCodec.Version)
         match response with
@@ -131,12 +155,12 @@ module PhantomCodec =
                     RequestId = request.Value,
                     HttpToken = token,
                     Delta = deltaDescriptor change)
-        | PhantomResponse.Complete(id, accepted, reason, request, target) ->
+        | PhantomResponse.Complete(id, outcome, detail, request, target) ->
             let value =
                 Dreamsleeve.Protocol.Phantom.Complete(
                     TransferId = id.Value,
-                    Accepted = accepted,
-                    Reason = reason,
+                    Outcome = wireOutcome outcome,
+                    Detail = detail,
                     RequestId = request.Value)
             target |> Option.iter (fun completion ->
                 value.PlayerId <- PlayerId.value completion.Target.Player

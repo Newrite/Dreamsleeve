@@ -79,6 +79,54 @@ namespace Dreamsleeve::Client::Phantom::Wire
       out->set_payload(pose.payload.data(), pose.payload.size());
     }
 
+    // Unspecified and unknown outcomes are malformed.
+    std::optional<Outcome> Get(Proto::TransferOutcome value)
+    {
+      switch (value)
+      {
+        case Proto::TRANSFER_OUTCOME_ACCEPTED:
+          return Outcome::Accepted;
+        case Proto::TRANSFER_OUTCOME_SOURCE_CHANGED:
+          return Outcome::SourceChanged;
+        case Proto::TRANSFER_OUTCOME_CONTEXT_CHANGED:
+          return Outcome::ContextChanged;
+        case Proto::TRANSFER_OUTCOME_VIEW_REMOVED:
+          return Outcome::ViewRemoved;
+        case Proto::TRANSFER_OUTCOME_DISCONNECTED:
+          return Outcome::Disconnected;
+        case Proto::TRANSFER_OUTCOME_CANCELLED:
+          return Outcome::Cancelled;
+        case Proto::TRANSFER_OUTCOME_STALE:
+          return Outcome::Stale;
+        case Proto::TRANSFER_OUTCOME_SUPERSEDED:
+          return Outcome::Superseded;
+        case Proto::TRANSFER_OUTCOME_TIMEOUT:
+          return Outcome::Timeout;
+        case Proto::TRANSFER_OUTCOME_STORAGE_FAILURE:
+          return Outcome::StorageFailure;
+        case Proto::TRANSFER_OUTCOME_HTTP_FAILURE:
+          return Outcome::HttpFailure;
+        case Proto::TRANSFER_OUTCOME_DELTA_BASE_UNAVAILABLE:
+          return Outcome::DeltaBaseUnavailable;
+        case Proto::TRANSFER_OUTCOME_PUBLISH_REFUSED:
+          return Outcome::PublishRefused;
+        case Proto::TRANSFER_OUTCOME_REPLACEMENT_PENDING:
+          return Outcome::ReplacementPending;
+        case Proto::TRANSFER_OUTCOME_INITIAL_DISPLAY_PENDING:
+          return Outcome::InitialDisplayPending;
+        case Proto::TRANSFER_OUTCOME_PUBLISH_COOLDOWN:
+          return Outcome::PublishCooldown;
+        case Proto::TRANSFER_OUTCOME_SOURCE_LIMIT:
+          return Outcome::SourceLimit;
+        case Proto::TRANSFER_OUTCOME_TRANSFER_LIMIT:
+          return Outcome::TransferLimit;
+        case Proto::TRANSFER_OUTCOME_VIEW_UNAVAILABLE:
+          return Outcome::ViewUnavailable;
+        default:
+          return std::nullopt;
+      }
+    }
+
   }
 
   Result<Bytes> Encode(const Request& request)
@@ -186,16 +234,17 @@ namespace Dreamsleeve::Client::Phantom::Wire
         };
       }
       case Proto::ServerAssetPacket::kComplete: {
-        const auto& v = packet.complete();
+        const auto& v       = packet.complete();
+        const auto  outcome = Get(v.outcome());
         if (
-          !v.request_id() || (!v.transfer_id() && (!v.player_id() || !v.generation())) || v.reason().size() > 256 ||
+          !outcome || !v.request_id() || (!v.transfer_id() && (!v.player_id() || !v.generation())) || v.detail().size() > MaxDetailBytes ||
           v.retry_after_ms() > 60000)
           return std::unexpected(Invalid("complete"));
         return Response{
             Complete{
                      TransferId{v.transfer_id()},
-                     v.accepted(),
-                     v.reason(),
+                     *outcome,
+                     v.detail(),
                      v.player_id(),
                      Generation{v.generation()},
                      v.retry_after_ms(),

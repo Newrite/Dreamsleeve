@@ -209,17 +209,18 @@ public:
       {
         // A commit can arrive between HTTP progress polls. Count its final
         // persisted bytes before replacing Upload with Ready.
-        if (value.accepted)
+        if (value.Accepted())
           link.exchange.Count(upload->transfer.BodyBytes() - upload->progress, 0);
         else
           link.http.Cancel(value.transfer);
       }
-      if (value.accepted)
+      if (value.Accepted())
       {
         local->state        = Ready{};
         committedGeneration = local->value.generation;
       }
-      else if (!local->fullOnly && local->value.asset->delta && (value.retryAfterMs == 0 || value.reason == "delta base unavailable"))
+      else if (
+        !local->fullOnly && local->value.asset->delta && (value.retryAfterMs == 0 || value.outcome == Wire::Outcome::DeltaBaseUnavailable))
       {
         local->fullOnly = true;
         local->state    = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
@@ -227,13 +228,13 @@ public:
       else if (value.retryAfterMs)
       {
         local->state = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
-        link.exchange.Failed("Сервер отклонил модель фантома: " + value.reason);
+        link.exchange.Failed("Сервер отклонил модель фантома: " + value.Describe());
       }
       else
       {
         local->state     = Rejected{};
         lastPoseSequence = 0;
-        link.exchange.PublicationRejected(local->value.generation, "Сервер отклонил модель фантома: " + value.reason);
+        link.exchange.PublicationRejected(local->value.generation, "Сервер отклонил модель фантома: " + value.Describe());
       }
       return true;
     }
