@@ -105,58 +105,65 @@ private:
       Settled,
       Rejected
     };
-    PublicationPhase   phase{PublicationPhase::Preparing};
+
+    // The own phantom: the generation being prepared or published (local) and
+    // the committed one it replaces (previous), with their assets, the poses
+    // waiting for the worker and the memory both reserve.
+    struct Own
+    {
+      PublicationPhase                                     phase{PublicationPhase::Preparing};
+      std::uint64_t                                        localRevision{1};
+      std::optional<Generation>                            localGeneration, previousGeneration;
+      std::optional<std::pair<Generation, ValidatedAsset>> capture;
+      std::shared_ptr<const Snapshot>                      snapshot, previousSnapshot;
+      std::optional<Publication>                           publication;
+      std::shared_ptr<const PreparedAsset>                 localAsset, previousAsset;
+      std::optional<Wire::Pose>                            encoded;
+      std::uint64_t                                        localReservation{}, previousReservation{};
+
+      // A new revision without a generation. A retained compression basis
+      // keeps its memory but has no generation or pose authority.
+      void Clear(bool retainBasis = false)
+      {
+        auto       basis = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
+        const auto basisReservation = basis ? (basis == localAsset ? localReservation : previousReservation) : 0;
+
+        ++localRevision;
+        localGeneration.reset();
+        previousGeneration.reset();
+        phase = PublicationPhase::Preparing;
+        previousSnapshot.reset();
+        capture.reset();
+        snapshot.reset();
+        publication.reset();
+        localAsset.reset();
+        previousAsset       = std::move(basis);
+        previousReservation = basisReservation;
+        encoded.reset();
+        localReservation = 0;
+      }
+    };
+
     mutable std::mutex mutex;
     ViewSettings       settings;
-
-    std::uint64_t                     epoch{1};
+    std::uint64_t      epoch{1};
+    // The movement context the own phantom is captured in, and whether it can publish there.
     std::uint64_t                     context{};
-    std::uint64_t                     localRevision{1};
-    std::uint64_t                     poseRevision{1};
-    std::optional<Generation>         localGeneration, previousGeneration;
     std::optional<Domain::LocationId> space;
-    std::uint64_t                     previousReservation{};
-    std::shared_ptr<const Snapshot>   previousSnapshot;
-    std::vector<Wire::Displayed>      displayed;
     bool                              available{}, changed{true};
     std::optional<Wire::PoseDemand>   poseDemand;
+    std::uint64_t                     poseRevision{1};
     std::uint32_t                     serverSampleRate{50};
-
-    std::optional<std::pair<Generation, ValidatedAsset>> capture;
-    std::shared_ptr<const Snapshot>                      snapshot;
-    std::optional<Publication>                           publication;
-    std::shared_ptr<const PreparedAsset>                 localAsset, previousAsset;
-    std::optional<Wire::Pose>                            encoded;
+    Own                               own;
 
     std::unordered_map<std::uint64_t, Remote> remotes;
-    Metrics                                   metrics;
-    std::uint64_t                             localReservation{};
+    // Remote scenes shown since the last output, for the server's display acknowledgement.
+    std::vector<Wire::Displayed> displayed;
+    Metrics                      metrics;
 
     bool DemandAllowsPoses() const
     {
       return !poseDemand || poseDemand->context != context || poseDemand->required;
-    }
-
-    void ClearPublication(bool retainBasis = false)
-    {
-      // A compression basis has no generation/pose authority in the next context.
-      auto       basis            = retainBasis ? (phase == PublicationPhase::Settled && localAsset ? localAsset : previousAsset) : nullptr;
-      const auto basisReservation = basis ? (basis == localAsset ? localReservation : previousReservation) : 0;
-
-      ++localRevision;
-      localGeneration.reset();
-      previousGeneration.reset();
-      phase               = PublicationPhase::Preparing;
-      previousReservation = 0;
-      previousSnapshot.reset();
-      capture.reset();
-      snapshot.reset();
-      publication.reset();
-      localAsset.reset();
-      previousAsset       = std::move(basis);
-      previousReservation = basisReservation;
-      encoded.reset();
-      localReservation = 0;
     }
 
     // Decode and model capacity and the compressed transfer, with the poses.
@@ -181,7 +188,7 @@ private:
 
     std::uint64_t Reserved(std::uint64_t except = 0) const
     {
-      std::uint64_t bytes = localReservation + previousReservation;
+      std::uint64_t bytes = own.localReservation + own.previousReservation;
       for (const auto& [id, remote] : remotes)
         if (id != except) bytes += Reservation(remote);
       return bytes;
@@ -206,8 +213,8 @@ public:
     void Configure(ViewSettings value)
     {
       std::lock_guard lock(mutex);
-      if (settings.publish != value.publish || (value.memoryBytes < settings.memoryBytes && localReservation > value.memoryBytes))
-        ClearPublication();
+      if (settings.publish != value.publish || (value.memoryBytes < settings.memoryBytes && own.localReservation > value.memoryBytes))
+        own.Clear();
       settings           = value;
       changed            = true;
       metrics.sampleRate = std::min(settings.sampleRate, serverSampleRate);
@@ -239,9 +246,9 @@ public:
       poseDemand = value;
       if (!value.required)
       {
-        snapshot.reset();
-        previousSnapshot.reset();
-        encoded.reset();
+        own.snapshot.reset();
+        own.previousSnapshot.reset();
+        own.encoded.reset();
       }
       return true;
     }
@@ -262,7 +269,7 @@ public:
     void Context(std::uint64_t value, bool ready, std::optional<Domain::LocationId> location = {})
     {
       std::lock_guard lock(mutex);
-      if (value != context) ClearPublication(true);
+      if (value != context) own.Clear(true);
       space = std::move(location);
       if (value != context || available != ready)
       {
@@ -270,9 +277,9 @@ public:
         if (poseDemand && poseDemand->context < value) poseDemand.reset();
         context   = value;
         available = ready;
-        snapshot.reset();
-        previousSnapshot.reset();
-        encoded.reset();
+        own.snapshot.reset();
+        own.previousSnapshot.reset();
+        own.encoded.reset();
         for (auto& [id, remote] : remotes)
         {
           remote.playback.Clear();
@@ -292,7 +299,7 @@ public:
       context   = 0;
       available = false;
       changed   = true;
-      ClearPublication();
+      own.Clear();
       remotes.clear();
       displayed.clear();
       metrics = {};
@@ -303,7 +310,7 @@ public:
     void RestartCapture()
     {
       std::lock_guard lock(mutex);
-      ClearPublication(true);
+      own.Clear(true);
       changed = true;
     }
 
@@ -312,26 +319,26 @@ public:
       std::lock_guard lock(mutex);
       const auto      bytes = 4 * asset.MemoryBytes() + LocalPoseBytes();
       if (
-        expectedContext != context || !available || !settings.publish || capture ||
-        (localGeneration && phase != PublicationPhase::Settled && phase != PublicationPhase::Rejected) ||
-        bytes + Reserved() - (phase == PublicationPhase::Rejected ? localReservation : 0) > settings.memoryBytes)
+        expectedContext != context || !available || !settings.publish || own.capture ||
+        (own.localGeneration && own.phase != PublicationPhase::Settled && own.phase != PublicationPhase::Rejected) ||
+        bytes + Reserved() - (own.phase == PublicationPhase::Rejected ? own.localReservation : 0) > settings.memoryBytes)
         return false;
 
       // A rejected candidate never replaces the last usable bridge asset.
-      if (phase != PublicationPhase::Rejected && localGeneration)
+      if (own.phase != PublicationPhase::Rejected && own.localGeneration)
       {
-        previousGeneration  = localGeneration;
-        previousReservation = localReservation;
-        previousAsset       = std::move(localAsset);
+        own.previousGeneration  = own.localGeneration;
+        own.previousReservation = own.localReservation;
+        own.previousAsset       = std::move(own.localAsset);
       }
 
-      localAsset.reset();
-      phase            = PublicationPhase::Preparing;
-      localReservation = bytes;
-      ++localRevision;
-      localGeneration = generation;
-      changed         = true;
-      capture.emplace(generation, std::move(asset));
+      own.localAsset.reset();
+      own.phase            = PublicationPhase::Preparing;
+      own.localReservation = bytes;
+      ++own.localRevision;
+      own.localGeneration = generation;
+      changed             = true;
+      own.capture.emplace(generation, std::move(asset));
       return true;
     }
 
@@ -339,14 +346,14 @@ public:
     {
       std::lock_guard lock(mutex);
       if (!available || !settings.publish || !DemandAllowsPoses()) return;
-      if (localGeneration == pose->generation)
+      if (own.localGeneration == pose->generation)
       {
-        if (prior && previousGeneration == prior->generation && prior->sampledAtUs == pose->sampledAtUs)
-          previousSnapshot = std::move(prior);
-        snapshot = std::move(pose);
+        if (prior && own.previousGeneration == prior->generation && prior->sampledAtUs == pose->sampledAtUs)
+          own.previousSnapshot = std::move(prior);
+        own.snapshot = std::move(pose);
       }
-      else if (previousGeneration == pose->generation)
-        previousSnapshot = std::move(pose);
+      else if (own.previousGeneration == pose->generation)
+        own.previousSnapshot = std::move(pose);
     }
 
     Work TakeWork()
@@ -357,54 +364,54 @@ public:
       return {
           epoch,
           context,
-          localRevision,
+          own.localRevision,
           poseRevision,
           current,
-          std::exchange(capture, {}),
-          localAsset ? std::exchange(snapshot, {}) : nullptr,
-          localGeneration,
-          previousGeneration,
-          std::exchange(previousSnapshot, {}),
-          localAsset,
-          previousAsset
+          std::exchange(own.capture, {}),
+          own.localAsset ? std::exchange(own.snapshot, {}) : nullptr,
+          own.localGeneration,
+          own.previousGeneration,
+          std::exchange(own.previousSnapshot, {}),
+          own.localAsset,
+          own.previousAsset
       };
     }
 
     void Prepared(std::uint64_t workEpoch, std::uint64_t revision, Publication value)
     {
       std::lock_guard lock(mutex);
-      if (workEpoch == epoch && revision == localRevision && localGeneration == value.generation && settings.publish)
+      if (workEpoch == epoch && revision == own.localRevision && own.localGeneration == value.generation && settings.publish)
       {
         // Preparation scratch is gone; keep immutable NIF/compressed data and
         // bounded pose work, not another compression reservation indefinitely.
-        localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() +
-                           (value.asset->delta ? value.asset->delta->bytes->capacity() : 0) + LocalPoseBytes();
-        localAsset       = value.asset;
-        publication      = std::move(value);
-        if (phase == PublicationPhase::Preparing) phase = PublicationPhase::Pending;
+        own.localReservation = value.asset->asset.MemoryBytes() + value.asset->compressed->capacity() +
+                               (value.asset->delta ? value.asset->delta->bytes->capacity() : 0) + LocalPoseBytes();
+        own.localAsset       = value.asset;
+        own.publication      = std::move(value);
+        if (own.phase == PublicationPhase::Preparing) own.phase = PublicationPhase::Pending;
       }
     }
 
     void PreparationFailed(std::uint64_t workEpoch, std::uint64_t revision, std::string error)
     {
       std::lock_guard lock(mutex);
-      if (workEpoch == epoch && revision == localRevision)
+      if (workEpoch == epoch && revision == own.localRevision)
       {
-        if (previousGeneration)
+        if (own.previousGeneration)
         {
-          ++localRevision;
-          localGeneration = previousGeneration;
-          localAsset      = std::move(previousAsset);
-          phase           = PublicationPhase::Settled;
-          previousGeneration.reset();
-          localReservation = std::exchange(previousReservation, 0);
-          snapshot         = std::exchange(previousSnapshot, {});
-          capture.reset();
-          publication = localAsset ? std::optional<Publication>{{*localGeneration, localAsset}} : std::nullopt;
-          encoded.reset();
+          ++own.localRevision;
+          own.localGeneration = own.previousGeneration;
+          own.localAsset      = std::move(own.previousAsset);
+          own.phase           = PublicationPhase::Settled;
+          own.previousGeneration.reset();
+          own.localReservation = std::exchange(own.previousReservation, 0);
+          own.snapshot         = std::exchange(own.previousSnapshot, {});
+          own.capture.reset();
+          own.publication = own.localAsset ? std::optional<Publication>{{*own.localGeneration, own.localAsset}} : std::nullopt;
+          own.encoded.reset();
         }
         else
-          ClearPublication();
+          own.Clear();
         changed       = true;
         metrics.error = std::move(error);
         ++metrics.rejected;
@@ -416,9 +423,9 @@ public:
     void PublicationRejected(Generation generation, std::string error)
     {
       std::lock_guard lock(mutex);
-      if (localGeneration != generation) return;
-      phase = PublicationPhase::Rejected;
-      encoded.reset();
+      if (own.localGeneration != generation) return;
+      own.phase = PublicationPhase::Rejected;
+      own.encoded.reset();
       metrics.error = std::move(error);
       ++metrics.rejected;
     }
@@ -426,25 +433,25 @@ public:
     bool Capturing(Generation generation) const
     {
       std::lock_guard lock(mutex);
-      return (localGeneration == generation || previousGeneration == generation) && settings.publish;
+      return (own.localGeneration == generation || own.previousGeneration == generation) && settings.publish;
     }
 
     bool CanReplace() const
     {
       std::lock_guard lock(mutex);
-      return !localGeneration || phase == PublicationPhase::Settled || phase == PublicationPhase::Rejected;
+      return !own.localGeneration || own.phase == PublicationPhase::Settled || own.phase == PublicationPhase::Rejected;
     }
 
     void Settled(const Wire::Settled& value)
     {
       std::lock_guard lock(mutex);
-      if (context != value.context || localGeneration != value.generation) return;
-      if (phase == PublicationPhase::Rejected) return;
-      phase = PublicationPhase::Settled;
-      previousGeneration.reset();
-      previousSnapshot.reset();
-      previousReservation = 0;
-      previousAsset.reset();
+      if (context != value.context || own.localGeneration != value.generation) return;
+      if (own.phase == PublicationPhase::Rejected) return;
+      own.phase = PublicationPhase::Settled;
+      own.previousGeneration.reset();
+      own.previousSnapshot.reset();
+      own.previousReservation = 0;
+      own.previousAsset.reset();
     }
 
     void Displayed(Wire::Displayed value)
@@ -462,11 +469,12 @@ public:
       std::lock_guard lock(mutex);
       if (
         workEpoch == epoch && workPoseRevision == poseRevision && context == value.context &&
-        (localGeneration == value.generation || (phase == PublicationPhase::Preparing && previousGeneration == value.generation)) &&
+        (own.localGeneration == value.generation ||
+         (own.phase == PublicationPhase::Preparing && own.previousGeneration == value.generation)) &&
         settings.publish && DemandAllowsPoses())
       {
-        if (!previousGeneration) value.previous.reset();
-        encoded = std::move(value);
+        if (!own.previousGeneration) value.previous.reset();
+        own.encoded = std::move(value);
       }
     }
 
@@ -485,12 +493,12 @@ public:
     {
       std::lock_guard lock(mutex);
       return {
-          localGeneration,
+          own.localGeneration,
           std::exchange(changed, false),
           settings,
-          localRevision,
-          std::exchange(publication, {}),
-          std::exchange(encoded, {}),
+          own.localRevision,
+          std::exchange(own.publication, {}),
+          std::exchange(own.encoded, {}),
           std::exchange(displayed, {})
       };
     }
