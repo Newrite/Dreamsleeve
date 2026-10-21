@@ -60,6 +60,10 @@
 | S3 | `PhantomAgent` | Закрытое `Completion` превращается в строку для протокола; клиент сравнивает строку (см. C6) | Причина завершения передачи — enum в `phantom.proto`; строка остаётся только для журнала |
 | S4 | `PhantomAgent` | Неименованные числа: повтор через 1000 мс, предел причины 256 байт, формула лимита исходящей очереди | Именованные значения у агента или в `PhantomOptions` |
 | S5 | `PhantomAgent` (964 строки) | Остальная часть агента (наблюдение, передачи, позы, тик) ещё не прочитана построчно | Отдельный проход в партии G |
+| S6 | `PhantomAgent` | `refreshEnabled` (~100 строк), допуск публикации и позы, тик — одной функцией каждый; снятие подписки, отмена передач и забывание видов повторены по 3–7 раз; `View.Distance` хранит квадрат расстояния; `match` по фазе и полосе с подстановочным случаем | Шаги `candidates`/`removeView`/`reoffer`/`offer`, `publishRefusal`/`beginPublish`, `admitPose`, `settleSources`/`serviceCommands`/`dispatchPoses`; помощники `cancelWhere`, `unsubscribe`, `forgetViewsOf`; `DistanceSquared`; полные `match` |
+| S7 | `Phantoms.fs` (домен) | Числа политики видимости (512, косинусы секторов, 0.81) и версия формата `2u` дважды | Именованные значения у `PhantomPolicy` и `PhantomManifest.CurrentFormat` |
+| S8 | `PhantomHttp` | Цикл передачи вмещал приём и отдачу куска с вложенностью в 5 уровней; учёт бюджета участника повторён в `admit`/`cancel`; индексы времени 0–3 и пороги 250/1000 мс | Шаги `receiveChunk`/`sendChunk`, `acquirePeer`/`releasePeer`, именованные индексы и пороги |
+| S9 | `PhantomStorage` | Сканирование кеша при запуске — 7 уровней вложенности; проверка кешированной копии повторена в `startUpload`/`startDownload`; закрытие файла с отчётом повторено; запись куска и завершение загрузки — одна вложенная задача | `cachedHash`/`adopt`/`scan`, `verifiedCopy`, `closeFile`, `appendChunk`/`finishUpload`, `workCapacity` |
 
 ### Открытые вопросы
 
@@ -77,4 +81,4 @@
 | D | C1, C3, C5 — разделение `Exchange`, `Worker::Asset`, `Streaming` | сделано: `Link`, `Publisher`, `Downloader`, `Streaming`-маршрутизатор; в `Exchange` своя публикация собрана в `Own` под тем же мьютексом (общий учёт памяти не даёт разнести блокировки) |
 | E | G1–G3 — игровые фантомы | сделано: `Phantom/Publisher`, `Phantom/Display` (шаги на игрока: `Visible`, `Bridge`, `Build`, `Settle`, `Recolor`), `Phantom/Log`; `Phantoms` — вход |
 | F | C6, C10, S3 — типизированные причины (протокол) | при слиянии с master |
-| G | S1, S2, S4, S5 — сервер | ждёт |
+| G | S1, S2, S4–S9 — сервер | сделано: `Credit` с именованными операциями; `Member` делится на `Publication`, `PoseStream`, `Rates`; именованные пределы; шаги агента, HTTP и хранилища. Вложенные `try/finally` владения файлом, хешем и шлюзом в `startUpload` оставлены: они защищают очистку, а не ловят ошибки |
