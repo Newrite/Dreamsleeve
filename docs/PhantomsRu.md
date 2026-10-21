@@ -27,7 +27,8 @@ world transforms/bounds. Своих вершинных буферов, CPU skinn
 | AOI, subscribers, ready/pending publication | существующий серверный `PhantomAgent`, один actor |
 | Игровой источник/handle и завершение обновления | Game `Phantom/Capture` (`PhantomCapture::Source`) |
 | Владение восстановленной NiPointer-сценой | Game `Phantom/Scene` (`PhantomScene::Scene`) |
-| Выбор current/candidate и представление | Game `Phantoms` — вход фантомов для остальной игры, внутренности в `Game/Phantom/`; UI читает состояние |
+| Захват и публикация своего фантома на игровом потоке | Game `Phantom/Publisher` |
+| Выбор current/candidate и представление | Game `Phantom/Display`; вход для остальной игры — `Phantoms`; UI читает состояние |
 | Адреса, ABI, выделение NiStream/нормализация bone cookie | `Hooks.ixx` |
 
 `ValidatedAsset` нельзя создать в обход Parse: он объединяет NIF с проверенной

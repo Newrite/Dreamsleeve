@@ -5,9 +5,9 @@ import std;
 import Dreamsleeve.Runtime;
 import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.Phantom.Capture;
-import Dreamsleeve.Game.Phantom.CaptureRules;
-import Dreamsleeve.Game.Phantom.Scene;
-import Dreamsleeve.Game.PlayerLabels;
+import Dreamsleeve.Game.Phantom.Log;
+import Dreamsleeve.Game.Phantom.Publisher;
+import Dreamsleeve.Game.Phantom.Display;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Host.PhantomSettings;
 import Dreamsleeve.Client.Phantom.Exchange;
@@ -16,67 +16,32 @@ import Dreamsleeve.Client.Diagnostics.PhantomTrace;
 import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
 #endif
 
+// The phantoms' entry for the rest of the game: one Tick per frame after the
+// game's update keeps the settings, follows the player's space and runs the
+// own phantom (Publisher) and the remote ones (Display); fireflies ask here
+// whether a phantom stands in for a player.
 namespace Phantoms
 {
-  namespace P       = Dreamsleeve::Client::Phantom;
-  namespace Capture = Dreamsleeve::Game::PhantomCapture;
-  namespace Scene   = Dreamsleeve::Game::PhantomScene;
-  using Clock       = std::chrono::steady_clock;
-  namespace Trace   = Dreamsleeve::Client::Diagnostics::Trace;
+  namespace P         = Dreamsleeve::Client::Phantom;
+  namespace Capture   = Dreamsleeve::Game::PhantomCapture;
+  namespace Publisher = Dreamsleeve::Game::PhantomPublisher;
+  namespace Display   = Dreamsleeve::Game::PhantomDisplay;
+  namespace Trace     = Dreamsleeve::Client::Diagnostics::Trace;
+  using Clock         = Dreamsleeve::Game::PhantomLog::Clock;
+  using Dreamsleeve::Game::PhantomLog::Micros;
 
-  struct Slot
-  {
-    std::uint64_t                 view{};
-    P::Generation                 generation;
-    Scene::Context                context;
-    std::unique_ptr<Scene::Scene> scene;
-  };
-
-  struct Visual
-  {
-    std::optional<Slot>                                    current, candidate;
-    std::optional<std::pair<std::uint64_t, P::Generation>> rejected;
-    Clock::time_point                                      applied{};
-    bool                                                   active{};
-    std::optional<std::pair<P::Vec3, float>>               look;
-
-    std::uint64_t MemoryBytes() const
-    {
-      return (current ? current->scene->MemoryBytes() : 0) + (candidate ? candidate->scene->MemoryBytes() : 0);
-    }
-  };
-
-  struct RetainedSource
-  {
-    P::Generation                    generation;
-    P::Sequence                      sequence;
-    std::unique_ptr<Capture::Source> source;
-  };
+  // Diagnostic builds log the exchange and each remote's playback this often.
+  constexpr auto NetworkReportInterval = std::chrono::seconds(5);
+  // Trace metrics are written this often.
+  constexpr auto MetricsInterval = std::chrono::seconds(1);
 
   struct State
   {
-    Capture::Engine                              engine;
-    std::unique_ptr<Capture::Source>             source;
-    std::optional<RetainedSource>                previous;
-    std::unordered_map<Domain::PlayerId, Visual> visuals;
-    P::Generation                                generation;
-    // Allocation high-watermark never rolls back with the retained native Source.
-    std::uint64_t                  lastGeneration{};
-    P::Sequence                    sequence;
+    Capture::Engine                engine;
     std::optional<P::ViewSettings> settings;
-    Capture::Cadence               cadence;
-    Clock::time_point              nextFailure{};
-    std::uint32_t                  omittedGeometry{}, hiddenGeometry{};
     Capture::Context               context;
     bool                           waiting{};
-    std::uint64_t                  cursor{};
-    // Players whose phantom is on its way this frame, for the firefly that stands in.
-    std::unordered_map<Domain::PlayerId, Nameplates::Loading> loading;
-    Clock::time_point                                         nextNetworkReport{};  // Diagnostic builds log the network state this often.
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
-    bool                                     publishing{};
-#endif
+    Clock::time_point              nextNetworkReport{};
   };
 
   State& Get()
@@ -85,18 +50,10 @@ namespace Phantoms
     return *state;
   }
 
-  std::uint64_t Micros(Clock::time_point now)
+  P::Exchange* CurrentExchange()
   {
-    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
-  }
-
-  void Error(const P::Error& error, Clock::time_point now)
-  {
-    auto& state = Get();
-    if (now < state.nextFailure) return;
-    state.nextFailure = now + std::chrono::seconds(5);
-    Trace::Event("failure", [&] { return std::format("\"code\":{}", static_cast<int>(error.reason)); });
-    logger::warn("Phantom: {} ({})", error.field, static_cast<int>(error.reason));
+    auto& runtime = Runtime::Get();
+    return runtime.app ? &runtime.app->Exchange().Phantoms() : nullptr;
   }
 
   export void Install(Capture::Engine engine)
@@ -106,25 +63,14 @@ namespace Phantoms
 
   void ResetResources()
   {
-    auto& state   = Get();
-    auto& runtime = Runtime::Get();
-    if (runtime.app)
-    {
-      if (state.source) runtime.app->Exchange().Phantoms().RestartCapture();
-      for (const auto& [id, visual] : state.visuals)
-        runtime.app->Exchange().Phantoms().SceneMemory(id, 0);
-    }
-    state.visuals.clear();
-    state.source.reset();
-    state.previous.reset();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    state.diagnosticAsset.reset();
-#endif
+    auto* exchange = CurrentExchange();
+    Publisher::Reset(exchange);
+    Display::Reset(exchange);
   }
 
   export void Clear(std::string_view reason = "game-context-ended")
   {
-    if (Get().source || !Get().visuals.empty()) Trace::Event("clear", [&] { return std::format("\"reason\":\"{}\"", reason); });
+    if (Publisher::Capturing() || !Display::Empty()) Trace::Event("clear", [&] { return std::format("\"reason\":\"{}\"", reason); });
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
     if (recorder.Active()) logger::info("Phantom recording stopped: {}", reason);
@@ -149,10 +95,7 @@ namespace Phantoms
         thirtySeconds ? 30 : 15,
         runtime.app->Exchange().Phantoms().Settings().sampleRate))
     {
-      Get().source.reset();
-      Get().previous.reset();
-      Get().diagnosticAsset.reset();
-      Get().cadence.Reset();
+      Publisher::StartRecording();
       logger::info("Phantom diagnostics recording requested");
     }
   }
@@ -170,275 +113,30 @@ namespace Phantoms
         logs ? *logs / "DreamsleevePhantomDiagnostics" : std::filesystem::path{}))
       ResetResources();
   }
-
-  void Record(std::shared_ptr<const P::Snapshot> pose, RE::PlayerCharacter& player, Clock::time_point start, bool firstPerson)
-  {
-    auto& recorder = Dreamsleeve::Client::Diagnostics::Phantoms();
-    if (!recorder.Active()) return;
-    const auto position = player.GetPosition(), angle = player.GetAngle();
-    recorder.Sample(
-      Get().diagnosticAsset,
-      std::move(pose),
-      {
-          0,
-          0,
-          Micros(start),
-          {position.x, position.y, position.z},
-          {angle.x,    angle.y,    angle.z   }
-    },
-      std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
-      firstPerson);
-  }
 #endif
-
-  void ReportCaptureHealth()
-  {
-    auto&      state  = Get();
-    const auto status = state.source->ReadStatus();
-    if (state.omittedGeometry != status.omitted || state.hiddenGeometry != status.hidden)
-    {
-      logger::info("Phantom capture health: omitted={}, hidden={}, {}", status.omitted, status.hidden, status.detail);
-      state.omittedGeometry = status.omitted;
-      state.hiddenGeometry  = status.hidden;
-    }
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    Dreamsleeve::Client::Diagnostics::Phantoms().Partial(status.omitted, status.hidden, status.detail);
-#endif
-  }
-
-  // Tick owns capture and playback on the same main-loop thread, after the
-  // game's frame update. No actor-update callback touches this state.
-  void CapturePlayer(RE::PlayerCharacter& player)
-  {
-    auto&      runtime        = Runtime::Get();
-    auto&      state          = Get();
-    const auto now            = Clock::now();
-    auto&      exchange       = runtime.app->Exchange().Phantoms();
-    const auto settings       = exchange.Settings();
-    const auto observer       = World::Observe(&player);
-    const auto captureContext = observer ? exchange.CaptureContext(observer->space) : std::nullopt;
-    bool       publishing     = captureContext.has_value() && settings.publish;
-    P::Limits  captureLimits;
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    const bool recording = Dreamsleeve::Client::Diagnostics::Phantoms().Active();
-    if (recording)
-    {
-      publishing    = false;
-      captureLimits = Dreamsleeve::Client::Diagnostics::CaptureLimits();
-    }
-    if (state.source && state.publishing != publishing)
-    {
-      state.source.reset();
-      state.previous.reset();
-    }
-    state.publishing = publishing;
-    if (!publishing && !recording)
-#else
-    if (!publishing)
-#endif
-    {
-      state.source.reset();
-      state.previous.reset();
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      state.diagnosticAsset.reset();
-#endif
-      return;
-    }
-
-    if (state.source && publishing && !exchange.Capturing(state.generation))
-    {
-      if (state.previous && exchange.Capturing(state.previous->generation))
-      {
-        state.source     = std::move(state.previous->source);
-        state.generation = state.previous->generation;
-        state.sequence   = state.previous->sequence;
-        state.previous.reset();
-      }
-      else
-        state.source.reset();
-      state.cadence.Defer(now);
-      return;
-    }
-
-    if (!state.source && publishing && exchange.Capturing(state.generation)) exchange.RestartCapture();
-    if (!state.cadence.Due(now, settings.sampleRate)) return;
-
-    const auto* camera      = RE::PlayerCamera::GetSingleton();
-    const bool  firstPerson = camera && camera->IsInFirstPerson();
-    if (state.previous && !exchange.Capturing(state.previous->generation)) state.previous.reset();
-    const auto priorPose = [&]() -> std::shared_ptr<const P::Snapshot> {
-      if (!publishing || !state.previous) return {};
-      auto& old = *state.previous;
-      if (old.sequence.value == std::numeric_limits<std::uint64_t>::max()) return {};
-      auto pose = old.source->Sample(player, firstPerson, {old.generation, {++old.sequence.value}, 1, Micros(now)}, true);
-      return pose ? std::make_shared<const P::Snapshot>(std::move(*pose)) : nullptr;
-    };
-
-    if (!state.source || ((!publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now))))
-    {
-      const auto changeReason = state.source ? state.source->ChangeReason() : std::string_view{"initial"};
-      if (state.source) state.source->DeferRebuild(Micros(now));
-      const auto replace = [&]() -> bool {
-        if (state.lastGeneration == std::numeric_limits<std::uint64_t>::max()) return false;
-        const P::Generation nextGeneration{state.lastGeneration + 1};
-        auto                opened = Capture::Open(state.engine, player, firstPerson, {nextGeneration, {1}, 1, Micros(now)}, captureLimits);
-        if (!opened)
-        {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-          Dreamsleeve::Client::Diagnostics::Phantoms().Failed(opened.error());
-#endif
-          Error(opened.error(), now);
-          return false;
-        }
-
-        auto asset = std::move(opened->asset);
-        Trace::Event("captured", [&] {
-          return std::format(
-            "\"generation\":{},\"reason\":\"{}\",\"raw_bytes\":{},\"channels\":{},\"elapsed_ms\":{}",
-            nextGeneration.value,
-            changeReason,
-            asset.Value().nif.size(),
-            asset.Layout().requiredChannels.size(),
-            std::chrono::duration<double, std::milli>(Clock::now() - now).count());
-        });
-        logger::info(
-          "Phantom capture: generation {}, {} channels, {} geometry, {:.2f} MiB native NIF, {:.2f} ms, reason={}",
-          nextGeneration.value,
-          asset.Layout().requiredChannels.size(),
-          asset.Layout().bounds.size(),
-          asset.Value().nif.size() / 1048576.0,
-          std::chrono::duration<double, std::milli>(Clock::now() - now).count(),
-          changeReason);
-
-        if (publishing && !exchange.Submit(*captureContext, nextGeneration, asset)) return false;
-        if (publishing && state.source && exchange.Capturing(state.generation))
-          state.previous = RetainedSource{state.generation, state.sequence, std::move(state.source)};
-        state.generation     = nextGeneration;
-        state.lastGeneration = nextGeneration.value;
-        state.sequence       = {1};
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-        state.diagnosticAsset = std::make_shared<const P::ValidatedAsset>(std::move(asset));
-#endif
-
-        state.source = std::move(opened->source);
-        ReportCaptureHealth();
-        auto initial = std::make_shared<const P::Snapshot>(std::move(opened->initial));
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-        Record(initial, player, now, firstPerson);
-#endif
-        if (publishing) exchange.Submit(std::move(initial), priorPose());
-        return true;
-      };
-
-      if (replace()) return;
-      if (!state.source)
-      {
-        state.cadence.Defer(now);
-        return;
-      }
-    }
-
-    if (publishing && !exchange.PosesRequired()) return;
-    if (state.sequence.value == std::numeric_limits<std::uint64_t>::max())
-    {
-      state.source.reset();
-      return;
-    }
-    const auto poseStart = Clock::now();
-    auto       pose =
-      state.source->Sample(player, firstPerson, {state.generation, P::Sequence{++state.sequence.value}, 1, Micros(now)}, publishing);
-    Trace::Observe(Trace::Metric::CapturePose, std::chrono::duration<double, std::milli>(Clock::now() - poseStart).count());
-    if (!pose)
-    {
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-      Dreamsleeve::Client::Diagnostics::Phantoms().Failed(pose.error());
-#endif
-      Error(pose.error(), now);
-      if (pose.error().reason == P::Failure::Stale)
-        state.source.reset();
-      else
-        state.cadence.Defer(now);
-      return;
-    }
-
-    ReportCaptureHealth();
-    auto sampled = std::make_shared<const P::Snapshot>(std::move(*pose));
-#ifdef DREAMSLEEVE_DIAGNOSTICS
-    Record(sampled, player, now, firstPerson);
-#endif
-    if (publishing) exchange.Submit(std::move(sampled), priorPose());
-  }
 
   export bool UseFirefly(Domain::PlayerId id)
   {
-    const auto& state = Get();
-    if (!state.settings || !state.settings->receive) return true;
-    const auto found = state.visuals.find(id);
-    if (found != state.visuals.end() && found->second.active) return false;
-    return state.settings->fallback;
+    const auto& settings = Get().settings;
+    if (!settings || !settings->receive) return true;
+    if (Display::Shown(id)) return false;
+    return settings->fallback;
   }
 
   // How far the phantom of a player shown as a firefly has loaded; absent when
   // it is not loading (shown, refused, out of reach or phantoms switched off).
   export std::optional<Nameplates::Loading> Loading(Domain::PlayerId id)
   {
-    const auto& loading = Get().loading;
-    const auto  found   = loading.find(id);
-    return found == loading.end() ? std::nullopt : std::optional{found->second};
+    return Display::Loading(id);
   }
 
   export std::size_t Count()
   {
-    return std::ranges::count_if(Get().visuals, [](const auto& entry) { return entry.second.active; });
+    return Display::Count();
   }
 
-  bool Matches(const Slot& slot, const P::Remote& remote, Scene::Context context)
+  void TraceFrame(Clock::time_point now)
   {
-    return slot.view == remote.view && slot.generation == remote.descriptor.generation && slot.context == context;
-  }
-
-  void Hide(Visual& visual, Clock::time_point now)
-  {
-    if (visual.current)
-    {
-      auto hidden = visual.current->scene->Hide(visual.current->context);
-      if (!hidden) Error(hidden.error(), now);
-    }
-    visual.active = false;
-  }
-
-  void ForgetCleared(Visual& visual, P::Exchange& exchange, Domain::PlayerId id)
-  {
-    if (visual.candidate && visual.candidate->scene->MemoryBytes() == 0) visual.candidate.reset();
-    if (visual.current && visual.current->scene->MemoryBytes() == 0)
-    {
-      visual.current.reset();
-      visual.look.reset();
-      visual.active = false;
-    }
-    if (visual.current && !visual.current->scene->Ready()) visual.active = false;
-    exchange.SceneMemory(id, visual.MemoryBytes());
-  }
-
-  // Commit an already posed and attached candidate on the game thread.
-  // The current scene stays owned until this accepted replacement is promoted.
-  void PromoteRemoteScene(Visual& visual, const P::Remote& remote, P::Exchange& exchange)
-  {
-    visual.current = std::move(visual.candidate);
-    exchange.Displayed({remote.player, remote.view, remote.descriptor.generation});
-    logger::info(
-      "[Phantom] native scene displayed: player={} generation={} bytes={}",
-      remote.player,
-      remote.descriptor.generation.value,
-      visual.current->scene->MemoryBytes());
-    visual.candidate.reset();
-    visual.look.reset();
-    exchange.SceneMemory(remote.player, visual.MemoryBytes());
-  }
-
-  export void Tick(Clock::time_point now, Nameplates::Frame& names)
-  {
-    Trace::Span              tickSpan(Trace::Metric::GameTick);
     static Clock::time_point lastFrame{}, nextTrace{};
     if (lastFrame != Clock::time_point{})
       Trace::Observe(Trace::Metric::Frame, std::chrono::duration<double, std::milli>(now - lastFrame).count());
@@ -446,11 +144,69 @@ namespace Phantoms
     if (now >= nextTrace)
     {
       Trace::FlushMetrics();
-      nextTrace = now + std::chrono::seconds(1);
+      nextTrace = now + MetricsInterval;
     }
+  }
+
+  void ReportNetwork(P::Exchange& exchange, const P::Display& display, const P::ViewSettings& settings, Clock::time_point now)
+  {
+    auto& state = Get();
+    if (now < state.nextNetworkReport) return;
+    state.nextNetworkReport = now + NetworkReportInterval;
+    const auto stats        = exchange.Stats();
+    Trace::Event("exchange", [&] {
+      return std::format(
+        "\"epoch\":{},\"model_bytes_total\":{},\"pose_bytes_total\":{},\"rejected_total\":{},\"dropped_total\":{},\"cache_hits_total\":{},\"queued\":{},\"sample_rate\":{}",
+        exchange.Epoch(),
+        stats.modelBytes,
+        stats.poseBytes,
+        stats.rejected,
+        stats.dropped,
+        stats.cacheHits,
+        stats.queued,
+        stats.sampleRate);
+    });
+    for (const auto& remote : display.remotes)
+    {
+      const auto timing    = remote.playback.Inspect(Micros(now), settings);
+      const auto displayed = Display::DisplayedGeneration(remote.player);
+      Trace::Event("playback", [&] {
+        return std::format(
+          "\"player\":{},\"view\":{},\"generation\":{},\"displayed\":{},\"samples\":{},\"sequence\":{},\"age_us\":{},\"ahead_us\":{},\"delay_us\":{}",
+          remote.player,
+          remote.view,
+          remote.descriptor.generation.value,
+          displayed,
+          timing.samples,
+          timing.sequence,
+          timing.ageUs,
+          timing.aheadUs,
+          timing.delayUs);
+      });
+      logger::info(
+        "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f} target_delay_ms={:.1f} speed={:.3f}",
+        remote.player,
+        remote.descriptor.generation.value,
+        displayed,
+        static_cast<int>(remote.State()),
+        timing.samples,
+        timing.sequence,
+        timing.sourceGapUs / 1000.0,
+        timing.arrivalGapUs / 1000.0,
+        timing.ageUs / 1000.0,
+        timing.aheadUs / 1000.0,
+        timing.delayUs / 1000.0,
+        timing.speed);
+    }
+  }
+
+  export void Tick(Clock::time_point now, Nameplates::Frame& names)
+  {
+    Trace::Span tickSpan(Trace::Metric::GameTick);
+    TraceFrame(now);
     auto& runtime = Runtime::Get();
     auto& state   = Get();
-    state.loading.clear();
+    Display::BeginFrame();
     if (!runtime.app || !state.engine.mainThread) return;
     auto&      exchange = runtime.app->Exchange().Phantoms();
     const auto settings = Dreamsleeve::Host::PhantomSettings(runtime.ui.ui.chat);
@@ -463,12 +219,7 @@ namespace Phantoms
     }
 
     // Apply visibility even while waiting for the local player/cell or replay.
-    if (!settings.receive && !state.visuals.empty())
-    {
-      for (const auto& [id, visual] : state.visuals)
-        exchange.SceneMemory(id, 0);
-      state.visuals.clear();  // Scene destruction detaches each root on this game thread.
-    }
+    if (!settings.receive && !Display::Empty()) Display::Reset(&exchange);
 
     auto* player = RE::PlayerCharacter::GetSingleton();
     auto* cell   = player ? player->GetParentCell() : nullptr;
@@ -482,9 +233,8 @@ namespace Phantoms
 
     const auto space = player && cell ? World::CurrentSpace(player) : std::nullopt;
     const bool ready = World::PlayerReady() && cell && cell->IsAttached() && parent && space;
-    const auto observed = state.context.Observe(ready
-      ? std::optional<Capture::Context::Space>{{space->form->GetFormID(), space->interior}}
-      : std::nullopt);
+    const auto observed =
+      state.context.Observe(ready ? std::optional<Capture::Context::Space>{{space->form->GetFormID(), space->interior}} : std::nullopt);
     if (observed == Capture::Context::Observation::Waiting)
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
@@ -502,8 +252,7 @@ namespace Phantoms
           space.has_value());
         // A transient missing cell/3D is not an appearance change. Retain
         // owned capture bindings and masks; only hide remote visuals.
-        for (auto& [id, visual] : state.visuals)
-          Hide(visual, now);
+        Display::HideAll(now);
         state.waiting = true;
       }
       return;
@@ -526,69 +275,15 @@ namespace Phantoms
     }
 #endif
 
-    CapturePlayer(*player);
+    Publisher::Tick(*player, exchange, state.engine);
     auto display = exchange.Read();
-    if constexpr (Trace::Compiled)
-    {
-      if (now >= state.nextNetworkReport)
-      {
-        state.nextNetworkReport = now + std::chrono::seconds(5);
-        const auto stats        = exchange.Stats();
-        Trace::Event("exchange", [&] {
-          return std::format(
-            "\"epoch\":{},\"model_bytes_total\":{},\"pose_bytes_total\":{},\"rejected_total\":{},\"dropped_total\":{},\"cache_hits_total\":{},\"queued\":{},\"sample_rate\":{}",
-            exchange.Epoch(),
-            stats.modelBytes,
-            stats.poseBytes,
-            stats.rejected,
-            stats.dropped,
-            stats.cacheHits,
-            stats.queued,
-            stats.sampleRate);
-        });
-        for (const auto& remote : display.remotes)
-        {
-          const auto timing    = remote.playback.Inspect(Micros(now), settings);
-          const auto visual    = state.visuals.find(remote.player);
-          const auto displayed = visual != state.visuals.end() && visual->second.current ? visual->second.current->generation.value : 0;
-          Trace::Event("playback", [&] {
-            return std::format(
-              "\"player\":{},\"view\":{},\"generation\":{},\"displayed\":{},\"samples\":{},\"sequence\":{},\"age_us\":{},\"ahead_us\":{},\"delay_us\":{}",
-              remote.player,
-              remote.view,
-              remote.descriptor.generation.value,
-              displayed,
-              timing.samples,
-              timing.sequence,
-              timing.ageUs,
-              timing.aheadUs,
-              timing.delayUs);
-          });
-          logger::info(
-            "[Phantom network] player={} generation={} displayed={} asset={} samples={} seq={} source_gap_ms={:.1f} arrival_gap_ms={:.1f} age_ms={:.1f} ahead_ms={:.1f} target_delay_ms={:.1f} speed={:.3f}",
-            remote.player,
-            remote.descriptor.generation.value,
-            displayed,
-            static_cast<int>(remote.State()),
-            timing.samples,
-            timing.sequence,
-            timing.sourceGapUs / 1000.0,
-            timing.arrivalGapUs / 1000.0,
-            timing.ageUs / 1000.0,
-            timing.aheadUs / 1000.0,
-            timing.delayUs / 1000.0,
-            timing.speed);
-        }
-      }
-    }
+    if constexpr (Trace::Compiled) ReportNetwork(exchange, display, settings, now);
     if (!display.available)
     {
 #ifdef DREAMSLEEVE_DIAGNOSTICS
       if (Dreamsleeve::Client::Diagnostics::Phantoms().Active())
       {
-        for (const auto& [id, visual] : state.visuals)
-          exchange.SceneMemory(id, 0);
-        state.visuals.clear();
+        Display::Reset(&exchange);
         return;
       }
 #endif
@@ -599,215 +294,25 @@ namespace Phantoms
     if (!settings.receive) return;
     const auto observer = World::Observe(player);
     if (!observer) return;
-    const auto& ui = runtime.ui.ui.chat;
     // Players who start in one place must not stand inside each other's character
     // creation. Scenes stay loaded and reappear when the menu closes.
-    if (ui.raceMenuHidePlayers && World::CharacterCreationOpen())
+    if (runtime.ui.ui.chat.raceMenuHidePlayers && World::CharacterCreationOpen())
     {
-      for (auto& [id, visual] : state.visuals)
-        Hide(visual, now);
+      Display::HideAll(now);
       return;
     }
-    std::unordered_set<Domain::PlayerId> retained;
-    std::ranges::sort(display.remotes, {}, &P::Remote::player);
-    const auto first = std::ranges::upper_bound(display.remotes, state.cursor, {}, &P::Remote::player);
-    std::rotate(display.remotes.begin(), first, display.remotes.end());
 
-    std::uint32_t      buildSteps = 1;
-    Scene::FrameBudget frame{65536};
-    for (const auto& remote : display.remotes)
-    {
-      const auto online   = runtime.session.OnlinePlayers().find(remote.player);
-      const auto movement = runtime.movement ? runtime.movement->Sample(remote.player, now) : std::nullopt;
-      if (
-        online == runtime.session.OnlinePlayers().end() || !movement ||
-        runtime.session.HidesPlayerRepresentation(remote.player, ui.fireflyGuildmatesOnly) ||
-        !Domain::Spatial::Reach(observer->space, observer->position, movement->location.locationId, movement->position, settings.distance))
-        continue;
-
-      retained.insert(remote.player);
-      const auto& color    = runtime.session.Guildmate(remote.player) ? settings.guildColor : settings.color;
-      auto&       visual   = state.visuals[remote.player];
-      const auto  revision = std::pair{remote.view, remote.descriptor.generation};
-      if (visual.rejected && *visual.rejected != revision) visual.rejected.reset();
-      ForgetCleared(visual, exchange, remote.player);
-      if (remote.previous && visual.current && visual.current->generation == remote.previous->descriptor.generation)
-      {
-        if (auto previousPose = remote.previous->playback.At(Micros(now), settings))
-        {
-          const Scene::Context c{
-              previousPose->context,
-              {space->form->GetFormID(), space->interior}
-          };
-          if (auto applied = visual.current->scene->Apply(*previousPose, c, frame); applied)
-          {
-            visual.applied = now;
-            visual.active  = true;
-          }
-        }
-      }
-
-      auto pose = remote.playback.At(Micros(now), settings);
-      if (remote.Asset() && pose)
-      {
-        const Scene::Context context{
-            pose->context,
-            {space->form->GetFormID(), space->interior}
-        };
-        if (visual.current && visual.current->context != context)
-        {
-          visual.current.reset();
-          visual.active = false;
-          visual.look.reset();
-        }
-        if (visual.candidate && !Matches(*visual.candidate, remote, context)) visual.candidate.reset();
-        exchange.SceneMemory(remote.player, visual.MemoryBytes());
-        if ((!visual.current || !Matches(*visual.current, remote, context)) && !visual.candidate && !visual.rejected && buildSteps)
-        {
-          auto scene = Scene::Scene::Begin(
-            *remote.Asset(),
-            state.engine,
-            context,
-            remote.descriptor.generation,
-            {color, settings.opacity},
-            Scene::Budget{exchange.RemainingMemory()});
-          if (scene && exchange.SceneMemory(remote.player, visual.MemoryBytes() + (*scene)->MemoryBytes()))
-            visual.candidate = Slot{remote.view, remote.descriptor.generation, context, std::move(*scene)};
-          else if (!scene)
-            Error(scene.error(), now);
-        }
-
-        const auto failedTarget = [&](const P::Error& error) {
-          Error(error, now);
-          if (visual.candidate)
-          {
-            visual.rejected = revision;
-            visual.candidate.reset();
-            exchange.SceneMemory(remote.player, visual.MemoryBytes());
-          }
-          else
-            Hide(visual, now);
-        };
-
-        Slot* target = nullptr;
-        if (visual.candidate)
-        {
-          target = &*visual.candidate;
-        }
-        else if (visual.current && Matches(*visual.current, remote, context))
-        {
-          target = &*visual.current;
-        }
-        if (target)
-        {
-          if (visual.candidate && buildSteps)
-          {
-            auto built = target->scene->Advance(context);
-            --buildSteps;
-            state.cursor = remote.player;
-            if (!built)
-            {
-              Error(built.error(), now);
-              // A rejected native asset must not invoke NiStream Load every frame.
-              // A new view/generation or context reset permits another attempt.
-              if (built.error().reason != P::Failure::Busy) visual.rejected = revision;
-              visual.candidate.reset();
-              exchange.SceneMemory(remote.player, visual.MemoryBytes());
-              target = nullptr;
-            }
-          }
-
-          if (target && !(settings.hideInCombat && player->IsInCombat()))
-          {
-            auto applied = target->scene->Apply(*pose, context, frame);
-            if (applied)
-            {
-              auto attached = target->scene->Attach(*parent, context);
-              if (attached)
-              {
-                if (visual.candidate)
-                {
-                  Trace::Event("displayed", [&] {
-                    return std::format(
-                      "\"player\":{},\"view\":{},\"generation\":{},\"context\":{},\"space\":{}",
-                      remote.player,
-                      remote.view,
-                      remote.descriptor.generation.value,
-                      context.epoch,
-                      context.space.id);
-                  });
-                  PromoteRemoteScene(visual, remote, exchange);
-                }
-
-                visual.applied = now;
-                visual.active  = true;
-                state.cursor   = remote.player;
-              }
-              else
-              {
-                failedTarget(attached.error());
-              }
-            }
-            else if (applied.error().reason != P::Failure::Busy)
-            {
-              failedTarget(applied.error());
-            }
-          }
-        }
-      }
-      ForgetCleared(visual, exchange, remote.player);
-
-      if (now - visual.applied > std::chrono::milliseconds(settings.timeoutMs))
-      {
-        Hide(visual, now);
-        ForgetCleared(visual, exchange, remote.player);
-        continue;
-      }
-      if (settings.hideInCombat && player->IsInCombat())
-      {
-        Hide(visual, now);
-        ForgetCleared(visual, exchange, remote.player);
-        visual.active = visual.current && visual.current->scene->Ready();
-        continue;
-      }
-
-      if (!visual.active || !visual.current) continue;
-      // A guild joined or left recolours the phantom like a changed setting.
-      const auto look = std::pair{color, settings.opacity};
-      if (visual.look != look)
-      {
-        auto changed = visual.current->scene->SetLook({color, settings.opacity}, visual.current->context);
-        if (!changed)
-        {
-          Error(changed.error(), now);
-          Hide(visual, now);
-          ForgetCleared(visual, exchange, remote.player);
-          continue;
-        }
-        visual.look = look;
-      }
-
-      PlayerLabels::Add(names, remote.player, visual.current->scene->LabelAnchor(), online->second, now);
-    }
-
-    // A model on its way reports the share received; a ready one still
-    // building its scene is complete. A refused model shows no progress.
-    for (const auto& remote : display.remotes)
-    {
-      const auto visual = state.visuals.find(remote.player);
-      if (!retained.contains(remote.player) || visual == state.visuals.end() || visual->second.active) continue;
-      if (remote.State() == P::Representation::Loading)
-        state.loading.emplace(remote.player, Nameplates::Loading{remote.Downloaded()});
-      else if (remote.State() == P::Representation::Ready && visual->second.candidate)
-        state.loading.emplace(remote.player, Nameplates::Loading{1.0f});
-    }
-
-    std::erase_if(state.visuals, [&](const auto& entry) {
-      if (retained.contains(entry.first)) return false;
-      Trace::Event("scene_removed", [&] { return std::format("\"player\":{},\"reason\":\"not-retained\"", entry.first); });
-      exchange.SceneMemory(entry.first, 0);
-      return true;
-    });
+    Display::Pass pass{
+        exchange,
+        settings,
+        state.engine,
+        *player,
+        *parent,
+        {space->form->GetFormID(), space->interior},
+        names,
+        now
+    };
+    Display::Show(std::move(display.remotes), *observer, pass);
   }
 
 }
