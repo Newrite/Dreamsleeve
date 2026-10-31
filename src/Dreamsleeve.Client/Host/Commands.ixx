@@ -2,6 +2,8 @@ export module Dreamsleeve.Host.Commands;
 
 import std;
 export import Dreamsleeve.Host.Session;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 export import Dreamsleeve.Host.Bubbles;
 
 // UI commands applied to the host: the chat session, ui.toml and the account.

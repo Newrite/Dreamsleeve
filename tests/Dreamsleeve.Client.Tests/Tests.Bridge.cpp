@@ -4,6 +4,8 @@
 
 import std;
 import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 
 #include "Bridge.h"
 #include "Repository.h"

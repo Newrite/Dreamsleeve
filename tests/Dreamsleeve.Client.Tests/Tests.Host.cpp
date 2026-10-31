@@ -2,6 +2,9 @@
 #include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Host.Session;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
+import Dreamsleeve.Host.GameDates;
 import Dreamsleeve.Host.Bubbles;
 import Dreamsleeve.Client.Model;
 

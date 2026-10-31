@@ -3,6 +3,9 @@ export module Dreamsleeve.Host.Session;
 import std;
 export import Dreamsleeve.Client.Exchange;
 export import Dreamsleeve.Host.Bridge;
+export import Dreamsleeve.Host.Names;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 export import Dreamsleeve.Host.Announcements;
 
 // Main-thread consumer of ClientOutput: projects Core state into UI bridge events

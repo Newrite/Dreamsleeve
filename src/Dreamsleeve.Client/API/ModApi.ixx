@@ -7,6 +7,7 @@ export module Dreamsleeve.ModApi;
 
 import std;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Host.BridgeProjection;
 import Dreamsleeve.Runtime;
 
 // Plugin API for other mods: IVDreamsleeve1, handed out by the exported

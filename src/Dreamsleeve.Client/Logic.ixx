@@ -15,6 +15,7 @@ import Dreamsleeve.Game.World;
 import Dreamsleeve.UI.Nameplates;
 import Dreamsleeve.Events;
 import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.BridgeProjection;
 import Dreamsleeve.ModApi;
 import Dreamsleeve.Client.Utils;
 
