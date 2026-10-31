@@ -27,6 +27,108 @@ Dreamsleeve is a social layer that relays Skyrim observations, not an authoritat
 Preserve this scope: server authority over social operations does not justify inventing simulation rules.
 Keep domain decisions independent of protobuf, SQLite, HTTP, ENet, UI, and game-engine details.
 
+## Reassess architecture throughout implementation
+
+**Architecture is continuous engineering work, not an immutable up-front decision.** Do not endlessly
+add fields, constructor parameters, callbacks, dispatch cases, forwarding layers, or unrelated duties
+to an existing type merely because that is the smallest local patch. An initially reasonable design
+may need revision after its first real use.
+
+- Before a substantial feature, identify domain concepts, state owner, lifecycle, entry points,
+  composition boundary, dependencies, expected variation, error/commit semantics, and consumers.
+  Choose the simplest coherent structure; a short outline is sufficient.
+- Reassess **after the first working vertical slice**, when a new responsibility or dependency is
+  introduced, and before declaring a substantial feature/refactor complete. Read actual callers,
+  constructor chains, state transitions, and module dependencies, not just the local diff.
+- Investigate architectural warning signs: a type accumulating unrelated responsibilities;
+  repeated long branches on the same state/type; one dependency forwarded through several
+  constructors without being used; multiple owners duplicating orchestration; growing sets of
+  booleans/options describing a lifecycle; callbacks whose lifetime is unclear; unrelated
+  components changed for every new feature; or wrappers existing solely to forward calls.
+  These are **review triggers, not automatic thresholds**.
+- When a trigger is material, state the underlying coupling/ownership problem, compare the
+  existing design with at least one simpler local and one appropriate structural alternative,
+  then make a deliberate choice. Prefer a focused, reviewable architectural correction **before**
+  piling on more workarounds. If the current structure is best, explain why briefly and proceed.
+- Use a clear **composition root** for constructing application services and selecting concrete
+  implementations. Constructor injection is already dependency injection; a DI container is
+  optional, not a default solution to long constructor chains. Prefer correcting misplaced
+  responsibility, dependency direction, or composition over adding a service locator, hidden
+  global resolution, or a giant parameters/context object.
+- Consider a **factory/checked constructor** where creation involves invariant validation,
+  resource acquisition, ownership, or meaningful variants. Use a typed outcome for expected
+  construction failure. Do not introduce abstract factories for one trivial constructor.
+- Consider **explicit state machines**, F# discriminated unions, or C++ `std::variant` when
+  phases and allowed transitions must be consistent. Consider **Strategy/policy** or compile-time
+  polymorphism for genuine behavioral variation instead of an ever-growing runtime switch.
+  Never replace a straightforward conditional with an abstraction without a concrete benefit.
+- Consider **typed events or messages** when independent consumers genuinely need to react
+  without a direct dependency. Define the event's owning constructor/factory when it enforces
+  invariants; define ordering, delivery, handler failure, cancellation, and subscription lifetime.
+  Do not add a global event bus for ordinary direct calls. In Dreamsleeve, actor messages must
+  preserve the actor's single-writer state rule, and native/game operations must keep their
+  established thread ownership.
+- Apply dependency inversion and adapters at **real external boundaries** (database, ENet,
+  filesystem, Steam, Skyrim, web/UI), not as an interface-per-class policy. Domain decisions
+  must stay out of adapters; application orchestration should not migrate into large domain
+  objects or infrastructure facades.
+- Review the costs of a proposed design on hot paths: allocations, closure captures, type
+  erasure, virtual dispatch, lifetime constraints, and F# GC pressure. A design pattern does
+  not justify a regression; neither does speculative optimization justify poor ownership.
+- If redesign changes a public/wire contract, ABI, storage semantics, existing actor ownership,
+  or several unrelated components, document the alternatives, tradeoffs, migration, and
+  verification plan before expanding scope. Implement safe authorized local fixes; do not
+  silently start an unrelated rewrite or defer straightforward design repairs forever.
+- **Architectural acceptance:** explain meaningful structure changes and revisit whether the
+  resulting owners, dependencies, state transitions, and event flows would simplify the *next
+  realistic change*. Passing tests, satisfying a formatter, or completing a self-selected
+  implementation queue is not evidence that the architecture was reconsidered.
+
+## C++23 modules: colocate API and implementation
+
+**Named C++ modules are the default for new first-party C++ code.** Prefer a cohesive `.ixx`
+module interface unit that contains its exported contracts, non-exported helpers, and the
+implementations of its functions and methods **together**, closer to C#/F#/Java source
+organization. The module boundary provides encapsulation; do **not** recreate the traditional
+header/implementation split as an obligatory module convention.
+
+- Define the primary interface with `export module ...;` and import first-party dependencies
+  by module name. Export only what importers need. Keep private members, functions, invariants,
+  and ordinary definitions near the relevant API in the **same module file**, when cohesive.
+  Out-of-class definitions in that same unit are fine when they make substantial methods clearer.
+- **Do not routinely add separate `module Name;` implementation units** just to move exported
+  methods' bodies away from their declarations. Do not create matching `.hpp`/`.cpp` pairs for
+  new first-party functionality without a demonstrated interoperability/build requirement.
+- If a single module grows multiple genuine responsibilities, split it into **cohesive named
+  modules** or justified partitions rather than preserving one giant file or moving all bodies
+  to a hidden implementation unit. Do not create a module per trivial helper, chains of
+  re-exports, or partitions solely to simulate headers.
+- Preserve normal C++ encapsulation, namespaces, ODR/linkage, template reachability, and
+  dependency order. C++ modules do not require every function body to be defined inside its
+  class. Keep exported contracts small; avoid exporting implementation-only third-party types.
+- Use the verified standard-library strategy of this repository. Prefer `import std;` only if
+  the current MSVC, standard library, C++ mode, and xmake configuration support it reliably.
+  Do not assume imports reproduce preprocessor macros.
+- Existing Skyrim/SKSE, Windows, CommonLib, protobuf, generated, C, or macro-configured
+  headers may need `#include` in a **global module fragment** (`module;` before `export module`)
+  or a narrowly scoped legacy adapter. Do not textually include such headers in a named-module
+  purview without checking attachment/ODR/linkage implications. Follow
+  `docs/MsvcProtobufModulesRu.md` for protobuf specifically; keep those headers out of exported
+  module interfaces as the repository requires.
+- Traditional `.hpp` and non-module `.cpp` remain valid when **actually necessary** for
+  exported C/SDK/plugin ABI, required macros, external consumers that need textual headers,
+  generated/third-party constraints, unsupported compiler/build integration, or a genuinely
+  isolated interoperability boundary. State the reason and localize the exception. Merely
+  preferring familiar headers or anticipating hypothetical compile-time costs is not a reason.
+- Do not mechanically convert unrelated working code while fixing a localized defect. Plan
+  migration around real consumers and stable ABI. Existing legacy files do not set a precedent
+  for new first-party architecture, and one incompatible SDK does not justify abandoning modules.
+- Keep xmake's module dependency scanning, module source declarations, BMI/IFC ownership,
+  and incremental build dependencies correct. Never commit compiler-generated BMI/IFC artifacts.
+  Verify relevant **clean and incremental native builds** and at least one real importer when
+  introducing/changing module boundaries. Verify both the development host and SKSE consumer
+  when their imports or linking contracts change.
+
 ## Model valid domain states
 
 - Express domain distinctions and valid state combinations in types: discriminated unions, meaningful IDs,
@@ -160,13 +262,16 @@ Keep domain decisions independent of protobuf, SQLite, HTTP, ENet, UI, and game-
   ground and pointless names for self-evident local values such as a loop's zero index.
 - Preserve the established C++ syntax style from `.clang-format` and subsequent manual edits.
   A completed formatting pass does not reduce the need for source review or structural improvement.
-  Do not repeat repository-wide clang-format runs during a manual readability pass.
+  Do not repeat repository-wide clang-format runs during a manual readability pass. C++ module
+  interface files need the same deliberate semantic spacing and control-flow decomposition;
+  colocation of API and implementation must improve discoverability, not produce giant methods.
 - Edit F# manually. Do not install or run Fantomas or another F# formatter, including through scripts,
   hooks, format-on-save, or automatic build/format stages. Read the actual source and choose each edit;
   do not substitute blanket whitespace scripts, regex spacing passes, or generic reflow operations.
   Normal editing and patch tools are appropriate. Follow the existing UI formatting configuration.
 - Choose architecture and patterns to solve the present problem. Useful generic abstractions and local
   refactoring are welcome; speculative frameworks, extension points, and compatibility layers are not.
+  Revisit the actual design as complexity emerges instead of continuously extending a poor boundary.
   Preserve user changes and unrelated behavior.
 - Fix nearby violations when that directly supports the task and remains reviewable. Report significant
   findings outside that scope. If a broad redesign or product decision is necessary, present the concrete
@@ -192,7 +297,30 @@ Keep domain decisions independent of protobuf, SQLite, HTTP, ENet, UI, and game-
   Ambiguous control-flow, ownership, or decomposition decisions return to the accountable design owner.
 - Final acceptance includes reviewed coverage, real before/after examples from both languages,
   structural decisions, actual checks, and remaining exceptions. Confirm that no F# formatter was used.
+  Review the final C++ module boundaries, owners, dependencies, and composition as part of any substantial
+  architectural refactor; tool and test success alone do not establish a sound design.
   Formatting-only edits need no artificial tests; structural changes need checks for their actual risks.
+
+## Remove dead code and keep optional diagnostics out of production
+
+- Remove **confirmed** unreachable/unused code, obsolete scaffolding, abandoned compatibility
+  paths, and temporary debugging helpers when working in their owning area. Clean up unused
+  imports, build entries, configuration, tests, and documentation. Do not retain commented-out
+  implementations for hypothetical future use.
+- First verify indirect use: module exports, public C/SDK/SKSE entry points, registration,
+  callbacks, serialization, reflection, generated bindings, plugin interfaces, tests, and
+  supported build modes. No local reference alone does not prove that code is dead.
+- Optional development traces, verbose dumps, profiling, and diagnostic-only probes must be
+  **compiled under explicit build flags**, disabled in default production builds. Reuse the
+  existing configuration flags where possible; do not create a fragmented flag vocabulary.
+- Gate **both diagnostic implementations and call sites**, including argument formatting,
+  allocations, captures, data preparation, callback registration, and worker startup. A runtime
+  logger set to off while its expensive arguments still execute does not satisfy this rule.
+- Required production error reporting, validation, cleanup, and lifecycle/supervision signals
+  must remain active. Do not turn a real failure into success or hide an expected dependency
+  error merely because optional diagnostics are disabled.
+- When changing diagnostic boundaries, verify applicable diagnostics-enabled and production
+  variants. Preserve supported behavior and document the build flag and actual checks.
 
 ## Keep contracts and generated code synchronized
 
@@ -231,6 +359,13 @@ xmake; managed projects target .NET 10. Consult `tests/README.md` for prerequisi
   tests for formatting-only edits. Async tests use controlled delivery/gates and bounded waits, not timing luck.
 - For contract or lifecycle changes, check the affected producer and consumer, late/stale results, and
   cleanup/overload behavior as applicable. Run smoke/load scenarios only when they address a concrete risk.
+- For C++ module or composition changes, check the module dependency graph, real importers, and
+  clean/incremental native builds as relevant; do not treat a successful incremental build on
+  stale BMI/IFC artifacts as evidence that clean compilation works.
+- For significant feature work, finish with a brief architectural review of actual owners,
+  constructor/dependency paths, state transitions, and event subscriptions. Record meaningful
+  alternatives considered and the reason for the final structure; do not add ceremonial reviews
+  to trivial changes.
 - Update existing documentation in the same change when behavior, contracts, ownership, configuration,
   generation, or commands change. Include affected example configurations and documentation links.
   Preserve each document's language; most project documentation is Russian. Correct relevant stale claims,
