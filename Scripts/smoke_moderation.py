@@ -108,7 +108,7 @@ def smoke(args, log, directory: Path):
         stage("a mute silences the player at once, is listed, spares moderators and lifts")
 
         location = {"location": {"locationId": {"pluginName": "Skyrim.esm", "localFormId": 291}, "locationName": "Whiterun"},
-                    "position": {"X": 1, "Y": 2, "Z": 3}, "rotation": {"X": 0, "Y": 0, "Z": 1.5}}
+                    "position": {"X": 1, "Y": 2, "Z": 3}, "cameraDirection": {"X": 0, "Y": 1, "Z": 0}}
         player.send("begin Nerevar")
         player.send("move " + json.dumps({"location": location}))
         mark_id = command(player, f"note smoke-note-{nonce}", r"placed mark (\d+)").group(1)
