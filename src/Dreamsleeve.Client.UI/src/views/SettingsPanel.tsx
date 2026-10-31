@@ -5,54 +5,13 @@ import type {
   NameColorState,
   Settings,
 } from "../bridge/types";
-import { isColor } from "../state/settings";
 import { nameColorPalette, hueColor, hueOf } from "../state/nameColor";
 import { defaults, limits } from "../bridge/settings.generated";
 import { identityStatus } from "../state/identity";
 import { Select } from "./Select";
+import { ColorField } from "./ColorField";
 import { useEffect, useState } from "react";
 import styles from "../styles/Settings.module.css";
-// A "#RRGGBB" text field with a swatch: an incomplete value is kept while
-// typing and applied only once it is a valid colour.
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return (
-    <label className={styles.color}>
-      <span>{label}</span>
-      <span
-        className={styles.swatch}
-        aria-hidden="true"
-        style={{ background: isColor(text) ? text : value }}
-      />
-      <input
-        type="text"
-        aria-label={label}
-        maxLength={7}
-        spellCheck={false}
-        value={text}
-        data-valid={isColor(text)}
-        onChange={(e) => {
-          const next = e.target.value.trim();
-          setText(next);
-          if (isColor(next) && next.toUpperCase() !== value.toUpperCase())
-            onChange(next.toUpperCase());
-        }}
-        onBlur={() => {
-          if (!isColor(text)) setText(value);
-        }}
-      />
-    </label>
-  );
-}
 // The own name color in chat: a server setting, applied with its own button.
 // The server refuses a color too dark to read; the preview shows the chat line.
 function NameColorPicker({
@@ -116,7 +75,12 @@ function NameColorPicker({
           onChange={(e) => setDraft(hueColor(Number(e.target.value)))}
         />
       </label>
-      <ColorField label="Свой цвет" value={draft} onChange={setDraft} />
+      <ColorField
+        label="Свой цвет"
+        value={draft}
+        onChange={setDraft}
+        presets={nameColorPalette}
+      />
       <button
         type="button"
         className={`${styles.primary} ${styles.apply}`}
@@ -152,6 +116,27 @@ const ranges = [
   ["fontSize", "Размер шрифта", 1],
   ["lineHeight", "Межстрочный интервал", 0.05],
   ["background", "Непрозрачность фона", 0.05],
+] as const;
+const phantomCountOptions = Array.from(
+  {
+    length: limits.maxVisiblePhantoms.max - limits.maxVisiblePhantoms.min + 1,
+  },
+  (_, i) => {
+    const value = String(limits.maxVisiblePhantoms.min + i);
+    return { value, label: value };
+  },
+);
+const phantomRanges = [
+  ["phantomDrawDistance", "Дальность фантомов", 128, "игр. ед."],
+  ["phantomOpacity", "Непрозрачность фантомов", 0.05, ""],
+  ["phantomSampleRate", "Частота движения", 1, "Гц"],
+  ["phantomDelayMs", "Минимальная задержка сглаживания", 1, "мс"],
+  ["phantomExtrapolationMs", "Продолжение движения без обновлений", 1, "мс"],
+  ["phantomTimeoutMs", "Скрывать при отсутствии обновлений", 50, "мс"],
+  ["phantomMemoryMiB", "Лимит памяти моделей", 64, "МиБ"],
+  ["phantomCacheMiB", "Лимит кеша на диске", 64, "МиБ"],
+  ["phantomUploadKiB", "Отправка моделей", 64, "КиБ/с"],
+  ["phantomDownloadKiB", "Загрузка моделей", 64, "КиБ/с"],
 ] as const;
 export function SettingsPanel({
   chat,
@@ -466,6 +451,80 @@ export function SettingsPanel({
           единицах. Имена пока доступны только в SE/AE.
         </p>
       </fieldset>
+      <fieldset className={styles.group} data-part="phantoms">
+        <legend>Фантомы</legend>
+        {(
+          [
+            ["publishPhantoms", "Публиковать мой фантом"],
+            ["showPhantoms", "Показывать фантомы других игроков"],
+            ["phantomFallback", "Показывать светлячок, если фантом недоступен"],
+            ["combatHidePhantoms", "Скрывать фантомы в бою"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <span>{label}</span>
+            <input
+              type="checkbox"
+              aria-label={label}
+              checked={s[key]}
+              onChange={(e) => chat.configure({ [key]: e.target.checked })}
+            />
+          </label>
+        ))}
+        <label className={styles.choice}>
+          Фантомов рядом
+          <Select
+            label="Фантомов рядом"
+            value={String(s.maxVisiblePhantoms)}
+            options={phantomCountOptions}
+            onChange={(value) =>
+              chat.configure({ maxVisiblePhantoms: Number(value) })
+            }
+          />
+        </label>
+        <ColorField
+          label="Цвет фантомов"
+          value={s.phantomColor}
+          onChange={(phantomColor) => chat.configure({ phantomColor })}
+        />
+        <ColorField
+          label="Цвет фантомов согильдейцев"
+          value={s.phantomGuildColor}
+          onChange={(phantomGuildColor) =>
+            chat.configure({ phantomGuildColor })
+          }
+        />
+        {phantomRanges.map(([key, label, step, unit]) => (
+          <label key={key} className={styles.range}>
+            <span>
+              {label}
+              <output>
+                {s[key].toFixed(step < 1 ? 2 : 0)}
+                {unit && ` ${unit}`}
+              </output>
+            </span>
+            <input
+              type="range"
+              aria-label={label}
+              min={limits[key].min}
+              max={limits[key].max}
+              step={step}
+              value={s[key]}
+              onChange={(e) =>
+                chat.configure({ [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <p className={styles.muted}>
+          Публикация и просмотр включаются независимо. Частота движения
+          ограничивается сервером. Настройки применяются после сохранения.
+        </p>
+        <p className={styles.muted}>
+          Дальность — в игровых единицах; память и кеш — в МиБ. Кеш на диске
+          хранит готовые модели внешности.
+        </p>
+      </fieldset>
       <fieldset className={styles.group}>
         <legend>Сообщения над игроками</legend>
         {(
@@ -666,6 +725,25 @@ export function SettingsPanel({
           Пока ваш персонаж в бою. Без светлячка нет и имени с сообщением над
           ним. Сообщения не теряются: они появятся после боя, если время показа
           ещё не вышло. Применяется после сохранения.
+        </p>
+      </fieldset>
+      <fieldset className={styles.group}>
+        <legend>Создание персонажа</legend>
+        <label>
+          <span>Скрывать других игроков</span>
+          <input
+            type="checkbox"
+            checked={s.raceMenuHidePlayers}
+            onChange={(e) =>
+              chat.configure({ raceMenuHidePlayers: e.target.checked })
+            }
+          />
+        </label>
+        <p className={styles.muted}>
+          Пока открыто меню создания персонажа (RaceMenu): фантомы, светлячки,
+          имена и сообщения других игроков не показываются. В новой игре все
+          начинают в одном месте и иначе стоят друг в друге. Применяется после
+          сохранения.
         </p>
       </fieldset>
       <button className={styles.primary} onClick={chat.save}>

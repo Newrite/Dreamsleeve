@@ -44,15 +44,15 @@ const char descriptor_table_protodef_network_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "twork*\215\001\n\020DisconnectReason\022\017\n\013Unspecifie"
     "d\020\000\022\022\n\016ClientShutdown\020\001\022\022\n\016ServerShutdow"
     "n\020\002\022\n\n\006Kicked\020\003\022\016\n\nAuthFailed\020\004\022\021\n\rTimeo"
-    "utPolicy\020\005\022\021\n\rProtocolError\020\006*3\n\014Deliver"
+    "utPolicy\020\005\022\021\n\rProtocolError\020\006*J\n\014Deliver"
     "yLane\022\013\n\007Control\020\000\022\010\n\004Chat\020\001\022\014\n\010Realtime"
-    "\020\002b\006proto3"
+    "\020\002\022\n\n\006Models\020\003\022\t\n\005Poses\020\004b\006proto3"
 };
 static ::absl::once_flag descriptor_table_network_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_network_2eproto = {
     false,
     false,
-    250,
+    273,
     descriptor_table_protodef_network_2eproto,
     "network.proto",
     &descriptor_table_network_2eproto_once,
@@ -79,7 +79,7 @@ const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL DeliveryLane_descript
   return file_level_enum_descriptors_network_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t DeliveryLane_internal_data_[] = {
-    196608u, 0u, };
+    327680u, 0u, };
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace Network
 }  // namespace Protocol

@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-08",
+  "bytes": 13313497,
+  "rateBytesPerSecond": 5242880,
+  "scope": "Production PhantomHttp + PhantomStorage + Kestrel; .NET HttpClient and persistent production C++ Http/WinHTTP; loopback, no WAN packet emulation",
+  "managed": [
+    {
+      "bytes": 13313497,
+      "elapsedMs": 2589.1063,
+      "name": "fast1",
+      "pumpMs": 2552.1384,
+      "remainingPumpMs": 2511.6962,
+      "responseWriteMs": 5.0361000000000145,
+      "storageReadMs": 35.40610000000002,
+      "valid": true
+    },
+    {
+      "bytes": 13313497,
+      "elapsedMs": 2538.839,
+      "name": "fast2",
+      "pumpMs": 2537.798,
+      "remainingPumpMs": 2509.5500999999995,
+      "responseWriteMs": 2.119199999999987,
+      "storageReadMs": 26.128700000000002,
+      "valid": true
+    },
+    {
+      "bytes": 13313497,
+      "elapsedMs": 25393.6779,
+      "name": "slow512KiB",
+      "pumpMs": 15256.5341,
+      "remainingPumpMs": 2495.4142000000206,
+      "responseWriteMs": 12735.19619999998,
+      "storageReadMs": 25.923699999999986,
+      "valid": true
+    },
+    {
+      "bytes": 13313497,
+      "elapsedMs": 2540.857,
+      "name": "fastAfterSlow",
+      "pumpMs": 2540.6412,
+      "remainingPumpMs": 2512.2925999999998,
+      "responseWriteMs": 2.1277999999999855,
+      "storageReadMs": 26.220800000000004,
+      "valid": true
+    },
+    {
+      "bytes": 13313497,
+      "elapsedMs": 4217.7967,
+      "name": "pause3s",
+      "pumpMs": 4217.6205,
+      "remainingPumpMs": 2507.899500000003,
+      "responseWriteMs": 1684.0100999999966,
+      "storageReadMs": 25.710899999999988,
+      "valid": true
+    },
+    {
+      "bytes": 13313497,
+      "elapsedMs": 2539.3071,
+      "name": "fastAfterPause",
+      "pumpMs": 2539.1256,
+      "remainingPumpMs": 2511.7255,
+      "responseWriteMs": 2.1062999999999854,
+      "storageReadMs": 25.293800000000015,
+      "valid": true
+    }
+  ],
+  "nativePersistent": [
+    {
+      "elapsedMs": 2595.3179,
+      "name": "winhttpFast1",
+      "pumpMs": 2553.9278,
+      "remainingPumpMs": 2510.5932,
+      "responseWriteMs": 5.747800000000031,
+      "storageReadMs": 37.586800000000004,
+      "valid": true
+    },
+    {
+      "elapsedMs": 25380.5114,
+      "name": "winhttpSlow512KiB",
+      "pumpMs": 15257.472,
+      "remainingPumpMs": 2495.2325000000064,
+      "responseWriteMs": 12736.561099999994,
+      "storageReadMs": 25.67839999999998,
+      "valid": true
+    },
+    {
+      "elapsedMs": 2554.6224,
+      "name": "winhttpFastAfterSlow",
+      "pumpMs": 2537.6096,
+      "remainingPumpMs": 2508.9710999999998,
+      "responseWriteMs": 2.157099999999986,
+      "storageReadMs": 26.48139999999997,
+      "valid": true
+    }
+  ]
+}

@@ -58,7 +58,12 @@ module internal GuildCodec =
         if isNull after then Ok ValueNone
         else
             match guild after.GuildId, nameKey "after" after.Name, count "after" after.Members with
-            | Ok guild, Ok key, Ok members -> Ok(ValueSome { Guild = guild; NameKey = key; Members = members })
+            | Ok guild, Ok key, Ok members ->
+                Ok(ValueSome {
+                    Guild = guild
+                    NameKey = key
+                    Members = members
+                })
             | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
 
     let private catalogQuery (query: Dreamsleeve.Protocol.Chat.QueryGuildCatalog) =
@@ -68,7 +73,14 @@ module internal GuildCodec =
             else count "max_members" query.MaxMembers |> Result.map ValueSome
         match nameKey "search" query.Search, count "min_members" query.MinMembers, maxMembers, catalogSort query.Sort, catalogAfter query.After with
         | Ok search, Ok minimum, Ok maximum, Ok sort, Ok after ->
-            Ok { Search = search; MinMembers = minimum; MaxMembers = maximum; OpenOnly = query.OpenOnly; Sort = sort; After = after }
+            Ok {
+                Search = search
+                MinMembers = minimum
+                MaxMembers = maximum
+                OpenOnly = query.OpenOnly
+                Sort = sort
+                After = after
+            }
         | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _ | _, _, _, Error error, _ | _, _, _, _, Error error ->
             Error error
 
@@ -81,29 +93,40 @@ module internal GuildCodec =
         let action =
             match source.ActionCase with
             | WireAction.Create -> Ok(GuildAction.Create source.Create.Name)
-            | WireAction.Invite -> pair source.Invite.GuildId source.Invite.PlayerId (fun guild player -> GuildAction.Invite(guild, player))
-            | WireAction.Answer -> guild source.Answer.GuildId |> Result.map (fun guild -> GuildAction.Answer(guild, source.Answer.Accept))
+            | WireAction.Invite ->
+                pair source.Invite.GuildId source.Invite.PlayerId (fun guild player -> GuildAction.Invite(guild, player))
+            | WireAction.Answer ->
+                guild source.Answer.GuildId
+                |> Result.map (fun guild -> GuildAction.Answer(guild, source.Answer.Accept))
             | WireAction.Leave -> guild source.Leave.GuildId |> Result.map GuildAction.Leave
-            | WireAction.Exclude -> pair source.Exclude.GuildId source.Exclude.PlayerId (fun guild player -> GuildAction.Exclude(guild, player))
+            | WireAction.Exclude ->
+                pair source.Exclude.GuildId source.Exclude.PlayerId (fun guild player -> GuildAction.Exclude(guild, player))
             | WireAction.SetRole ->
                 pair source.SetRole.GuildId source.SetRole.PlayerId (fun guild player -> struct (guild, player))
                 |> Result.bind (fun (struct (guild, player)) ->
                     decodeRole source.SetRole.Role |> Result.map (fun role -> GuildAction.SetRole(guild, player, role)))
-            | WireAction.Transfer -> pair source.Transfer.GuildId source.Transfer.PlayerId (fun guild player -> GuildAction.Transfer(guild, player))
+            | WireAction.Transfer ->
+                pair source.Transfer.GuildId source.Transfer.PlayerId (fun guild player -> GuildAction.Transfer(guild, player))
             | WireAction.Mute ->
                 let mute = source.Mute
                 let minutes =
-                    if not mute.HasMinutes then Ok ValueNone
-                    elif mute.Minutes > uint32 Int32.MaxValue then Error(ProtocolCodecFailure.InvalidPayload "minutes")
-                    else Ok(ValueSome(int mute.Minutes))
+                    if not mute.HasMinutes then
+                        Ok ValueNone
+                    elif mute.Minutes > uint32 Int32.MaxValue then
+                        Error(ProtocolCodecFailure.InvalidPayload "minutes")
+                    else
+                        Ok(ValueSome(int mute.Minutes))
                 match pair mute.GuildId mute.PlayerId (fun guild player -> struct (guild, player)), minutes,
                       SanctionReason.create mute.Reason |> Result.mapError ProtocolCodecFailure.InvalidDomain with
                 | Ok(struct (guild, player)), Ok minutes, Ok reason ->
                     SanctionTerm.create minutes
                     |> Result.mapError ProtocolCodecFailure.InvalidDomain
                     |> Result.map (fun term -> GuildAction.Mute(guild, player, term, reason))
-                | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
-            | WireAction.Unmute -> pair source.Unmute.GuildId source.Unmute.PlayerId (fun guild player -> GuildAction.Unmute(guild, player))
+                | Error error, _, _
+                | _, Error error, _
+                | _, _, Error error -> Error error
+            | WireAction.Unmute ->
+                pair source.Unmute.GuildId source.Unmute.PlayerId (fun guild player -> GuildAction.Unmute(guild, player))
             | WireAction.Disband -> guild source.Disband.GuildId |> Result.map GuildAction.Disband
             | WireAction.CreateTitle ->
                 guild source.CreateTitle.GuildId |> Result.map (fun guild -> GuildAction.CreateTitle(guild, source.CreateTitle.Name))
@@ -149,6 +172,7 @@ module internal GuildCodec =
             let state = Dreamsleeve.Protocol.Chat.MuteState(Reason = SanctionReason.value mute.Reason)
             mute.Expires |> ValueOption.iter (fun until -> state.UntilUnixMs <- unixMs until)
             result.Mute <- state)
+
         result
 
     let requestOf (view: GuildJoinRequestView) =
@@ -222,12 +246,21 @@ module internal GuildCodec =
         match change with
         | GuildChange.Added view -> result.Added <- guildOf view
         | GuildChange.Removed(guild, reason) ->
-            result.Removed <- Dreamsleeve.Protocol.Chat.GuildRemoved(GuildId = GuildId.value guild, Reason = removal reason)
+            result.Removed <-
+                Dreamsleeve.Protocol.Chat.GuildRemoved(
+                    GuildId = GuildId.value guild,
+                    Reason = removal reason)
         | GuildChange.MemberChanged(guild, view) ->
-            result.Member <- Dreamsleeve.Protocol.Chat.GuildMemberUpdate(GuildId = GuildId.value guild, Member = memberOf view)
+            result.Member <-
+                Dreamsleeve.Protocol.Chat.GuildMemberUpdate(
+                    GuildId = GuildId.value guild,
+                    Member = memberOf view)
         | GuildChange.MemberRemoved(guild, player, reason) ->
             result.MemberRemoved <-
-                Dreamsleeve.Protocol.Chat.GuildMemberRemoved(GuildId = GuildId.value guild, PlayerId = PlayerId.value player, Reason = removal reason)
+                Dreamsleeve.Protocol.Chat.GuildMemberRemoved(
+                    GuildId = GuildId.value guild,
+                    PlayerId = PlayerId.value player,
+                    Reason = removal reason)
         | GuildChange.Invited view -> result.Invited <- inviteOf view
         | GuildChange.InviteRemoved guild -> result.InviteRemoved <- GuildId.value guild
         | GuildChange.Titles(guild, titles) ->

@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.Auth;
 import DreamNet.Runtime;
 import Dreamsleeve.Client.CredentialStore;
+import Dreamsleeve.Client.Auth.Browser;
 import Dreamsleeve.Client.Device;
 export import Dreamsleeve.Client.Settings;
 export import Dreamsleeve.Client.Runtime;
@@ -19,6 +20,12 @@ export namespace Dreamsleeve::Client
     std::size_t                first{};
   };
 
+  // The detached auth-method request port; the production adapter is the default.
+  struct ApplicationPorts
+  {
+    std::function<std::expected<Auth::Methods, Auth::Failure>(std::string_view, bool)> readMethods = Auth::ReadMethods;
+  };
+
   // All public calls, including destruction, belong to the application main
   // thread. The worker owns Runtime; Exchange is the only shared-state boundary.
   class ClientApplication final
@@ -28,24 +35,31 @@ public:
     using Result = std::expected<std::unique_ptr<ClientApplication>, std::string>;
     using Ptr    = std::unique_ptr<ClientApplication>;
 
-    static Result TryCreate(ClientSettings settings, RoutePreference preference = {})
+    static Result TryCreate(ClientSettings settings, RoutePreference preference = {}, ApplicationPorts ports = {})
     {
       if (auto valid = ValidateClientSettings(settings); !valid) return std::unexpected{valid.error()};
+      if (!ports.readMethods) return std::unexpected{"Missing authentication methods request port"};
+
       auto net = DreamNetRuntime::TryInitialize();
       if (!net) return std::unexpected{net.error().ToLogString()};
+
       auto exchange = ClientExchange::TryCreate(settings.commandCapacity, settings.stateCapacity);
       if (!exchange) return std::unexpected{"Cannot create client exchange"};
       auto runtime = ClientRuntime::Create(settings.client, **exchange);
 
       auto app = std::unique_ptr<ClientApplication>{
-          new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime)}
+          new ClientApplication{std::move(settings), std::move(*net), std::move(*exchange), std::move(runtime), std::move(ports)}
       };
+
       // Before the threads: the first connection already goes by the route.
-      const auto known = [&](std::optional<std::size_t> index) { return index && *index < app->routes.size() ? index : std::nullopt; };
+      const auto known = [&](std::optional<std::size_t> index) {
+        return index && *index < app->routes.size() ? index : std::nullopt;
+      };
       const auto chosen = known(preference.chosen);
       app->exchange->SetRouteChoice(chosen);
       app->automatic = !chosen;
       app->SelectRoute(chosen.value_or(known(preference.first).value_or(0)), true);
+
       try
       {
         app->methodsReader = std::jthread([self = app.get()](std::stop_token stop) { self->ReadMethods(stop); });
@@ -133,6 +147,7 @@ public:
     {
       exchange->RequestStop();
       if (worker.joinable()) worker.join();
+
       methodsReader.request_stop();
       if (methodsReader.joinable()) methodsReader.join();
     }
@@ -143,25 +158,24 @@ private:
     // and gives up after this many failed asks in a row.
     static constexpr auto SteamPollInterval    = std::chrono::seconds{2};
     static constexpr int  MaxSteamPollFailures = 5;
+
     // Unknown sign-in methods are asked again this often.
     static constexpr auto MethodsRetry = std::chrono::seconds{30};
 
-    // How opening the browser ended, written by its own thread.
-    struct BrowserOpening
-    {
-      std::mutex  mutex;
-      bool        done{};
-      std::string opener;
-      std::string error;
-    };
-
-    ClientApplication(ClientSettings options, DreamNetRuntime net, ClientExchange::Ptr boundary, ClientRuntime::Ptr client)
+    ClientApplication(
+      ClientSettings      options,
+      DreamNetRuntime     net,
+      ClientExchange::Ptr boundary,
+      ClientRuntime::Ptr  client,
+      ApplicationPorts    adapters)
         : settings(std::move(options)),
           routes(RoutesOf(settings)),
           enet(std::move(net)),
           exchange(std::move(boundary)),
-          runtime(std::move(client))
+          runtime(std::move(client)),
+          ports(std::move(adapters))
     {
+      runtime->UseHttpEndpoint(settings.authUrl, settings.allowInsecureRemoteAuth);
       // One server for the application's lifetime: its credential scope keys the device hash too.
       if (auto scope = Auth::CredentialTarget(settings.authUrl, settings.allowInsecureRemoteAuth)) device = Device::Identify(*scope);
     }
@@ -205,11 +219,21 @@ private:
 
     void SelectRoute(std::size_t index, bool now)
     {
-      active       = index;
       routeReached = false;
       runtime->UseEndpoint(routes[index].serverHost, routes[index].serverPort, now);
-      exchange->PublishRoute(index, false);
-      RefreshMethods();
+      runtime->UseHttpEndpoint(routes[index].authUrl, settings.allowInsecureRemoteAuth);
+
+      {
+        // Selection and a methods reply's revision check/publication serialize
+        // here. A route index alone does not identify an A -> B -> A request.
+        std::lock_guard lock{methodsMutex};
+        active = index;
+        ++routeRevision;
+        exchange->PublishRoute(index, false, true);
+        methodsWanted = true;
+      }
+
+      methodsWake.notify_one();
     }
 
     // The player's choice applies while no session runs.
@@ -244,8 +268,10 @@ private:
     template <class Request>
     auto OnRoutes(Request request)
     {
-      auto       result      = request(Route());
-      const auto unanswered  = [&] { return !result && result.error().code == Auth::FailureCode::Unreachable; };
+      auto       result     = request(Route());
+      const auto unanswered = [&] {
+        return !result && result.error().code == Auth::FailureCode::Unreachable;
+      };
       for (std::size_t tried = 1; unanswered() && tried < routes.size() && !exchange->AuthenticationCanceled() && NextRoute(); ++tried)
         result = request(Route());
       if (!unanswered()) NoteReached();
@@ -280,9 +306,8 @@ private:
         exchange->PublishSavedLogin(false);
         return {};
       }
-      auto result = OnRoutes([&](const ConnectionRoute& route) {
-        return Auth::Logout(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth);
-      });
+      auto result = OnRoutes(
+        [&](const ConnectionRoute& route) { return Auth::Logout(route.authUrl, (**saved).token, settings.allowInsecureRemoteAuth); });
       // Keep the credential on transient failure so the UI can retry revocation.
       // ForgetSavedLogin is the explicit offline alternative.
       if (!result) return result;
@@ -299,6 +324,7 @@ private:
         if (!saved) return saved;
         exchange->PublishSavedLogin(true, grant->username);
       }
+
       auto connected = runtime->Connect(std::move(grant->sessionTicket));
       if (!connected)
         return std::unexpected{
@@ -320,6 +346,7 @@ private:
         if (!registered) return registered;
         NoteReached();
       }
+
       return ConnectGrant(
         OnRoutes([&](const ConnectionRoute& route) {
           return Auth::LoginGrant(route.authUrl, request.credentials, request.remember, settings.allowInsecureRemoteAuth, device);
@@ -357,8 +384,10 @@ private:
         return Auth::BeginSteam(route.authUrl, request.remember, settings.allowInsecureRemoteAuth, device);
       });
       if (!flow) return std::unexpected{flow.error()};
+
       // The page stays available for "copy the link" while the client waits.
       exchange->PublishSteamPage(flow->page);
+
       struct PageShown
       {
         ClientExchange& exchange;
@@ -368,27 +397,13 @@ private:
           exchange.PublishSteamPage({});
         }
       } shown{*exchange};
-      // The shell may take its time or never answer, and the wait must not
-      // stall with it. The thread holds only its own copies, so it is detached.
-      auto opening = std::make_shared<BrowserOpening>();
-      try
-      {
-        std::thread{[opening, page = flow->page] {
-          auto            opened = Auth::OpenSteamPage(page);
-          std::lock_guard lock{opening->mutex};
-          if (opened)
-            opening->opener = std::move(*opened);
-          else
-            opening->error = std::move(opened.error());
-          opening->done = true;
-        }}.detach();
-      }
-      catch (const std::system_error&)
-      {
-        opening->done  = true;
-        opening->error = "Cannot start a thread for the browser";
-      }
-      bool       opened{};
+
+      // One process-wide opener remains owned even if this flow is canceled.
+      // A busy shell leaves the current manual-copy page available; no resend.
+      auto opening = Auth::Browser::Start(flow->page);
+      bool opened  = !opening;
+      if (!opening) exchange->PublishSteamPage(flow->page, {}, opening.error().detail);
+
       const auto deadline = std::chrono::steady_clock::now() + flow->lifetime;
       auto       next     = std::chrono::steady_clock::now() + SteamPollInterval;
       int        failures{};
@@ -397,10 +412,13 @@ private:
         Report(runtime->Poll(10));
         if (!opened)
         {
-          std::lock_guard lock{opening->mutex};
-          opened = opening->done;
-          if (opened) exchange->PublishSteamPage(flow->page, opening->opener, opening->error);
+          if (auto result = (*opening)->Read())
+          {
+            opened = true;
+            exchange->PublishSteamPage(flow->page, *result ? **result : std::string{}, *result ? std::string{} : result->error());
+          }
         }
+
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline)
           return std::unexpected{
@@ -419,6 +437,7 @@ private:
             continue;
           return std::unexpected{polled.error()};
         }
+
         failures = 0;
         if (!*polled) continue;
         if (request.remember && (**polled).rememberToken.empty())
@@ -458,11 +477,17 @@ private:
       std::unique_lock lock{methodsMutex};
       while (!stop.stop_requested())
       {
-        methodsWanted = false;
+        methodsWanted       = false;
+        const auto revision = routeRevision;
+        const auto url      = routes[active.load()].authUrl;
+
         lock.unlock();
-        auto methods = Auth::ReadMethods(routes[active.load()].authUrl, settings.allowInsecureRemoteAuth);
-        if (methods) exchange->PublishMethods(*methods);
+        auto methods = ports.readMethods(url, settings.allowInsecureRemoteAuth);
         lock.lock();
+
+        if (stop.stop_requested()) break;
+        if (revision != routeRevision) continue;
+        if (methods) exchange->PublishMethods(*methods);
         if (methods)
           methodsWake.wait(lock, stop, [this] { return methodsWanted; });
         else
@@ -491,6 +516,7 @@ private:
         exchange->PublishSavedLogin(saved->has_value(), saved->has_value() ? (**saved).username : std::string{});
       else
         exchange->PublishError(saved.error().message);
+
       // Online from the start: the server counts a client that has not signed in.
       runtime->KeepGuest(true);
 
@@ -513,6 +539,7 @@ private:
             result ? Auth::FailureCode::None : result.error().code);
           if (refused) RefreshMethods();
         }
+
         if (exchange->StopRequested()) break;
         if (control.disconnect || (control.authentication && exchange->AuthenticationCanceled())) Report(runtime->Disconnect());
         Report(runtime->Poll(10));
@@ -539,14 +566,18 @@ private:
     bool                       routeReached{};
     std::size_t                failedRoutes{};
     std::optional<std::string> device;
+
     DreamNetRuntime            enet;
-    ClientExchange::Ptr exchange;
-    ClientRuntime::Ptr  runtime;
-    std::jthread        worker;
-    // ReadMethods: methodsWanted under methodsMutex.
+    ClientExchange::Ptr        exchange;
+    ClientRuntime::Ptr         runtime;
+    std::jthread               worker;
+    ApplicationPorts           ports;
+
+    // ReadMethods owns detached HTTP work; wanted/revision under methodsMutex.
     std::mutex                  methodsMutex;
     std::condition_variable_any methodsWake;
     bool                        methodsWanted{};
+    std::uint64_t               routeRevision{};
     std::jthread                methodsReader;
   };
 

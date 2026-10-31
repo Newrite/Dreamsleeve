@@ -2,6 +2,8 @@ export module Dreamsleeve.Host.Commands;
 
 import std;
 export import Dreamsleeve.Host.Session;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 export import Dreamsleeve.Host.Bubbles;
 
 // UI commands applied to the host: the chat session, ui.toml and the account.
@@ -97,12 +99,15 @@ export namespace Dreamsleeve::Host
         auto&      chat  = context.ui.ui.chat;
         const bool names = InstantChanged(chat, command.settings);
         chat             = std::move(command.settings);
+
         if (names)
         {
           context.session.Refresh();
           Emit(context.session.IgnoredList(chat));
         }
+
         context.ports.activationKey(chat.activationKey);
+
         Bridge::SettingsResultEvent result{.revision = command.revision};
         if (auto saved = context.ports.saveUi(); !saved) result.error = Bridge::ClipError(saved.error());
         Emit(std::move(result));

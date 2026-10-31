@@ -113,6 +113,7 @@ namespace Input
       if (!last) head = event;
       last = event;
     }
+
     if (!full && last && last->next)
     {
       if (count < links.size())
@@ -123,6 +124,7 @@ namespace Input
       else
         full = true;
     }
+
     lock.unlock();
     if (full)
     {
@@ -133,6 +135,7 @@ namespace Input
 
     RE::InputEvent* chain = head;
     original(source, &chain);
+
     for (auto i = count; i-- > 0;)
       links[i].event->next = links[i].next;
   }

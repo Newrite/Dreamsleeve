@@ -58,12 +58,12 @@ namespace Dreamsleeve::Client::Wire::Detail
     target.set_z(value.Z);
   }
 
-  inline Domain::Rotation RotationOf(const P::Rotation& source)
+  inline Domain::CameraDirection CameraDirectionOf(const P::CameraDirection& source)
   {
     return {source.x(), source.y(), source.z()};
   }
 
-  inline void WriteRotation(P::Rotation& target, const Domain::Rotation& value)
+  inline void WriteCameraDirection(P::CameraDirection& target, const Domain::CameraDirection& value)
   {
     target.set_x(value.X);
     target.set_y(value.Y);

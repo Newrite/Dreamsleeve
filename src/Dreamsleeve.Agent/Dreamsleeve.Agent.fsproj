@@ -9,5 +9,6 @@
     <Compile Include="AgentLifetimes.fs" />
     <Compile Include="AgentTicker.fs" />
     <Compile Include="AgentSupervisor.fs" />
+    <InternalsVisibleTo Include="Dreamsleeve.Server.Tests" />
   </ItemGroup>
 </Project>

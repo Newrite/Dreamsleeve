@@ -5,6 +5,11 @@ export import Dreamsleeve.Client.ProtocolCodec;
 export import DreamNet.Client;
 import DreamNet.Core;
 import Dreamsleeve.Client.Utils;
+import Dreamsleeve.Client.Phantom.Streaming;
+import Dreamsleeve.Client.Diagnostics.PhantomTrace;
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+import Dreamsleeve.Client.Diagnostics.PhantomRecorder;
+#endif
 
 export namespace Dreamsleeve::Client
 {
@@ -16,6 +21,7 @@ export namespace Dreamsleeve::Client
 public:
 
     using Error = std::variant<DreamNetError, Wire::Error, Domain::Error>;
+
     template <class T>
     using Result = std::expected<T, Error>;
     using Ptr    = std::unique_ptr<ClientRuntime>;
@@ -50,6 +56,11 @@ public:
       if (enabled || !SessionIdle(phase) || !transport) return;
       if (transport->State() == ClientState::Connected && transport->BeginDisconnect()) return;
       if (transport->State() != ClientState::Disconnecting) DropGuest();
+    }
+
+    void UseHttpEndpoint(std::string url, bool insecure)
+    {
+      phantoms.ConfigureHttp(std::move(url), insecure);
     }
 
     // Where the next connection goes; a guest link elsewhere is dropped. now:
@@ -175,6 +186,27 @@ public:
       if (phase == SessionPhase::Opening && Clock::now() >= deadline)
         return Fail(DreamNetError::Make(DreamNetErrorCode::ConnectTimeout, "OpenSession timed out"));
 
+      phantoms.Context(
+        contextRevision,
+        phase == SessionPhase::Ready && movementReady && latestMovement.has_value(),
+        latestMovement ? std::optional{latestMovement->location.locationId} : std::nullopt);
+      for (auto& outgoing : phantoms.Poll())
+      {
+        if (outgoing.lane == Phantom::Wire::PosesLane)
+        {
+          auto rotated = transport->RotateUnreliableSequence(outgoing.lane);
+          if (!rotated) return Fail(rotated.error());
+        }
+        const auto flag   = outgoing.lane == Phantom::Wire::PosesLane ? PacketFlag::UnreliableFragment : PacketFlag::Reliable;
+        auto       packet = DreamNetPacket::TryFromSpan(DreamNetPacket::DataSpan{outgoing.bytes}, flag);
+        if (!packet) return Fail(packet.error());
+        auto sent = transport->Send(std::move(*packet), outgoing.lane);
+        if (!sent) return Fail(sent.error());
+        Diagnostics::Trace::Packet(true, outgoing.lane, outgoing.bytes);
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+        if (outgoing.lane == Phantom::Wire::PosesLane) Diagnostics::Phantoms().Sent(outgoing.bytes);
+#endif
+      }
       auto sampled = SendMovement();
       return sampled ? commandsResult : sampled;
     }
@@ -213,6 +245,7 @@ private:
         : config(std::move(settings)),
           codec(std::move(codec)),
           exchange(exchange),
+          phantoms(exchange.Phantoms(), config.phantomCacheDirectory),
           model(config.maxPendingMovementSamples)
     {}
 
@@ -225,6 +258,7 @@ private:
     // Forgets the previous session, its pending requests included.
     void ResetSession()
     {
+      phantoms.Reset();
       serverName.clear();
       pending.clear();
       ResetMovement();
@@ -233,6 +267,7 @@ private:
       model.ResetSession();
       kinds.Clear();
       kindSweep = KindSweepFloor;
+
       exchange.PublishIdentity(std::nullopt, Domain::HiddenIdentity::None);
       exchange.PublishMute(std::nullopt);
       exchange.PublishRole(Domain::PlayerRole::Player);
@@ -382,6 +417,28 @@ private:
     {
       if (phase == SessionPhase::Disconnecting || SessionIdle(phase))
         return {};  // A terminal reply may have closed the session earlier in this batch.
+      if (received.channelId == Phantom::Wire::ModelsLane || received.channelId == Phantom::Wire::PosesLane)
+      {
+        const auto flags = received.packet.Flags();
+        if (
+          received.channelId == Phantom::Wire::PosesLane && received.packet.Data().empty() &&
+          PacketFlags::HasFlag(flags, PacketFlag::Reliable) && !PacketFlags::HasFlag(flags, PacketFlag::Unsequenced))
+          return {};
+        if (
+          PacketFlags::HasFlag(flags, PacketFlag::Unsequenced) ||
+          (received.channelId == Phantom::Wire::ModelsLane && !PacketFlags::HasFlag(flags, PacketFlag::Reliable)) ||
+          (received.channelId == Phantom::Wire::PosesLane && PacketFlags::HasFlag(flags, PacketFlag::Reliable)))
+          return Unexpected("phantom.delivery");
+        const auto bytes = received.packet.Data();
+        Diagnostics::Trace::Packet(false, received.channelId, bytes);
+        const auto now =
+          static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+        const auto result =
+          received.channelId == Phantom::Wire::ModelsLane ? phantoms.ReceiveAsset(bytes) : phantoms.ReceivePose(bytes, now);
+        if (!result) return Unexpected("phantom." + result.error().field);
+        return {};
+      }
+
       if (received.channelId > 2) return Unexpected("channel");
       const auto channel = static_cast<Wire::Channel>(received.channelId);
       const auto flags   = received.packet.Flags();
@@ -401,6 +458,7 @@ private:
         const auto expected = chat ? Wire::Channel::Chat : Wire::Channel::Control;
         if (channel != expected) return Unexpected("rejection_channel");
       }
+
       return std::visit([this](auto& value) { return Receive(value); }, *response);
     }
 
@@ -438,12 +496,14 @@ private:
       exchange.PublishMute(std::move(opened.mute));
       exchange.PublishRole(opened.role);
       phase = SessionPhase::Ready;
+
       for (const auto& change : earlyChat)
       {
         auto applied = model.Apply(generation, change);
         if (!applied) return std::unexpected{applied.error()};
       }
       earlyChat.clear();
+
       return Publish(true);
     }
 
@@ -462,6 +522,7 @@ private:
       if (guilds)
         for (const auto& guild : guilds->Guilds())
           if (auto closed = model.UnregisterChannel(guild.channelId); !closed) return std::unexpected{closed.error()};
+
       for (auto& opened : snapshot.guilds)
         if (auto channel = OpenGuildChannel(opened); !channel) return channel;
 
@@ -694,6 +755,7 @@ private:
         movementReady    = latestMovement.has_value();
         nextPlayerSample = {};
       }
+
       return {};
     }
 
@@ -755,11 +817,13 @@ private:
       // The decoder already checked these against the same table.
       for (auto& kind : changed.kinds)
         kinds.Define(std::move(kind));
+
       for (const auto& update : changed.updates)
       {
         auto applied = model.Apply(model.Generation(), update);
         if (!applied) return std::unexpected{applied.error()};
       }
+
       ForgetUnusedKinds();
       return Publish();
     }
@@ -1076,10 +1140,15 @@ private:
         return SendPlayerUpdate(generation, rejected);
       }
       if (contextRevision == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_context_exhausted");
+
       ResetMovement();
       latestMovement = command.location;
       Wire::SetLocation transition{++contextRevision, command.location};
-      auto              result = SendPlayerUpdate(generation, transition, true);
+      Diagnostics::Trace::Event("movement_context", [&] {
+        return std::format("\"context\":{},\"located\":{}", contextRevision, command.location.has_value());
+      });
+
+      auto result = SendPlayerUpdate(generation, transition, true);
       if (!result || pendingLocation == Domain::InvalidId) ResetMovement();
       return result;
     }
@@ -1102,19 +1171,41 @@ private:
     // receivers drop it as the sample they already have.
     Result<void> SendMovement()
     {
-      if (phase != SessionPhase::Ready || !movementReady || !latestMovement || Clock::now() < nextPlayerSample) return {};
+      const auto now = Clock::now();
+      if (phase != SessionPhase::Ready || !movementReady || !latestMovement || now < nextPlayerSample) return {};
       if (movementSequence == std::numeric_limits<std::uint64_t>::max()) return Unexpected("movement_sequence_exhausted");
-      nextPlayerSample = Clock::now() + std::chrono::milliseconds(config.playerSampleIntervalMs);
-      auto packet      = codec.Encode(
+
+      Utils::Time::AdvanceSample(nextPlayerSample, now, std::chrono::milliseconds(config.playerSampleIntervalMs));
+      auto packet = codec.Encode(
         Wire::MovementSample{
             contextRevision,
             ++movementSequence,
-            {latestMovement->position, latestMovement->rotation, latestMovement->sampledAtUs}
+            {latestMovement->position, latestMovement->cameraDirection, latestMovement->sampledAtUs}
       },
         transport->MaxUnfragmentedPayloadBytes());
       if (!packet) return Fail(packet.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto diagnosticData = packet->Data();
+      const auto diagnosticPacket =
+        Diagnostics::Phantoms().Active() ? Phantom::Bytes(diagnosticData.begin(), diagnosticData.end()) : Phantom::Bytes{};
+#endif
+
       auto sent = transport->Send(std::move(*packet), static_cast<ChannelId>(Wire::Channel::Realtime));
       if (!sent) return Fail(sent.error());
+#ifdef DREAMSLEEVE_DIAGNOSTICS
+      const auto& p = latestMovement->position;
+      const auto& r = latestMovement->cameraDirection;
+      Diagnostics::Phantoms().MovementSent(
+        {
+            contextRevision,
+            movementSequence,
+            latestMovement->sampledAtUs,
+            {p.X, p.Y, p.Z},
+            {r.X, r.Y, r.Z}
+      },
+        diagnosticPacket);
+#endif
+
       return {};
     }
 
@@ -1162,13 +1253,15 @@ private:
     }
 
     // Control, chat and realtime lanes.
-    static constexpr std::size_t MinimumChannels = 3;
+    static constexpr std::size_t MinimumChannels = MinChannels;
+
     // The kind table is swept when it reaches this size, then twice the kinds left.
     static constexpr std::size_t KindSweepFloor = 64;
 
     Configuration       config;
     Wire::ProtocolCodec codec;
     ClientExchange&     exchange;
+    Phantom::Streaming  phantoms;
     DreamNetClient::Ptr transport;
 
     // The route's game port, the main one until the application picks another.
@@ -1178,10 +1271,11 @@ private:
       Port        port{};
     } endpoint{config.serverHost, config.serverPort};
 
-    std::size_t                                       unreachable{};  // See TakeUnreachable.
-    bool                                              reached{};      // See Reached.
-    bool                                              keepGuest{};
-    Utils::Timing::Backoff                            guestRetry{GuestRetryMinimum, GuestRetryMaximum};
+    std::size_t            unreachable{};  // See TakeUnreachable.
+    bool                   reached{};      // See Reached.
+    bool                   keepGuest{};
+    Utils::Timing::Backoff guestRetry{GuestRetryMinimum, GuestRetryMaximum};
+
     ClientModel                                       model;
     SessionPhase                                      phase{SessionPhase::Disconnected};
     Wire::OpenSession                                 opening;
@@ -1191,17 +1285,19 @@ private:
     std::unordered_map<std::uint64_t, PendingRequest> pending;
     std::vector<QueuedClientCommand>                  commands;
     Clock::time_point                                 deadline{};
-    Clock::time_point                                 nextPlayerSample{};
-    std::optional<Domain::PlayerLocation>             latestMovement;
-    std::uint64_t                                     contextRevision{};
-    std::uint64_t                                     movementSequence{};
-    std::uint64_t                                     pendingLocation{Domain::InvalidId};  // The location update in flight.
-    bool                                              movementReady{};
-    std::vector<ClientUpdate>                         earlyChat;
-    std::shared_ptr<const GuildBook>                  guilds;  // Absent until the session's GuildsSnapshot.
-    std::vector<ClientEvent>                          events;
-    Wire::ActorValueKinds                             kinds;
-    std::size_t                                       kindSweep{KindSweepFloor};
+
+    Clock::time_point                     nextPlayerSample{};
+    std::optional<Domain::PlayerLocation> latestMovement;
+    std::uint64_t                         contextRevision{};
+    std::uint64_t                         movementSequence{};
+    std::uint64_t                         pendingLocation{Domain::InvalidId};  // The location update in flight.
+    bool                                  movementReady{};
+
+    std::vector<ClientUpdate>        earlyChat;
+    std::shared_ptr<const GuildBook> guilds;  // Absent until the session's GuildsSnapshot.
+    std::vector<ClientEvent>         events;
+    Wire::ActorValueKinds            kinds;
+    std::size_t                      kindSweep{KindSweepFloor};
   };
 
 }

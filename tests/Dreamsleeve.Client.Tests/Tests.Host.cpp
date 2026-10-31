@@ -2,6 +2,9 @@
 #include <glaze/glaze.hpp>
 import std;
 import Dreamsleeve.Host.Session;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
+import Dreamsleeve.Host.GameDates;
 import Dreamsleeve.Host.Bubbles;
 import Dreamsleeve.Client.Model;
 
@@ -121,6 +124,7 @@ TEST_CASE("UI settings round trip through TOML with normalization and atomic rep
     std::ofstream output{file.path, std::ios::binary | std::ios::trunc};
     output << "version = 1\n[ui]\nhideUi = false\n[ui.chat]\nscale = 9\ntheme = \"neon\"\nunknownKey = 1\n";
   }
+
   auto clamped = LoadUiFile(file.path);
   REQUIRE(clamped);
   CHECK(clamped->ui.chat.scale == 1.5);
@@ -247,6 +251,7 @@ TEST_CASE("Session tells the page of a mute and its lift, and of each end of a s
   CHECK(mute["muted"].get<bool>());
   CHECK(mute["reason"].get<std::string>() == "Флуд");
   CHECK(mute["until"].get<double>() == 1700000900000.0);
+
   exchange->PublishMute(std::nullopt);
   next();
   REQUIRE(frame.events.size() == 1);
@@ -472,6 +477,7 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   CHECK(guilds["invites"][0].contains("inviter"));
   CHECK(guilds["limits"]["members"].get<double>() == 64);
   CHECK(guilds["removed"].get_array().empty());
+
   // The same book again is no news.
   publish(shared);
   CHECK(frame.events.empty());
@@ -530,6 +536,7 @@ TEST_CASE("Session shows the guilds once the server sent them, names guild chann
   CHECK(left["guilds"].get_array().empty());
   CHECK(left["removed"][0]["reason"].get<std::string>() == "excluded");
   CHECK(left["removed"][0]["name"].get<std::string>() == "Вороны");
+
   session.Refresh();
   publish(removed);
   exchange->TakeCommands(commands);
@@ -682,6 +689,8 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   CHECK_FALSE(loaded->ui.chat.combatHideFireflies);
   CHECK_FALSE(loaded->ui.chat.combatHideNames);
   CHECK_FALSE(loaded->ui.chat.combatHideBubbles);
+  // Shared new-game starts: an older file still hides others in character creation.
+  CHECK(loaded->ui.chat.raceMenuHidePlayers);
   CHECK_FALSE(loaded->ui.chat.showFireflyNames);
 
   UiFile edited;
@@ -696,6 +705,7 @@ TEST_CASE("Older UI files keep bubble defaults and new bubble values are bounded
   edited.ui.chat.combatHideFireflies = true;
   edited.ui.chat.combatHideNames     = true;
   edited.ui.chat.combatHideBubbles   = true;
+  edited.ui.chat.raceMenuHidePlayers = false;
   REQUIRE(SaveUiFile(file.path, edited));
   auto saved = LoadUiFile(file.path);
   REQUIRE(saved);
@@ -911,15 +921,18 @@ TEST_CASE("Alias dictionary falls back to built-in names for missing, broken or 
   auto filtered = LoadAliasDictionary(file.path);
   CHECK(filtered.warning.empty());
   CHECK(filtered.names == std::vector<std::string>{"Страж", "Бард"});
+
   write("names = [\n");
   auto broken = LoadAliasDictionary(file.path);
   CHECK_FALSE(broken.names.empty());
   CHECK_FALSE(broken.warning.empty());
+
   // TOML allows an array over several lines with comments; glaze needs help with it.
   write("version = 1\nnames = [\n  \"Страж\", # guard\n  \"Бард\",\n]\n");
   auto multiline = LoadAliasDictionary(file.path);
   CHECK(multiline.warning.empty());
   CHECK(multiline.names == std::vector<std::string>{"Страж", "Бард"});
+
   write("names = []\n");
   CHECK(LoadAliasDictionary(file.path).names == missing.names);
   write("");
@@ -969,6 +982,7 @@ TEST_CASE("Ignore list is per server, refuses self and system, and survives a re
   same.Configure("a:1", {});
   same.Load(loaded->names);
   CHECK(same.Ignored(7));
+
   Names otherServer;
   otherServer.Configure("b:1", {});
   otherServer.Load(loaded->names);
@@ -1006,6 +1020,9 @@ TEST_CASE("Ignored authors disappear from history, deltas and bubbles; unignore 
 
   CHECK_FALSE(session.Ignore(1));  // Self.
   CHECK(session.Ignore(7));
+  CHECK(session.HidesPlayerRepresentation(7, false));
+  CHECK(session.HidesPlayerRepresentation(1, false));
+  CHECK_FALSE(session.HidesPlayerRepresentation(8, false));
   session.Refresh();
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), UiSettings{}, Domain::HiddenIdentity::None, frame);
@@ -1931,6 +1948,7 @@ TEST_CASE("A display name change waits for the server and reports the stored nam
   REQUIRE(settled);
   CHECK_FALSE((*settled)["pending"].get<bool>());
   CHECK((*settled)["changed"].get<std::string>() == "Новое Имя");
+
   // The stored name is reported once.
   frame = {};
   session.Process(*exchange, Drain(*exchange, model, SessionPhase::Ready), settings, Domain::HiddenIdentity::None, frame);

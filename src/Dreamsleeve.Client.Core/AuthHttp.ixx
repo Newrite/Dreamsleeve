@@ -32,8 +32,8 @@ export namespace Dreamsleeve::Client::Auth
     InvalidResponse,
     CredentialStorage,
     Canceled,
-    NameNotAllowed,        // Registration: the server word list refused a name.
-    Banned,                // Sign-in and resume while a ban holds; see Failure::ban.
+    NameNotAllowed,         // Registration: the server word list refused a name.
+    Banned,                 // Sign-in and resume while a ban holds; see Failure::ban.
     RegistrationSteamOnly,  // New accounts come only from a Steam sign-in.
     AddressBanned,          // The server banned the IP range of this computer; see Failure::ban.
     DeviceBanned,           // An account ban covers this computer.
@@ -46,9 +46,9 @@ export namespace Dreamsleeve::Client::Auth
   enum class RegistrationMode
   {
     Unknown,
-    Open,    // Registration in the game and the first Steam sign-in.
-    Steam,   // New accounts only from a Steam sign-in.
-    Manual   // Administrators create accounts in the admin panel.
+    Open,   // Registration in the game and the first Steam sign-in.
+    Steam,  // New accounts only from a Steam sign-in.
+    Manual  // Administrators create accounts in the admin panel.
   };
 
   struct Methods
@@ -261,10 +261,16 @@ namespace Dreamsleeve::Client::Auth
     }
 
     // A request without a body is a GET.
-    std::expected<HttpResponse, SendFailure> Send(std::string_view url, const wchar_t* path, const std::string& body, bool allowInsecureRemote = false)
+    std::expected<HttpResponse, SendFailure> Send(
+      std::string_view   url,
+      const wchar_t*     path,
+      const std::string& body,
+      bool               allowInsecureRemote = false)
     {
-      const auto failed = [](Result<HttpResponse> local) { return std::unexpected{SendFailure{std::move(local.error())}}; };
-      auto       endpoint = ParseUrl(url, allowInsecureRemote);
+      const auto failed = [](Result<HttpResponse> local) {
+        return std::unexpected{SendFailure{std::move(local.error())}};
+      };
+      auto endpoint = ParseUrl(url, allowInsecureRemote);
       if (!endpoint) return std::unexpected{SendFailure{endpoint.error()}};
       if (body.size() > 16384) return std::unexpected{SendFailure{"Authentication request is too large"}};
 
@@ -276,8 +282,10 @@ namespace Dreamsleeve::Client::Auth
         0)};
       if (!session) return failed(SystemError("WinHttpOpen"));
       if (!WinHttpSetTimeouts(session.get(), 5000, 5000, 5000, 5000)) return failed(SystemError("Auth timeout configuration"));
+
       Handle connection{WinHttpConnect(session.get(), endpoint->host.c_str(), endpoint->port, 0)};
       if (!connection) return failed(SystemError("WinHttpConnect"));
+
       Handle request{WinHttpOpenRequest(
         connection.get(),
         body.empty() ? L"GET" : L"POST",
@@ -294,9 +302,11 @@ namespace Dreamsleeve::Client::Auth
         !WinHttpSetOption(request.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof(redirects)) ||
         !WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled)))
         return failed(SystemError("Auth request policy"));
+
       // HTTPS uses WinHTTP's normal certificate and hostname validation.
       const auto     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-      const wchar_t* headers  = body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
+      const wchar_t* headers =
+        body.empty() ? L"Accept: application/json\r\n" : L"Content-Type: application/json\r\nAccept: application/json\r\n";
       if (
         !WinHttpSendRequest(
           request.get(),
@@ -310,7 +320,9 @@ namespace Dreamsleeve::Client::Auth
       {
         // The name, the connection, TLS or the wait for a response failed.
         auto unanswered = SystemError("Authentication request");
-        return std::unexpected{SendFailure{std::move(unanswered.error()), true}};
+        return std::unexpected{
+            SendFailure{std::move(unanswered.error()), true}
+        };
       }
 
       HttpResponse result;
@@ -323,6 +335,7 @@ namespace Dreamsleeve::Client::Auth
             &statusSize,
             WINHTTP_NO_HEADER_INDEX))
         return failed(SystemError("Authentication status"));
+
       for (;;)
       {
         if (std::chrono::steady_clock::now() >= deadline) return std::unexpected{SendFailure{"Authentication response timed out"}};
@@ -333,6 +346,7 @@ namespace Dreamsleeve::Client::Auth
         if (result.body.size() + read > 16384) return std::unexpected{SendFailure{"Authentication response is too large"}};
         result.body.append(chunk, read);
       }
+
       return result;
     }
 
@@ -452,17 +466,24 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidRequest, checked.error()}
       };
-    auto body = glz::write_json(RegisterRequest{credentials.username, displayName, credentials.password, device});
+
+    auto body = glz::write_json(RegisterRequest{
+      credentials.username,
+      displayName,
+      credentials.password,
+      device});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode registration request"}
       };
+
     auto response = Send(url, L"/auth/register", *body, allowInsecureRemote);
     SecureZeroMemory(body->data(), body->size());
     if (!response)
       return std::unexpected{
           Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
+
     if (response->status == 400)
     {
       ErrorResponse error;
@@ -478,6 +499,7 @@ namespace Dreamsleeve::Client::Auth
           };
       }
     }
+
     if (response->status == 403)
     {
       if (auto banned = AddressBan(response->body)) return std::unexpected{std::move(*banned)};
@@ -487,6 +509,7 @@ namespace Dreamsleeve::Client::Auth
             Failure{FailureCode::RegistrationSteamOnly, "Registration is open only through Steam"}
         };
     }
+
     if (response->status != 201) return std::unexpected{HttpFailure(response->status)};
     return {};
   }
@@ -511,7 +534,10 @@ namespace Dreamsleeve::Client::Auth
       BanResponse ban;
       if (!glz::read<glz::opts{.error_on_unknown_keys = false}>(ban, response.body) && ban.code == "banned")
         return std::unexpected{
-            Failure{FailureCode::Banned, ban.reason, Domain::SessionEnd{Domain::SessionEndReason::Banned, ban.reason, ban.untilUnixMs}}
+            Failure{
+              FailureCode::Banned,
+              ban.reason,
+              Domain::SessionEnd{Domain::SessionEndReason::Banned, ban.reason, ban.untilUnixMs}}
         };
     }
     if (response.status != 200) return std::unexpected{HttpFailure(response.status)};
@@ -525,7 +551,11 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Invalid authentication response"}
       };
-    return Grant{std::move(decoded.sessionTicket), std::move(decoded.rememberToken), std::move(decoded.username)};
+
+    return Grant{
+      std::move(decoded.sessionTicket),
+      std::move(decoded.rememberToken),
+      std::move(decoded.username)};
   }
 
   GrantResult RequestGrant(std::string_view url, const wchar_t* path, std::string body, bool allowInsecureRemote = false)
@@ -550,11 +580,17 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{FailureCode::InvalidCredentials, checked.error()}
       };
-    auto body = glz::write_json(LoginRequest{credentials.username, credentials.password, remember, device});
+
+    auto body = glz::write_json(LoginRequest{
+      credentials.username,
+      credentials.password,
+      remember,
+      device});
     if (!body)
       return std::unexpected{
           Failure{FailureCode::InvalidResponse, "Cannot encode login request"}
       };
+
     auto grant = RequestGrant(url, L"/auth/login", std::move(*body), allowInsecureRemote);
     if (grant && remember && grant->rememberToken.empty())
       return std::unexpected{
@@ -589,6 +625,7 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
+
     if (response->status != 204) return std::unexpected{HttpFailure(response->status)};
     return {};
   }
@@ -602,6 +639,7 @@ namespace Dreamsleeve::Client::Auth
           Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
     if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
+
     auto methods = DecodeMethods(response->body);
     if (!methods)
       return std::unexpected{
@@ -634,6 +672,7 @@ namespace Dreamsleeve::Client::Auth
           Failure{FailureCode::Unavailable, "Steam sign-in is not enabled on this server"}
       };
     if (response->status != 200) return std::unexpected{HttpFailure(response->status)};
+
     SteamBeginResponse decoded;
     if (
       glz::read<glz::opts{.error_on_unknown_keys = false}>(decoded, response->body) || !ValidToken(decoded.flow) ||
@@ -667,11 +706,13 @@ namespace Dreamsleeve::Client::Auth
       return std::unexpected{
           Failure{response.error().unanswered ? FailureCode::Unreachable : FailureCode::Unavailable, response.error().message}
       };
+
     if (response->status == 202) return std::optional<Grant>{};
     if (response->status == 410)
       return std::unexpected{
           Failure{FailureCode::SteamExpired, "The Steam sign-in expired"}
       };
+
     auto grant = DecodeGrant(*response);
     if (!grant) return std::unexpected{std::move(grant.error())};
     return std::optional<Grant>{std::move(*grant)};
@@ -685,7 +726,7 @@ namespace Dreamsleeve::Client::Auth
     {
       T* value{};
 
-      ComRef() = default;
+      ComRef()                         = default;
       ComRef(const ComRef&)            = delete;
       ComRef& operator=(const ComRef&) = delete;
 
@@ -711,12 +752,14 @@ namespace Dreamsleeve::Client::Auth
         ComRef<IShellWindows> windows;
         HRESULT               hr = CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&windows.value));
         if (FAILED(hr)) return hr;
+
         VARIANT           location{};
         VARIANT           root{};
         long              window{};
         ComRef<IDispatch> desktop;
         hr = windows->FindWindowSW(&location, &root, SWC_DESKTOP, &window, SWFO_NEEDDISPATCH, &desktop.value);
         if (hr != S_OK || !desktop.value) return FAILED(hr) ? hr : E_FAIL;
+
         ComRef<IServiceProvider> provider;
         if (FAILED(hr = desktop->QueryInterface(IID_PPV_ARGS(&provider.value)))) return hr;
         ComRef<IShellBrowser> browser;
@@ -731,6 +774,7 @@ namespace Dreamsleeve::Client::Auth
         if (FAILED(hr = folder->get_Application(&application.value))) return hr;
         ComRef<IShellDispatch2> shell;
         if (FAILED(hr = application->QueryInterface(IID_PPV_ARGS(&shell.value)))) return hr;
+
         BSTR file = SysAllocString(url.c_str());
         if (!file) return E_OUTOFMEMORY;
         VARIANT none{};

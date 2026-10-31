@@ -12,6 +12,7 @@ let now () = float (Stopwatch.GetTimestamp()) * 1000. / float Stopwatch.Frequenc
 type Group() =
     let directory = Environment.GetEnvironmentVariable "DREAMSLEEVE_BENCH_GROUP"
     let enabled = not (String.IsNullOrEmpty directory)
+
     let readInt name fallback =
         match Environment.GetEnvironmentVariable name with
         | null | "" -> fallback
@@ -34,24 +35,31 @@ type Group() =
         if enabled then
             let deadline = now() + 600000.
             let mutable ready = false
+
             while not ready do
                 let checkAt = now() + 50.
-                while now() < checkAt do pump()
+                while now() < checkAt do
+                    pump()
                 ready <- [0 .. count - 1] |> List.forall (fun worker -> File.Exists(path name worker))
+
                 if not ready && now() >= deadline then
                     invalidOp (sprintf "Worker barrier timed out: %s" name)
 
     member this.All<'T>(name, local: 'T, pump) =
-        if not enabled then [|local|]
+        if not enabled then
+            [|local|]
         else
             this.Publish(name, local)
             this.Wait(name, workers, pump)
+
             Array.init workers (fun worker -> JsonSerializer.Deserialize<'T>(File.ReadAllText(path name worker)))
 
     member this.Start(pump) =
-        if not enabled then now()
+        if not enabled then
+            now()
         else
             this.All("armed", true, pump) |> ignore
-            if index = 0 then this.Publish("start", now() + 1000.)
+            if index = 0 then
+                this.Publish("start", now() + 1000.)
             this.Wait("start", 1, pump)
             JsonSerializer.Deserialize<float>(File.ReadAllText(path "start" 0))

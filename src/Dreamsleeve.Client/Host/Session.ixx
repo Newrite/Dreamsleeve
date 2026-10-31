@@ -3,6 +3,9 @@ export module Dreamsleeve.Host.Session;
 import std;
 export import Dreamsleeve.Client.Exchange;
 export import Dreamsleeve.Host.Bridge;
+export import Dreamsleeve.Host.Names;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 export import Dreamsleeve.Host.Announcements;
 
 // Main-thread consumer of ClientOutput: projects Core state into UI bridge events
@@ -56,10 +59,12 @@ public:
     {
       const bool ready = output.status.Ready();
       serverName       = output.status.serverName;
+
       // Published with the chat state of their channels: read before the updates name them.
       const bool guildsChanged = guilds != output.status.guilds;
       guilds                   = output.status.guilds;
       if (guildsChanged) CollectGuildmates();
+
       // The core drops the request with the session; the server may or may not have stored it.
       if (!ready && std::erase_if(pending, [](const auto& entry) {
                       return std::holds_alternative<PendingName>(entry.second.request);
@@ -69,6 +74,7 @@ public:
                       return std::holds_alternative<PendingColor>(entry.second.request);
                     }) != 0)
         colorError = "Соединение прервано до ответа сервера";
+
       for (const auto& update : output.state.updates)
         std::visit([&](const auto& value) { Apply(value, settings, ready, frame); }, update);
 
@@ -78,9 +84,11 @@ public:
 
       for (const auto& result : output.results)
         Resolve(frame, result, settings);
+
       pseudonym = output.status.pseudonym;
       if (ownMarksChanged && !frame.snapshot) Emit(frame, Bridge::GroundMarksEvent{.marks = OwnMarkList(settings)});
       ownMarksChanged = false;
+
       // Guild-only marks follow the guilds as well.
       if ((frame.visibleMarksChanged || (guildsChanged && settings.markGuildmatesOnly)) && !frame.snapshot && Ready())
         Emit(frame, Bridge::NearbyMarksEvent{.marks = NearbyMarkList(settings)});
@@ -103,6 +111,7 @@ public:
         lastColor = std::move(color);
         colorChanged.reset();
       }
+
       RequestSnapshotIfNeeded(exchange, frame);
     }
 
@@ -408,6 +417,18 @@ public:
     bool GuildmatesOnlyHides(Domain::PlayerId id, bool guildmatesOnly) const
     {
       return guildmatesOnly && selfId != id && !guildmates.contains(id);
+    }
+
+    // Whether the player shares one of the own guilds with self.
+    bool Guildmate(Domain::PlayerId id) const
+    {
+      return selfId != id && guildmates.contains(id);
+    }
+
+    // Both player representations follow the same privacy and guild filter.
+    bool HidesPlayerRepresentation(Domain::PlayerId id, bool guildmatesOnly) const
+    {
+      return selfId == id || names.Hides(id, selfId) || GuildmatesOnlyHides(id, guildmatesOnly);
     }
 
     const Players& OnlinePlayers() const noexcept
@@ -1005,6 +1026,7 @@ private:
         players.erase(id);
         frame.playersChanged = true;
       }
+
       for (const auto& change : delta.chats)
       {
         if (change.state)
@@ -1014,6 +1036,7 @@ private:
       }
       // A guild came or went: the UI gets the list before the channel's history.
       if (!delta.chats.empty() && !needsSnapshot) Emit(frame, Bridge::ChannelsEvent{.channels = ChannelList()});
+
       // Ordered transitions of the visible set. A clear (space change) keeps
       // the own marks: they still exist, only out of sight.
       for (const auto& change : delta.groundMarks)
@@ -1030,6 +1053,11 @@ private:
       }
       if (delta.ownGroundMarks) ReplaceOwn(*delta.ownGroundMarks);
 
+      ApplyChatContent(delta, settings, frame);
+    }
+
+    void ApplyChatContent(const ClientStateDelta& delta, const UiSettings& settings, Frame& frame)
+    {
       // Additions travel together; a removal goes out in its place in the order.
       Bridge::MessagesEvent messages;
       const auto            flush = [&] {
@@ -1080,7 +1108,9 @@ private:
     {
       if (const auto* rejection = std::get_if<ServerRejection>(&outcome))
         return rejection->code == RequestRejectionCode::RateLimited ? Announcements::Result::RateLimited : Announcements::Result::Rejected;
-      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome)) switch (*failure)
+      if (const auto* failure = std::get_if<CommandFailureCode>(&outcome))
+      {
+        switch (*failure)
         {
           case CommandFailureCode::StaleGeneration:
           case CommandFailureCode::SessionNotReady:
@@ -1092,6 +1122,7 @@ private:
           case CommandFailureCode::EncodingFailed:
             break;
         }
+      }
       return Announcements::Result::Failed;
     }
 
@@ -1161,24 +1192,30 @@ private:
     std::unordered_map<Domain::ChatChannelId, Domain::ChatChannelKind> channels;
     std::optional<Domain::ChatChannelId>                               globalChannel;
     Domain::ChatMessageId                                              bubbleFloor{};
-    Players                                                            players;
-    Marks                                                              visibleMarks;
-    Marks                                                              ownMarks;
-    bool                                                               ownMarksChanged{};
-    std::unordered_map<std::uint64_t, Pending>                         pending;
-    std::optional<std::string>                                         pseudonym;
-    std::optional<std::string>                                         identityError;
-    std::optional<Bridge::IdentityEvent>                               lastIdentity;
-    std::optional<std::string>                                         nameError;
-    std::optional<std::string>                                         nameChanged;
-    Bridge::DisplayNameEvent                                           lastName;
-    std::optional<std::string>                                         colorError;
-    std::optional<std::string>                                         colorChanged;
-    Bridge::NameColorEvent                                             lastColor;
-    std::vector<std::string>                                           routeNames;
-    std::string                                                        routeChoice;
-    Bridge::RoutesEvent                                                lastRoutes;
-    std::optional<ClientStatus>                                        lastStatus;
+
+    Players players;
+    Marks   visibleMarks;
+    Marks   ownMarks;
+    bool    ownMarksChanged{};
+
+    std::unordered_map<std::uint64_t, Pending> pending;
+    std::optional<std::string>                 pseudonym;
+    std::optional<std::string>                 identityError;
+    std::optional<Bridge::IdentityEvent>       lastIdentity;
+
+    std::optional<std::string> nameError;
+    std::optional<std::string> nameChanged;
+    Bridge::DisplayNameEvent   lastName;
+
+    std::optional<std::string> colorError;
+    std::optional<std::string> colorChanged;
+    Bridge::NameColorEvent     lastColor;
+
+    std::vector<std::string>    routeNames;
+    std::string                 routeChoice;
+    Bridge::RoutesEvent         lastRoutes;
+    std::optional<ClientStatus> lastStatus;
+
     // The guild book of the session, the one the UI shows, whether this view
     // has had it, and the book revision whose removals the UI has heard of.
     std::shared_ptr<const GuildBook>     guilds;
@@ -1186,10 +1223,12 @@ private:
     std::shared_ptr<const GuildBook>     shownGuilds;
     bool                                 guildsShown{};
     std::uint64_t                        removalsSeen{};
-    bool                                 needsSnapshot{true};
-    bool                                 snapshotRequested{};
+
+    bool needsSnapshot{true};
+    bool snapshotRequested{};
     // The session whose snapshot the current page holds; none for a new page.
     std::optional<std::uint64_t> shownGeneration;
+
     // Profiles of retained authors, so offline players can be ignored by name.
     static constexpr std::size_t                             MaxKnownAuthors = 2048;
     std::unordered_map<Domain::PlayerId, Domain::PlayerData> authors;

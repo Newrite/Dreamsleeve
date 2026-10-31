@@ -40,18 +40,22 @@ WEB = ROOT / "src" / "Dreamsleeve.Server.Web"
 # Test, dev and benchmark builds never ship with the server.
 SERVER_FORBIDDEN = ("Tests", "Benchmarks", "Client.Dev", "TraceReport", "Expecto", "Faqt")
 BUILD = ROOT / "build" / "windows" / "x64" / "releasedbg"
-FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data")
-FORBIDDEN_SUFFIXES = (".map", ".db", ".log")
+FORBIDDEN = ("node_modules", "demo.html", "dist-demo", "test-results", "credentials", "logs", "data", "phantom-cache", "phantom-diagnostics", "diagnostics", "DreamsleevePhantoms", "DreamsleevePhantomDiagnostics", "captures")
+FORBIDDEN_SUFFIXES = (".map", ".db", ".log", ".zst", ".delta", ".partial", ".dmp", ".i64", ".idb", ".phdiag")
 # Relative to dist/: user-owned files and folders that a rebuild must not replace.
 PRESERVED = (
     "Client/SKSE/Plugins/Dreamsleeve/client.toml",
     "Client/SKSE/Plugins/Dreamsleeve/ui.toml",
     "Client/SKSE/Plugins/Dreamsleeve/aliases.toml",
+    "Client/SKSE/Plugins/Dreamsleeve/phantom-cache",
+    "Client/SKSE/Plugins/Dreamsleeve/phantom-diagnostics",
     "Server/server.toml",
     "Server/moderation.toml",
     "Server/pseudonyms.toml",
     "Server/data",
     "Server/logs",
+    "Server/diagnostics",
+    "Server/phantoms",
 )
 
 # Dreamsleeve's license, shipped with every build; the source of a build is its release tag there.
@@ -85,6 +89,11 @@ def check_mod_toml() -> None:
     drift = sorted(key for key in mod.keys() | example.keys() if key not in ESP_KEYS and mod.get(key) != example.get(key))
     if drift:
         raise SystemExit(f"{MOD_TOML} differs from client.example.toml beyond the ESP forms: {', '.join(drift)}")
+
+
+def check_release_dll(dll: Path) -> None:
+    if b"DREAMSLEEVE_DIAGNOSTICS_BUILD_V1" in dll.read_bytes():
+        raise SystemExit("Diagnostic DLL cannot be packaged for distribution; rebuild with xmake f --diagnostics=n")
 
 
 def run(command: list[str], cwd: Path) -> None:
@@ -125,7 +134,7 @@ def notices() -> str:
              "GPL-3.0-or-later with the Modding Exception and the GPL-3.0 Linking Exception, the same terms as "
              "Dreamsleeve: see LICENSE and EXCEPTIONS.md). Parts of the plugin follow skyrim-rich-presence "
              "(https://github.com/doodlum/skyrim-rich-presence, same terms).\n\n",
-             "It also links ENet (MIT), protobuf (BSD-3-Clause), spdlog (MIT), Glaze (MIT) and magic_enum (MIT); "
+             "It also links ENet (MIT), protobuf (BSD-3-Clause), spdlog (MIT), Glaze (MIT), magic_enum (MIT), and Zstandard 1.5.7 (BSD-3-Clause); "
              "their texts are in the respective upstream repositories.\n",
              "The web UI bundle contains the following packages:\n"]
     for name, path in packages.items():
@@ -133,6 +142,8 @@ def notices() -> str:
             parts.append(f"\n## {name}\n\n```\n{path.read_text(encoding='utf-8').strip()}\n```\n")
         else:
             parts.append(f"\n## {name}\n\nLicense file not found at packaging time ({path}).\n")
+    zstd = ROOT / "third_party/licenses/Zstd.txt"
+    parts.append("\n## Zstandard 1.5.7\n\nhttps://github.com/facebook/zstd/tree/v1.5.7\n\n```\n" + zstd.read_text(encoding="utf-8").strip() + "\n```\n")
     parts.append("\nPrismaUI, SKSE Menu Framework, Address Library and Media Keys Fix are separate downloads "
                  "with their own licenses and are not redistributed here.\n")
     return "".join(parts)
@@ -200,13 +211,17 @@ MIT (текст в нём самом): его можно подключать в
 
 def server_notices() -> str:
     htmx = (WEB / "Resources" / "htmx.LICENSE").read_text(encoding="utf-8").strip()
+    zstdsharp = (ROOT / "third_party/licenses/ZstdSharp.txt").read_text(encoding="utf-8").strip()
+    zstd = (ROOT / "third_party/licenses/Zstd.txt").read_text(encoding="utf-8").strip()
     return ("# Third-party notices\n\n"
             "The admin panel (Dreamsleeve.Server.Web.dll) embeds htmx 2.0.11 (https://htmx.org), "
             "served from the assembly at /static/htmx.min.js; its license:\n\n"
             f"```\n{htmx}\n```\n\n"
             "Falco, Falco.Markup and Falco.Htmx (https://github.com/FalcoFramework) are licensed under Apache-2.0. "
             "Other packages (Serilog, Tomlyn, SqlHydra, Migrondi, Microsoft.Data.Sqlite, yENet, Google.Protobuf, FSharp.Core) "
-            "keep their own licenses, listed in their NuGet packages.\n")
+            "keep their own licenses, listed in their NuGet packages.\n\n"
+            "ZstdSharp.Port 0.8.6 (https://github.com/oleg-st/ZstdSharp), MIT:\n\n"
+            f"```\n{zstdsharp}\n```\n\nZstandard (https://github.com/facebook/zstd), BSD:\n\n```\n{zstd}\n```\n")
 
 
 def check_server(server: Path) -> None:
@@ -316,12 +331,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.skip_build:
+        run(["xmake", "f", "--diagnostics=n", "-y"], ROOT)
         run(["xmake", "build", "Dreamsleeve.Client"], ROOT)
         run(["npm", "run", "build"], UI)
 
     dll = BUILD / "Dreamsleeve.Client.dll"
     if not dll.exists():
         raise SystemExit(f"Missing {dll}; build Dreamsleeve.Client first")
+    check_release_dll(dll)
     ui_dist = UI / "dist"
     if not (ui_dist / "index.html").exists():
         raise SystemExit(f"Missing {ui_dist / 'index.html'}; run npm run build first")
@@ -351,6 +368,7 @@ def main() -> int:
     config.mkdir()
     check_mod_toml()
     shutil.copy2(MOD_TOML, config / "client.toml")
+    shutil.copy2(UI / "ui.example.toml", config / "ui.example.toml")
     shutil.copy2(ESP, client / ESP.name)
     shutil.copy2(CLIENT / "aliases.toml", config / "aliases.toml")
 
@@ -386,6 +404,12 @@ def main() -> int:
         (server / "THIRD_PARTY_NOTICES.md").write_text(server_notices(), encoding="utf-8")
         copy_licenses(server)
         check_server(server)
+
+    network_trace = output / "NetworkTrace"
+    network_trace.mkdir()
+    # Explicit allowlist: never package recordings from a developer's tools folder.
+    for name in ("Start.ps1", "Stop.ps1", "README.ru.md"):
+        shutil.copy2(ROOT / "Scripts" / "NetworkTrace" / name, network_trace / name)
 
     for item in output.rglob("*"):
         relative = item.relative_to(output).parts

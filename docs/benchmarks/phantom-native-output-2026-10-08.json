@@ -1,0 +1,32 @@
+{
+  "scope": "detached-output-only",
+  "bytes": 27740607,
+  "iterations": 30,
+  "results": [
+    {
+      "name": "doubling-plus-copy",
+      "median_ms": 19.088,
+      "p95_ms": 20.6271,
+      "allocations": 14,
+      "extra_copy_bytes": 62977471
+    },
+    {
+      "name": "direct-first",
+      "median_ms": 13.0716,
+      "p95_ms": 16.17,
+      "allocations": 13,
+      "extra_copy_bytes": 35236864
+    },
+    {
+      "name": "direct-size-hint",
+      "median_ms": 5.5645,
+      "p95_ms": 5.844,
+      "allocations": 1,
+      "extra_copy_bytes": 0
+    }
+  ],
+  "fixture": "archives/1791233656455-idle-0/appearance.nif",
+  "fixtureSha256": "1dbaaca245c4b5eb79fba460a43f26891635fde646c9ced2536dc0005078b8d7",
+  "runtime": "MSVC x64 releasedbg, Windows 10; no Skyrim engine calls",
+  "workload": "4096 bytes in 4-byte writes, remaining bytes in 64-KiB writes; 3 warmup + 30 measured iterations, interleaved variant order; equality checked outside timed interval"
+}

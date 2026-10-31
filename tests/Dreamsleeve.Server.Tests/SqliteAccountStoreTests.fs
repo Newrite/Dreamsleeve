@@ -9,14 +9,19 @@ open Dreamsleeve.Server.Domain
 open Dreamsleeve.Server.Infrastructure
 open Expecto
 
-let private ok = function Ok value -> value | Error error -> failtestf "Unexpected error: %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Unexpected error: %A" error
+
 let private username value = Username.create 32 value |> ok
 let private display value = DisplayName.create 64 value |> ok
 let private token = CancellationToken.None
 
 type Database() =
     let directory = Path.Combine(Path.GetTempPath(), "Dreamsleeve.AccountStoreTests", Guid.NewGuid().ToString("N"))
-    let config = { DatabasePath = Path.Combine(directory, "accounts.db"); BusyTimeoutSeconds = 1 }
+    let config =
+        { DatabasePath = Path.Combine(directory, "accounts.db")
+          BusyTimeoutSeconds = 1 }
 
     member _.Config = config
 
@@ -61,6 +66,7 @@ let tests = testList "SQLite accounts" [
         let identity = SqliteAccountStore.findIdentity database.Config "steam" "verified-subject" token |> ok |> Option.get
         Expect.equal identity.AccountId 17L "Provider resolves an account, not a display name."
         Expect.isNone (SqliteAccountStore.find database.Config (username "external") token |> ok) "No implicit password login."
+
         SqliteAccountStore.remember database.Config identity.AccountId "test-token-hash" 0L 100L 8 token |> ok
         let resumed = SqliteAccountStore.resume database.Config "test-token-hash" 1L token |> ok
         Expect.equal resumed identity "Provider-independent token restores the same identity.")
@@ -97,11 +103,14 @@ let tests = testList "SQLite accounts" [
         SqliteAccountStore.initialize database.Config |> ok
         let profile = SqliteAccountStore.create database.Config (username "Painter") (display "Painter") "hash" token |> ok
         Expect.contains NameColor.palette profile.NameColor "a random palette color"
+
         let chosen = NameColor.create 0x123456u |> ok
         let stored = SqliteAccountStore.setNameColor database.Config profile.PlayerId chosen token |> ok |> Option.get
         Expect.equal stored.Profile (PlayerData.withNameColor chosen profile) "only the color changed"
+
         let restored = SqliteAccountStore.find database.Config (username "painter") token |> ok |> Option.get
         Expect.equal restored.Profile.NameColor chosen "the color survives a new connection"
+
         let missing = PlayerId.create 404UL |> Result.defaultWith (failwithf "%A")
         Expect.isNone (SqliteAccountStore.setNameColor database.Config missing chosen token |> ok) "no such profile")
 
@@ -131,6 +140,7 @@ let tests = testList "SQLite accounts" [
 
         Expect.equal (database.Scalar "SELECT count(*) FROM accounts") 0L "The account insert rolled back."
         Expect.equal (database.Scalar "SELECT count(*) FROM profiles") 0L "The profile insert rolled back."
+
         database.Execute "DROP TRIGGER reject_profile"
         SqliteAccountStore.create database.Config (username "player") (display "Player") "hash" token |> ok |> ignore)
 
@@ -152,6 +162,7 @@ let tests = testList "SQLite accounts" [
         SqliteAccountStore.initialize database.Config |> ok
         let name = username "missing"
         Expect.isNone (SqliteAccountStore.find database.Config name token |> ok) "Find never registers an account."
+
         use cancellation = new CancellationTokenSource()
         cancellation.Cancel()
 
@@ -205,6 +216,7 @@ let tests = testList "SQLite accounts" [
         Expect.equal (database.Scalar "SELECT count(*) FROM accounts") 1L "One account exists."
         Expect.equal (database.Scalar "SELECT count(*) FROM profiles") 1L "One profile exists."
     })
+
     testCase "account and player identifiers have independent sequences" (fun () ->
         use database = new Database()
         SqliteAccountStore.initialize database.Config |> ok

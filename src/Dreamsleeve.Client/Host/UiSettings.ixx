@@ -25,14 +25,16 @@ export namespace Dreamsleeve::Host
     bool   fireflyNameOcclusion{true};
     double fireflyNameFontSize{18};
     double fireflyNameOffset{35};
+
     // Chat bubbles above fireflies; independent of names and of the chat window fade.
-    bool        showBubbles{true};
-    double      bubbleDuration{8.0};      // Seconds a message stays fully visible.
-    bool        bubbleFade{true};
-    double      bubbleFadeDuration{1.0};  // Seconds of the fade-out after the display time.
-    double      bubbleFontSize{16};       // HUD units.
-    double      bubbleMaxWidth{320};      // HUD units, including padding.
-    double      bubbleBackground{0.65};   // Background fill only; the text stays opaque.
+    bool   showBubbles{true};
+    double bubbleDuration{8.0};      // Seconds a message stays fully visible.
+    bool   bubbleFade{true};
+    double bubbleFadeDuration{1.0};  // Seconds of the fade-out after the display time.
+    double bubbleFontSize{16};       // HUD units.
+    double bubbleMaxWidth{320};      // HUD units, including padding.
+    double bubbleBackground{0.65};   // Background fill only; the text stays opaque.
+
     std::string onlineView{"cards"};
     // The column the online list is ordered by, and the direction.
     std::string onlineSort{"name"};
@@ -48,12 +50,15 @@ export namespace Dreamsleeve::Host
     double      background{0.82};
     bool        timestamps{true};
     bool        fullColor{false};
+
     // username | display | character. "account" from older files reads as username.
     std::string nameMode{"display"};
     // Local pseudonyms instead of every real name; not sent to the server.
     bool streamerMode{false};
+
     // Ranges the server flagged: off (show) | mask (stars) | hide (whole message).
     std::string textFilter{"off"};
+
     bool        locked{true};
     double      x{0.025};
     double      y{0.42};
@@ -61,10 +66,15 @@ export namespace Dreamsleeve::Host
     double      height{390.0};
     std::string activationKey{"Enter"};
     std::string theme{"skyrim"};
+
     // Hidden while the player is in combat, each surface on its own.
     bool combatHideFireflies{false};
     bool combatHideNames{false};
     bool combatHideBubbles{false};
+    // Other players (phantoms, fireflies, their names and bubbles) while the
+    // character creation menu is open: a new game starts everyone in one place.
+    bool raceMenuHidePlayers{true};
+
     // System channel: tab (only its own tab) | all (also the "all" view) | current (every tab).
     std::string announcementChannels{"all"};
     // Shown origins and kinds; announcement and admin kinds follow their origin only.
@@ -73,14 +83,17 @@ export namespace Dreamsleeve::Host
     bool announcementsThirdParty{true};
     bool announcementsEvents{true};
     bool announcementsPeriodic{true};
+
     // Bubble look above fireflies: the fill opacity is bubbleBackground; a
     // border and the text colour ("#RRGGBB") are separate, so "no box at all"
     // is background 0 with the border off.
     bool        bubbleBorder{true};
     std::string bubbleTextColor{"#EEECE5"};
     std::string fireflyNameColor{"#EEECE5"};
+
     // Height of the glow above the pose origin, game units.
     double fireflyHeightOffset{110};
+
     // Ground marks: notes and death places near the player (see docs/GroundMarksRu.md).
     bool showGroundNotes{true};
     bool showDeathMarks{true};
@@ -103,6 +116,7 @@ export namespace Dreamsleeve::Host
     bool        deathBorder{true};
     bool        combatHideGroundMarks{false};  // Statics and labels.
     bool        combatHideGroundText{false};   // Labels only.
+
     // The in-game date as a header line on top of a mark's bubble. Style
     // "tamriel" (Тирдас, 17 Последнего зерна) or "earth" (Вторник, 17 августа);
     // the era and year are Tamriel's either way. The web UI lists use the same style.
@@ -110,6 +124,28 @@ export namespace Dreamsleeve::Host
     bool        deathDateHeader{true};
     bool        noteDateHeader{false};
     std::string markDateColor{"#A9A69B"};
+
+    bool publishPhantoms{true};
+    bool showPhantoms{true};
+    bool phantomFallback{true};
+    bool combatHidePhantoms{false};
+
+    double      maxVisiblePhantoms{4};
+    double      phantomDrawDistance{4096};
+    double      phantomOpacity{0.6};
+    std::string phantomColor{"#8CCCCC"};
+    // Phantoms of players who share a guild with you; the guild chat's green.
+    std::string phantomGuildColor{"#A8CE85"};
+
+    double phantomSampleRate{10};
+    double phantomDelayMs{100};
+    double phantomExtrapolationMs{100};
+    double phantomTimeoutMs{1000};
+
+    double phantomMemoryMiB{512};
+    double phantomCacheMiB{1024};
+    double phantomUploadKiB{5120};
+    double phantomDownloadKiB{5120};
 
     bool operator==(const UiSettings&) const = default;
   };
@@ -134,11 +170,13 @@ export namespace Dreamsleeve::Host
   constexpr auto NumberRules = std::to_array<NumberRule>({
       {"fireflyNameFontSize", 8, 48},
       {"fireflyNameOffset", 0, 512},
+
       {"bubbleDuration", 1, 60},
       {"bubbleFadeDuration", 0.1, 5},
       {"bubbleFontSize", 8, 48},
       {"bubbleMaxWidth", 120, 800},
       {"bubbleBackground", 0, 1},
+
       {"delay", 0, 120},
       {"duration", 0, 5},
       {"idleOpacity", 0, 1},
@@ -146,11 +184,14 @@ export namespace Dreamsleeve::Host
       {"fontSize", 12, 26},
       {"lineHeight", 1.1, 2},
       {"background", 0, 1},
+
       {"x", 0, 1},
       {"y", 0, 1},
       {"width", 320, 1600},
       {"height", 220, 1200},
+
       {"fireflyHeightOffset", 0, 512},
+
       {"maxVisibleNotes", 1, 64, true},
       {"maxVisibleDeaths", 1, 64, true},
       {"groundDrawDistance", 0, 16384},
@@ -162,6 +203,20 @@ export namespace Dreamsleeve::Host
       {"groundMaxWidth", 120, 800},
       {"groundBackground", 0, 1},
       {"deathBackground", 0, 1},
+
+      {"maxVisiblePhantoms", 0, 16, true},
+      {"phantomDrawDistance", 0, 16384},
+      {"phantomOpacity", 0, 1},
+
+      {"phantomSampleRate", 1, 50, true},
+      {"phantomDelayMs", 0, 500, true},
+      {"phantomExtrapolationMs", 0, 250, true},
+      {"phantomTimeoutMs", 500, 5000, true},
+
+      {"phantomMemoryMiB", 64, 2048, true},
+      {"phantomCacheMiB", 0, 8192, true},
+      {"phantomUploadKiB", 64, 8192, true},
+      {"phantomDownloadKiB", 64, 8192, true},
   });
 
   // Words the UI chooses from; anything else is the default.
@@ -178,13 +233,21 @@ export namespace Dreamsleeve::Host
   });
 
   // "#RRGGBB"; anything else is the default.
-  constexpr auto ColorKeys =
-    std::to_array<std::string_view>({"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor"});
+  constexpr auto ColorKeys = std::to_array<std::string_view>(
+    {"bubbleTextColor", "fireflyNameColor", "groundTextColor", "deathTextColor", "markDateColor", "phantomColor", "phantomGuildColor"});
 
   // How names, texts, dates and whose marks are projected. These apply to every
   // surface at once, without saving, and a change projects the session again.
-  constexpr auto InstantKeys =
-    std::to_array<std::string_view>({"nameMode", "streamerMode", "textFilter", "markDateStyle", "markGuildmatesOnly"});
+  constexpr auto InstantKeys = std::to_array<std::string_view>(
+    {"nameMode",
+     "streamerMode",
+     "textFilter",
+     "markDateStyle",
+     "markGuildmatesOnly",
+     "publishPhantoms",
+     "showPhantoms",
+     "phantomFallback",
+     "combatHidePhantoms"});
 
   // The hide-my-name choices in the order of Domain::HiddenIdentity.
   constexpr auto HidingNames = std::to_array<std::string_view>({"off", "everywhere", "exceptGroundMarks"});
@@ -341,36 +404,66 @@ export namespace Dreamsleeve::Host
     return book;
   }
 
+  namespace UiFileDetail
+  {
+
+    template <class Probe>
+    std::expected<UiFile, std::string> Load(const std::filesystem::path& path, Probe&& probeExists)
+    {
+      std::error_code probe;
+      const bool      exists = probeExists(path, probe);
+      if (probe) return std::unexpected{"Cannot inspect UI settings: " + probe.message()};
+      if (!exists) return UiFile{};
+
+      std::ifstream input{path, std::ios::binary | std::ios::ate};
+      if (!input) return std::unexpected{"Cannot open UI settings"};
+      const auto length = input.tellg();
+      // Pseudonyms and the ignore list share the file, hence the larger bound.
+      if (length < 0 || length > (1 << 20)) return std::unexpected{"UI settings must not exceed 1 MiB"};
+
+      std::string source(static_cast<std::size_t>(length), '\0');
+      input.seekg(0);
+      if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
+
+      UiFile file;
+      source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
+      if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
+        return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
+      if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
+
+      file.ui.chat = Normalize(file.ui.chat);
+      if (!std::ranges::contains(HidingNames, file.ui.hideIdentity)) file.ui.hideIdentity = HidingNames.front();
+      file.names = Normalize(std::move(file.names));
+      return file;
+    }
+
+  }
+
   // A missing file is the ordinary first run and yields defaults. A present but
   // unreadable file is an error: the caller keeps its current values and reports it.
   std::expected<UiFile, std::string> LoadUiFile(const std::filesystem::path& path)
   {
-    std::error_code probe;
-    if (!std::filesystem::exists(path, probe)) return UiFile{};
+    return UiFileDetail::Load(path, [](const std::filesystem::path& value, std::error_code& error) {
+      return std::filesystem::exists(value, error);
+    });
+  }
 
-    std::ifstream input{path, std::ios::binary | std::ios::ate};
-    if (!input) return std::unexpected{"Cannot open UI settings"};
-    const auto length = input.tellg();
-    // Pseudonyms and the ignore list share the file, hence the larger bound.
-    if (length < 0 || length > (1 << 20)) return std::unexpected{"UI settings must not exceed 1 MiB"};
+  namespace Testing
+  {
 
-    std::string source(static_cast<std::size_t>(length), '\0');
-    input.seekg(0);
-    if (!input.read(source.data(), static_cast<std::streamsize>(source.size()))) return std::unexpected{"Cannot read UI settings"};
+    // Only the initial dependency probe is substituted; parsing and file ownership
+    // use the production pipeline, without a global filesystem override.
+    template <class Probe>
+    std::expected<UiFile, std::string> LoadUiFileWithProbe(const std::filesystem::path& path, Probe&& probe)
+    {
+      return UiFileDetail::Load(path, std::forward<Probe>(probe));
+    }
 
-    UiFile file;
-    source = Dreamsleeve::Utils::Toml::OneLineArrays(source);
-    if (auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(file, source); !source.empty() && error)
-      return std::unexpected{"Invalid UI TOML: " + glz::format_error(error, source)};
-    if (file.version != 1) return std::unexpected{"Unsupported UI settings version"};
-
-    file.ui.chat = Normalize(file.ui.chat);
-    if (!std::ranges::contains(HidingNames, file.ui.hideIdentity)) file.ui.hideIdentity = HidingNames.front();
-    file.names = Normalize(std::move(file.names));
-    return file;
   }
 
   // Temporary file plus rename: a crash mid-write never leaves a truncated file.
+  // This call owns only a file it exclusively creates; a preexisting .tmp is
+  // refused without truncating or removing somebody else's path.
   std::expected<void, std::string> SaveUiFile(const std::filesystem::path& path, const UiFile& file)
   {
     auto text = glz::write_toml(file);
@@ -382,19 +475,49 @@ export namespace Dreamsleeve::Host
 
     auto temporary  = path;
     temporary      += ".tmp";
+
+    struct Partial
     {
-      std::ofstream output{temporary, std::ios::binary | std::ios::trunc};
-      if (!output) return std::unexpected{"Cannot write UI settings"};
-      output << *text << '\n';
-      if (!output.flush()) return std::unexpected{"Cannot flush UI settings"};
+      const std::filesystem::path& path;
+      bool                         owned{};
+
+      ~Partial()
+      {
+        // Unexpected escaping failures still release the resource after the
+        // stream closes. Expected paths use Reject and report cleanup failure.
+        if (owned)
+        {
+          std::error_code error;
+          std::filesystem::remove(path, error);
+        }
+      }
+
+      std::unexpected<std::string> Reject(std::string reason)
+      {
+        std::error_code cleanup;
+        std::filesystem::remove(path, cleanup);
+        owned = false;
+        if (cleanup) reason += "; cannot remove temporary UI settings: " + cleanup.message();
+        return std::unexpected{std::move(reason)};
+      }
+    } partial{temporary};
+
+    {
+      std::ofstream output{temporary, std::ios::binary | std::ios::noreplace};
+      if (!output) return std::unexpected{"Cannot create temporary UI settings file"};
+      partial.owned = true;
+
+      const bool written = static_cast<bool>(output << *text << '\n');
+      output.close();
+
+      if (!written) return partial.Reject("Cannot write UI settings");
+      if (!output) return partial.Reject("Cannot finish UI settings write");
     }
 
     std::filesystem::rename(temporary, path, error);
-    if (error)
-    {
-      std::filesystem::remove(temporary, error);
-      return std::unexpected{"Cannot replace UI settings file"};
-    }
+    if (error) return partial.Reject("Cannot replace UI settings file: " + error.message());
+    partial.owned = false;
+
     return {};
   }
 

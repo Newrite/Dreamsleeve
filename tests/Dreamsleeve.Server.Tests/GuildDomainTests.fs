@@ -4,7 +4,10 @@ open System
 open Expecto
 open Dreamsleeve.Server.Domain
 
-let private ok = function Ok value -> value | Error error -> failtestf "Expected success, got %A" error
+let private ok = function
+    | Ok value -> value
+    | Error error -> failtestf "Expected success, got %A" error
+
 let private refused expected result =
     match result with
     | Error error -> Expect.equal error expected "refusal"
@@ -118,11 +121,27 @@ let tests = testList "Guild domain" [
         GuildBook.invite (pid 1UL) (gid 1UL) (pid 4UL) (at 3) lowered |> ok |> ignore
         let restored =
             GuildBook.restore (limits 1 1 2 1)
-                [ { Id = gid 1UL; Name = name "Стражи"; CreatedAt = at 0; Invites = []; Info = ValueNone; Listed = true; JoinRequests = []
-                    Titles = [ for id in 1UL .. 3UL -> { Id = tid id; Name = titleName $"Роль {id}" } ]
-                    Members = [ for player in 1UL .. 5UL ->
-                                    { Player = pid player; JoinedAt = at 0; Mute = ValueNone; Title = ValueSome(tid 1UL)
-                                      Role = if player = 1UL then GuildRole.Master else GuildRole.Member } ] } ]
+                [
+                    {
+                        Id = gid 1UL
+                        Name = name "Стражи"
+                        CreatedAt = at 0
+                        Invites = []
+                        Info = ValueNone
+                        Listed = true
+                        JoinRequests = []
+                        Titles = [ for id in 1UL .. 3UL -> { Id = tid id; Name = titleName $"Роль {id}" } ]
+                        Members = [
+                            for player in 1UL .. 5UL -> {
+                                Player = pid player
+                                JoinedAt = at 0
+                                Mute = ValueNone
+                                Title = ValueSome(tid 1UL)
+                                Role = if player = 1UL then GuildRole.Master else GuildRole.Member
+                            }
+                        ]
+                    }
+                ]
         let guild = (GuildBook.tryFind (gid 1UL) restored).Value
         Expect.equal guild.MemberCount 5 "stored guilds come back whole"
         Expect.equal guild.Titles.Length 3 "custom roles over a limit of two stay"

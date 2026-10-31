@@ -1,4 +1,4 @@
-﻿module Dreamsleeve.Server.Tests.AsyncDispatcherTests
+module Dreamsleeve.Server.Tests.AsyncDispatcherTests
 
 open System
 open System.Collections.Concurrent
@@ -19,11 +19,14 @@ type private OwnerMessage =
     | Ping of TaskCompletionSource<unit>
 
 let private start capacity execute =
-    let handler = AgentReplyDispatcher.createAsyncHandler capacity (fun request -> request.ReplyTo) execute
-    Agent.Start(options "async-dispatcher" (AgentMailbox.boundedWait 1), handler)
+    let handler = TestReplyDispatcher.createAsyncHandler capacity (fun request -> request.ReplyTo) execute
+    TestAgent.StartReliable(options "async-dispatcher" (AgentMailbox.boundedWait 1), handler)
 
 let private post (owner: Agent<Request>) (destination: Agent<AgentTests.Message>) value = task {
-    let! result = owner.PostAsync { Value = value; ReplyTo = destination.Ref.TryReliable().Value }
+    let! result = owner.PostAsync {
+        Value = value
+        ReplyTo = destination.Ref.TryReliable().Value
+    }
     equal AgentPostResult.Posted result
 }
 
@@ -49,7 +52,7 @@ let private failingWork asynchronous = case (sprintf "%s operation failure fault
         else
             raise failure
 
-    use destination = Agent.Start(AgentOptions.create "replies", ordinaryHandler (ConcurrentQueue<int>()))
+    use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler (ConcurrentQueue<int>()))
     use owner = start 2 execute
     do! post owner destination 1
     do! awaitResult entered.Task
@@ -69,17 +72,20 @@ let tests = testList "AsyncDispatcher" [
             release.Wait token
             Task.FromResult(AgentTests.Message.Record request.Value)
 
-        let dispatcher = AgentReplyDispatcher.createAsyncHandler 1 (fun request -> request.ReplyTo) execute
-        let handle (context: AgentContext<OwnerMessage>) message = task {
+        let dispatcher = TestReplyDispatcher.createAsyncHandler 1 (fun request -> request.ReplyTo) execute
+        let handle (context: ReliableAgentContext<OwnerMessage>) message = task {
             match message with
             | Dispatch request -> do! dispatcher context request
             | Ping reply -> reply.SetResult()
         }
         let seen = ConcurrentQueue<int>()
-        use destination = Agent.Start(AgentOptions.create "replies", ordinaryHandler seen)
-        use owner = Agent.Start(AgentOptions.create "owner", handle)
+        use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler seen)
+        use owner = TestAgent.StartReliable(AgentOptions.create "owner", handle)
         try
-            let! admitted = owner.PostAsync(Dispatch { Value = 7; ReplyTo = destination.Ref.TryReliable().Value })
+            let! admitted = owner.PostAsync(Dispatch {
+                Value = 7
+                ReplyTo = destination.Ref.TryReliable().Value
+            })
             equal AgentPostResult.Posted admitted
             do! awaitResult started.Task
             let! pinged = owner.PostAsync(Ping dispatched)
@@ -97,16 +103,19 @@ let tests = testList "AsyncDispatcher" [
 
     case "sync dispatcher accepts a nested request while its owner uses a larger command type" (fun () -> task {
         let seen = ConcurrentQueue<int>()
-        use destination = Agent.Start(AgentOptions.create "replies", ordinaryHandler seen)
-        let dispatcher = AgentReplyDispatcher.createHandler 1 (fun request -> request.ReplyTo)
+        use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler seen)
+        let dispatcher = TestReplyDispatcher.createHandler 1 (fun request -> request.ReplyTo)
                              (fun request -> AgentTests.Message.Record request.Value)
-        let handle (context: AgentContext<OwnerMessage>) message = task {
+        let handle (context: ReliableAgentContext<OwnerMessage>) message = task {
             match message with
             | Dispatch request -> do! dispatcher context request
             | Ping reply -> reply.SetResult()
         }
-        use owner = Agent.Start(AgentOptions.create "owner", handle)
-        let! admitted = owner.PostAsync(Dispatch { Value = 42; ReplyTo = destination.Ref.TryReliable().Value })
+        use owner = TestAgent.StartReliable(AgentOptions.create "owner", handle)
+        let! admitted = owner.PostAsync(Dispatch {
+            Value = 42
+            ReplyTo = destination.Ref.TryReliable().Value
+        })
         equal AgentPostResult.Posted admitted
         let pinged = gate<unit>()
         let! _ = owner.PostAsync(Ping pinged)
@@ -128,7 +137,7 @@ let tests = testList "AsyncDispatcher" [
 
             return AgentTests.Message.Record request.Value
         }
-        use destination = Agent.Start(options "full-replies" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+        use destination = TestAgent.Start(options "full-replies" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
         let! releaseReplies = holdAgent destination
         equal AgentPostResult.Posted (destination.TryPost(AgentTests.Message.Record 99))
         use owner = start 1 execute
@@ -139,6 +148,7 @@ let tests = testList "AsyncDispatcher" [
             do! eventually (fun () -> owner.QueueLength = 0)
             do! post owner destination 3
             equal [|1|] (executed.ToArray())
+
             releaseWork.SetResult()
             do! awaitResult executedFirst.Task
             equal [|1|] (executed.ToArray())
@@ -159,12 +169,12 @@ let tests = testList "AsyncDispatcher" [
         let execute _ request =
             executed.Enqueue request.Value
             Task.FromResult(AgentTests.Message.Record request.Value)
-        use slow = Agent.Start(options "slow" (AgentMailbox.boundedWait 1), ordinaryHandler slowSeen)
+        use slow = TestAgent.Start(options "slow" (AgentMailbox.boundedWait 1), ordinaryHandler slowSeen)
         let! release = holdAgent slow
         equal AgentPostResult.Posted (slow.TryPost(AgentTests.Message.Record 99))
-        use closed = Agent.Start(AgentOptions.create "closed", ordinaryHandler (ConcurrentQueue<int>()))
+        use closed = TestAgent.Start(AgentOptions.create "closed", ordinaryHandler (ConcurrentQueue<int>()))
         do! finish closed
-        use healthy = Agent.Start(AgentOptions.create "healthy", ordinaryHandler healthySeen)
+        use healthy = TestAgent.Start(AgentOptions.create "healthy", ordinaryHandler healthySeen)
         use owner = start 2 execute
         try
             do! post owner slow 1
@@ -193,12 +203,14 @@ let tests = testList "AsyncDispatcher" [
             executed.Enqueue request.Value
             if request.Value = 1 then
                 started.SetResult()
-                try do! Task.Delay(Timeout.Infinite, token)
-                finally cleaned.SetResult()
+                try
+                    do! Task.Delay(Timeout.Infinite, token)
+                finally
+                    cleaned.SetResult()
 
             return AgentTests.Message.Record request.Value
         }
-        use destination = Agent.Start(options "full-replies" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
+        use destination = TestAgent.Start(options "full-replies" (AgentMailbox.boundedWait 1), ordinaryHandler seen)
         let! release = holdAgent destination
         equal AgentPostResult.Posted (destination.TryPost(AgentTests.Message.Record 99))
         use owner = start 2 execute
@@ -210,6 +222,7 @@ let tests = testList "AsyncDispatcher" [
             do! post owner destination 3
             do! eventually (fun () -> owner.QueueLength = 0)
             do! post owner destination 4
+
             owner.Abort()
             let! _ = terminal owner.Completion
             check owner.Completion.IsCanceled "Abort changed into a fault or success."
@@ -233,10 +246,14 @@ let tests = testList "AsyncDispatcher" [
             do! release.Task.WaitAsync token
             return AgentTests.Message.Record request.Value
         }
-        use destination = Agent.Start(AgentOptions.create "replies", ordinaryHandler (ConcurrentQueue<int>()))
+
+        use destination = TestAgent.Start(AgentOptions.create "replies", ordinaryHandler (ConcurrentQueue<int>()))
         let broken = destination.Ref.TryReliable().Value.Map(fun (_: AgentTests.Message) -> raise failure)
         use owner = start 1 execute
-        let! admitted = owner.PostAsync { Value = 1; ReplyTo = broken }
+        let! admitted = owner.PostAsync {
+            Value = 1
+            ReplyTo = broken
+        }
         equal AgentPostResult.Posted admitted
         do! awaitResult started.Task
         owner.Complete() |> ignore

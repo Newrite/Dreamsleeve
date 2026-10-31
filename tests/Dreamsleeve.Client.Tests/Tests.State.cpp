@@ -68,6 +68,7 @@ TEST_CASE("PlayerStore full snapshots replace membership atomically and reject d
   REQUIRE(store.Upsert(StateTests::MakePlayer(9)));
   REQUIRE(store.Upsert(StateTests::MakePlayer(2)));
   const auto before = store.Snapshot();
+
   const std::array duplicates{StateTests::MakePlayer(3), StateTests::MakePlayer(3)};
   const auto rejected = store.ReplaceAll(duplicates);
   REQUIRE_FALSE(rejected.has_value());
@@ -115,13 +116,11 @@ TEST_CASE("PlayerStore snapshots and lookup results own their nested maps and st
   snapshot[0].data.displayName = "Changed locally";
   CHECK(store.Find(1)->actorValues.size() == 2);
   CHECK(store.Find(1)->data.displayName == "Player 1");
-  REQUIRE(store
-            .ApplyMetadata(
-              1,
-              ActorValuesPatch{
-                  .removed = {"skyrim:health", "skyrim:magicka"}
-  },
-              std::nullopt)
+
+  REQUIRE(store.ApplyMetadata(
+                 1,
+                 ActorValuesPatch{.removed = {"skyrim:health", "skyrim:magicka"}},
+                 std::nullopt)
             .has_value());
   REQUIRE(store.UpdateLocation(1, std::nullopt).has_value());
   CHECK(store.Find(1)->actorValues.empty());
@@ -224,10 +223,12 @@ TEST_CASE("ChatCache conflicts and wrong channels reject the entire incoming bat
   REQUIRE_FALSE(result.has_value());
   CHECK(result.error().code == ErrorCode::ConflictingMessage);
   CHECK(StateTests::Ids(cache) == std::vector<ChatMessageId>{10});
+
   conflict = StateTests::Message(20);
   conflict.author->displayName = "A different author snapshot";
   const std::array newConflict{StateTests::Message(20), conflict};
   CHECK_FALSE(cache.Merge(newConflict).has_value());
+
   const std::array wrongChannel{StateTests::Message(20), StateTests::Message(30, 8)};
   result = cache.Merge(wrongChannel);
   REQUIRE_FALSE(result.has_value());

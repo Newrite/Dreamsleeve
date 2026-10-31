@@ -75,6 +75,7 @@ namespace
       auto created = ClientExchange::TryCreate(16, 8);
       REQUIRE(created);
       exchange = std::move(*created);
+
       session.PlayerNames().Configure("127.0.0.1:8778", {});
       REQUIRE(model.RegisterChannel(GlobalChannel, 16));
       REQUIRE(model.RegisterChannel(SystemChannel, 16, Domain::ChatChannelKind::System));
@@ -84,7 +85,9 @@ namespace
             {MakePlayer(1, "Alice"), MakePlayer(7, "Seven")}
       }));
       REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+
       REQUIRE(exchange->Publish(model, true, SessionPhase::Ready, "Tamriel"));
+
       Process();
       REQUIRE(frame.snapshot);
     }

@@ -18,13 +18,14 @@ export const chat = makeChat((command) => {
   }
 });
 window.dreamsleeveReceive = (payload) => {
-  try {
-    chat.receive(parseHostEvent(payload));
-  } catch {
+  const result = parseHostEvent(payload);
+  if (!result.ok) {
     chat.store.setState({
       notice: "Ошибка данных интерфейса. Ожидается новый снимок.",
     });
+    return;
   }
+  chat.receive(result.event);
 };
 
 installVisibility(chat);

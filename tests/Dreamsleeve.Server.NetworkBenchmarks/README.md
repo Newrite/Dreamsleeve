@@ -508,3 +508,70 @@ with the same warmup setting, and report cold admission stress separately from
 steady-state delivery. This option does not change production behavior.
 
 Python smoke/benchmark scripts require Python 3.11+ and `python -m pip install -r Scripts/requirements.txt` (run from the repository root). Configuration files are written as TOML; measurement reports remain JSON.
+
+
+## Native NIF payload replay (protocol 22)
+
+`Scripts/benchmark_phantom.py` accepts the actual compressed production model and
+one or more compressed production pose payload files. The model's raw byte length
+and binding count are required; SHA256 and per-pose lengths/hashes are saved beside
+the run. No synthetic geometry or fixed 13 MiB / 6 KiB payload is generated.
+
+```powershell
+$poses = 1..301 | ForEach-Object { "build/native-nif/movement-poses/pose-$_.zst" }
+python -u Scripts/benchmark_phantom.py --mode steady --clients 512 --publishers 512 --workers 8 --scenario sparse --rate 20 --seconds 30 --actor-values-hz 4 --maximum 4 --model-file build/native-nif/movement-poses/model.zst --raw-model-bytes 27740619 --channels 327 --pose-file $poses --output build/benchmarks/my-native-steady
+```
+
+`sparse` uses the existing movement/AOI workload: twenty groups of 25 and one group
+of 12 for 512 players. `--maximum` selects the requested and server maximum phantom
+count per observer (default 4; 24 requests all other members in a full group).
+Publishers are global indices, interleaved across workers exactly as movement is.
+Each worker owns only its local peers. Combined chat is exercised with one worker;
+multiple workers send no additional chat, because that chat oracle owns one local
+message sequence. Movement and actor-value traffic remain enabled as requested.
+
+- `cold`: no server cache; observers download the complete shared content hash.
+- `warm`: server cache is preseeded; observer caches start empty.
+- `steady`: both server and observer caches are preseeded. Publications still pass
+  through the production admission path before a common readiness barrier. Queued
+  reliable model commands drain before the 30-second measured stream; warmup
+  model payload bytes are reported separately.
+- `off`: matched movement/control workload with phantom replication disabled.
+
+All peers deliberately share one model hash. These cases measure hash reuse,
+transfer scheduling and fanout, not the disk footprint of 512 unique appearances.
+At the default shared model bandwidth of 5 MiB/s, downloading a ~12.7 MiB model to
+512 cold observers cannot finish inside a 30-second window. Unfinished transfers
+are reported separately from successful packet validation; they are not hidden by
+`success=true`. Use cold/warm to measure that workload separately from steady poses.
+`readyMs` measures publisher acceptance after complete model upload/commit;
+`verifiedDownloadMs` measures elapsed time from scenario start until the observer
+verifies all downloaded bytes with SHA256. Both include scheduling and waiting,
+not just disk or network calls; neither measures native loading.
+
+The model and pose bytes come from the production codec, but this is an **opaque
+server/transport replay**: the benchmark updates protobuf envelope sequence/time
+for timing while leaving embedded pose identity as recorded. It never calls the
+native asset decoder, NiStream, or the renderer. It therefore does not establish
+client envelope/payload acceptance or visual correctness. Use native codec and
+in-game tests for those claims. Source frequency, publication readiness,
+subscription time, received complete poses, and missed source intervals are all
+reported separately; protocol success does not imply requested cadence. Reliable
+model commands use a bounded FIFO of 16 commands per peer when ENet is full.
+Unreliable pose admission failures increment `droppedAtPoseAdmission` and discard
+the old snapshot; they do not terminate the benchmark or create a pose backlog.
+
+`transportDuringLoad` records per-worker ENet sent/received byte and datagram
+counter deltas over the exact load loop, plus admitted/received protobuf bytes by
+lane `[control, chat, movement, models, poses]`. ENet bytes include its headers,
+fragment commands, ACKs and retransmissions; IP/UDP headers are not included.
+`28 * UDP datagrams` is the explicit IPv4+UDP header estimate, not measured layer-2
+traffic. ENet minus application bytes includes queued/dropped work at the interval
+boundary and transport reliability effects, so do not label it pure header size.
+Host counters are handled modulo 2^32 per socket; runs exceeding one counter wrap
+per socket are outside this recorder's contract.
+
+`--server-benchmark` can use an isolated compatible server diagnostic DLL, and
+`--server-overlay` changes only generated benchmark configuration. Preserve the
+source and binary hashes, exact compatibility overlay, fixture provenance, and
+all failed runs when comparing revisions. Never put game fixtures in Git or dist.

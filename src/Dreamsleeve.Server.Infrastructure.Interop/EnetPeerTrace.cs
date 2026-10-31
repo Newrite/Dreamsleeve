@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Security;
 using System.Text.Json;
 using Enet;
 using enet;
@@ -15,27 +16,52 @@ internal sealed class EnetPeerTrace
     private int records;
     private const int RecordLimit = 20000;
 
-    private EnetPeerTrace(string directory, EnetHost host)
-    {
-        Directory.CreateDirectory(directory);
-        path = Path.Combine(directory, $"enet-{Environment.ProcessId}-{host.Socket.Handle}.jsonl");
-        Write(new { kind = "host", pid = Environment.ProcessId, socket = host.Socket.Handle.ToInt64(),
-            local = host.Address.ToString(), stopwatchFrequency = Stopwatch.Frequency });
-    }
+    private EnetPeerTrace(string path) => this.path = path;
 
-    internal static EnetPeerTrace? Create(EnetHost host)
+    internal static bool TryCreate(EnetHost host, out EnetPeerTrace? trace, out Exception? error)
     {
+        trace = null;
+        error = null;
         var directory = Environment.GetEnvironmentVariable("DREAMSLEEVE_ENET_TRACE_DIRECTORY");
-        return string.IsNullOrEmpty(directory) ? null : new EnetPeerTrace(directory, host);
+        if (string.IsNullOrEmpty(directory)) return true;
+        string path;
+        // Only the filesystem/path dependency calls translate expected failures.
+        try
+        {
+            directory = Path.GetFullPath(directory);
+            path = Path.Combine(directory, $"enet-{Environment.ProcessId}-{host.Socket.Handle}.jsonl");
+            Directory.CreateDirectory(directory);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or SecurityException)
+        {
+            error = failure;
+            return false;
+        }
+        var candidate = new EnetPeerTrace(path);
+        if (!candidate.TryWrite(new { kind = "host", pid = Environment.ProcessId, socket = host.Socket.Handle.ToInt64(),
+            local = host.Address.ToString(), stopwatchFrequency = Stopwatch.Frequency }, out error)) return false;
+        trace = candidate;
+        return true;
     }
 
-    private void Write(object value)
+    private bool TryWrite(object value, out Exception? error)
     {
-        if (records >= RecordLimit) return;
-        File.AppendAllText(path, JsonSerializer.Serialize(value) + Environment.NewLine);
-        records++;
-        if (records == RecordLimit)
-            File.AppendAllText(path, "{\"kind\":\"truncated\"}" + Environment.NewLine);
+        error = null;
+        if (records >= RecordLimit) return true;
+        var json = JsonSerializer.Serialize(value) + Environment.NewLine;
+        try
+        {
+            File.AppendAllText(path, json);
+            records++;
+            if (records == RecordLimit)
+                File.AppendAllText(path, "{\"kind\":\"truncated\"}" + Environment.NewLine);
+            return true;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            error = failure;
+            return false;
+        }
     }
 
     private static unsafe object Queue(ENetList* list, uint time)
@@ -68,15 +94,16 @@ internal sealed class EnetPeerTrace
         return new { count, truncated = node != end, retryCommands = retries, maxAttempts = attempts, oldest = head };
     }
 
-    internal unsafe void Record(EnetHost host, EnetPeer peer)
+    internal unsafe bool TryRecord(EnetHost host, EnetPeer peer, out Exception? error)
     {
-        if (records >= RecordLimit) return;
+        error = null;
+        if (records >= RecordLimit) return true;
 
         var time = host.ServiceTime;
-        if (peer.EarliestTimeout == 0 || unchecked(time - peer.EarliestTimeout) < 250) return;
+        if (peer.EarliestTimeout == 0 || unchecked(time - peer.EarliestTimeout) < 250) return true;
 
         var p = peer.GetInner();
-        Write(new {
+        return TryWrite(new {
             kind = "suspect", ticks = Stopwatch.GetTimestamp(), utc = DateTime.UtcNow,
             hostTimeMs = time, slot = p->incomingPeerID, remoteSlot = p->outgoingPeerID,
             connection = p->connectID, remote = peer.Address.ToString(), state = p->state.ToString(),
@@ -90,6 +117,6 @@ internal sealed class EnetPeerTrace
             sentReliable = Queue(&p->sentReliableCommands, time),
             outgoingReliable = Queue(&p->outgoingSendReliableCommands, time),
             outgoingControl = Queue(&p->outgoingCommands, time)
-        });
+        }, out error);
     }
 }

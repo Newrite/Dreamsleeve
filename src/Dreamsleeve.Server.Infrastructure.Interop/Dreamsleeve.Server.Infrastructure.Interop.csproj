@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
     <PackageReference Include="yENet" Version="1.2.1" />
   </ItemGroup>
 </Project>

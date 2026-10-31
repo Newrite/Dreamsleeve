@@ -41,52 +41,134 @@ module SqliteGuildStore =
                 | Error error -> Error error
         next []
 
+    let private MemberProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.Int32
+           SqliteStored.Column.UnixMilliseconds
+           (SqliteStored.Column.Nullable SqliteStored.Column.Text)
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger)
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds)
+           (SqliteStored.Column.Nullable SqliteStored.Column.UnixMilliseconds)
+           (SqliteStored.Column.Nullable SqliteStored.Column.PositiveInteger) |]
+
+    let private InviteProjection =
+        [| SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.PositiveInteger
+           SqliteStored.Column.UnixMilliseconds
+           SqliteStored.Column.UnixMilliseconds |]
+
+    let private GuildProjection =
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+            SqliteStored.Column.UnixMilliseconds
+            (SqliteStored.Column.Nullable SqliteStored.Column.Text)
+            SqliteStored.Column.Integer
+        |]
+
+    let private JoinRequestProjection =
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.UnixMilliseconds
+            SqliteStored.Column.UnixMilliseconds
+        |]
+
+    let private TitleProjection =
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+        |]
+
+    let private ProfileProjection =
+        [|
+            SqliteStored.Column.PositiveInteger
+            SqliteStored.Column.Text
+            SqliteStored.Column.Text
+            SqliteStored.Column.Integer
+        |]
+
     let private memberOf (reader: DbDataReader) =
-        let guild = GuildId.create (uint64 (reader.GetInt64 0))
-        let player = PlayerId.create (uint64 (reader.GetInt64 1))
-        let role = GuildRole.ofInt (reader.GetInt32 2)
-        let title =
-            match optional reader 8 reader.GetInt64 with
-            | ValueSome raw -> GuildTitleId.create (uint64 raw) |> Result.map ValueSome |> Result.mapError ignore
-            | ValueNone -> Ok ValueNone
-        let mute =
-            match optional reader 4 reader.GetString, optional reader 5 reader.GetInt64, optional reader 6 reader.GetInt64 with
-            | ValueSome reason, ValueSome by, ValueSome at ->
-                match SanctionReason.create reason, PlayerId.create (uint64 by) with
-                | Ok reason, Ok by ->
-                    Ok(ValueSome { Reason = reason; IssuedBy = by; IssuedAt = time at; Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time })
+        SqliteAccountStore.storedRow reader 0 MemberProjection (fun () ->
+            let guild = GuildId.create (uint64 (reader.GetInt64 0))
+            let player = PlayerId.create (uint64 (reader.GetInt64 1))
+            let role = GuildRole.ofInt (reader.GetInt32 2)
+            let title =
+                match optional reader 8 reader.GetInt64 with
+                | ValueSome raw -> GuildTitleId.create (uint64 raw) |> Result.map ValueSome |> Result.mapError ignore
+                | ValueNone -> Ok ValueNone
+            let mute =
+                match optional reader 4 reader.GetString, optional reader 5 reader.GetInt64, optional reader 6 reader.GetInt64 with
+                | ValueSome reason, ValueSome by, ValueSome at ->
+                    match SanctionReason.create reason, PlayerId.create (uint64 by) with
+                    | Ok reason, Ok by ->
+                        Ok(
+                            ValueSome {
+                                Reason = reason
+                                IssuedBy = by
+                                IssuedAt = time at
+                                Expires = optional reader 7 reader.GetInt64 |> ValueOption.map time
+                            })
+                    | _ -> Error()
+                | ValueNone, ValueNone, ValueNone -> Ok ValueNone
                 | _ -> Error()
-            | ValueNone, ValueNone, ValueNone -> Ok ValueNone
-            | _ -> Error()
-        match guild, player, role, mute, title with
-        | Ok guild, Ok player, ValueSome role, Ok mute, Ok title ->
-            Ok(guild, { Player = player; Role = role; JoinedAt = time (reader.GetInt64 3); Mute = mute; Title = title })
-        | _ -> invalidData "A stored guild member is invalid."
+
+            match guild, player, role, mute, title with
+            | Ok guild, Ok player, ValueSome role, Ok mute, Ok title ->
+                Ok(guild, {
+                    Player = player
+                    Role = role
+                    JoinedAt = time (reader.GetInt64 3)
+                    Mute = mute
+                    Title = title
+                })
+            | _ -> invalidData "A stored guild member is invalid.")
 
     let private inviteOf (reader: DbDataReader) =
-        match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)), PlayerId.create (uint64 (reader.GetInt64 2)) with
-        | Ok guild, Ok player, Ok by ->
-            Ok { Guild = guild; Player = player; InvitedBy = by; CreatedAt = time (reader.GetInt64 3); Expires = time (reader.GetInt64 4) }
-        | _ -> invalidData "A stored guild invitation is invalid."
+        SqliteAccountStore.storedRow reader 0 InviteProjection (fun () ->
+            match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)), PlayerId.create (uint64 (reader.GetInt64 2)) with
+            | Ok guild, Ok player, Ok by ->
+                Ok {
+                    Guild = guild
+                    Player = player
+                    InvitedBy = by
+                    CreatedAt = time (reader.GetInt64 3)
+                    Expires = time (reader.GetInt64 4)
+                }
+            | _ -> invalidData "A stored guild invitation is invalid.")
 
     let private requestOf (reader: DbDataReader) =
-        match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)) with
-        | Ok guild, Ok player -> Ok { Guild = guild; Player = player; CreatedAt = time (reader.GetInt64 2); Expires = time (reader.GetInt64 3) }
-        | _ -> invalidData "A stored guild join request is invalid."
+        SqliteAccountStore.storedRow reader 0 JoinRequestProjection (fun () ->
+            match GuildId.create (uint64 (reader.GetInt64 0)), PlayerId.create (uint64 (reader.GetInt64 1)) with
+            | Ok guild, Ok player ->
+                Ok {
+                    Guild = guild
+                    Player = player
+                    CreatedAt = time (reader.GetInt64 2)
+                    Expires = time (reader.GetInt64 3)
+                }
+            | _ -> invalidData "A stored guild join request is invalid.")
 
     let private titleOf (reader: DbDataReader) =
-        match GuildTitleId.create (uint64 (reader.GetInt64 0)), GuildId.create (uint64 (reader.GetInt64 1)),
-              GuildTitleName.create 1 GuildOptions.MaxNameLength (reader.GetString 2) with
-        | Ok id, Ok guild, Ok name -> Ok(guild, { Id = id; Name = name })
-        | _ -> invalidData "A stored guild custom role is invalid."
+        SqliteAccountStore.storedRow reader 0 TitleProjection (fun () ->
+            match GuildTitleId.create (uint64 (reader.GetInt64 0)), GuildId.create (uint64 (reader.GetInt64 1)),
+                  GuildTitleName.create 1 GuildOptions.MaxNameLength (reader.GetString 2) with
+            | Ok id, Ok guild, Ok name ->
+                Ok(guild, {
+                    Id = id
+                    Name = name
+                })
+            | _ -> invalidData "A stored guild custom role is invalid.")
 
     // One above the highest ID the table's AUTOINCREMENT issued; sqlite_sequence
     // is not a schema table, and the sequence outlives deleted rows.
     let private nextId context (table: string) =
-        let highest =
-            scalar context $"SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = '{table}'), 0), COALESCE((SELECT MAX(id) FROM {table}), 0))" []
-            :?> int64
-        if highest < 0L then Error() else Ok(uint64 highest + 1UL)
+        match scalar context $"SELECT MAX(COALESCE((SELECT seq FROM sqlite_sequence WHERE name = '{table}'), 0), COALESCE((SELECT MAX(id) FROM {table}), 0))" [] with
+        | :? int64 as highest when highest >= 0L -> Ok(uint64 highest + 1UL)
+        | _ -> Error()
 
     // A member holds a custom role of their own guild only.
     let private titlesHeld (members: (GuildId * GuildMember) list) (titles: (GuildId * GuildTitle) list) =
@@ -107,13 +189,15 @@ module SqliteGuildStore =
                 readAll reader row
             let guilds =
                 rows "SELECT id, name, created_at, info, listed FROM guilds ORDER BY id" (fun reader ->
-                    let info =
-                        match optional reader 3 reader.GetString with
-                        | ValueSome text -> GuildInfo.create GuildOptions.MaxInfoLength text |> Result.map ValueSome
-                        | ValueNone -> Ok ValueNone
-                    match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1), info with
-                    | Ok id, Ok name, Ok info -> Ok(id, name, time (reader.GetInt64 2), info, reader.GetInt64 4 <> 0L)
-                    | _ -> invalidData "A stored guild is invalid.")
+                    SqliteAccountStore.storedRow reader 0 GuildProjection (fun () ->
+                        let info =
+                            match optional reader 3 reader.GetString with
+                            | ValueSome text -> GuildInfo.create GuildOptions.MaxInfoLength text |> Result.map ValueSome
+                            | ValueNone -> Ok ValueNone
+
+                        match GuildId.create (uint64 (reader.GetInt64 0)), GuildName.create 1 GuildOptions.MaxNameLength (reader.GetString 1), info with
+                        | Ok id, Ok name, Ok info -> Ok(id, name, time (reader.GetInt64 2), info, reader.GetInt64 4 <> 0L)
+                        | _ -> invalidData "A stored guild is invalid."))
             let members =
                 rows "SELECT guild_id, player_id, role, joined_at, mute_reason, muted_by, muted_at, muted_until, title_id FROM guild_members" memberOf
             let invites = rows "SELECT guild_id, player_id, invited_by, created_at, expires_at FROM guild_invites" inviteOf
@@ -122,10 +206,12 @@ module SqliteGuildStore =
             let profiles =
                 rows "SELECT p.player_id, a.username, p.display_name, p.name_color FROM profiles p JOIN accounts a ON a.id=p.account_id WHERE p.player_id IN (SELECT player_id FROM guild_members UNION SELECT player_id FROM guild_invites UNION SELECT player_id FROM guild_join_requests)"
                     (fun reader ->
-                        match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
-                              DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
-                        | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
-                        | _ -> invalidData "A stored profile is invalid.")
+                        SqliteAccountStore.storedRow reader 0 ProfileProjection (fun () ->
+                            match PlayerId.create (uint64 (reader.GetInt64 0)), Username.create Int32.MaxValue (reader.GetString 1),
+                                  DisplayName.create Int32.MaxValue (reader.GetString 2), nameColor (reader.GetInt64 3) with
+                            | Ok id, Ok username, Ok name, Ok color -> Ok(PlayerData.create id username name color)
+                            | _ -> invalidData "A stored profile is invalid."))
+
             match guilds, members, invites, profiles, titles, requests with
             | Ok guilds, Ok members, Ok invites, Ok profiles, Ok titles, Ok requests ->
                 let membersOf = members |> List.groupBy fst |> Map.ofList
@@ -133,28 +219,39 @@ module SqliteGuildStore =
                 let titlesOf = titles |> List.groupBy fst |> Map.ofList
                 let requestsOf = requests |> List.groupBy _.Guild |> Map.ofList
                 let stored =
-                    guilds |> List.map (fun (id, name, createdAt, info, listed) ->
-                        { Id = id
-                          Name = name
-                          CreatedAt = createdAt
-                          Info = info
-                          Listed = listed
-                          JoinRequests = requestsOf |> Map.tryFind id |> Option.defaultValue []
-                          Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
-                          Invites = invitesOf |> Map.tryFind id |> Option.defaultValue []
-                          Titles = titlesOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd })
+                    guilds |> List.map (fun (id, name, createdAt, info, listed) -> {
+                        Id = id
+                        Name = name
+                        CreatedAt = createdAt
+                        Info = info
+                        Listed = listed
+                        JoinRequests = requestsOf |> Map.tryFind id |> Option.defaultValue []
+                        Members = membersOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
+                        Invites = invitesOf |> Map.tryFind id |> Option.defaultValue []
+                        Titles = titlesOf |> Map.tryFind id |> Option.defaultValue [] |> List.map snd
+                    })
+
                 match nextId context "guilds", nextId context "guild_titles" with
                 | Ok next, _ when next >= GuildId.MaxValue -> invalidData "The guild ID sequence is exhausted."
                 | Ok _, Ok nextTitle when nextTitle > uint64 Int64.MaxValue -> invalidData "The guild custom role ID sequence is exhausted."
                 | Ok _, Ok _ when not (titlesHeld members titles) -> invalidData "A guild member holds a custom role of another guild."
-                | Ok next, Ok nextTitle -> Ok { Guilds = stored; Profiles = profiles; NextId = next; NextTitleId = nextTitle }
-                | Error(), _ | _, Error() -> invalidData "A guild ID sequence is negative."
+                | Ok next, Ok nextTitle ->
+                    Ok {
+                        Guilds = stored
+                        Profiles = profiles
+                        NextId = next
+                        NextTitleId = nextTitle
+                    }
+                | Error(), _ | _, Error() -> invalidData "A guild ID sequence is invalid."
             | Error error, _, _, _, _, _ | _, Error error, _, _, _, _ | _, _, Error error, _, _, _
             | _, _, _, Error error, _, _ | _, _, _, _, Error error, _ | _, _, _, _, _, Error error -> Error error)
 
     let private guild (id: GuildId) = box (int64 (GuildId.value id))
     let private player (id: PlayerId) = box (int64 (PlayerId.value id))
-    let private nullable (value: 'T voption) = match value with ValueSome value -> box value | ValueNone -> box DBNull.Value
+    let private nullable (value: 'T voption) =
+        match value with
+        | ValueSome value -> box value
+        | ValueNone -> box DBNull.Value
 
     let private title (id: GuildTitleId) = box (int64 (GuildTitleId.value id))
 
@@ -180,6 +277,7 @@ module SqliteGuildStore =
                 execute context "INSERT INTO guilds(id, name, name_key, created_at) VALUES (@guild, @name, @key, @at)"
                     [ "@guild", guild id; "@name", box (GuildName.value name); "@key", box (GuildName.key name); "@at", box (milliseconds createdAt) ]
                 |> ignore
+
                 putMember context id master
                 Ok())
         | GuildWrite.Delete id ->
@@ -242,10 +340,23 @@ module SqliteGuildStore =
                 execute context "DELETE FROM guild_titles WHERE id=@title" [ "@title", title id ] |> ignore
                 Ok())
 
+        | GuildWrite.Join(id, membership) ->
+            transaction context (fun () ->
+                let row = [ "@guild", guild id; "@player", player membership.Player ]
+                execute context "DELETE FROM guild_invites WHERE guild_id=@guild AND player_id=@player" row |> ignore
+                execute context "DELETE FROM guild_join_requests WHERE guild_id=@guild AND player_id=@player" row |> ignore
+                putMember context id membership
+                Ok())
+        | GuildWrite.TransferMaster(id, previous, master) ->
+            transaction context (fun () ->
+                previous |> ValueOption.iter (putMember context id)
+                putMember context id master
+                Ok())
+
     /// One change, in its own unit of work.
     let write config (change: GuildWrite) token = SqliteAccountStore.withContext config token (fun context -> apply context change)
 
-    let private handle config (logger: ILogger) (context: AgentContext<GuildWrite>) (change: GuildWrite) = task {
+    let private handle config (logger: ILogger) (context: ReliableAgentContext<GuildWrite>) (change: GuildWrite) = task {
         match write config change context.CancellationToken with
         | Ok() -> ()
         | Error error ->
@@ -253,6 +364,7 @@ module SqliteGuildStore =
             | AccountStoreError.Failed exn -> logger.LogError(exn, "Guild storage write failed: {Write}", change)
             | AccountStoreError.UsernameTaken | AccountStoreError.InvalidCredential | AccountStoreError.Canceled ->
                 logger.LogError("Guild storage write failed: {Error} ({Write})", error, change)
+
             // Memory went ahead of storage: the writer stops, the runtime fails
             // and the supervisor restarts the game from what storage holds.
             context.Abort()
@@ -260,6 +372,12 @@ module SqliteGuildStore =
 
     /// One sequential writer keeps the order of a guild's changes. capacity is
     /// Guilds.MaxPendingWrites, checked with the configuration.
-    let startWriter config (logger: ILogger) capacity =
-        let options = { AgentOptions.create "guild-writer" with Mailbox = AgentMailbox.boundedWait capacity }
-        Agent.Start(options, handle config logger)
+    let tryPrepareWriter config (logger: ILogger) capacity =
+        let options = {
+            AgentOptions.create "guild-writer" with
+                Mailbox = AgentMailbox.boundedWait capacity
+        }
+        Agent.TryPrepareReliable(options, handle config logger)
+
+    let startWriter config logger capacity =
+        tryPrepareWriter config logger capacity |> Result.map (fun plan -> plan.Start())

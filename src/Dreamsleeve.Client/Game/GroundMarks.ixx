@@ -10,7 +10,8 @@ import Dreamsleeve.Game.World;
 import Dreamsleeve.Game.PlacedReferences;
 import Dreamsleeve.Game.Raycast;
 import Dreamsleeve.UI.Nameplates;
-import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.GameDates;
 import Dreamsleeve.Host.Hud;
 import Dreamsleeve.Client.Utils;
 
@@ -122,6 +123,7 @@ namespace GroundMarks
     if (!runtime.app || runtime.context != Runtime::GameContext::Playing || !player) return;
     const auto spot = World::Spot();
     if (!spot) return;
+
     state.deathReported = true;
 
     using Dreamsleeve::Utils::Text::CodePoints;
@@ -186,6 +188,7 @@ namespace GroundMarks
       if (!spawned) return;
       state.refs.Keep(mark.markId, *spawned);
     }
+
     visible.insert(mark.markId);
     if (combat && ui.combatHideGroundText) return;
 
@@ -207,6 +210,7 @@ namespace GroundMarks
         runtime.session.PlayerNames().NameFor(mark.author.playerId, mark.author, mark.characterName, ui) +
           (death ? LevelSuffix(mark.characterLevel) : std::string{}),
         mark.author);
+
     // The same filter of server-flagged ranges as chat lines and bubbles. The
     // date header comes and goes with the text.
     if (visual.textShown)
@@ -216,6 +220,7 @@ namespace GroundMarks
       if (mark.gameDate && (death ? ui.deathDateHeader : ui.noteDateHeader))
         label.header = Host::FormatGameDate(*mark.gameDate, ui.markDateStyle);
     }
+
     const RE::NiPoint3 anchor{mark.placement.position.X, mark.placement.position.Y, visual.z + LabelHeight};
     Nameplates::Add(names, std::move(label), anchor, ui.fireflyNameOcclusion);
   }
@@ -232,6 +237,7 @@ namespace GroundMarks
       ClearAll();
       return;
     }
+
     // Resurrection, a load or a new game: the next death may be reported again.
     if (!player->IsDead()) state.deathReported = false;
 
@@ -242,9 +248,11 @@ namespace GroundMarks
       ClearAll();
       return;
     }
+
     const auto observer = World::Observe(player);
     if (!observer || (state.space && *state.space != observer->space)) ClearAll();
     if (!observer) return;
+
     state.space        = observer->space;
     const auto& space  = observer->space;
     const auto& origin = observer->position;
@@ -265,6 +273,7 @@ namespace GroundMarks
       if (!distance) continue;
       (death ? deaths : notes).push_back({&mark, *distance});
     }
+
     Domain::Spatial::KeepNearest(notes, static_cast<std::size_t>(ui.maxVisibleNotes), &Candidate::distance);
     Domain::Spatial::KeepNearest(deaths, static_cast<std::size_t>(ui.maxVisibleDeaths), &Candidate::distance);
 

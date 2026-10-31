@@ -4,6 +4,7 @@ import std;
 export import Dreamsleeve.Client.Auth;
 export import Dreamsleeve.Client.StateUpdateQueue;
 export import Dreamsleeve.Client.GuildBook;
+export import Dreamsleeve.Client.Phantom.Exchange;
 
 export namespace Dreamsleeve::Client
 {
@@ -560,29 +561,37 @@ export namespace Dreamsleeve::Client
     bool              savedLogin{};
     std::string       savedUsername;
     std::uint32_t     authSequence{};  // Bumped per completion so an identical repeat is still observable.
+
     // What the server offers: who may register, whether Steam sign-in is on.
     Auth::Methods methods;
+
     // The page of a Steam sign-in in progress, for "copy the link", and who
     // was asked to open it in the browser or why that failed; empty outside one.
     std::string steamPage;
     std::string steamBrowser;
     std::string steamBrowserError;
+
     // The server pseudonym the others see for this session and where; absent
     // while the names are shown or outside a session.
     std::optional<std::string> pseudonym;
     Domain::HiddenIdentity     hiding{Domain::HiddenIdentity::None};
+
     // The player's mute in this session, as the server reported it.
     std::optional<Domain::MuteState> mute;
+
     // The player's role in this session; a moderator gets the moderator tools.
     Domain::PlayerRole role{Domain::PlayerRole::Player};
+
     // The player's guilds and invitations in this session, published with the
     // chat state of their channels; absent until the server sent them. Every
     // change is a new book, so comparing pointers tells a change.
     std::shared_ptr<const GuildBook> guilds;
+
     // Why the last session ended or a sign-in was refused by a ban; kept until
     // the next sign-in. The sequence tells a repeat of the same notice apart.
     std::optional<Domain::SessionEnd> sessionEnd;
     std::uint32_t                     sessionEndSequence{};
+
     // The route the traffic goes by (an index of the settings' routes, the main
     // one first) and whether it has answered since the client took it.
     std::size_t route{};
@@ -685,6 +694,11 @@ public:
     ClientExchange(const ClientExchange&)            = delete;
     ClientExchange& operator=(const ClientExchange&) = delete;
 
+    Phantom::Exchange& Phantoms() noexcept
+    {
+      return phantoms;
+    }
+
     // Main thread. Lifecycle has a reserved slot, independent of game-command
     // capacity and reply backpressure. Admission does not mean authentication.
     std::expected<void, std::string> PostLogin(
@@ -699,6 +713,7 @@ public:
     {
       std::lock_guard lock{mutex};
       if (inputClosed) return std::unexpected{"Client input is closed"};
+
       const auto operation     = std::visit([](const auto& value) { return value.Operation; }, request);
       const bool activeAllowed = operation == AuthOperation::SignOut || operation == AuthOperation::ForgetSavedLogin;
       if (status.authenticating || disconnectRequested || (!activeAllowed && !SessionIdle(status.phase)))
@@ -710,6 +725,7 @@ public:
       status.authFailure     = Auth::FailureCode::None;
       status.error.clear();
       pendingAuthentication.emplace(std::move(request));
+
       wake.notify_one();
       return {};
     }
@@ -766,6 +782,7 @@ public:
       std::lock_guard lock{mutex};
       status.authenticating = false;
       ++status.authSequence;
+
       if (authenticationCanceled)
         status.authFailure = Auth::FailureCode::Canceled;
       else
@@ -846,11 +863,12 @@ public:
     }
 
     // Owner only.
-    void PublishRoute(std::size_t route, bool reached)
+    void PublishRoute(std::size_t route, bool reached, bool resetMethods = false)
     {
       std::lock_guard lock{mutex};
       status.route        = route;
       status.routeReached = reached;
+      if (resetMethods) status.methods = {};
     }
 
     // Main thread. Read by the owner when it opens the next session; a running
@@ -926,11 +944,13 @@ public:
       output.clear();
 
       std::lock_guard lock{mutex};
+
       // Every taken command may fail locally or produce a server rejection.
       // Existing requests retain their result slots until a reply arrives.
       const auto free      = maxCommands - Settled();
       const auto available = pendingReplies >= free ? 0 : free - pendingReplies;
       auto       count     = std::min(commands.size(), available);
+
       if (count == commands.size())
         commands.swap(output);
       else
@@ -991,8 +1011,10 @@ public:
       if (nextPhase) status.phase = *nextPhase;
       status.serverName = serverName;
       status.guilds     = std::move(guilds);
+
       if (accepted && result) pendingResults.push_back(std::move(*result));
       if (update && state->Publish(std::move(*update)) == StatePublishResult::SnapshotRequired) state->Publish(model.Snapshot());
+
       return accepted;
     }
 
@@ -1032,8 +1054,10 @@ public:
       authenticationCanceled = true;
       pendingAuthentication.reset();
       commands.clear();
+
       status.authenticating = false;
       status.stopped        = true;
+
       wake.notify_one();
     }
 
@@ -1047,23 +1071,28 @@ private:
       return pendingResults.size();
     }
 
-    mutable std::mutex                   mutex;
-    std::condition_variable              wake;
-    const std::size_t                    maxCommands;
-    std::vector<QueuedClientCommand>     commands;
-    bool                                 inputClosed{};
-    std::uint64_t                        nextRequestId{1};
-    std::vector<CommandResult>           pendingResults;
-    ClientStatus                         status;
-    Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
-    std::optional<std::size_t>           routeChoice;
+    mutable std::mutex      mutex;
+    Phantom::Exchange       phantoms;
+    std::condition_variable wake;
+
+    const std::size_t                maxCommands;
+    std::vector<QueuedClientCommand> commands;
+    bool                             inputClosed{};
+    std::uint64_t                    nextRequestId{1};
+
+    std::vector<CommandResult> pendingResults;
+    ClientStatus               status;
+    Domain::HiddenIdentity     hideIdentity{Domain::HiddenIdentity::None};
+    std::optional<std::size_t> routeChoice;
+
     std::optional<AuthenticationRequest> pendingAuthentication;
     bool                                 disconnectRequested{};
     bool                                 authenticationCanceled{};
     bool                                 stopRequested{};
-    StateUpdateQueue::Ptr                state;
-    ChangeBatch                          scratch;                     // Owner only.
-    bool                                 needsInitialSnapshot{true};  // Owner only.
+
+    StateUpdateQueue::Ptr state;
+    ChangeBatch           scratch;                     // Owner only.
+    bool                  needsInitialSnapshot{true};  // Owner only.
   };
 
 }

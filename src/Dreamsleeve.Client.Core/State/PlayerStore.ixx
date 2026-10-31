@@ -106,6 +106,7 @@ public:
     {
       const auto found = players.find(id);
       if (found == players.end()) return UnknownPlayer();
+
       if (values) Domain::Players::Apply(found->second.actorValues, *values);
       if (details) Domain::Players::Apply(found->second.details, *details);
       return {};

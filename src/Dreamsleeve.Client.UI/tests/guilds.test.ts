@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GUILDS, makeChat, visible } from "../src/state/chat";
 import { mayRemove } from "../src/state/guilds";
 import { parseHostEvent } from "../src/bridge/parse";
+import { expectHostEvent } from "./parseHostEvent";
 import type {
   Channel,
   Command,
@@ -505,6 +506,42 @@ describe("guilds in the chat", () => {
   });
 });
 
+describe("guild request session ownership", () => {
+  const snapshot: HostEvent = {
+    type: "snapshot",
+    serverName: "Next session",
+    channels: [global, system, ravens],
+    messages: [],
+    players: [],
+    selfId: SELF,
+  };
+  it("a new session ignores old guild deletion replies and accepts new ones", () => {
+    const { chat, sent } = inGuilds();
+    chat.guilds.invite("4", "9", "Pending player");
+    chat.guilds.deleteMessage(ravens.id, "2");
+    chat.receive(snapshot);
+    expect(chat.store.getState().guildRequests).toEqual({});
+    const notice = chat.store.getState().notice;
+    chat.receive({ type: "guildResult", requestId: "g1", guildId: "4" });
+    chat.receive({ type: "moderationResult", requestId: "gd2" });
+    expect(chat.store.getState().notice).toBe(notice);
+    chat.guilds.deleteMessage(ravens.id, "3");
+    expect(sent().at(-1)).toMatchObject({
+      type: "deleteChatMessage",
+      requestId: "gd3",
+    });
+    chat.receive({ type: "moderationResult", requestId: "gd3" });
+    expect(chat.store.getState().notice).toBe("Сообщение удалено");
+  });
+  it("a refresh preserves current guild deletion correlation", () => {
+    const { chat } = inGuilds();
+    chat.guilds.deleteMessage(ravens.id, "2");
+    chat.receive({ ...snapshot, refresh: true });
+    chat.receive({ type: "moderationResult", requestId: "gd1" });
+    expect(chat.store.getState().notice).toBe("Сообщение удалено");
+  });
+});
+
 describe("guild events at the bridge", () => {
   const sample = {
     type: "guilds",
@@ -549,14 +586,20 @@ describe("guild events at the bridge", () => {
     applicationsEnded: [{ guildId: "3", name: "Лисы", reason: "rejected" }],
   };
   it("accept what the host sends and refuse what it never would", () => {
-    expect(parseHostEvent(JSON.stringify(sample)).type).toBe("guilds");
+    expect(expectHostEvent(JSON.stringify(sample)).type).toBe("guilds");
     const broken = structuredClone(sample);
     broken.guilds[0].members[0].role = "king";
-    expect(() => parseHostEvent(JSON.stringify(broken))).toThrow();
+    expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+      ok: false,
+      error: "schema",
+    });
     const untitled = structuredClone(sample);
     untitled.guilds[0].members[0].title = 2 as never;
-    expect(() => parseHostEvent(JSON.stringify(untitled))).toThrow();
-    expect(() =>
+    expect(parseHostEvent(JSON.stringify(untitled))).toEqual({
+      ok: false,
+      error: "schema",
+    });
+    expect(
       parseHostEvent(
         JSON.stringify({
           type: "guildResult",
@@ -565,12 +608,12 @@ describe("guild events at the bridge", () => {
           error: "x",
         }),
       ),
-    ).toThrow();
-    expect(() =>
-      parseHostEvent(JSON.stringify({ type: "guildResult", requestId: "g1" })),
-    ).toThrow();
+    ).toEqual({ ok: false, error: "schema" });
     expect(
-      parseHostEvent(
+      parseHostEvent(JSON.stringify({ type: "guildResult", requestId: "g1" })),
+    ).toEqual({ ok: false, error: "schema" });
+    expect(
+      expectHostEvent(
         JSON.stringify({ type: "channels", channels: [{ ...ravens }] }),
       ).type,
     ).toBe("channels");

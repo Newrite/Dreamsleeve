@@ -15,6 +15,8 @@ open Dreamsleeve.Server.Domain
 module GuildsAgent =
     type private State = {
         Options: GuildOptions
+        HistoryCapacity: ChatHistoryCapacity
+        TickInterval: AgentTickerInterval
         Book: GuildBook
         Moderation: ModerationRules
         /// Moderated profile of every member and invited player, for the wire
@@ -37,14 +39,24 @@ module GuildsAgent =
     }
 
     let private notifyHost state context command =
-        if not (state.Host.TrySend(context, command)) then context.Abort()
+        if not (state.Host.TrySend(context, command)) then
+            context.Abort()
 
     // Storage is the source of truth between runs: a write that cannot even be
     // queued means persistence is broken, and the owner stops visibly.
-    let private persist state (context: AgentContext<GuildCommand>) write =
-        if not (state.Writer.TrySend(context, write)) then
+    let private persist state (context: ReliableAgentContext<GuildCommand>) write =
+        if state.Writer.TrySend(context, write) then true
+        else
             state.Logger.LogError("Guild persistence queue is full; stopping the owner")
             context.Abort()
+            false
+
+    // What depends on a write is published only once the writer admitted it; the
+    // answer tells a request whether there is anything to confirm.
+    let inline private persisted state context write ([<InlineIfLambda>] publish: unit -> unit) =
+        let admitted = persist state context write
+        if admitted then publish ()
+        admitted
 
     let private now () = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
 
@@ -84,9 +96,11 @@ module GuildsAgent =
         | false, _ -> PlayerData.create player (Moderation.fallbackUsername player) (Moderation.fallbackDisplayName player) NameColor.unknown
 
     let private memberView state now (membership: GuildMember) =
-        { Membership = { membership with Mute = GuildMember.mute now membership }
-          Profile = profileOf state membership.Player
-          Online = state.Online.ContainsKey membership.Player }
+        {
+            Membership = { membership with Mute = GuildMember.mute now membership }
+            Profile = profileOf state membership.Player
+            Online = state.Online.ContainsKey membership.Player
+        }
 
     // The master first, officers next, then members; each by joining time.
     let private ordered (guild: Guild) =
@@ -97,7 +111,11 @@ module GuildsAgent =
         guild.Member player |> ValueOption.exists (fun membership -> GuildRole.mayInvite membership.Role)
 
     let private requestViews state (guild: Guild) =
-        guild.JoinRequests |> List.map (fun request -> { Request = request; Profile = profileOf state request.Player })
+        guild.JoinRequests
+        |> List.map (fun request -> {
+            Request = request
+            Profile = profileOf state request.Player
+        })
 
     /// The guild as viewer sees it: join requests only for the master and officers.
     let private guildView state now (guild: Guild) withMessages viewer =
@@ -105,40 +123,50 @@ module GuildsAgent =
             match state.Chats.TryGetValue guild.Id with
             | true, chat when withMessages -> (Chat.snapshot chat).Messages
             | true, _ | false, _ -> []
-        { Guild = guild.Id
-          Name = guild.Name
-          ChannelId = ChatChannels.ofGuild guild.Id
-          CreatedAt = guild.CreatedAt
-          Members = ordered guild |> List.map (memberView state now)
-          Messages = messages
-          Titles = guild.Titles
-          Info = guild.Info
-          Listed = guild.Listed
-          JoinRequests = if isStaff guild viewer then requestViews state guild else [] }
+        {
+            Guild = guild.Id
+            Name = guild.Name
+            ChannelId = ChatChannels.ofGuild guild.Id
+            CreatedAt = guild.CreatedAt
+            Members = ordered guild |> List.map (memberView state now)
+            Messages = messages
+            Titles = guild.Titles
+            Info = guild.Info
+            Listed = guild.Listed
+            JoinRequests = if isStaff guild viewer then requestViews state guild else []
+        }
 
     let private inviteView state (invite: GuildInvite) =
         GuildBook.tryFind invite.Guild state.Book
-        |> ValueOption.map (fun guild -> { Invite = invite; GuildName = guild.Name })
+        |> ValueOption.map (fun guild -> {
+            Invite = invite
+            GuildName = guild.Name
+        })
 
     let private applicationView state (request: GuildJoinRequest) =
         GuildBook.tryFind request.Guild state.Book
-        |> ValueOption.map (fun guild -> { Request = request; GuildName = guild.Name })
+        |> ValueOption.map (fun guild -> {
+            Request = request
+            GuildName = guild.Name
+        })
 
     let private snapshotOf state player now : GuildState =
-        { Guilds =
-            GuildBook.guildsOf player state.Book
-            |> List.sortBy _.CreatedAt
-            |> List.map (fun guild -> guildView state now guild true player)
-          Invites =
-            GuildBook.invitesOf player state.Book
-            |> List.filter (fun invite -> now < invite.Expires)
-            |> List.choose (inviteView state >> ValueOption.toOption)
-          Applications =
-            GuildBook.applicationsOf player state.Book
-            |> List.filter (fun request -> now < request.Expires)
-            |> List.sortBy _.CreatedAt
-            |> List.choose (applicationView state >> ValueOption.toOption)
-          Limits = state.Book.Limits }
+        {
+            Guilds =
+                GuildBook.guildsOf player state.Book
+                |> List.sortBy _.CreatedAt
+                |> List.map (fun guild -> guildView state now guild true player)
+            Invites =
+                GuildBook.invitesOf player state.Book
+                |> List.filter (fun invite -> now < invite.Expires)
+                |> List.choose (inviteView state >> ValueOption.toOption)
+            Applications =
+                GuildBook.applicationsOf player state.Book
+                |> List.filter (fun request -> now < request.Expires)
+                |> List.sortBy _.CreatedAt
+                |> List.choose (applicationView state >> ValueOption.toOption)
+            Limits = state.Book.Limits
+        }
 
     /// The complete list to every online master and officer of the guild.
     let private requestsChanged state context (guild: Guild) =
@@ -152,26 +180,37 @@ module GuildsAgent =
         send state context player (GuildEvent.Changed(GuildChange.JoinRequests(guild.Id, views)))
 
     let private summary state (guild: Guild) : GuildSummary =
-        { Guild = guild.Id
-          Name = guild.Name
-          Info = guild.Info
-          Listed = guild.Listed
-          CreatedAt = guild.CreatedAt
-          Members = guild.MemberCount
-          Master = guild.Master |> ValueOption.map (fun master -> profileOf state master.Player) }
+        {
+            Guild = guild.Id
+            Name = guild.Name
+            Info = guild.Info
+            Listed = guild.Listed
+            CreatedAt = guild.CreatedAt
+            Members = guild.MemberCount
+            Master = guild.Master |> ValueOption.map (fun master -> profileOf state master.Player)
+        }
 
     let private card state now (guild: Guild) : GuildCard =
-        { Summary = summary state guild
-          Members = ordered guild |> List.map (memberView state now)
-          Invites =
-            guild.Invites
-            |> List.sortBy _.CreatedAt
-            |> List.map (fun invite ->
-                let profile = match state.Profiles.TryGetValue invite.Player with | true, profile -> ValueSome profile | false, _ -> ValueNone
-                invite, profile) }
+        {
+            Summary = summary state guild
+            Members = ordered guild |> List.map (memberView state now)
+            Invites =
+                guild.Invites
+                |> List.sortBy _.CreatedAt
+                |> List.map (fun invite ->
+                    let profile =
+                        match state.Profiles.TryGetValue invite.Player with
+                        | true, profile -> ValueSome profile
+                        | false, _ -> ValueNone
+                    invite, profile)
+        }
 
     let private rejection error : RequestRejection =
-        let refuse code message field = { Code = code; Message = message; Field = field }
+        let refuse code message field = {
+            Code = code
+            Message = message
+            Field = field
+        }
         match error with
         | GuildError.NameTaken -> refuse RequestRejectionCode.GuildNameTaken "A guild with this name exists." "name"
         | GuildError.ServerFull -> refuse RequestRejectionCode.GuildServerLimit "The server has the maximum number of guilds." ""
@@ -199,12 +238,12 @@ module GuildsAgent =
         match state.Chats.TryGetValue guild.Id with
         | true, chat -> chat
         | false, _ ->
-            match Chat.create (ChatChannels.ofGuild guild.Id) ChatChannelKind.Guild state.Options.HistoryCapacity with
-            | Error error -> invalidOp $"Guild chat cannot start: %A{error}"
-            | Ok chat ->
-                for membership in guild.Members do Chat.join membership.Player chat |> ignore
-                state.Chats[guild.Id] <- chat
-                chat
+            let chat = Chat.createGuild state.HistoryCapacity guild.Id
+            for membership in guild.Members do
+                Chat.join membership.Player chat |> ignore
+
+            state.Chats[guild.Id] <- chat
+            chat
 
     let private joinChat state guild playerId =
         match state.Chats.TryGetValue guild with
@@ -218,41 +257,50 @@ module GuildsAgent =
 
     /// Everyone in and invited to a disbanded guild hears of it; its chat goes.
     let private disbanded state context (gone: DisbandedGuild) =
-        persist state context (GuildWrite.Delete gone.Guild)
-        state.Chats.Remove gone.Guild |> ignore
-        state.NextMessageIds.Remove gone.Guild |> ignore
-        for membership in gone.Members do
-            send state context membership.Player (GuildEvent.Changed(GuildChange.Removed(gone.Guild, GuildRemoval.Disbanded)))
-        for invite in gone.Invites do
-            send state context invite.Player (GuildEvent.Changed(GuildChange.InviteRemoved gone.Guild))
-        for request in gone.JoinRequests do
-            send state context request.Player (GuildEvent.Changed(GuildChange.ApplicationRemoved(gone.Guild, GuildApplicationEnd.Disbanded)))
+        if persist state context (GuildWrite.Delete gone.Guild) then
+            state.Chats.Remove gone.Guild |> ignore
+            state.NextMessageIds.Remove gone.Guild |> ignore
+            for membership in gone.Members do
+                send state context membership.Player (GuildEvent.Changed(GuildChange.Removed(gone.Guild, GuildRemoval.Disbanded)))
+            for invite in gone.Invites do
+                send state context invite.Player (GuildEvent.Changed(GuildChange.InviteRemoved gone.Guild))
+            for request in gone.JoinRequests do
+                send state context request.Player (GuildEvent.Changed(GuildChange.ApplicationRemoved(gone.Guild, GuildApplicationEnd.Disbanded)))
+            true
+        else false
 
     let private handedOver state context now (guild: Guild) (previous: GuildMember voption) (master: GuildMember) =
-        previous |> ValueOption.iter (fun officer ->
-            persist state context (GuildWrite.PutMember(guild.Id, officer))
-            broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state now officer))))
-        persist state context (GuildWrite.PutMember(guild.Id, master))
-        broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state now master)))
-        requestsFor state context guild master.Player
+        if persist state context (GuildWrite.TransferMaster(guild.Id, previous, master)) then
+            previous |> ValueOption.iter (fun officer ->
+                broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state now officer))))
+            broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state now master)))
+            requestsFor state context guild master.Player
+            true
+        else false
+
+    let private refusal code message field : RequestRejection = {
+        Code = code
+        Message = message
+        Field = field
+    }
 
     /// A guild name or a custom role's name (noun): the shared rules, then the word list.
     let private checkedName state noun (create: int -> int -> string -> Result<'Name, DomainError>) (text: 'Name -> string) raw =
         let limits = state.Book.Limits
-        let invalid message = Error { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "name" }
+        let invalid message = Error(refusal RequestRejectionCode.InvalidRequest message "name")
         match create limits.NameMinLength limits.NameMaxLength raw with
         | Error(DomainError.InvalidText(_, TextError.TooShort minimum)) -> invalid $"A {noun} name has at least {minimum} characters."
         | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"A {noun} name has at most {maximum} characters."
         | Error _ -> invalid $"A {noun} name has letters, digits and spaces only."
         | Ok name when not (Moderation.allows state.Moderation (text name)) ->
-            Error { Code = RequestRejectionCode.TextNotAllowed; Message = $"The {noun} name contains words that are not allowed."; Field = "name" }
+            Error(refusal RequestRejectionCode.TextNotAllowed $"The {noun} name contains words that are not allowed." "name")
         | Ok name -> Ok name
 
     let private create state context (subscriber: Subscription<GuildEvent>) requestId raw =
         let actor = subscriber.Profile.PlayerId
         let reply event = deliver state context subscriber event
         match checkedName state "guild" GuildName.create GuildName.value raw with
-        | Error refusal -> reply (GuildEvent.Refused(requestId, refusal))
+        | Error refused -> reply (GuildEvent.Refused(requestId, refused))
         | Ok name ->
             match GuildId.create state.NextId with
             | Error _ -> context.Abort()
@@ -263,10 +311,13 @@ module GuildsAgent =
                 | Ok(guild, master) ->
                     state.NextId <- state.NextId + 1UL
                     state.Profiles[actor] <- subscriber.Profile
-                    persist state context (GuildWrite.Create(id, name, created, master))
-                    state.Logger.LogInformation("Guild {GuildId} {Name} created by player {PlayerId}", guildKey id, GuildName.value name, player actor)
-                    reply (GuildEvent.Changed(GuildChange.Added(guildView state created guild true actor)))
-                    reply (GuildEvent.Done(requestId, id))
+                    if persist state context (GuildWrite.Create(id, name, created, master)) then
+                        state.Logger.LogInformation("Guild {GuildId} {Name} created by player {PlayerId}", guildKey id, GuildName.value name, player actor)
+                        reply (GuildEvent.Changed(GuildChange.Added(guildView state created guild true actor)))
+                        reply (GuildEvent.Done(requestId, id))
+
+    let private memberChanged state at guild membership =
+        GuildEvent.Changed(GuildChange.MemberChanged(guild, memberView state at membership))
 
     let private titlesChanged state context (guild: Guild) =
         broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.Titles(guild.Id, guild.Titles)))
@@ -278,67 +329,66 @@ module GuildsAgent =
         |> Result.bind (fun name -> GuildBook.createTitle actor guild id name state.Book |> Result.mapError rejection)
         |> Result.map (fun (entry, title) ->
             state.NextTitleId <- state.NextTitleId + 1UL
-            persist state context (GuildWrite.PutTitle(guild, title))
-            state.Logger.LogInformation("Custom role {TitleId} {Name} created in guild {GuildId} by player {PlayerId}",
-                                        GuildTitleId.value title.Id, GuildTitleName.value title.Name, guildKey guild, player actor)
-            titlesChanged state context entry)
+            persisted state context (GuildWrite.PutTitle(guild, title)) (fun () ->
+                state.Logger.LogInformation("Custom role {TitleId} {Name} created in guild {GuildId} by player {PlayerId}",
+                                            GuildTitleId.value title.Id, GuildTitleName.value title.Name, guildKey guild, player actor)
+                titlesChanged state context entry))
 
     let private renameTitle state context actor guild id raw =
         titleName state raw
         |> Result.bind (fun name -> GuildBook.renameTitle actor guild id name state.Book |> Result.mapError rejection)
         |> Result.map (fun (entry, title) ->
-            persist state context (GuildWrite.PutTitle(guild, title))
-            state.Logger.LogInformation("Custom role {TitleId} of guild {GuildId} renamed to {Name} by player {PlayerId}",
-                                        GuildTitleId.value id, guildKey guild, GuildTitleName.value title.Name, player actor)
-            titlesChanged state context entry)
+            persisted state context (GuildWrite.PutTitle(guild, title)) (fun () ->
+                state.Logger.LogInformation("Custom role {TitleId} of guild {GuildId} renamed to {Name} by player {PlayerId}",
+                                            GuildTitleId.value id, guildKey guild, GuildTitleName.value title.Name, player actor)
+                titlesChanged state context entry))
 
-    // The holders lose the role before the list does, so no member names a missing role.
+    // The holders hear before the list changes, so no member names a missing role.
     let private deleteTitle state context actor guild id at =
         GuildBook.deleteTitle actor guild id state.Book
         |> Result.mapError rejection
         |> Result.map (fun (entry, cleared) ->
-            for membership in cleared do
-                persist state context (GuildWrite.PutMember(guild, membership))
-                broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild, memberView state at membership)))
-            persist state context (GuildWrite.RemoveTitle id)
-            state.Logger.LogInformation("Custom role {TitleId} of guild {GuildId} deleted by player {PlayerId}",
-                                        GuildTitleId.value id, guildKey guild, player actor)
-            titlesChanged state context entry)
+            persisted state context (GuildWrite.RemoveTitle id) (fun () ->
+                for membership in cleared do
+                    broadcast state context entry ValueNone (memberChanged state at guild membership)
+                state.Logger.LogInformation("Custom role {TitleId} of guild {GuildId} deleted by player {PlayerId}",
+                                            GuildTitleId.value id, guildKey guild, player actor)
+                titlesChanged state context entry))
 
     let private setTitle state context actor guild target title at =
         GuildBook.setTitle actor guild target title state.Book
         |> Result.mapError rejection
         |> Result.map (fun (entry, membership) ->
-            persist state context (GuildWrite.PutMember(guild, membership))
-            broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild, memberView state at membership))))
+            persisted state context (GuildWrite.PutMember(guild, membership)) (fun () ->
+                broadcast state context entry ValueNone (memberChanged state at guild membership)))
 
     // Empty text clears the information; otherwise the chat text rules and the word list.
     let private infoText state (raw: string) =
-        let invalid message = Error { Code = RequestRejectionCode.InvalidRequest; Message = message; Field = "info" }
+        let invalid message = Error(refusal RequestRejectionCode.InvalidRequest message "info")
         if String.IsNullOrWhiteSpace raw then Ok ValueNone
         else
             match GuildInfo.create state.Book.Limits.InfoMaxLength raw with
             | Error(DomainError.InvalidText(_, TextError.TooLong maximum)) -> invalid $"The guild information has at most {maximum} characters."
             | Error _ -> invalid "The guild information contains control characters."
             | Ok info when not (Moderation.allows state.Moderation (GuildInfo.value info)) ->
-                Error { Code = RequestRejectionCode.TextNotAllowed; Message = "The guild information contains words that are not allowed."; Field = "info" }
+                Error(refusal RequestRejectionCode.TextNotAllowed "The guild information contains words that are not allowed." "info")
             | Ok info -> Ok(ValueSome info)
 
     let private setInfo state context actor guild raw =
         infoText state raw
         |> Result.bind (fun info -> GuildBook.setInfo actor guild info state.Book |> Result.mapError rejection)
         |> Result.map (fun entry ->
-            persist state context (GuildWrite.PutInfo(guild, entry.Info))
-            state.Logger.LogInformation("Information of guild {GuildId} changed by player {PlayerId}", guildKey guild, player actor)
-            broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.Info(guild, entry.Info))))
+            persisted state context (GuildWrite.PutInfo(guild, entry.Info)) (fun () ->
+                state.Logger.LogInformation("Information of guild {GuildId} changed by player {PlayerId}", guildKey guild, player actor)
+                broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.Info(guild, entry.Info)))))
 
     let private setListed state context actor guild listed =
         GuildBook.setListed actor guild listed state.Book
         |> Result.mapError rejection
         |> Result.map (fun entry ->
-            persist state context (GuildWrite.PutListed(guild, listed))
-            state.Logger.LogInformation("Guild {GuildId} listed {Listed} by player {PlayerId}", guildKey guild, listed, player actor)
-            broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.Listed(guild, listed))))
+            persisted state context (GuildWrite.PutListed(guild, listed)) (fun () ->
+                state.Logger.LogInformation("Guild {GuildId} listed {Listed} by player {PlayerId}", guildKey guild, listed, player actor)
+                broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.Listed(guild, listed)))))
 
     let private apply state context (subscriber: Subscription<GuildEvent>) guild at =
         let actor = subscriber.Profile.PlayerId
@@ -346,18 +396,21 @@ module GuildsAgent =
         |> Result.mapError rejection
         |> Result.map (fun (entry, request) ->
             state.Profiles[actor] <- subscriber.Profile
-            persist state context (GuildWrite.PutJoinRequest request)
-            state.Logger.LogInformation("Player {PlayerId} asked to join guild {GuildId}", player actor, guildKey guild)
-            deliver state context subscriber (GuildEvent.Changed(GuildChange.Applied { Request = request; GuildName = entry.Name }))
-            requestsChanged state context entry)
+            persisted state context (GuildWrite.PutJoinRequest request) (fun () ->
+                state.Logger.LogInformation("Player {PlayerId} asked to join guild {GuildId}", player actor, guildKey guild)
+                deliver state context subscriber (GuildEvent.Changed(GuildChange.Applied {
+                    Request = request
+                    GuildName = entry.Name
+                }))
+                requestsChanged state context entry))
 
     let private withdraw state context actor guild =
         GuildBook.withdraw actor guild state.Book
         |> Result.mapError rejection
         |> Result.map (fun (entry, _) ->
-            persist state context (GuildWrite.RemoveJoinRequest(guild, actor))
-            send state context actor (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Withdrawn)))
-            requestsChanged state context entry)
+            persisted state context (GuildWrite.RemoveJoinRequest(guild, actor)) (fun () ->
+                send state context actor (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Withdrawn)))
+                requestsChanged state context entry))
 
     // The applicant joins like an invited player: the guild with its history,
     // the members hear of them; an invitation they had goes as well.
@@ -365,36 +418,142 @@ module GuildsAgent =
         GuildBook.acceptRequest actor guild target at state.Book
         |> Result.mapError rejection
         |> Result.map (fun (entry, _, joined, invited) ->
-            persist state context (GuildWrite.RemoveJoinRequest(guild, target))
-            if invited then persist state context (GuildWrite.RemoveInvite(guild, target))
-            persist state context (GuildWrite.PutMember(guild, joined))
-            joinChat state guild target
-            state.Logger.LogInformation("Player {Target} joined guild {GuildId} on request, let in by player {PlayerId}",
-                                        player target, guildKey guild, player actor)
-            send state context target (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Accepted)))
-            if invited then send state context target (GuildEvent.Changed(GuildChange.InviteRemoved guild))
-            send state context target (GuildEvent.Changed(GuildChange.Added(guildView state at entry true target)))
-            broadcast state context entry (ValueSome target) (GuildEvent.Changed(GuildChange.MemberChanged(guild, memberView state at joined)))
-            requestsChanged state context entry)
+            persisted state context (GuildWrite.Join(guild, joined)) (fun () ->
+                joinChat state guild target
+                state.Logger.LogInformation("Player {Target} joined guild {GuildId} on request, let in by player {PlayerId}",
+                                            player target, guildKey guild, player actor)
+                send state context target (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Accepted)))
+                if invited then send state context target (GuildEvent.Changed(GuildChange.InviteRemoved guild))
+                send state context target (GuildEvent.Changed(GuildChange.Added(guildView state at entry true target)))
+                broadcast state context entry (ValueSome target) (memberChanged state at guild joined)
+                requestsChanged state context entry))
 
     let private rejectRequest state context actor guild target at =
         GuildBook.rejectRequest actor guild target at state.Book
         |> Result.mapError rejection
         |> Result.map (fun (entry, _) ->
-            persist state context (GuildWrite.RemoveJoinRequest(guild, target))
-            state.Logger.LogInformation("Join request of player {Target} to guild {GuildId} rejected by player {PlayerId}",
-                                        player target, guildKey guild, player actor)
-            send state context target (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Rejected)))
-            requestsChanged state context entry)
+            persisted state context (GuildWrite.RemoveJoinRequest(guild, target)) (fun () ->
+                state.Logger.LogInformation("Join request of player {Target} to guild {GuildId} rejected by player {PlayerId}",
+                                            player target, guildKey guild, player actor)
+                send state context target (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Rejected)))
+                requestsChanged state context entry))
 
     let private catalog state query : GuildCatalogView =
         let page = GuildBook.catalog query state.Options.CatalogPageSize state.Book
-        { Guilds =
-            page.Guilds
-            |> List.map (fun guild ->
-                { Guild = guild.Id; Name = guild.Name; Info = guild.Info; Members = guild.MemberCount; CreatedAt = guild.CreatedAt })
-          More = page.More
-          Total = page.Total }
+        {
+            Guilds =
+                page.Guilds
+                |> List.map (fun guild -> {
+                    Guild = guild.Id
+                    Name = guild.Name
+                    Info = guild.Info
+                    Members = guild.MemberCount
+                    CreatedAt = guild.CreatedAt
+                })
+            More = page.More
+            Total = page.Total
+        }
+
+    let private invite state context actor guild target at =
+        match subscriberOf state target with
+        | ValueNone when target <> actor -> Error(refusal RequestRejectionCode.TargetNotFound "The player is not online." "player_id")
+        | ValueSome _ | ValueNone ->
+            GuildBook.invite actor guild target at state.Book
+            |> Result.mapError rejection
+            |> Result.map (fun invitation ->
+                subscriberOf state target |> ValueOption.iter (fun invited -> state.Profiles[target] <- invited.Profile)
+                persisted state context (GuildWrite.PutInvite invitation) (fun () ->
+                    state.Logger.LogInformation("Player {PlayerId} invited player {Target} to guild {GuildId}", player actor, player target, guildKey guild)
+                    inviteView state invitation |> ValueOption.iter (fun view -> send state context target (GuildEvent.Changed(GuildChange.Invited view)))))
+
+    let private acceptInvite state context (subscriber: Subscription<GuildEvent>) guild at =
+        let actor = subscriber.Profile.PlayerId
+        let reply event = deliver state context subscriber event
+        GuildBook.accept actor guild at state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, _, joined, request) ->
+            state.Profiles[actor] <- subscriber.Profile
+            persisted state context (GuildWrite.Join(guild, joined)) (fun () ->
+                joinChat state guild actor
+                state.Logger.LogInformation("Player {PlayerId} joined guild {GuildId}", player actor, guildKey guild)
+                reply (GuildEvent.Changed(GuildChange.InviteRemoved guild))
+                if request.IsSome then reply (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Accepted)))
+                reply (GuildEvent.Changed(GuildChange.Added(guildView state at entry true actor)))
+                broadcast state context entry (ValueSome actor) (memberChanged state at guild joined)
+                if request.IsSome then requestsChanged state context entry))
+
+    let private declineInvite state context (subscriber: Subscription<GuildEvent>) guild at =
+        let actor = subscriber.Profile.PlayerId
+        GuildBook.decline actor guild at state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun _ ->
+            persisted state context (GuildWrite.RemoveInvite(guild, actor)) (fun () ->
+                deliver state context subscriber (GuildEvent.Changed(GuildChange.InviteRemoved guild))))
+
+    let private leave state context (subscriber: Subscription<GuildEvent>) guild =
+        let actor = subscriber.Profile.PlayerId
+        GuildBook.leave actor guild state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, _) ->
+            persisted state context (GuildWrite.RemoveMember(guild, actor)) (fun () ->
+                leaveChat state guild actor
+                state.Logger.LogInformation("Player {PlayerId} left guild {GuildId}", player actor, guildKey guild)
+                deliver state context subscriber (GuildEvent.Changed(GuildChange.Removed(guild, GuildRemoval.Left)))
+                broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberRemoved(guild, actor, GuildRemoval.Left)))))
+
+    let private exclude state context actor guild target =
+        GuildBook.exclude actor guild target state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, _) ->
+            persisted state context (GuildWrite.RemoveMember(guild, target)) (fun () ->
+                leaveChat state guild target
+                state.Logger.LogInformation("Player {Target} excluded from guild {GuildId} by player {PlayerId}", player target, guildKey guild, player actor)
+                send state context target (GuildEvent.Changed(GuildChange.Removed(guild, GuildRemoval.Excluded)))
+                broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberRemoved(guild, target, GuildRemoval.Excluded)))))
+
+    let private setRole state context actor guild target role at =
+        GuildBook.setRole actor guild target role state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, membership) ->
+            persisted state context (GuildWrite.PutMember(guild, membership)) (fun () ->
+                state.Logger.LogInformation("Player {Target} is now {Role} of guild {GuildId}", player target, GuildRole.key role, guildKey guild)
+                broadcast state context entry ValueNone (memberChanged state at guild membership)
+                requestsFor state context entry target))
+
+    let private transfer state context actor guild target at =
+        GuildBook.transfer actor guild target state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, previous, master) ->
+            let admitted = handedOver state context at entry previous master
+            if admitted then
+                state.Logger.LogInformation("Guild {GuildId} handed to player {Target} by player {PlayerId}", guildKey guild, player target, player actor)
+            admitted)
+
+    let private mute state context actor guild target term reason at =
+        GuildBook.mute actor guild target term reason at state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, membership) ->
+            persisted state context (GuildWrite.PutMember(guild, membership)) (fun () ->
+                state.Logger.LogInformation("Player {Target} muted in guild {GuildId} by player {PlayerId}: {Reason}",
+                                            player target, guildKey guild, player actor, SanctionReason.value reason)
+                broadcast state context entry ValueNone (memberChanged state at guild membership)))
+
+    let private unmute state context actor guild target at =
+        GuildBook.unmute actor guild target at state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun (entry, membership) ->
+            persisted state context (GuildWrite.PutMember(guild, membership)) (fun () ->
+                state.Logger.LogInformation("Guild mute of player {Target} in guild {GuildId} lifted by player {PlayerId}", player target, guildKey guild, player actor)
+                broadcast state context entry ValueNone (memberChanged state at guild membership)))
+
+    let private disband state context actor guild =
+        GuildBook.disband actor guild state.Book
+        |> Result.mapError rejection
+        |> Result.map (fun gone ->
+            let admitted = disbanded state context gone
+            if admitted then
+                state.Logger.LogInformation("Guild {GuildId} {Name} disbanded by player {PlayerId}", guildKey guild, GuildName.value gone.Name, player actor)
+            admitted)
 
     let private act state context (request: GuildRequest) =
         match state.Subscribers.TryGetValue request.ConnectionId with
@@ -403,111 +562,23 @@ module GuildsAgent =
             let actor = subscriber.Profile.PlayerId
             let at = now ()
             let reply event = deliver state context subscriber event
-            let refuse error = reply (GuildEvent.Refused(request.RequestId, rejection error))
-            let finish guild = reply (GuildEvent.Done(request.RequestId, guild))
             let settle guild outcome =
                 match outcome with
-                | Ok() -> finish guild
-                | Error refusal -> reply (GuildEvent.Refused(request.RequestId, refusal))
-            let changed guild view = GuildEvent.Changed(GuildChange.MemberChanged(guild, view))
+                | Ok true -> reply (GuildEvent.Done(request.RequestId, guild))
+                | Ok false -> ()
+                | Error refused -> reply (GuildEvent.Refused(request.RequestId, refused))
             match request.Action with
             | GuildAction.Create raw -> create state context subscriber request.RequestId raw
-            | GuildAction.Invite(guild, target) ->
-                match subscriberOf state target with
-                | ValueNone when target <> actor ->
-                    reply (GuildEvent.Refused(request.RequestId, { Code = RequestRejectionCode.TargetNotFound; Message = "The player is not online."; Field = "player_id" }))
-                | ValueSome _ | ValueNone ->
-                    match GuildBook.invite actor guild target at state.Book with
-                    | Error error -> refuse error
-                    | Ok invitation ->
-                        subscriberOf state target |> ValueOption.iter (fun invited -> state.Profiles[target] <- invited.Profile)
-                        persist state context (GuildWrite.PutInvite invitation)
-                        state.Logger.LogInformation("Player {PlayerId} invited player {Target} to guild {GuildId}", player actor, player target, guildKey guild)
-                        inviteView state invitation |> ValueOption.iter (fun view -> send state context target (GuildEvent.Changed(GuildChange.Invited view)))
-                        finish guild
-            | GuildAction.Answer(guild, true) ->
-                match GuildBook.accept actor guild at state.Book with
-                | Error error -> refuse error
-                | Ok(entry, _, joined, request) ->
-                    state.Profiles[actor] <- subscriber.Profile
-                    persist state context (GuildWrite.RemoveInvite(guild, actor))
-                    if request.IsSome then persist state context (GuildWrite.RemoveJoinRequest(guild, actor))
-                    persist state context (GuildWrite.PutMember(guild, joined))
-                    joinChat state guild actor
-                    state.Logger.LogInformation("Player {PlayerId} joined guild {GuildId}", player actor, guildKey guild)
-                    reply (GuildEvent.Changed(GuildChange.InviteRemoved guild))
-                    if request.IsSome then reply (GuildEvent.Changed(GuildChange.ApplicationRemoved(guild, GuildApplicationEnd.Accepted)))
-                    reply (GuildEvent.Changed(GuildChange.Added(guildView state at entry true actor)))
-                    broadcast state context entry (ValueSome actor) (changed guild (memberView state at joined))
-                    if request.IsSome then requestsChanged state context entry
-                    finish guild
-            | GuildAction.Answer(guild, false) ->
-                match GuildBook.decline actor guild at state.Book with
-                | Error error -> refuse error
-                | Ok _ ->
-                    persist state context (GuildWrite.RemoveInvite(guild, actor))
-                    reply (GuildEvent.Changed(GuildChange.InviteRemoved guild))
-                    finish guild
-            | GuildAction.Leave guild ->
-                match GuildBook.leave actor guild state.Book with
-                | Error error -> refuse error
-                | Ok(entry, _) ->
-                    persist state context (GuildWrite.RemoveMember(guild, actor))
-                    leaveChat state guild actor
-                    state.Logger.LogInformation("Player {PlayerId} left guild {GuildId}", player actor, guildKey guild)
-                    reply (GuildEvent.Changed(GuildChange.Removed(guild, GuildRemoval.Left)))
-                    broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberRemoved(guild, actor, GuildRemoval.Left)))
-                    finish guild
-            | GuildAction.Exclude(guild, target) ->
-                match GuildBook.exclude actor guild target state.Book with
-                | Error error -> refuse error
-                | Ok(entry, _) ->
-                    persist state context (GuildWrite.RemoveMember(guild, target))
-                    leaveChat state guild target
-                    state.Logger.LogInformation("Player {Target} excluded from guild {GuildId} by player {PlayerId}", player target, guildKey guild, player actor)
-                    send state context target (GuildEvent.Changed(GuildChange.Removed(guild, GuildRemoval.Excluded)))
-                    broadcast state context entry ValueNone (GuildEvent.Changed(GuildChange.MemberRemoved(guild, target, GuildRemoval.Excluded)))
-                    finish guild
-            | GuildAction.SetRole(guild, target, role) ->
-                match GuildBook.setRole actor guild target role state.Book with
-                | Error error -> refuse error
-                | Ok(entry, membership) ->
-                    persist state context (GuildWrite.PutMember(guild, membership))
-                    state.Logger.LogInformation("Player {Target} is now {Role} of guild {GuildId}", player target, GuildRole.key role, guildKey guild)
-                    broadcast state context entry ValueNone (changed guild (memberView state at membership))
-                    requestsFor state context entry target
-                    finish guild
-            | GuildAction.Transfer(guild, target) ->
-                match GuildBook.transfer actor guild target state.Book with
-                | Error error -> refuse error
-                | Ok(entry, previous, master) ->
-                    state.Logger.LogInformation("Guild {GuildId} handed to player {Target} by player {PlayerId}", guildKey guild, player target, player actor)
-                    handedOver state context at entry previous master
-                    finish guild
-            | GuildAction.Mute(guild, target, term, reason) ->
-                match GuildBook.mute actor guild target term reason at state.Book with
-                | Error error -> refuse error
-                | Ok(entry, membership) ->
-                    persist state context (GuildWrite.PutMember(guild, membership))
-                    state.Logger.LogInformation("Player {Target} muted in guild {GuildId} by player {PlayerId}: {Reason}",
-                                                player target, guildKey guild, player actor, SanctionReason.value reason)
-                    broadcast state context entry ValueNone (changed guild (memberView state at membership))
-                    finish guild
-            | GuildAction.Unmute(guild, target) ->
-                match GuildBook.unmute actor guild target at state.Book with
-                | Error error -> refuse error
-                | Ok(entry, membership) ->
-                    persist state context (GuildWrite.PutMember(guild, membership))
-                    state.Logger.LogInformation("Guild mute of player {Target} in guild {GuildId} lifted by player {PlayerId}", player target, guildKey guild, player actor)
-                    broadcast state context entry ValueNone (changed guild (memberView state at membership))
-                    finish guild
-            | GuildAction.Disband guild ->
-                match GuildBook.disband actor guild state.Book with
-                | Error error -> refuse error
-                | Ok gone ->
-                    state.Logger.LogInformation("Guild {GuildId} {Name} disbanded by player {PlayerId}", guildKey guild, GuildName.value gone.Name, player actor)
-                    disbanded state context gone
-                    finish guild
+            | GuildAction.Invite(guild, target) -> invite state context actor guild target at |> settle guild
+            | GuildAction.Answer(guild, true) -> acceptInvite state context subscriber guild at |> settle guild
+            | GuildAction.Answer(guild, false) -> declineInvite state context subscriber guild at |> settle guild
+            | GuildAction.Leave guild -> leave state context subscriber guild |> settle guild
+            | GuildAction.Exclude(guild, target) -> exclude state context actor guild target |> settle guild
+            | GuildAction.SetRole(guild, target, role) -> setRole state context actor guild target role at |> settle guild
+            | GuildAction.Transfer(guild, target) -> transfer state context actor guild target at |> settle guild
+            | GuildAction.Mute(guild, target, term, reason) -> mute state context actor guild target term reason at |> settle guild
+            | GuildAction.Unmute(guild, target) -> unmute state context actor guild target at |> settle guild
+            | GuildAction.Disband guild -> disband state context actor guild |> settle guild
             | GuildAction.CreateTitle(guild, raw) ->
                 match GuildTitleId.create state.NextTitleId with
                 | Error _ -> context.Abort()
@@ -524,7 +595,13 @@ module GuildsAgent =
             | GuildAction.Catalog query -> reply (GuildEvent.CatalogPage(request.RequestId, catalog state query))
 
     let private rejectChat state context connectionId (replyTo: ReliableAgentRef<ChatRoomEvent>) requestId code message field =
-        respond state context connectionId replyTo (ChatRoomEvent.Rejected(requestId, { Code = code; Message = message; Field = field }))
+        respond state context connectionId replyTo (ChatRoomEvent.Rejected(
+            requestId,
+            {
+                Code = code
+                Message = message
+                Field = field
+            }))
 
     /// A member's message: the guild owner checks membership, the guild mute and
     /// the rate; the session decided the author (the real profile) and the word list.
@@ -549,7 +626,10 @@ module GuildsAgent =
                     | ValueSome entry ->
                         let chat = chatOf state entry
                         Chat.join author.Profile.PlayerId chat |> ignore
-                        let next = match state.NextMessageIds.TryGetValue guild with | true, id -> id | false, _ -> 1UL
+                        let next =
+                            match state.NextMessageIds.TryGetValue guild with
+                            | true, id -> id
+                            | false, _ -> 1UL
                         match ChatMessageId.create next with
                         | Error _ -> context.Abort()
                         | Ok messageId ->
@@ -560,6 +640,7 @@ module GuildsAgent =
                             | Error _ -> context.Abort()
                             | Ok () ->
                                 state.NextMessageIds[guild] <- next + 1UL
+
                                 respond state context request.ConnectionId request.ReplyTo (ChatRoomEvent.Accepted(request.RequestId, message))
                                 broadcast state context entry (ValueSome author.Profile.PlayerId) (GuildEvent.Chat(ChatRoomEvent.Published message))
 
@@ -620,7 +701,7 @@ module GuildsAgent =
             deliver state context subscription (GuildEvent.Snapshot(snapshotOf state playerId (now ())))
             announcePresence state context playerId
 
-    let private detach state (context: AgentContext<GuildCommand>) (request: SessionDetach) =
+    let private detach state (context: ReliableAgentContext<GuildCommand>) (request: SessionDetach) =
         match state.Subscribers.TryGetValue request.ConnectionId with
         | true, subscriber ->
             let playerId = subscriber.Profile.PlayerId
@@ -639,18 +720,25 @@ module GuildsAgent =
     /// Invitations and guild mutes end by themselves; this makes it visible.
     let private expire state context =
         let at = now ()
+        let mutable admitted = true
         for invite in GuildBook.expireInvites at state.Book do
-            persist state context (GuildWrite.RemoveInvite(invite.Guild, invite.Player))
-            send state context invite.Player (GuildEvent.Changed(GuildChange.InviteRemoved invite.Guild))
-        for guild, membership in GuildBook.expireMutes at state.Book do
-            persist state context (GuildWrite.PutMember(guild.Id, membership))
-            broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state at membership)))
-        let expired = GuildBook.expireJoinRequests at state.Book
-        for request in expired do
-            persist state context (GuildWrite.RemoveJoinRequest(request.Guild, request.Player))
-            send state context request.Player (GuildEvent.Changed(GuildChange.ApplicationRemoved(request.Guild, GuildApplicationEnd.Expired)))
-        for guild in expired |> List.map _.Guild |> List.distinct do
-            GuildBook.tryFind guild state.Book |> ValueOption.iter (requestsChanged state context)
+            if admitted then
+                admitted <- persist state context (GuildWrite.RemoveInvite(invite.Guild, invite.Player))
+                if admitted then send state context invite.Player (GuildEvent.Changed(GuildChange.InviteRemoved invite.Guild))
+        if admitted then
+            for guild, membership in GuildBook.expireMutes at state.Book do
+                if admitted then
+                    admitted <- persist state context (GuildWrite.PutMember(guild.Id, membership))
+                    if admitted then broadcast state context guild ValueNone (GuildEvent.Changed(GuildChange.MemberChanged(guild.Id, memberView state at membership)))
+        if admitted then
+            let expired = GuildBook.expireJoinRequests at state.Book
+            for request in expired do
+                if admitted then
+                    admitted <- persist state context (GuildWrite.RemoveJoinRequest(request.Guild, request.Player))
+                    if admitted then send state context request.Player (GuildEvent.Changed(GuildChange.ApplicationRemoved(request.Guild, GuildApplicationEnd.Expired)))
+            if admitted then
+                for guild in expired |> List.map _.Guild |> List.distinct do
+                    GuildBook.tryFind guild state.Book |> ValueOption.iter (requestsChanged state context)
 
     let private search state (query: string) page =
         let text = query.Trim()
@@ -666,43 +754,44 @@ module GuildsAgent =
                 |> List.filter (fun guild -> needle.Length = 0 || (GuildName.value guild.Name).ToLowerInvariant().Contains needle)
         let sorted = matches |> List.sortBy (fun guild -> GuildName.key guild.Name)
         let page = max 1 page
-        { Guilds = sorted |> List.skip (min sorted.Length ((page - 1) * GuildPage.Size)) |> List.truncate GuildPage.Size |> List.map (summary state)
-          Total = sorted.Length
-          Page = page }
+        {
+            Guilds = sorted |> List.skip (min sorted.Length ((page - 1) * GuildPage.Size)) |> List.truncate GuildPage.Size |> List.map (summary state)
+            Total = sorted.Length
+            Page = page
+        }
 
     let private admin state context command (reply: ReplyChannel<GuildAdminResult>) =
         let at = now ()
-        let result =
-            match command with
-            | GuildAdminCommand.Search(query, page) -> GuildAdminResult.Page(search state query page)
-            | GuildAdminCommand.Card guild ->
-                GuildAdminResult.Card(GuildBook.tryFind guild state.Book |> ValueOption.map (card state at))
-            | GuildAdminCommand.PlayerGuilds playerId ->
-                GuildBook.guildsOf playerId state.Book
-                |> List.choose (fun guild -> guild.Member playerId |> ValueOption.map (fun membership -> summary state guild, membership.Role) |> ValueOption.toOption)
-                |> List.sortBy (fun (summary, _) -> GuildName.key summary.Name)
-                |> GuildAdminResult.PlayerGuilds
-            | GuildAdminCommand.Appoint(guild, target) ->
-                match GuildBook.appoint guild target state.Book with
-                | Error error -> GuildAdminResult.Refused error
-                | Ok(entry, previous, master) ->
+        match command with
+        | GuildAdminCommand.Search(query, page) -> reply.Reply(GuildAdminResult.Page(search state query page))
+        | GuildAdminCommand.Card guild ->
+            reply.Reply(GuildAdminResult.Card(GuildBook.tryFind guild state.Book |> ValueOption.map (card state at)))
+        | GuildAdminCommand.PlayerGuilds playerId ->
+            GuildBook.guildsOf playerId state.Book
+            |> List.choose (fun guild -> guild.Member playerId |> ValueOption.map (fun membership -> summary state guild, membership.Role) |> ValueOption.toOption)
+            |> List.sortBy (fun (summary, _) -> GuildName.key summary.Name)
+            |> GuildAdminResult.PlayerGuilds
+            |> reply.Reply
+        | GuildAdminCommand.Appoint(guild, target) ->
+            match GuildBook.appoint guild target state.Book with
+            | Error error -> reply.Reply(GuildAdminResult.Refused error)
+            | Ok(entry, previous, master) ->
+                if handedOver state context at entry previous master then
                     state.Logger.LogInformation("Player {Target} appointed master of guild {GuildId} from the panel", player target, guildKey guild)
-                    handedOver state context at entry previous master
-                    GuildAdminResult.Appointed(card state at entry)
-            | GuildAdminCommand.Dissolve guild ->
-                match GuildBook.dissolve guild state.Book with
-                | Error error -> GuildAdminResult.Refused error
-                | Ok gone ->
+                    reply.Reply(GuildAdminResult.Appointed(card state at entry))
+        | GuildAdminCommand.Dissolve guild ->
+            match GuildBook.dissolve guild state.Book with
+            | Error error -> reply.Reply(GuildAdminResult.Refused error)
+            | Ok gone ->
+                if disbanded state context gone then
                     state.Logger.LogInformation("Guild {GuildId} {Name} disbanded from the panel", guildKey guild, GuildName.value gone.Name)
-                    disbanded state context gone
-                    GuildAdminResult.Dissolved gone
-        reply.Reply result
+                    reply.Reply(GuildAdminResult.Dissolved gone)
 
     let private schedule state context =
         if state.Ticker.IsNone then
-            state.Ticker <- Some(AgentTicker.start (TimeSpan.FromMilliseconds(float state.Options.InviteCheckIntervalMs)) context GuildCommand.Expire)
+            state.Ticker <- Some(AgentTicker.start state.TickInterval context GuildCommand.Expire)
 
-    let private handle state (context: AgentContext<GuildCommand>) command = task {
+    let private handle state (context: ReliableAgentContext<GuildCommand>) command = task {
         schedule state context
         match command with
         | GuildCommand.Join subscription -> join state context subscription
@@ -721,46 +810,75 @@ module GuildsAgent =
         | GuildCommand.Join _ | GuildCommand.Expire _ | GuildCommand.Detach _ -> true
         | GuildCommand.Act _ | GuildCommand.Publish _ | GuildCommand.Remove _ | GuildCommand.Rename _ | GuildCommand.Admin _ -> false
 
+    [<RequireQualifiedAccess>]
+    type StartError =
+        | StoredData of string
+        | Chat of DomainError
+        | Agent of AgentStartError
+
     /// The options and limits come checked by GameSettings.create; the stored
     /// guilds stay as they are, limits lowered since bind nobody.
     let start (options: GuildOptions) (limits: GuildLimits) (rules: ModerationRules) (chatRate: RateLimitOptions)
               (persistence: GuildPersistence) (host: ReliableAgentRef<SessionHostCommand>) (logger: ILogger) =
-        let highest = persistence.Loaded |> List.fold (fun highest guild -> max highest (GuildId.value guild.Id)) 0UL
-        let highestTitle =
-            persistence.Loaded
-            |> List.collect _.Titles
-            |> List.fold (fun highest title -> max highest (GuildTitleId.value title.Id)) 0UL
-        let names = persistence.Loaded |> List.map (fun guild -> GuildName.key guild.Name)
-        if highest >= max persistence.NextId 1UL then
-            Error(sprintf "Stored guild ID %d is not below the next ID %d." highest persistence.NextId)
-        elif highestTitle >= max persistence.NextTitleId 1UL then
-            Error(sprintf "Stored custom role ID %d is not below the next ID %d." highestTitle persistence.NextTitleId)
-        elif (List.distinct names).Length <> names.Length then Error "Stored guilds repeat a name."
-        else
-            let state = {
-                Options = options
-                Book = GuildBook.restore limits persistence.Loaded
-                Moderation = rules
-                Profiles = Dictionary()
-                Chats = Dictionary()
-                NextMessageIds = Dictionary()
-                Subscribers = Dictionary()
-                Online = Dictionary()
-                Failed = HashSet()
-                Senders = RateLimit.create chatRate
-                Writer = AgentOutbox(options.MaxPendingWrites, persistence.Writer)
-                Host = AgentOutbox(options.MaxControlDeliveries, host)
-                Logger = logger
-                NextId = max persistence.NextId 1UL
-                NextTitleId = max persistence.NextTitleId 1UL
-                Ticker = None
-            }
-            for profile in persistence.Profiles do state.Profiles[profile.PlayerId] <- profile
-            let settings = {
-                AgentOptions.create "guilds" with
-                    Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
-            }
-            let agent = Agent.Start(settings, handle state, isControl = isControl)
-            let tick = System.Diagnostics.Stopwatch.GetTimestamp()
-            agent.TryPost(GuildCommand.Expire { DueTimestamp = tick; QueuedTimestamp = tick }) |> ignore
-            Ok agent
+        let settings = {
+            AgentOptions.create "guilds" with
+                Mailbox = AgentMailbox.boundedWithControl options.MailboxCapacity options.ControlReserve
+        }
+        let construction =
+            match Agent<GuildCommand>.TryCheckReliable(settings, isControl = isControl),
+                  AgentTickerInterval.TryCreate(TimeSpan.FromMilliseconds(int64 options.InviteCheckIntervalMs)),
+                  AgentOutbox<GuildWrite>.TryCreate(options.MaxPendingWrites, persistence.Writer),
+                  AgentOutbox<SessionHostCommand>.TryCreate(options.MaxControlDeliveries, host) with
+            | Error error, _, _, _
+            | _, Error error, _, _
+            | _, _, Error error, _
+            | _, _, _, Error error -> Error (StartError.Agent error)
+            | Ok configuration, Ok interval, Ok writerOutbox, Ok hostOutbox -> Ok (configuration, interval, writerOutbox, hostOutbox)
+        construction
+        |> Result.bind (fun (configuration, interval, writerOutbox, hostOutbox) ->
+            ChatHistoryCapacity.create options.HistoryCapacity
+            |> Result.mapError StartError.Chat
+            |> Result.bind (fun history ->
+                let highest = persistence.Loaded |> List.fold (fun highest guild -> max highest (GuildId.value guild.Id)) 0UL
+                let highestTitle =
+                    persistence.Loaded
+                    |> List.collect _.Titles
+                    |> List.fold (fun highest title -> max highest (GuildTitleId.value title.Id)) 0UL
+                let names = persistence.Loaded |> List.map (fun guild -> GuildName.key guild.Name)
+                if highest >= max persistence.NextId 1UL then
+                    Error(StartError.StoredData(sprintf "Stored guild ID %d is not below the next ID %d." highest persistence.NextId))
+                elif highestTitle >= max persistence.NextTitleId 1UL then
+                    Error(StartError.StoredData(sprintf "Stored custom role ID %d is not below the next ID %d." highestTitle persistence.NextTitleId))
+                elif (List.distinct names).Length <> names.Length then Error (StartError.StoredData "Stored guilds repeat a name.")
+                else
+                    let state = {
+                        Options = options
+                        HistoryCapacity = history
+                        TickInterval = interval
+
+                        Book = GuildBook.restore limits persistence.Loaded
+                        Moderation = rules
+                        Profiles = Dictionary()
+                        Chats = Dictionary()
+                        NextMessageIds = Dictionary()
+                        Subscribers = Dictionary()
+                        Online = Dictionary()
+                        Failed = HashSet()
+                        Senders = RateLimit.create chatRate
+                        Writer = writerOutbox
+                        Host = hostOutbox
+                        Logger = logger
+                        NextId = max persistence.NextId 1UL
+                        NextTitleId = max persistence.NextTitleId 1UL
+                        Ticker = None
+                    }
+                    for profile in persistence.Profiles do
+                        state.Profiles[profile.PlayerId] <- profile
+
+                    let agent = configuration.Start(handle state)
+                    let tick = System.Diagnostics.Stopwatch.GetTimestamp()
+                    agent.TryPost(GuildCommand.Expire {
+                        DueTimestamp = tick
+                        QueuedTimestamp = tick
+                    }) |> ignore
+                    Ok agent))

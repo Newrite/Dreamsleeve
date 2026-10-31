@@ -72,12 +72,21 @@ public:
 
     ChatCacheState State() const noexcept
     {
-      return ChatCacheState{.channelId = channelId, .kind = kind, .capacity = capacity, .count = messages.size()};
+      return ChatCacheState{
+          .channelId = channelId,
+          .kind      = kind,
+          .capacity  = capacity,
+          .count     = messages.size()
+      };
     }
 
     ChatCacheSnapshot Snapshot() const
     {
-      ChatCacheSnapshot result{.channelId = channelId, .kind = kind, .capacity = capacity};
+      ChatCacheSnapshot result{
+          .channelId = channelId,
+          .kind      = kind,
+          .capacity  = capacity
+      };
 
       result.messages.reserve(messages.size());
       for (const auto& [id, message] : messages)

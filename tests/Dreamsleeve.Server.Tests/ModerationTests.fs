@@ -57,15 +57,27 @@ let tests = testList "Moderation" [
     }
 
     test "empty rules allow everything and blank rules are ignored" {
-        let empty = Moderation.create { Words = [""; "   "]; Substrings = []; Exceptions = [] }
+        let empty = Moderation.create {
+            Words = [""; "   "]
+            Substrings = []
+            Exceptions = []
+        }
         Expect.isTrue empty.IsEmpty "Blank entries compile to nothing"
         Expect.isTrue (Moderation.allows Moderation.empty "badword") "Disabled moderation allows text"
     }
 
     test "flag tier marks UTF-8 byte ranges of the original text without refusing it" {
         let flags =
-            Moderation.create { Words = []; Substrings = []; Exceptions = [] }
-            |> Moderation.withFlags { Words = ["badword"; "плохо"]; Substrings = ["zzz"]; Exceptions = ["zzzok"] }
+            Moderation.create {
+                Words = []
+                Substrings = []
+                Exceptions = []
+            }
+            |> Moderation.withFlags {
+                Words = ["badword"; "плохо"]
+                Substrings = ["zzz"]
+                Exceptions = ["zzzok"]
+            }
         Expect.isTrue (Moderation.allows flags "badword") "flag rules never refuse"
         Expect.isTrue flags.HasFlags "flag tier present"
         let text = "Ой, B\u200Ba\u0301dword и ПЛОХО!"

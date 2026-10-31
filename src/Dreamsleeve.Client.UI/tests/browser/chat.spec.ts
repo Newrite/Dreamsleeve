@@ -1496,7 +1496,7 @@ test("names are drawn in their color; the own color changes in the settings once
   await expect(status).toHaveText("Цвет сохранён");
   await expect(apply).toBeDisabled();
   // The workshop stands in for the server: a dark color is refused.
-  await picker.getByLabel("Свой цвет").fill("#101010");
+  await picker.getByLabel("Свой цвет", { exact: true }).fill("#101010");
   await apply.click();
   await expect(status).toHaveText(
     "Цвет слишком тёмный: имя будет плохо видно в чате",

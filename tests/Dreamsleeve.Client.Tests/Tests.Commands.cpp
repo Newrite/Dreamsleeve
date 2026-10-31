@@ -28,11 +28,15 @@ namespace
     Session                    session;
     UiFile                     ui;
     Bubbles                    bubbles;
+
     bool                       manualDisconnect{};
+
     int                        saves{};
     std::optional<std::string> saveError;
+
     int                        closes{};
     std::vector<std::string>   keys;
+
     std::optional<Domain::MarkSpot> spot;
     std::vector<std::string>        copied;
     bool                            copyRefused{};
@@ -41,26 +45,28 @@ namespace
     {
       auto command = Bridge::ParseCommand(json);
       REQUIRE_MESSAGE(command, command.error());
+
       CommandContext context{
           *exchange,
           session,
           ui,
           bubbles,
           manualDisconnect,
-          {.saveUi =
-             [this]() -> std::expected<void, std::string> {
-             ++saves;
-             if (saveError) return std::unexpected{*saveError};
-             return {};
-           },
-           .close         = [this] { ++closes; },
-           .activationKey = [this](std::string_view key) { keys.emplace_back(key); },
-           .noteSpot      = [this] { return spot; },
-           .copyText      = [this](std::string_view text) {
-             if (copyRefused) return false;
-             copied.emplace_back(text);
-             return true;
-           }}
+          {
+              .saveUi = [this]() -> std::expected<void, std::string> {
+                ++saves;
+                if (saveError) return std::unexpected{*saveError};
+                return {};
+              },
+              .close         = [this] { ++closes; },
+              .activationKey = [this](std::string_view key) { keys.emplace_back(key); },
+              .noteSpot      = [this] { return spot; },
+              .copyText      = [this](std::string_view text) {
+                if (copyRefused) return false;
+                copied.emplace_back(text);
+                return true;
+              }
+          }
       };
       return Handle(context, std::move(*command));
     }
@@ -75,7 +81,9 @@ namespace
             {MakePlayer(1, "Self"), MakePlayer(7, "Seven")}
       }));
       REQUIRE(model.Apply(model.Generation(), SelfPlayerAssigned{1}));
+
       REQUIRE(exchange->Publish(model, true, SessionPhase::Ready, "Tamriel"));
+
       ClientOutput output;
       exchange->Drain(output);
       Session::Frame frame;
@@ -155,10 +163,12 @@ TEST_CASE("Without a session requests are refused with the reason the UI shows")
   REQUIRE(chat.events.size() == 1);
   CHECK(Parse(chat.events[0])["requestId"].get<std::string>() == "c1");
   CHECK(Parse(chat.events[0])["error"].get<std::string>() == "Нет соединения с сервером");
+
   auto removal = fixture.Run(R"({"type":"removeGroundMark","requestId":"r1","markId":"5"})");
   REQUIRE(removal.events.size() == 1);
   CHECK(Type(removal.events[0]) == "markResult");
   CHECK(Parse(removal.events[0])["error"].get<std::string>() == "Нет соединения с сервером");
+
   auto name = fixture.Run(R"({"type":"changeDisplayName","displayName":"Новое"})");
   REQUIRE(name.events.size() == 1);
   CHECK(Type(name.events[0]) == "displayName");

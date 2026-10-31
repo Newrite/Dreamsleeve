@@ -302,7 +302,7 @@ def smoke(args, log, directory: Path):
         sample = {
             "location": {"location": {"locationId": {"pluginName": "Skyrim.esm", "localFormId": 291},
                                       "locationName": "Whiterun"},
-                         "position": {"X": 1, "Y": 2, "Z": 3}, "rotation": {"X": 0, "Y": 0, "Z": 1.5}},
+                         "position": {"X": 1, "Y": 2, "Z": 3}, "cameraDirection": {"X": 0, "Y": 1, "Z": 0}},
             "actorValues": {"skyrim:speed": {"displayName": "Speed", "state": {"value": 0}},
                             "skyrim:health": {"displayName": "Health", "state": {"current": 150, "maximum": 100}}},
         }
@@ -359,7 +359,7 @@ def smoke(args, log, directory: Path):
 
         alice_start, bob_start = alice.mark(), bob.mark()
         sample["location"]["position"]["X"] = 42
-        sample["location"]["rotation"]["Z"] = 2.5
+        sample["location"]["cameraDirection"]["Z"] = 0.5
         alice.send("move " + json.dumps({"location": sample["location"]}))
         for child, start_at in ((alice, alice_start), (bob, bob_start)):
             moved = wait_player(child, alice_id,
@@ -367,7 +367,7 @@ def smoke(args, log, directory: Path):
                 args.timeout, start_at)
             check(moved["details"] == authoritative["details"] and moved["actorValues"] == authoritative["actorValues"],
                   "Movement changed character metadata or actor values")
-            check(moved["location"]["rotation"]["Z"] == 2.5, "Rotation did not replicate")
+            check(moved["location"]["cameraDirection"] == {"X": 0, "Y": 0, "Z": 0}, "The camera direction left the server")
             check(moved["location"]["sampledAtUs"] > authoritative["location"]["sampledAtUs"],
                   "Movement timestamp did not advance across the real transport")
         stage("periodic compact movement reaches author and peer without losing unchanged details")

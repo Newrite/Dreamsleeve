@@ -234,6 +234,7 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
         1,
         RemoveGroundMark{*exchange.NextRequestId(), 5}
   }) == CommandPostResult::Full);
+
   std::vector<QueuedClientCommand> commands;
   exchange.TakeCommands(commands);
   REQUIRE(commands.size() == 2);
@@ -352,6 +353,7 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   auto noAuthor = Changed(3, {1});
   noAuthor.mutable_ground_marks_changed()->mutable_added(0)->clear_author();
   CHECK_FALSE(codec.Decode(Bytes(noAuthor)));
+
   auto emptyDeath = Changed(3, {});
   WriteMark(*emptyDeath.mutable_ground_marks_changed()->add_added(), 8, P::GROUND_MARK_KIND_DEATH);
   auto death = codec.Decode(Bytes(emptyDeath));
@@ -361,7 +363,7 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].characterName);
   // A mark stored before protocol 12 has no date; a present date must be valid.
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].gameDate);
-  // A mark stored before protocol 22 has no levels: zero is none.
+  // A mark stored before death levels has none: zero is none.
   CHECK(std::get<GroundMarksChanged>(*death).added[0].characterLevel == 0);
   CHECK(std::get<GroundMarksChanged>(*death).added[0].killerLevel == 0);
   emptyDeath.mutable_ground_marks_changed()->mutable_added(0)->set_character_level(32);

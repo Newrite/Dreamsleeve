@@ -8,8 +8,21 @@ open Dreamsleeve.Server.Core
 
 let private movementBatch items =
     items |> List.map (fun (id, location) ->
-        let pose = match location with ValueSome value -> MovementPose.ofLocation value | ValueNone -> { Position = Position.zero; Rotation = Rotation.zero; SampledAtUs = 0UL }
-        ({ PlayerId = id; ViewRevision = 1UL; Sequence = 0UL; Pose = pose }: Dreamsleeve.Server.Domain.MovementChange)) |> List.toArray
+        let pose =
+            match location with
+            | ValueSome value -> MovementPose.ofLocation value
+            | ValueNone -> {
+                Position = Position.zero
+                CameraDirection = CameraDirection.zero
+                SampledAtUs = 0UL
+              }
+        ({
+            PlayerId = id
+            ViewRevision = 1UL
+            Sequence = 0UL
+            Pose = pose
+        }: Dreamsleeve.Server.Domain.MovementChange))
+    |> List.toArray
 
 let private config = ServerConfig.defaults
 
@@ -34,7 +47,7 @@ let private health current maximum = ActorValueInfo.create healthName (ActorValu
 let private whiterun =
     PlayerLocation.create
         (Location.create (FormKey.create (PluginName.create 255 "Skyrim.esm" |> ok) (LocalFormId.create 0x3Cu |> ok)) (LocationName.create 128 "Whiterun" |> ok))
-        (Position.create 1.0f 2.0f 3.0f |> ok) Rotation.zero
+        (Position.create 1.0f 2.0f 3.0f |> ok) CameraDirection.zero
 
 /// Numbers the readings of these players from one, as presence does for a recipient that knows no kind.
 let private kindsOf (players: PlayerSnapshot list) : ActorValueKinds =
@@ -42,34 +55,58 @@ let private kindsOf (players: PlayerSnapshot list) : ActorValueKinds =
         players
         |> List.collect (fun player -> [ for KeyValue(key, info) in player.ActorValues -> key, info.DisplayName ])
         |> List.distinct
-        |> List.mapi (fun index (key, name) -> ({ Id = uint64 index + 1UL; Key = key; DisplayName = name }: ActorValueKind))
-    { Ids = defined |> List.map (fun kind -> struct (kind.Key, kind.DisplayName), kind.Id) |> Map.ofList; Defined = defined }
+        |> List.mapi (fun index (key, name) -> ({
+            Id = uint64 index + 1UL
+            Key = key
+            DisplayName = name
+        }: ActorValueKind))
+    {
+        Ids = ActorValueKindIndex.Create defined
+        Defined = defined
+    }
 
 let private joined player = ServerResponse.PresenceChanged({ PresenceChange.empty with Joined = [ player ] }, kindsOf [ player ])
 let private updated player = ServerResponse.PresenceChanged({ PresenceChange.empty with Updated = [ player ] }, kindsOf [ player ])
 let private message =
     ChatMessage.create (ChatMessageId.create UInt64.MaxValue |> ok) channel (PublicIdentity.Profile profile) ValueNone
         (ChatMessageText.create 2000 "Привет\nworld" |> ok) (DateTimeOffset.FromUnixTimeMilliseconds(-1L))
+
 let private parseMovement bytes = Dreamsleeve.Protocol.Chat.ServerMovementPacket.Parser.ParseFrom(bytes: byte array)
 let private parse bytes = Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom(bytes: byte array)
+
 let private send requestId text =
     Dreamsleeve.Protocol.Chat.ClientPacket(
         ProtocolVersion = ProtocolCodec.Version, RequestId = requestId,
         SendChat = Dreamsleeve.Protocol.Chat.SendChat(ChannelId = 1UL, Text = text))
+
 let private decode (packet: Dreamsleeve.Protocol.Chat.ClientPacket) =
     ProtocolCodec.decodeClient codec (packet.ToByteArray())
-let private systemChannel = { ChannelId = ChatChannels.systemId; Kind = ChatChannelKind.System; Messages = [] }
+
+let private systemChannel = {
+    ChannelId = ChatChannels.systemId
+    Kind = ChatChannelKind.System
+    Messages = []
+}
+
 let private welcomeWith messages = {
     SelfPlayerId = pid 7UL
     Players = [snapshot]
     Kinds = ActorValueKinds.none
-    Channels = [ { ChannelId = channel; Kind = ChatChannelKind.Global; Messages = messages }; systemChannel ]
+    Channels = [
+        {
+            ChannelId = channel
+            Kind = ChatChannelKind.Global
+            Messages = messages
+        }
+        systemChannel
+    ]
     AnnouncementSources = [ClientAnnouncementSource.ThirdParty]
     OwnPseudonym = ValueNone
     Hiding = HiddenIdentity.Shown
     Mute = ValueNone
     Role = PlayerRole.Player
 }
+
 let private welcome = welcomeWith [message]
 
 let private updatePacket action =
@@ -91,7 +128,7 @@ let private wireLocation () =
         Location = Dreamsleeve.Protocol.Chat.Location(
             LocationId = Dreamsleeve.Protocol.Chat.FormKey(PluginName = "Skyrim.ESM", LocalFormId = 0x3Cu),
             LocationName = "Тамриэль"),
-        Position = Dreamsleeve.Protocol.Chat.Position(), Rotation = Dreamsleeve.Protocol.Chat.Rotation())
+        Position = Dreamsleeve.Protocol.Chat.Position(), CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection())
 
 let private scalarEntry key scalar =
     Dreamsleeve.Protocol.Chat.ActorValueEntry(Key = key, DisplayName = "", Scalar = scalar)
@@ -107,6 +144,29 @@ let private playerUpdate result =
 let private apply update = Player.create profile |> Player.applyUpdate update |> Player.snapshot
 
 let tests = testList "Dreamsleeve.Server.Codec" [
+    testCase "kind index snapshot survives registry replacement and compares by value" <| fun _ ->
+        let original = {
+            Id = 4UL
+            Key = healthKey
+            DisplayName = healthName
+        }
+        let renamed = {
+            original with
+                Id = 9UL
+                DisplayName = ActorValueName.create 64 "Life" |> ok
+        }
+        let registry = ResizeArray [ original ]
+        let first = ActorValueKindIndex.Create registry
+        registry[0] <- renamed
+        let second = ActorValueKindIndex.Create registry
+        Expect.equal first[struct (healthKey, healthName)] 4UL "Published snapshot retains its number."
+        Expect.isFalse (second.ContainsKey(struct (healthKey, healthName))) "New snapshot reflects removal."
+        Expect.equal second[struct (healthKey, renamed.DisplayName)] 9UL "Renamed reading gets its new number."
+        let forward = ActorValueKindIndex.Create [ original; renamed ]
+        let reverse = ActorValueKindIndex.Create [ renamed; original ]
+        Expect.equal forward reverse "Snapshot equality is independent of insertion order."
+        Expect.equal (forward.GetHashCode()) (reverse.GetHashCode()) "Equal snapshots hash equally."
+
     testCase "movement batches split exactly within configured packet limits" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         let packet = Packets.single codec (ServerResponse.PlayersMoved movements) |> ok
@@ -128,12 +188,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let packets = ProtocolCodec.encode codec 548 (ServerResponse.PlayersMoved movements) |> ok
         Expect.isGreaterThan expected.Length 548 "Fixture crosses the transport fragmentation threshold."
         Expect.isGreaterThan packets.Length 1 "Realtime splits at MTU even without an explicit target."
-        for bytes in packets do Expect.isLessThanOrEqual bytes.Length 548 "No reliable fragmentation fallback."
+        for bytes in packets do
+            Expect.isLessThanOrEqual bytes.Length 548 "No reliable fragmentation fallback."
 
     testCase "movement target is clamped by negotiated transport and application budgets" <| fun _ ->
         let movements = movementBatch [for id in 1UL .. 130UL -> pid id, ValueNone]
         for target, transport, application in [64, 128, 1024; 128, 64, 1024; 128, 1024, 64] do
-            let configured = configured { config with MovementPacketTargetBytes = target; MaxPacketBytes = application }
+            let configured = configured {
+                config with
+                    MovementPacketTargetBytes = target
+                    MaxPacketBytes = application
+            }
             let packets = ProtocolCodec.encode configured transport (ServerResponse.PlayersMoved movements) |> ok
             let budget = min target (min transport application)
             let ids = packets |> List.collect (fun bytes ->
@@ -163,8 +228,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Expect.equal moved.Movements.Players[0].Pose.SampledAtUs stamp "Compact movement retains time."
             let full = Packets.single codec (joined state) |> ok |> parse
             Expect.equal full.PresenceChanged.Joined[0].Location.SampledAtUs stamp "Snapshots retain the same measurement."
-            let baseline: VisibilityChange = { PlayerId = pid 7UL; ViewRevision = 1UL; Sequence = 0UL; Pose = ValueSome (MovementPose.ofLocation location) }
-            let change = { PresenceChange.empty with Space = ValueSome location.Location; Visibility = [ baseline ] }
+            let baseline: VisibilityChange = {
+                PlayerId = pid 7UL
+                ViewRevision = 1UL
+                Sequence = 0UL
+                Pose = ValueSome (MovementPose.ofLocation location)
+            }
+            let change = {
+                PresenceChange.empty with
+                    Space = ValueSome location.Location
+                    Visibility = [ baseline ]
+            }
             let visible = Packets.single codec (ServerResponse.PresenceChanged(change, ActorValueKinds.none)) |> ok |> parse
             Expect.equal visible.PresenceChanged.Visibility[0].Pose.SampledAtUs stamp "A visibility baseline retains it too."
 
@@ -172,7 +246,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let stamina = ActorValueKey.create 128 "skyrim:stamina" |> ok
         let staminaName = ActorValueName.create 64 "Stamina" |> ok
         let kinds: ActorValueKinds = {
-            Ids = Map.ofList [ struct (healthKey, healthName), 4UL; struct (stamina, staminaName), 9UL ]
+            Ids = ActorValueKindIndex.Create [ { Id = 4UL; Key = healthKey; DisplayName = healthName }; { Id = 9UL; Key = stamina; DisplayName = staminaName } ]
             Defined = [ { Id = 9UL; Key = stamina; DisplayName = staminaName } ]
         }
         let activity = PlayerActivity.create 256 64 ActivityKind.Combat (ValueSome "Mudcrab") LockDifficulty.Unknown ValueNone |> ok
@@ -181,10 +255,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             Set = [ stamina, ActorValueInfo.create staminaName (ActorValueState.resource -3 120) ]
         }
         let details: DetailsPatch = {
-            Race = ValueSome ValueNone; Level = ValueSome (ValueSome 12u); Activity = ValueSome activity
-            Place = ValueNone; GameStartedAt = ValueSome ValueNone
+            Race = ValueSome ValueNone
+            Level = ValueSome (ValueSome 12u)
+            Activity = ValueSome activity
+            Place = ValueNone
+            GameStartedAt = ValueSome ValueNone
         }
-        let patch: MetadataPatch = { PlayerId = pid 7UL; ActorValues = ValueSome values; Details = ValueSome details }
+        let patch: MetadataPatch = {
+            PlayerId = pid 7UL
+            ActorValues = ValueSome values
+            Details = ValueSome details
+        }
         let encode patch kinds =
             let packet = Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Metadata = [ patch ] }, kinds)) |> ok |> parse
             packet.PresenceChanged
@@ -206,8 +287,21 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let valuesOnly = encode { patch with Details = ValueNone } kinds
         Expect.isNull valuesOnly.Metadata[0].Details "absent details are unchanged"
         Expect.isEmpty valuesOnly.Metadata[0].ClearedDetails "and nothing is cleared"
-        let clearing = { details with Race = ValueNone; Level = ValueSome ValueNone; Activity = ValueNone; GameStartedAt = ValueNone }
-        let clearOnly = encode { patch with ActorValues = ValueNone; Details = ValueSome clearing } ActorValueKinds.none
+        let clearing = {
+            details with
+                Race = ValueNone
+                Level = ValueSome ValueNone
+                Activity = ValueNone
+                GameStartedAt = ValueNone
+        }
+        let clearOnly =
+            encode
+                {
+                    patch with
+                        ActorValues = ValueNone
+                        Details = ValueSome clearing
+                }
+                ActorValueKinds.none
         Expect.isNull clearOnly.Metadata[0].Details "a pure clearing sends no details"
         Expect.sequenceEqual clearOnly.Metadata[0].ClearedDetails [ Dreamsleeve.Protocol.Chat.PlayerDetailsField.Level ] "only the level clears"
         Expect.isEmpty clearOnly.Metadata[0].RemovedActorValues "absent values are unchanged"
@@ -218,15 +312,35 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let entering = { other with ActorValues = Map.ofList [ healthKey, health 75 100 ] }
         let renamed = { snapshot with ActorValues = Map.ofList [ healthKey, health 30 100 ] }
         let activity = PlayerActivity.create 256 64 ActivityKind.Sneaking ValueNone LockDifficulty.Unknown ValueNone |> ok
-        let details: DetailsPatch = { Race = ValueNone; Level = ValueNone; Activity = ValueSome activity; Place = ValueNone; GameStartedAt = ValueNone }
+        let details: DetailsPatch = {
+            Race = ValueNone
+            Level = ValueNone
+            Activity = ValueSome activity
+            Place = ValueNone
+            GameStartedAt = ValueNone
+        }
         let change: PresenceChange = {
             Joined = [ entering ]
             Updated = [ renamed ]
-            Metadata = [ { PlayerId = pid 9UL; ActorValues = ValueNone; Details = ValueSome details } ]
+            Metadata = [ {
+                PlayerId = pid 9UL
+                ActorValues = ValueNone
+                Details = ValueSome details
+            } ]
             Space = ValueSome whiterun.Location
             Visibility = [
-                { PlayerId = pid 8UL; ViewRevision = 3UL; Sequence = 5UL; Pose = ValueSome (MovementPose.ofLocation whiterun) }
-                { PlayerId = pid 10UL; ViewRevision = 4UL; Sequence = 0UL; Pose = ValueNone }
+                {
+                    PlayerId = pid 8UL
+                    ViewRevision = 3UL
+                    Sequence = 5UL
+                    Pose = ValueSome (MovementPose.ofLocation whiterun)
+                }
+                {
+                    PlayerId = pid 10UL
+                    ViewRevision = 4UL
+                    Sequence = 0UL
+                    Pose = ValueNone
+                }
             ]
             Left = [ pid 11UL ]
         }
@@ -256,8 +370,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let healthy = { snapshot with ActorValues = Map.ofList [ healthKey, health 50 100 ] }
         let kinds = kindsOf [ healthy ]
         let pose = MovementPose.ofLocation whiterun
-        let view revision pose : VisibilityChange = { PlayerId = pid 8UL; ViewRevision = revision; Sequence = 0UL; Pose = pose }
-        let values patch : MetadataPatch = { PlayerId = pid 7UL; ActorValues = ValueSome patch; Details = ValueNone }
+        let view revision pose : VisibilityChange = {
+            PlayerId = pid 8UL
+            ViewRevision = revision
+            Sequence = 0UL
+            Pose = pose
+        }
+        let values patch : MetadataPatch = {
+            PlayerId = pid 7UL
+            ActorValues = ValueSome patch
+            Details = ValueNone
+        }
         refused PresenceChange.empty ActorValueKinds.none "an empty change is not sent"
         refused { PresenceChange.empty with Joined = [ healthy ] } ActorValueKinds.none "a joined reading needs a number"
         refused { PresenceChange.empty with Updated = [ healthy ] } ActorValueKinds.none "an updated reading needs a number"
@@ -308,8 +431,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let now = DateTimeOffset.FromUnixTimeMilliseconds 1_000_000L
         let issue id kind term =
             Sanction.issue (SanctionId.create id |> ok) now
-                { Target = pid 7UL; Kind = kind; Term = term; Reason = SanctionReason.create " Флуд " |> ok
-                  IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok); Devices = false }
+                {
+                    Target = pid 7UL
+                    Kind = kind
+                    Term = term
+                    Reason = SanctionReason.create " Флуд " |> ok
+                    IssuedBy = SanctionIssuer.Admin(AdminId.create 1L |> ok)
+                    Devices = false
+                }
         let packet response = Packets.single codec response |> ok |> Dreamsleeve.Protocol.Chat.ServerPacket.Parser.ParseFrom
         let mute = issue 1L SanctionKind.Mute (SanctionTerm.For(TimeSpan.FromMinutes 15.))
         let muted = (packet (ServerResponse.MuteChanged(ValueSome mute))).MuteChanged.Mute
@@ -327,8 +456,12 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let revoked = (packet (ServerResponse.SessionEnded SessionEnd.AccessRevoked)).SessionEnded
         Expect.equal (revoked.Reason, revoked.Text) (Dreamsleeve.Protocol.Chat.SessionEndReason.AccessRevoked, "") "revoked without words"
         let addressBan : AddressBan = {
-            Id = 3L; Range = AddressRange.parse "203.0.113.0/24" |> ok; Reason = SanctionReason.create "Рейд" |> ok
-            IssuedBy = ValueNone; IssuedAt = now; Expires = ValueSome (now + TimeSpan.FromHours 1.)
+            Id = 3L
+            Range = AddressRange.parse "203.0.113.0/24" |> ok
+            Reason = SanctionReason.create "Рейд" |> ok
+            IssuedBy = ValueNone
+            IssuedAt = now
+            Expires = ValueSome (now + TimeSpan.FromHours 1.)
         }
         let addressBanned = (packet (ServerResponse.SessionEnded(SessionEnd.AddressBanned addressBan))).SessionEnded
         Expect.equal (addressBanned.Reason, addressBanned.Text, addressBanned.UntilUnixMs)
@@ -397,7 +530,11 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let marked = Packets.single codec (ServerResponse.ChatPublished(ChatMessage.withFlagged [{ Start = 1; Length = 2 }] named)) |> ok |> parse
         Expect.equal marked.ChatPublished.Message.Flagged.Count 1 "flag ranges"
         Expect.equal (marked.ChatPublished.Message.Flagged[0].Start, marked.ChatPublished.Message.Flagged[0].Length) (1u, 2u) "byte range"
-        let withheld = { snapshot with CharacterName = ValueNone; CharacterNameWithheld = true }
+        let withheld = {
+            snapshot with
+                CharacterName = ValueNone
+                CharacterNameWithheld = true
+        }
         let player = (Packets.single codec (joined withheld) |> ok |> parse).PresenceChanged.Joined[0]
         Expect.isTrue player.CharacterNameWithheld "withheld flag"
         Expect.isFalse player.HasCharacterName "withheld name absent"
@@ -439,7 +576,11 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             (ProtocolCodecFailure.InvalidPayload "session_opened") "a reading without a number is refused"
 
     testCase "replies require an ID while presence notifications have no correlation" <| fun _ ->
-        let rejection = { Code = RequestRejectionCode.AuthenticationFailed; Message = "Отказ"; Field = "text" }
+        let rejection = {
+            Code = RequestRejectionCode.AuthenticationFailed
+            Message = "Отказ"
+            Field = "text"
+        }
         let packet = Packets.single codec (ServerResponse.RequestRejected(9UL, rejection)) |> ok |> parse
         Expect.equal packet.RequestRejected.Code RequestRejectionCode.AuthenticationFailed "shared protobuf code"
         Expect.equal packet.RequestId 9UL "required correlation"
@@ -496,7 +637,11 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         try
             use host = Enet.EnetHost.Create(Unchecked.defaultof<enet.ENetAddress>, 1un, 1un, 0u, 0u, Enet.EnetHostOption.Ipv4)
             let bytes = (send 1UL "hello").ToByteArray()
-            let settings = { config with MaxPacketBytes = bytes.Length; MaxWaitingData = bytes.Length * 2 }
+            let settings = {
+                config with
+                    MaxPacketBytes = bytes.Length
+                    MaxWaitingData = bytes.Length * 2
+            }
             ServerConfig.applyPacketLimits settings host |> ok
             Expect.equal host.MaximumPacketSize (unativeint bytes.Length) "actual host packet limit"
             Expect.equal host.MaximumWaitingData (unativeint (bytes.Length * 2)) "actual host waiting budget"
@@ -515,6 +660,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 Expect.equal packet.RequestRejected.Code code "generated enum survives serialization"
         for invalid in [RequestRejectionCode.Unspecified; enum<RequestRejectionCode> 0x7FFF0001; enum<RequestRejectionCode> -1] do
             Expect.equal (encode invalid |> error).Failure (ProtocolCodecFailure.InvalidPayload "code") "do not invent server codes"
+
     testCase "player lifecycle commands preserve character names and require an action" <| fun _ ->
         let name = "  Nerevar  "
         let beginAction = Dreamsleeve.Protocol.Chat.UpdatePlayer(BeginCharacter = Dreamsleeve.Protocol.Chat.BeginCharacter(Name = name))
@@ -551,7 +697,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let decoded = locationPacket (wireLocation()) |> update |> playerUpdate |> apply
         let place = decoded.Location |> ValueOption.get
         Expect.equal place.Position Position.zero "all-zero coordinates are valid"
-        Expect.equal place.Rotation Rotation.zero "all-zero radians are valid"
+        Expect.equal place.CameraDirection CameraDirection.zero "all-zero radians are valid"
         Expect.equal (PluginName.value place.Location.LocationId.PluginName) "skyrim.esm" "canonical identity"
         let noLocation = locationPacket null |> update |> playerUpdate |> apply
         Expect.equal noLocation.Location ValueNone "unknown is represented by presence"
@@ -561,7 +707,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             | 0 -> broken.Location <- null
             | 1 -> broken.Location.LocationId <- null
             | 2 -> broken.Position <- null
-            | _ -> broken.Rotation <- null
+            | _ -> broken.CameraDirection <- null
             Expect.equal (locationPacket broken |> update |> error).Failure
                 (ProtocolCodecFailure.InvalidPayload "location") "partial location rejected"
 
@@ -573,9 +719,9 @@ let tests = testList "Dreamsleeve.Server.Codec" [
                 | 0 -> place.Position.X <- bad
                 | 1 -> place.Position.Y <- bad
                 | 2 -> place.Position.Z <- bad
-                | 3 -> place.Rotation.X <- bad
-                | 4 -> place.Rotation.Y <- bad
-                | _ -> place.Rotation.Z <- bad
+                | 3 -> place.CameraDirection.X <- bad
+                | 4 -> place.CameraDirection.Y <- bad
+                | _ -> place.CameraDirection.Z <- bad
                 let failure = locationPacket place |> update |> error
                 Expect.equal failure.RequestId (Some 91UL) "caller can reject without applying the sample"
                 match failure.Failure with
@@ -654,7 +800,12 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         let moved = Packets.single codec (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone])) |> ok |> parseMovement
         Expect.equal moved.Movements.Players[0].PlayerId 7UL "Realtime identity."
         Expect.equal moved.Movements.Players[0].ViewRevision 1UL "Visibility revision."
-        let cleared: VisibilityChange = { PlayerId = pid 7UL; ViewRevision = 2UL; Sequence = 0UL; Pose = ValueNone }
+        let cleared: VisibilityChange = {
+            PlayerId = pid 7UL
+            ViewRevision = 2UL
+            Sequence = 0UL
+            Pose = ValueNone
+        }
         let clear = Packets.single codec (ServerResponse.PresenceChanged({ PresenceChange.empty with Visibility = [ cleared ] }, ActorValueKinds.none)) |> ok |> parse
         Expect.isNull clear.PresenceChanged.Visibility[0].Pose "Visibility clears are reliable control."
         Expect.isNull clear.PresenceChanged.Space "A clear needs no place."
@@ -689,7 +840,8 @@ let tests = testList "Dreamsleeve.Server.Codec" [
     testCase "all defined activity and lock enums map explicitly in both directions" <| fun _ ->
         for kind in Enum.GetValues<Dreamsleeve.Protocol.Chat.ActivityKind>() do
             let activity = Dreamsleeve.Protocol.Chat.PlayerActivity(Kind = kind)
-            if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then activity.MenuKey <- "InventoryMenu"
+            if kind = Dreamsleeve.Protocol.Chat.ActivityKind.Menu then
+                activity.MenuKey <- "InventoryMenu"
             let source = Dreamsleeve.Protocol.Chat.PlayerDetails(Activity = activity)
             let state = update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = source)) |> playerUpdate |> apply
             let encoded = Packets.single codec (updated state) |> ok |> parse
@@ -733,10 +885,11 @@ let tests = testList "Dreamsleeve.Server.Codec" [
             let timestamp = valid()
             timestamp.GameStartedAtUnixMs <- boundary
             Expect.isOk (update (Dreamsleeve.Protocol.Chat.UpdatePlayer(SetDetails = timestamp))) "DateTimeOffset boundary is valid"
+
     testCase "realtime decoding validates independent context and sequence without request correlation" <| fun _ ->
         let sample () = Dreamsleeve.Protocol.Chat.MovementSample(ContextRevision = 3UL, Sequence = 9UL,
             Pose = Dreamsleeve.Protocol.Chat.MovementPose(Position = Dreamsleeve.Protocol.Chat.Position(),
-                Rotation = Dreamsleeve.Protocol.Chat.Rotation(), SampledAtUs = UInt64.MaxValue))
+                CameraDirection = Dreamsleeve.Protocol.Chat.CameraDirection(), SampledAtUs = UInt64.MaxValue))
         let packet = Dreamsleeve.Protocol.Chat.ClientMovementPacket(ProtocolVersion = ProtocolCodec.Version, Sample = sample())
         let decode () = ProtocolCodec.decodeMovement codec (packet.ToByteArray())
         let actual = decode() |> ok
@@ -765,12 +918,17 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (send 1UL "hello" |> decode |> ok |> ProtocolCodec.requestLane) DeliveryLane.Chat "Chat request."
         let location = locationPacket (wireLocation()) |> update |> ok
         Expect.equal (ProtocolCodec.requestLane location) DeliveryLane.Control "Location is reliable control."
-        let rejection = { Code = RequestRejectionCode.Overloaded; Message = "busy"; Field = "" }
+        let rejection = {
+            Code = RequestRejectionCode.Overloaded
+            Message = "busy"
+            Field = ""
+        }
         for response in [ServerResponse.ChatPublished message; ServerResponse.ChatAccepted(1UL, message); ServerResponse.ChatRejected(1UL, rejection)] do
             Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Chat "Chat response remains on chat channel."
         for response in [joined snapshot; ServerResponse.PlayerUpdateAccepted 1UL; ServerResponse.RequestRejected(1UL, rejection)] do
             Expect.equal (ProtocolCodec.delivery response).Lane DeliveryLane.Control "Lifecycle and command replies."
         Expect.equal (ProtocolCodec.delivery (ServerResponse.PlayersMoved (movementBatch [pid 7UL, ValueNone]))).Lane DeliveryLane.Realtime "Movement envelope is independent."
+
     testCase "a pseudonymous identity leaves with no username or character and a flag" <| fun _ ->
         let pseudonym = Pseudonym.create "Страж" |> ok |> Pseudonym.numbered 2
         let character = Player.create profile |> Player.beginCharacter (CharacterName.create 128 "Lydia" |> ok)
@@ -821,6 +979,7 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.isError (Packets.single codec (ServerResponse.SessionOpened(1UL, selfHidden))) "the self entry keeps the real profile"
         Expect.equal welcomed.SessionOpened.OwnPseudonym "Страж" "the owner learns its pseudonym at opening"
         Expect.isFalse (parse (Packets.single codec (ServerResponse.SessionOpened(1UL, welcome)) |> ok)).SessionOpened.HasOwnPseudonym "absent when shown"
+
     testCase "moderator requests decode through the domain and their answers carry the correlation" <| fun _ ->
         let packet (fill: Dreamsleeve.Protocol.Chat.ClientPacket -> unit) =
             let value = Dreamsleeve.Protocol.Chat.ClientPacket(ProtocolVersion = ProtocolCodec.Version, RequestId = 5UL)
@@ -856,8 +1015,14 @@ let tests = testList "Dreamsleeve.Server.Codec" [
         Expect.equal (ProtocolCodec.delivery (ServerResponse.ChatMessageRemoved(ValueSome 5UL, channel, message.MessageId))).Lane DeliveryLane.Chat "chat lane"
         let issued =
             Sanction.issue (SanctionId.create 1L |> ok) (DateTimeOffset.FromUnixTimeMilliseconds 1_000L)
-                { Target = pid 9UL; Kind = SanctionKind.Ban; Term = SanctionTerm.UntilLifted; Reason = SanctionReason.create "Читы" |> ok
-                  IssuedBy = SanctionIssuer.Moderator(pid 7UL); Devices = false }
+                {
+                    Target = pid 9UL
+                    Kind = SanctionKind.Ban
+                    Term = SanctionTerm.UntilLifted
+                    Reason = SanctionReason.create "Читы" |> ok
+                    IssuedBy = SanctionIssuer.Moderator(pid 7UL)
+                    Devices = false
+                }
         let listed = (encoded (ServerResponse.SanctionList(6UL, [ issued ]))).SanctionList.Sanctions |> Seq.exactlyOne
         Expect.equal (listed.PlayerId, listed.Kind, listed.Reason, listed.IssuedAtUnixMs, listed.HasUntilUnixMs)
                      (9UL, Dreamsleeve.Protocol.Chat.SanctionKind.Ban, "Читы", 1_000L, false) "the entry names the player, not the issuer"

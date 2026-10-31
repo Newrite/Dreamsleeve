@@ -11,13 +11,15 @@ public sealed class PacketBudget(int maximumPackets, long maximumBytes, int reli
     public int Packets { get; private set; }
     public long Bytes { get; private set; }
 
-    internal bool TryReserve(int length, bool reliable)
+    internal bool TryReserve(int length, PacketDelivery delivery)
     {
         // Realtime cannot occupy the reliable headroom. These are admission
         // limits within the existing total budget, not additional memory.
-        var packetLimit = reliable ? maximumPackets
+        var reliable = delivery == PacketDelivery.Reliable;
+        var bulk = delivery == PacketDelivery.ReliableBulk;
+        var packetLimit = bulk ? Math.Max(1, maximumPackets / 2) : reliable ? maximumPackets
             : maximumPackets - Math.Max(1, Math.Min(maximumPackets, reliablePacketReserve));
-        var byteLimit = reliable ? maximumBytes : maximumBytes - Math.Max(1L, maximumBytes / 4);
+        var byteLimit = bulk ? Math.Max(1L, maximumBytes / 2) : reliable ? maximumBytes : maximumBytes - Math.Max(1L, maximumBytes / 4);
         if (Packets >= packetLimit || length > byteLimit - Bytes)
             return false;
 
@@ -33,11 +35,14 @@ public sealed class PacketBudget(int maximumPackets, long maximumBytes, int reli
     }
 }
 
+public enum PacketDelivery { Reliable, Sequenced, SequencedFragmented, ReliableBulk }
+
 public enum PacketSendResult
 {
     Sent,
     BudgetExceeded,
-    PeerRejected
+    PeerRejected,
+    InvalidDelivery
 }
 
 // C# expresses the managed function pointer required by yENet. Routing, polling,
@@ -70,15 +75,48 @@ public static unsafe class OutgoingPackets
     }
 
     public static PacketSendResult TrySend(EnetPeer peer, ReadOnlySpan<byte> bytes,
-        PacketBudget hostBudget, PacketBudget peerBudget) => TrySend(peer, bytes, hostBudget, peerBudget, 0, true);
+        PacketBudget hostBudget, PacketBudget peerBudget) => TrySend(peer, bytes, hostBudget, peerBudget, 0, PacketDelivery.Reliable);
 
     public static PacketSendResult TrySend(EnetPeer peer, ReadOnlySpan<byte> bytes,
-        PacketBudget hostBudget, PacketBudget peerBudget, byte channel, bool reliable)
+        PacketBudget hostBudget, PacketBudget peerBudget, byte channel, PacketDelivery delivery)
     {
-        if (!hostBudget.TryReserve(bytes.Length, reliable))
+        // An unknown CLR enum value is rejected before reserving budgets or
+        // creating a native packet. Valid delivery policies are enumerated here.
+        EnetPacketFlag flags;
+        switch (delivery)
+        {
+            case PacketDelivery.Reliable:
+            case PacketDelivery.ReliableBulk:
+                flags = EnetPacketFlag.Reliable;
+                break;
+            case PacketDelivery.Sequenced:
+                flags = default;
+                break;
+            case PacketDelivery.SequencedFragmented:
+                flags = EnetPacketFlag.UnreliableFragment;
+                break;
+            default:
+                return PacketSendResult.InvalidDelivery;
+        }
+
+        // ENet silently upgrades ordinary and fragmented unreliable packets to
+        // reliable at FFFF. Advance the channel epoch with an empty reliable
+        // transport marker first: a pose itself must never become reliable.
+        // Both sends stay on the native owner and use its existing lease budget.
+        if (delivery == PacketDelivery.SequencedFragmented && peer.IsCreated
+            && channel < peer.ChannelCount
+            && peer.GetInner()->channels[channel].outgoingUnreliableSequenceNumber == ushort.MaxValue)
+        {
+            var rotated = TrySend(peer, ReadOnlySpan<byte>.Empty, hostBudget, peerBudget,
+                channel, PacketDelivery.ReliableBulk);
+            if (rotated != PacketSendResult.Sent)
+                return rotated;
+        }
+
+        if (!hostBudget.TryReserve(bytes.Length, delivery))
             return PacketSendResult.BudgetExceeded;
 
-        if (!peerBudget.TryReserve(bytes.Length, reliable))
+        if (!peerBudget.TryReserve(bytes.Length, delivery))
         {
             hostBudget.Release(bytes.Length);
             return PacketSendResult.BudgetExceeded;
@@ -92,7 +130,7 @@ public static unsafe class OutgoingPackets
         {
             var lease = new Lease(hostBudget, peerBudget, bytes.Length);
             handle = GCHandle.Alloc(lease);
-            packet = EnetPacket.Create(bytes, reliable ? EnetPacketFlag.Reliable : default,
+            packet = EnetPacket.Create(bytes, flags,
                 &Released, (void*)GCHandle.ToIntPtr(handle));
             if (!packet.IsCreated)
                 return PacketSendResult.PeerRejected;

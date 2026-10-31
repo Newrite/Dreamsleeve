@@ -16,7 +16,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     WriteKey(*target.mutable_location()->mutable_location_id(), value.location.locationId);
     target.mutable_location()->set_location_name(value.location.locationName);
     WritePosition(*target.mutable_position(), value.position);
-    WriteRotation(*target.mutable_rotation(), value.rotation);
+    WriteCameraDirection(*target.mutable_camera_direction(), value.cameraDirection);
   }
 
   struct ActorValueWriter
@@ -44,11 +44,13 @@ namespace Dreamsleeve::Client::Wire::Detail
       race->set_name(value.race->name);
     }
     if (value.level) target.set_level(*value.level);
+
     auto* activity = target.mutable_activity();
     activity->set_kind(static_cast<P::ActivityKind>(value.activity.kind));
     activity->set_lock_difficulty(static_cast<P::LockDifficulty>(value.activity.lockDifficulty));
     if (value.activity.targetName) activity->set_target_name(*value.activity.targetName);
     if (value.activity.menuKey) activity->set_menu_key(*value.activity.menuKey);
+
     if (value.place)
     {
       auto* place = target.mutable_place();
@@ -134,11 +136,11 @@ namespace Dreamsleeve::Client::Wire::Detail
     Domain::PlayerLocation result{
         {KeyOf(source.location().location_id()), source.location().location_name()},
         PositionOf(source.position()),
-        RotationOf(source.rotation()),
+        CameraDirectionOf(source.camera_direction()),
         source.sampled_at_us()
     };
     if (!ValidKey(result.location.locationId)) return Invalid("location_id");
-    if (!Finite(result.position) || !Finite(result.rotation)) return Invalid("location");
+    if (!Finite(result.position) || !Finite(result.cameraDirection)) return Invalid("location");
     return result;
   }
 
@@ -158,7 +160,10 @@ namespace Dreamsleeve::Client::Wire::Detail
       case P::ActorValue::kResource:
         return std::pair{
             kind->key,
-            Domain::ActorValueInfo{kind->displayName, Domain::ResourceActorValue{entry.resource().current(), entry.resource().maximum()}}
+            Domain::ActorValueInfo{
+                kind->displayName,
+                Domain::ResourceActorValue{entry.resource().current(), entry.resource().maximum()}
+            }
         };
       case P::ActorValue::VALUE_NOT_SET:
         return Invalid("actor_value");
@@ -179,7 +184,13 @@ namespace Dreamsleeve::Client::Wire::Detail
 
   Domain::PlaceDescription ReadPlace(const P::PlaceDescription& place)
   {
-    return {place.worldspace_name(), place.location_name(), place.nearby_marker_name(), place.marker_kind(), place.is_interior()};
+    return {
+        place.worldspace_name(),
+        place.location_name(),
+        place.nearby_marker_name(),
+        place.marker_kind(),
+        place.is_interior()
+    };
   }
 
   Domain::NamedForm ReadRace(const P::NamedForm& race)
@@ -211,6 +222,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (set.has_place()) result.place = std::optional{ReadPlace(set.place())};
       if (set.has_game_started_at_unix_ms()) result.gameStartedAtUnixMs = std::optional{set.game_started_at_unix_ms()};
     }
+
     const auto clear = [](auto& component) {
       if (component) return false;
       component.emplace();
@@ -229,6 +241,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         cleared = clear(result.gameStartedAtUnixMs);
       if (!cleared) return Invalid("cleared_details");
     }
+
     if (result.gameStartedAtUnixMs && *result.gameStartedAtUnixMs && !ValidUnixMs(**result.gameStartedAtUnixMs))
       return Invalid("game_started_at_unix_ms");
     return result;
@@ -240,7 +253,10 @@ namespace Dreamsleeve::Client::Wire::Detail
     if (!profile) return std::unexpected{profile.error()};
     if (static_cast<std::size_t>(source.actor_values_size()) > config.maxActorValues) return Invalid("actor_values");
 
-    Domain::Player result{.data = std::move(*profile), .characterGeneration = source.character_generation()};
+    Domain::Player result{
+        .data = std::move(*profile),
+        .characterGeneration = source.character_generation()
+    };
     result.viewRevision     = source.view_revision();
     result.movementSequence = source.movement_sequence();
     result.details          = ReadDetails(source.details());
@@ -252,6 +268,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!location) return std::unexpected{location.error()};
       result.location = std::move(*location);
     }
+
     for (const auto& entry : source.actor_values())
     {
       auto value = ReadActorValue(entry, kinds);
@@ -269,6 +286,7 @@ namespace Dreamsleeve::Client::Wire::Detail
     const bool values  = !source.removed_actor_values().empty() || !source.actor_values().empty();
     const bool details = source.has_details() || !source.cleared_details().empty();
     if (source.player_id() == Domain::InvalidId || (!values && !details)) return Invalid("player_metadata_patch");
+
     PlayerMetadataUpdated result{source.player_id()};
     if (values)
     {
@@ -283,6 +301,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!kind) return Invalid("actor_value_kind");
         patch.removed.push_back(kind->key);
       }
+
       for (const auto& entry : source.actor_values())
       {
         auto value = ReadActorValue(entry, kinds);
@@ -292,6 +311,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         patch.set.push_back(std::move(*value));
       }
     }
+
     if (details)
     {
       auto patch = ReadDetailsPatch(source);
@@ -304,7 +324,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   void WritePose(P::MovementPose& target, const Domain::MovementPose& value)
   {
     WritePosition(*target.mutable_position(), value.position);
-    WriteRotation(*target.mutable_rotation(), value.rotation);
+    WriteCameraDirection(*target.mutable_camera_direction(), value.cameraDirection);
     target.set_sampled_at_us(value.sampledAtUs);
   }
 
@@ -312,8 +332,12 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     if (source.player_id() == Domain::InvalidId || source.view_revision() == 0 || !source.has_pose()) return Invalid("movement");
     const auto&                pose = source.pose();
-    const Domain::MovementPose value{PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
-    if (!Finite(value.position) || !Finite(value.rotation)) return Invalid("pose");
+    const Domain::MovementPose value{
+        PositionOf(pose.position()),
+        CameraDirectionOf(pose.camera_direction()),
+        pose.sampled_at_us()
+    };
+    if (!Finite(value.position) || !Finite(value.cameraDirection)) return Invalid("pose");
     return PlayerMovementReceived{source.player_id(), source.view_revision(), source.sequence(), value};
   }
 
@@ -326,8 +350,13 @@ namespace Dreamsleeve::Client::Wire::Detail
     {
       if (!space) return Invalid("space");
       const auto& pose = source.pose();
-      location         = Domain::PlayerLocation{*space, PositionOf(pose.position()), RotationOf(pose.rotation()), pose.sampled_at_us()};
-      if (!Finite(location->position) || !Finite(location->rotation)) return Invalid("pose");
+      location = Domain::PlayerLocation{
+          *space,
+          PositionOf(pose.position()),
+          CameraDirectionOf(pose.camera_direction()),
+          pose.sampled_at_us()
+      };
+      if (!Finite(location->position) || !Finite(location->cameraDirection)) return Invalid("pose");
     }
     return PlayerLocationUpdated{source.player_id(), std::move(location), source.view_revision(), source.sequence()};
   }
@@ -366,6 +395,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!player) return std::unexpected{player.error()};
         result.updates.emplace_back(PlayerUpserted{std::move(*player)});
       }
+
     for (const auto& value : source.metadata())
     {
       auto patch = ReadMetadata(config, value, kinds);
@@ -379,6 +409,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       space = Domain::Location{KeyOf(source.space().location_id()), source.space().location_name()};
       if (!ValidKey(space->locationId)) return Invalid("space");
     }
+
     bool posed = false;
     for (const auto& value : source.visibility())
     {

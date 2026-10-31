@@ -242,6 +242,7 @@ namespace Dreamsleeve::Client::Wire::Detail
         if (!member) return std::unexpected{member.error()};
         result.guild.members.push_back(std::move(*member));
       }
+
       for (const auto& value : source.recent_messages())
       {
         auto message = Message(value);
@@ -277,6 +278,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   Result<GuildsSnapshot> ReadGuilds(const Configuration& config, const P::GuildsSnapshot& source)
   {
     if (!source.has_limits()) return Invalid("limits");
+
     const auto&    limits = source.limits();
     GuildsSnapshot result{
         {},
@@ -296,6 +298,7 @@ namespace Dreamsleeve::Client::Wire::Detail
       if (!guild) return std::unexpected{guild.error()};
       result.guilds.push_back(std::move(*guild));
     }
+
     for (const auto& value : source.invites())
     {
       auto invite = Invite(value);

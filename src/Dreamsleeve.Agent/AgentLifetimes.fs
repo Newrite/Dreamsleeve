@@ -7,15 +7,57 @@ open System.Threading.Tasks
 
 [<AutoOpen>]
 module AgentLifetimeExtensions =
-    type AgentContext<'Message> with
+    type ReliableAgentContext<'Message> with
         /// Own a child from this handler: parent cancellation aborts it, and parent
         /// Completion joins its actual cleanup. Graceful child Stop remains domain-specific.
         member context.Own(child: Agent<'Child>, stopped: Result<unit, exn> -> 'Message) =
             let observe (token: CancellationToken) = task {
                 use registration = token.Register(fun () -> child.Abort())
-                do! child.Completion
+                let! outcome = task {
+                    try
+                        do! child.Completion
+                        return Ok ()
+                    with error ->
+                        if child.Completion.IsFaulted then
+                            let causes = child.Completion.Exception.InnerExceptions
+                            return Error (if causes.Count = 1 then causes[0] else AggregateException(causes))
+                        else return Error error
+                }
+
+                let retainChildFailures () =
+                    if child.Completion.IsFaulted then
+                        for error in child.Completion.Exception.InnerExceptions do
+                            context.Fail error
+                    else
+                        match outcome with
+                        | Error error -> context.Fail error
+                        | Ok () -> ()
+
+                // Parent Abort may cancel the child. Actual cleanup faults remain faults.
+                if not (token.IsCancellationRequested && child.Completion.IsCanceled) then
+                    let message =
+                        try Ok (stopped outcome)
+                        with error -> Error error
+
+                    match message with
+                    | Error error ->
+                        retainChildFailures ()
+                        context.Fail error
+                    | Ok value ->
+                        let! admission = task {
+                            try
+                                let! delivered = context.PostAsync(value, cancellationToken = token)
+                                return Ok delivered
+                            with error -> return Error error
+                        }
+                        match admission with
+                        | Ok AgentDeliveryResult.Posted -> () // Owning handler observes the child outcome.
+                        | Ok AgentDeliveryResult.Closed | Ok AgentDeliveryResult.Canceled -> retainChildFailures ()
+                        | Error error ->
+                            retainChildFailures ()
+                            context.Fail error
             }
-            context.PipeToSelf(observe, stopped)
+            context.StartDelivery observe
 
         /// Observe a shared dependency without controlling its lifetime. Detaches when
         /// the owner stops dispatching, including Complete; it never stops the target.
@@ -28,28 +70,31 @@ module AgentLifetimeExtensions =
                         return Ok ()
                     with error -> return Error error
                 }
+
                 if not cancel.IsCancellationRequested then
                     let! delivered = context.PostAsync(stopped outcome, cancellationToken = cancel.Token)
                     match delivered with
-                    | AgentPostResult.Posted | AgentPostResult.Closed | AgentPostResult.Canceled -> ()
-                    | AgentPostResult.Full | AgentPostResult.Dropped ->
-                        invalidOp "Lifecycle observation requires a non-dropping owner mailbox."
+                    | AgentDeliveryResult.Posted | AgentDeliveryResult.Closed | AgentDeliveryResult.Canceled -> ()
             }
             context.StartDelivery observe
 
         member context.Watch(target: Agent<'Target>, stopped: Result<unit, exn> -> 'Message) =
             context.Watch(target.Completion, stopped)
 
+    type ReliableAgentContext<'Message> with
+        member context.Own(child: ReliableAgent<'Child>, stopped: Result<unit, exn> -> 'Message) =
+            context.Own(child.Agent, stopped)
+        member context.Watch(target: ReliableAgent<'Target>, stopped: Result<unit, exn> -> 'Message) =
+            context.Watch(target.Completion, stopped)
+
 /// Bounded ownership of forwarded reply channels. A library lock coordinates only
 /// reply settlement with target/owner termination; application state stays in handlers.
 [<Sealed>]
-type AgentReplyScope<'Reply> internal (capacity: int, closedReply: 'Reply, busyReply: 'Reply) =
+type AgentReplyScope<'Reply> internal (budget: AgentDeliveryCapacity, closedReply: 'Reply, busyReply: 'Reply, failureSink: exn -> unit) =
+    let capacity = budget.Value
     let gate = obj()
     let pending = HashSet<ReplyChannel<'Reply>>()
     let mutable closed = false
-
-    do
-        if capacity < 1 then invalidArg (nameof capacity) "Pending reply capacity must be positive."
 
     member _.Close() =
         lock gate (fun () ->
@@ -81,16 +126,16 @@ type AgentReplyScope<'Reply> internal (capacity: int, closedReply: 'Reply, busyR
                     reply.Reply closedReply
                     lock gate (fun () -> pending.Remove reply |> ignore)
             with error ->
-                reply.ReplyError error
+                reply.ReplyFault error
                 lock gate (fun () -> pending.Remove reply |> ignore)
-                reraise ()
+                failureSink error
 
 [<RequireQualifiedAccess>]
 module AgentReplyScope =
     /// Attach to one route. Either endpoint stopping closes the scope, even if the
     /// owner cannot process a termination message. Target faults do not fault the owner.
-    let create (context: AgentContext<'Owner>) (target: Agent<'Target>) capacity closedReply busyReply =
-        let scope = AgentReplyScope(capacity, closedReply, busyReply)
+    let create (context: ReliableAgentContext<'Owner>) (target: Agent<'Target>) (capacity: AgentDeliveryCapacity) closedReply busyReply =
+        let scope = AgentReplyScope(capacity, closedReply, busyReply, context.Fail)
         let observe (token: CancellationToken) = task {
             use cancel = CancellationTokenSource.CreateLinkedTokenSource(token, context.DispatchStopped)
             try
@@ -101,3 +146,16 @@ module AgentReplyScope =
         }
         context.StartDelivery observe
         scope
+
+
+    let tryCreate (context: ReliableAgentContext<'Owner>) (target: Agent<'Target>) capacity closedReply busyReply =
+        if isNull (box context) then
+            Error (AgentStartError.NullArgument "context")
+        elif isNull (box target) then
+            Error (AgentStartError.NullArgument "target")
+        else
+            AgentDeliveryCapacity.TryCreate capacity
+            |> Result.map (fun budget -> create context target budget closedReply busyReply)
+
+    let createForReliable context (target: ReliableAgent<'Target>) capacity closedReply busyReply =
+        create context target.Agent capacity closedReply busyReply

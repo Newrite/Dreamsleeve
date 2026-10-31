@@ -36,19 +36,33 @@ public sealed class TransportDiagnostics
     private static readonly Histogram<double> TimeoutAge = Meter.CreateHistogram<double>("transport.peer.timeout.age.max", "ms");
     private static readonly Histogram<double> ReceiveAge = Meter.CreateHistogram<double>("transport.peer.receive.age.max", "ms");
     private EnetPeerTrace? peerTrace;
+    private readonly Action<Exception> reportFailure;
     private long lastPoll;
     private long lastSample;
+
+    public TransportDiagnostics(Action<Exception> reportFailure) => this.reportFailure = reportFailure;
 
     public static bool ConfigureBuffers(EnetHost host, int receive, int send) =>
         enet.ENET_API.enet_socket_set_option(host.Socket, enet.ENetSocketOption.ENET_SOCKOPT_RCVBUF, receive) == 0 &&
         enet.ENET_API.enet_socket_set_option(host.Socket, enet.ENetSocketOption.ENET_SOCKOPT_SNDBUF, send) == 0;
 
-    public static (int Receive, int Send) ReadBuffers(EnetHost host)
+    public static bool TryReadBuffers(EnetHost host, out (int Receive, int Send) buffers, out SocketException? error)
     {
         // The wrapper borrows the descriptor; disposal cannot close the ENet socket.
-        using var handle = new SafeSocketHandle(host.Socket.Handle, ownsHandle: false);
-        using var socket = new Socket(handle);
-        return (socket.ReceiveBufferSize, socket.SendBufferSize);
+        try
+        {
+            using var handle = new SafeSocketHandle(host.Socket.Handle, ownsHandle: false);
+            using var socket = new Socket(handle);
+            buffers = (socket.ReceiveBufferSize, socket.SendBufferSize);
+            error = null;
+            return true;
+        }
+        catch (SocketException failure)
+        {
+            buffers = default;
+            error = failure;
+            return false;
+        }
     }
 
     public long BeginPoll()
@@ -68,10 +82,13 @@ public sealed class TransportDiagnostics
         if (Environment.TickCount64 - lastSample < 100) return;
         if (lastSample == 0)
         {
-            peerTrace = EnetPeerTrace.Create(host);
-            var buffers = ReadBuffers(host);
-            ReceiveBuffer.Record(buffers.Receive);
-            SendBuffer.Record(buffers.Send);
+            if (!EnetPeerTrace.TryCreate(host, out peerTrace, out var traceError)) reportFailure(traceError!);
+            if (TryReadBuffers(host, out var buffers, out var bufferError))
+            {
+                ReceiveBuffer.Record(buffers.Receive);
+                SendBuffer.Record(buffers.Send);
+            }
+            else reportFailure(bufferError!);
         }
         lastSample = Environment.TickCount64;
         PendingBytes.Record(budget.Bytes);
@@ -83,7 +100,11 @@ public sealed class TransportDiagnostics
         {
             if (!host.TryGetPeer((ushort)i, out var peer)) continue;
             if (peer.State != EnetPeerState.Connected) continue;
-            peerTrace?.Record(host, peer);
+            if (peerTrace is not null && !peerTrace.TryRecord(host, peer, out var traceError))
+            {
+                peerTrace = null;
+                reportFailure(traceError!);
+            }
             rtt = Math.Max(rtt, peer.RoundTripTime);
             if (peer.EarliestTimeout != 0)
                 timeoutAge = Math.Max(timeoutAge, unchecked(host.ServiceTime - peer.EarliestTimeout));

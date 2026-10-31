@@ -4,6 +4,8 @@
 
 import std;
 import Dreamsleeve.Host.Bridge;
+import Dreamsleeve.Host.BridgeProjection;
+import Dreamsleeve.Host.BridgeTexts;
 
 #include "Bridge.h"
 #include "Repository.h"
@@ -76,6 +78,7 @@ namespace
       std::ofstream output{path, std::ios::binary | std::ios::trunc};
       output << expected;
     }
+
     const auto stale = path.filename().string() + " is stale; set DREAMSLEEVE_WRITE_GENERATED=1 and run the tests";
     CHECK_MESSAGE(ReadText(path) == expected, stale);
   }
@@ -265,6 +268,7 @@ TEST_CASE("Bridge name tables follow the enumerators they name")
   auto hiding    = EnumeratorNames<Domain::HiddenIdentity>();
   hiding.front() = "off";
   CHECK(Strings(HidingNames) == hiding);
+
   // Out of range: the least trust, a plain announcement.
   CHECK(Bridge::OriginName(Domain::AnnouncementSource::Unspecified) == "thirdParty");
   CHECK(Bridge::KindName(static_cast<Domain::AnnouncementKind>(99)) == "announcement");
@@ -276,6 +280,7 @@ TEST_CASE("Host events carry their type and commands parse by theirs")
   const auto result = Parse(Bridge::SettingsResultEvent{.revision = 2});
   CHECK(result["type"].get<std::string>() == "settingsResult");
   CHECK(result["revision"].get<double>() == 2);
+
   for (std::size_t index = 0; index < Bridge::CommandNames.size(); ++index)
   {
     // Every command is known by name; one without values parses from its type alone.
