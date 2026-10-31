@@ -54,6 +54,7 @@ let private exercise failAcquisition = task {
                 Loaded = []
                 Profiles = []
                 NextId = 1UL
+                NextTitleId = 1UL
                 Writer = guilds.Ref.TryReliable().Value
                 WriterStopped = guilds.Completion
             }

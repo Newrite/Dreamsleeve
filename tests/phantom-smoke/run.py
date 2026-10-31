@@ -27,6 +27,7 @@ HIDDEN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 READY_SECONDS = 15
 SHUTDOWN_SECONDS = 25
 PROXY_READY_SECONDS = 10
+PORT_ATTEMPTS = 32
 
 SCENARIOS = {
     # The two-party contract smoke.
@@ -67,6 +68,19 @@ def free_port(kind):
     with socket.socket(socket.AF_INET, kind) as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
+
+
+def free_server_port():
+    """The server takes one number for ENet (UDP) and HTTP (TCP); Windows reserves TCP ranges apart."""
+    for _ in range(PORT_ATTEMPTS):
+        port = free_port(socket.SOCK_DGRAM)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+        return port
+    raise SmokeFailure("No loopback port is free for both UDP and TCP.")
 
 
 def start(command, log_name, artifacts, env=None):
@@ -155,7 +169,7 @@ def run(args):
     if not FIXTURE_DLL.exists():
         raise SmokeFailure("Server fixture is missing; build it before using --no-build.")
 
-    port = free_port(socket.SOCK_DGRAM)
+    port = free_server_port()
     ready_path = artifacts / "ready.json"
     server_env = dict(os.environ)
     if args.model_bytes_per_second > 0:

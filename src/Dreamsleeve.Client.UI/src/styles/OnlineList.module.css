@@ -24,6 +24,20 @@
   padding: 10px;
   border-bottom: 1px solid var(--border);
 }
+.sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.sort:hover,
+.sort[data-current] {
+  color: var(--ink);
+}
 .table td {
   height: 52px;
   padding: 5px 10px;

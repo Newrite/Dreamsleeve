@@ -108,6 +108,16 @@ const commands: { [K in Command["type"]]: Extract<Command, { type: K }> } = {
     minutes: 30,
     reason: "Флуд",
   },
+  guildCatalog: {
+    type: "guildCatalog",
+    requestId: "c1",
+    search: "вор",
+    minMembers: 2,
+    maxMembers: 20,
+    openOnly: true,
+    sort: "members",
+    after: { guildId: "7", name: "Совы", members: 12 },
+  },
 };
 
 describe("bridge contract with the host", () => {

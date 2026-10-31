@@ -31,7 +31,9 @@ let private placement space x = GroundMarkPlacement.create space (position x) (R
 let private located space x =
     ValueSome (PlayerLocation.create (Location.create space (LocationName.create 128 "" |> ok)) (position x) CameraDirection.zero)
 let private note text = GroundMarkBody.Note (GroundNoteText.create 200 text |> ok)
-let private death label = GroundMarkBody.Death (DeathMarkText.create 64 label |> ok)
+let private deathAt characterLevel killerLevel label =
+    GroundMarkBody.Death (DeathReport.create (DeathMarkText.create 64 label |> ok) characterLevel killerLevel |> ok)
+let private death label = deathAt 32u 0u label
 let private markId value = GroundMarkId.create value |> ok
 // Tirdas, 17 Last Seed 4E 201, 14:05.
 let private gameDate = GameDate.create 4 201 8 17 2 14 5 |> ok
@@ -629,12 +631,30 @@ let private codecTests = testList "GroundMarkCodec" [
             equal gameDate date
         | other -> failwithf "Expected note: %A" other
         equal DeliveryLane.Control (ProtocolCodec.requestLane decoded)
-        let death = client 4UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "", Placement = wirePlacement 1.0f, GameDate = wireDate ())) |> ok
-        match death.Command with
-        | ClientCommand.ReportDeath(label, _, date) ->
-            equal "" (DeathMarkText.value label)
+        let reportDeath requestId label characterLevel killerLevel =
+            client requestId (fun packet ->
+                packet.ReportDeath <-
+                    Dreamsleeve.Protocol.Chat.ReportDeath(
+                        Label = label, Placement = wirePlacement 1.0f, GameDate = wireDate (),
+                        CharacterLevel = characterLevel, KillerLevel = killerLevel))
+        match (reportDeath 4UL "" 32u 0u |> ok).Command with
+        | ClientCommand.ReportDeath(death, _, date) ->
+            equal "" (DeathMarkText.value death.Label)
+            equal (ValueSome 32u) death.CharacterLevel
+            equal ValueNone death.KillerLevel
             equal gameDate date
         | other -> failwithf "Expected death: %A" other
+        // Levels are not bounded; the character's is required, a zero killer level is none.
+        match (reportDeath 5UL "Убийца: Алдуин" 4000000000u 81u |> ok).Command with
+        | ClientCommand.ReportDeath(death, _, _) ->
+            equal (ValueSome 4000000000u) death.CharacterLevel
+            equal (ValueSome 81u) death.KillerLevel
+        | other -> failwithf "Expected death: %A" other
+        match reportDeath 6UL "" 0u 5u with
+        | Error error ->
+            equal (ProtocolCodecFailure.InvalidDomain(DomainError.MissingLevel "character_level")) error.Failure
+            equal "character_level" (ProtocolCodec.rejection error.Failure).Field
+        | Ok _ -> failtest "A death without the character's level is refused" 
         // The game date is required and checked for calendar ranges only.
         Expect.isError (client 11UL (fun packet -> packet.PlaceGroundNote <- Dreamsleeve.Protocol.Chat.PlaceGroundNote(Text = "x", Placement = wirePlacement 1.0f))) "missing game date"
         Expect.isError (client 12UL (fun packet -> packet.ReportDeath <- Dreamsleeve.Protocol.Chat.ReportDeath(Label = "", Placement = wirePlacement 1.0f))) "missing death date"
@@ -693,6 +713,15 @@ let private codecTests = testList "GroundMarkCodec" [
         let datedRecord = { record 6UL 0.0f with Mark = (record 6UL 0.0f).Mark |> GroundMark.withGameDate (ValueSome gameDate) }
         let datedPacket = Packets.single codec (ServerResponse.OwnGroundMarks [ datedRecord ]) |> ok |> parse
         equal (wireDate ()) datedPacket.OwnGroundMarks.Marks[0].GameDate
+        // A death carries its levels; a note and a death without a killer leave zeros.
+        let deathRecord id body =
+            { record id 0.0f with
+                Mark = GroundMark.create (markId id) (pid 7UL) body (placement whiterun 0.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L) }
+        let levels =
+            Packets.single codec (ServerResponse.OwnGroundMarks [ deathRecord 7UL (deathAt 32u 45u "Убийца: драугр"); deathRecord 8UL (death "Причина смерти: Падение"); record 9UL 0.0f ])
+            |> ok |> parse
+        equal [ (32u, 45u); (32u, 0u); (0u, 0u) ]
+              (levels.OwnGroundMarks.Marks |> Seq.map (fun mark -> mark.CharacterLevel, mark.KillerLevel) |> List.ofSeq)
         equal DeliveryLane.Control (ProtocolCodec.delivery (ServerResponse.GroundMarksChanged view)).Lane
         let placed = Packets.single codec (ServerResponse.GroundMarkPlaced(11UL, record 4UL 0.0f, ValueSome (markId 1UL))) |> ok |> parse
         equal 11UL placed.RequestId
@@ -830,14 +859,14 @@ let private storeTests = testList "SQLite ground marks" [
     testCase "a fresh database and a version two database both reach the current schema" (fun () ->
         use fresh = new Database()
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 14L (fresh.Scalar "PRAGMA user_version")
+        equal 18L (fresh.Scalar "PRAGMA user_version")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks")
         // Back to version two: the mark table, the admin tables and their migration markers are gone.
-        fresh.Execute "ALTER TABLE profiles DROP COLUMN name_color; DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%'; DROP TABLE guild_invites; DROP TABLE guild_members; DROP TABLE guilds; DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%'; DROP TABLE device_bans; DROP TABLE player_devices; DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%'; DROP TABLE address_bans; DROP TABLE sign_in_addresses; DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%'; DROP TABLE server_settings; DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
+        fresh.Execute "DELETE FROM __migrondi_migrations WHERE name LIKE '%death_mark_levels%'; DROP TABLE guild_join_requests; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_catalog%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_info%'; DROP TABLE guild_titles; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_titles%'; ALTER TABLE profiles DROP COLUMN name_color; DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%'; DROP TABLE guild_invites; DROP TABLE guild_members; DROP TABLE guilds; DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%'; DROP TABLE device_bans; DROP TABLE player_devices; DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%'; DROP TABLE address_bans; DROP TABLE sign_in_addresses; DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%'; DROP TABLE server_settings; DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; DROP TABLE ground_marks; DELETE FROM __migrondi_migrations WHERE name LIKE '%ground_mark%'; PRAGMA user_version = 2"
         Expect.throws (fun () -> fresh.Scalar "SELECT count(*) FROM ground_marks" |> ignore) "table is gone"
         SqliteAccountStore.initialize fresh.Config |> ok
-        equal 14L (fresh.Scalar "PRAGMA user_version")
-        equal 14L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
+        equal 18L (fresh.Scalar "PRAGMA user_version")
+        equal 18L (fresh.Scalar "SELECT count(*) FROM __migrondi_migrations")
         equal 0L (fresh.Scalar "SELECT count(*) FROM ground_marks"))
 
     testCase "a version three database keeps its marks and gains the pseudonym and game date columns" (fun () ->
@@ -846,9 +875,9 @@ let private storeTests = testList "SQLite ground marks" [
         let alice = register database "alice"
         let mark = GroundMark.create (markId 1UL) alice.PlayerId (note "before") (placement whiterun 1.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
         SqliteGroundMarkStore.insert database.Config mark token |> ok
-        database.Execute "ALTER TABLE profiles DROP COLUMN name_color; DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%'; DROP TABLE guild_invites; DROP TABLE guild_members; DROP TABLE guilds; DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%'; DROP TABLE device_bans; DROP TABLE player_devices; DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%'; DROP TABLE address_bans; DROP TABLE sign_in_addresses; DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%'; DROP TABLE server_settings; DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; ALTER TABLE ground_marks DROP COLUMN game_era; ALTER TABLE ground_marks DROP COLUMN game_year; ALTER TABLE ground_marks DROP COLUMN game_month; ALTER TABLE ground_marks DROP COLUMN game_day; ALTER TABLE ground_marks DROP COLUMN game_day_of_week; ALTER TABLE ground_marks DROP COLUMN game_hour; ALTER TABLE ground_marks DROP COLUMN game_minute; DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%'; PRAGMA user_version = 3"
+        database.Execute "ALTER TABLE ground_marks DROP COLUMN killer_level; ALTER TABLE ground_marks DROP COLUMN character_level; DELETE FROM __migrondi_migrations WHERE name LIKE '%death_mark_levels%'; DROP TABLE guild_join_requests; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_catalog%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_info%'; DROP TABLE guild_titles; DELETE FROM __migrondi_migrations WHERE name LIKE '%guild_titles%'; ALTER TABLE profiles DROP COLUMN name_color; DELETE FROM __migrondi_migrations WHERE name LIKE '%name_colors%'; DROP TABLE guild_invites; DROP TABLE guild_members; DROP TABLE guilds; DELETE FROM __migrondi_migrations WHERE name LIKE '%guilds%'; DROP TABLE device_bans; DROP TABLE player_devices; DELETE FROM __migrondi_migrations WHERE name LIKE '%devices%'; DROP TABLE address_bans; DROP TABLE sign_in_addresses; DELETE FROM __migrondi_migrations WHERE name LIKE '%addresses%'; DROP TABLE server_settings; DELETE FROM __migrondi_migrations WHERE name LIKE '%registration%'; DELETE FROM __migrondi_migrations WHERE name LIKE '%moderator_audit%'; DROP TABLE sanctions; DELETE FROM __migrondi_migrations WHERE name LIKE '%sanctions%'; DROP TABLE display_name_changes; DELETE FROM __migrondi_migrations WHERE name LIKE '%display_names%'; DROP TABLE admin_audit; DROP TABLE player_roles; DROP TABLE admin_api_tokens; DROP TABLE admin_sessions; DROP TABLE admin_accounts; DELETE FROM __migrondi_migrations WHERE name LIKE '%admin%'; ALTER TABLE ground_marks DROP COLUMN author_pseudonym; DELETE FROM __migrondi_migrations WHERE name LIKE '%pseudonym%'; ALTER TABLE ground_marks DROP COLUMN game_era; ALTER TABLE ground_marks DROP COLUMN game_year; ALTER TABLE ground_marks DROP COLUMN game_month; ALTER TABLE ground_marks DROP COLUMN game_day; ALTER TABLE ground_marks DROP COLUMN game_day_of_week; ALTER TABLE ground_marks DROP COLUMN game_hour; ALTER TABLE ground_marks DROP COLUMN game_minute; DELETE FROM __migrondi_migrations WHERE name LIKE '%game_date%'; PRAGMA user_version = 3"
         SqliteAccountStore.initialize database.Config |> ok
-        equal 14L (database.Scalar "PRAGMA user_version")
+        equal 18L (database.Scalar "PRAGMA user_version")
         let loaded = SqliteGroundMarkStore.loadAll database.Config token |> ok
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.Pseudonym))
         equal [ValueNone] (loaded.Marks |> List.map (fun entry -> entry.Mark.GameDate))
@@ -878,7 +907,7 @@ let private storeTests = testList "SQLite ground marks" [
             GroundMark.create (markId 1UL) alice.PlayerId (note "praise\nthe sun") (placement whiterun 10.0f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000000000L)
             |> GroundMark.withCharacterName (ValueSome (CharacterName.create 128 " Ne\u0301revar " |> ok))
             |> GroundMark.withGameDate (ValueSome gameDate)
-        let deathMark = GroundMark.create (markId 2UL) bob.PlayerId (death "") (placement riften -5.5f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000001000L)
+        let deathMark = GroundMark.create (markId 2UL) bob.PlayerId (deathAt 32u 45u "") (placement riften -5.5f) (DateTimeOffset.FromUnixTimeMilliseconds 1700000001000L)
         SqliteGroundMarkStore.insert database.Config noteMark token |> ok
         SqliteGroundMarkStore.insert database.Config deathMark token |> ok
         SqliteAccountStore.initialize database.Config |> ok
@@ -890,6 +919,14 @@ let private storeTests = testList "SQLite ground marks" [
         equal (ValueSome " Ne\u0301revar ") (loaded.Marks[0].Mark.CharacterName |> ValueOption.map CharacterName.value)
         equal ValueNone loaded.Marks[1].Mark.CharacterName
         equal [ ValueSome gameDate; ValueNone ] (loaded.Marks |> List.map _.Mark.GameDate)
+        // Levels belong to deaths only; a mark stored before them has none.
+        Expect.throws (fun () -> database.Execute "UPDATE ground_marks SET character_level = 3 WHERE id = 1") "a note holds no level"
+        database.Execute "UPDATE ground_marks SET character_level = NULL, killer_level = NULL WHERE id = 2"
+        match (SqliteGroundMarkStore.loadAll database.Config token |> ok).Marks[1].Mark.Body with
+        | GroundMarkBody.Death old ->
+            equal ValueNone old.CharacterLevel
+            equal ValueNone old.KillerLevel
+        | other -> failwithf "Expected a death: %A" other
         // A partial or out-of-range stored date is damage, not a mark without a date.
         database.Execute "UPDATE ground_marks SET game_minute = NULL WHERE id = 1"
         Expect.isError (SqliteGroundMarkStore.loadAll database.Config token) "partial game date"

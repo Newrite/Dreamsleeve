@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { Chat, ChatState } from "../state/chat";
 import { OnlineList } from "./OnlineList";
 import { PlayerDetails } from "./PlayerDetails";
-import { playerName, realNames } from "../state/names";
+import { nameMatches } from "../state/names";
+import { sortPlayers, type OnlineSort } from "../state/onlineSort";
 import styles from "../styles/Workspace.module.css";
 export function OnlinePanel({
   chat,
@@ -14,17 +15,22 @@ export function OnlinePanel({
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLocaleLowerCase("ru");
   // Streamer mode searches only what is shown: pseudonyms and places.
-  const players = s.players.filter((p) => {
-    const real = realNames(p, s.settings);
-    return [
-      playerName(p, s.settings),
-      real?.displayName,
-      real?.username,
-      real?.character,
-      p.location,
-      p.zone,
-    ].some((v) => v?.toLocaleLowerCase("ru").includes(normalized));
-  });
+  const players = s.players.filter(
+    (p) =>
+      nameMatches(p, s.settings, normalized) ||
+      [p.location, p.zone].some((v) =>
+        v?.toLocaleLowerCase("ru").includes(normalized),
+      ),
+  );
+  // The same column again turns the direction; another starts from the top.
+  const sortBy = (sort: OnlineSort) => {
+    chat.configure({
+      onlineSort: sort,
+      onlineSortDescending:
+        sort === s.settings.onlineSort && !s.settings.onlineSortDescending,
+    });
+    chat.save();
+  };
   return (
     <>
       <div className={styles.toolbar}>
@@ -64,11 +70,17 @@ export function OnlinePanel({
       </div>
       {s.settings.onlineView === "list" ? (
         <OnlineList
-          players={players}
+          players={sortPlayers(
+            players,
+            s.settings.onlineSort,
+            s.settings.onlineSortDescending,
+            s.settings,
+          )}
           selfId={s.selfId}
           connected={s.connected}
           settings={s.settings}
           openProfile={(id) => chat.open("profile", id)}
+          onSort={sortBy}
         />
       ) : (
         <div className={styles.players}>

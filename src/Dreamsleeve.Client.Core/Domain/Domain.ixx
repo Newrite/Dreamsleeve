@@ -316,9 +316,12 @@ export namespace Domain
     bool operator==(const Sanction&) const = default;
   };
 
-  using GuildId            = std::uint64_t;
-  using GuildRole          = ::Protocol::Chat::GuildRole;
-  using GuildRemovalReason = ::Protocol::Chat::GuildRemovalReason;
+  using GuildId             = std::uint64_t;
+  using GuildTitleId        = std::uint64_t;
+  using GuildRole           = ::Protocol::Chat::GuildRole;
+  using GuildRemovalReason  = ::Protocol::Chat::GuildRemovalReason;
+  using GuildApplicationEnd = ::Protocol::Chat::GuildApplicationEnd;
+  using GuildCatalogSort    = ::Protocol::Chat::GuildCatalogSort;
 
   // A guild's chat channel: above every server-wide channel (guild.proto).
   inline constexpr ChatChannelId GuildChannelBase = 4294967296ULL;
@@ -331,25 +334,61 @@ export namespace Domain
   // A member as guildmates see them: the real profile, never a pseudonym.
   struct GuildMember
   {
-    PlayerData               profile{};
-    GuildRole                role{GuildRole::Member};
-    bool                     online{};
-    std::optional<MuteState> mute;  // Muted in this guild: reading only.
-    std::int64_t             joinedAtUnixMs{};
+    PlayerData                  profile{};
+    GuildRole                   role{GuildRole::Member};
+    bool                        online{};
+    std::optional<MuteState>    mute;     // Muted in this guild: reading only.
+    std::int64_t                joinedAtUnixMs{};
+    std::optional<GuildTitleId> titleId;  // One of the guild's custom roles.
 
     bool operator==(const GuildMember&) const = default;
+  };
+
+  // A custom role of a guild, such as "Казначей": cosmetic, the master's to
+  // create and assign.
+  struct GuildTitle
+  {
+    GuildTitleId titleId{};
+    std::string  name;
+
+    bool operator==(const GuildTitle&) const = default;
+  };
+
+  // A player's request to join, as the master and officers see it: the real
+  // profile, like a member's.
+  struct GuildJoinRequest
+  {
+    PlayerData   profile{};
+    std::int64_t createdAtUnixMs{};
+    std::int64_t expiresAtUnixMs{};
+
+    bool operator==(const GuildJoinRequest&) const = default;
   };
 
   // A guild of this player; its chat is the channel channelId.
   struct Guild
   {
-    GuildId                  guildId{};
-    std::string              name;
-    ChatChannelId            channelId{};
-    std::int64_t             createdAtUnixMs{};
-    std::vector<GuildMember> members;
+    GuildId                       guildId{};
+    std::string                   name;
+    ChatChannelId                 channelId{};
+    std::int64_t                  createdAtUnixMs{};
+    std::vector<GuildMember>      members;
+    std::vector<GuildTitle>       titles;        // Oldest first.
+    std::string                   info;          // What the master tells about it; empty: nothing.
+    bool                          listed{true};  // Shown in the public catalog.
+    std::vector<GuildJoinRequest> joinRequests;  // Oldest first; only the master and officers receive them.
 
     bool operator==(const Guild&) const = default;
+  };
+
+  // A join request of this player, waiting for the guild's answer.
+  struct GuildApplication
+  {
+    GuildId      guildId{};
+    std::string  guildName;
+    std::int64_t expiresAtUnixMs{};
+
+    bool operator==(const GuildApplication&) const = default;
   };
 
   // An invitation waiting for this player's answer. The inviter is a player
@@ -369,10 +408,57 @@ export namespace Domain
   {
     std::uint32_t maxGuildsPerPlayer{};  // Own guilds included.
     std::uint32_t maxMembers{};
-    std::uint32_t nameMinLength{};       // Unicode scalar values.
+    std::uint32_t nameMinLength{};       // Unicode scalar values; custom role names too.
     std::uint32_t nameMaxLength{};
+    std::uint32_t maxTitles{};           // Custom roles of one guild.
+    std::uint32_t infoMaxLength{};       // Unicode scalar values of the guild information.
+    std::uint32_t maxJoinRequests{};     // Pending join requests of one guild.
+    std::uint32_t maxApplications{};     // Pending join requests of one player.
 
     bool operator==(const GuildLimits&) const = default;
+  };
+
+  // The last catalog entry received: the next page follows it.
+  struct GuildCatalogAfter
+  {
+    GuildId       guildId{};
+    std::string   name;
+    std::uint32_t members{};
+
+    bool operator==(const GuildCatalogAfter&) const = default;
+  };
+
+  // A search of the public catalog; the server decides the page size.
+  struct GuildCatalogQuery
+  {
+    std::string                      search;      // Part of the name; empty: any.
+    std::uint32_t                    minMembers{};
+    std::optional<std::uint32_t>     maxMembers;  // Absent: no upper bound.
+    bool                             openOnly{};  // Only guilds with free places.
+    GuildCatalogSort                 sort{GuildCatalogSort::Name};
+    std::optional<GuildCatalogAfter> after;       // Absent: the first page.
+
+    bool operator==(const GuildCatalogQuery&) const = default;
+  };
+
+  struct GuildCatalogEntry
+  {
+    GuildId       guildId{};
+    std::string   name;
+    std::string   info;
+    std::uint32_t members{};
+    std::int64_t  createdAtUnixMs{};
+
+    bool operator==(const GuildCatalogEntry&) const = default;
+  };
+
+  struct GuildCatalogPage
+  {
+    std::vector<GuildCatalogEntry> guilds;
+    bool                           more{};   // Another page follows the last entry.
+    std::uint32_t                  total{};  // Every guild the query matches.
+
+    bool operator==(const GuildCatalogPage&) const = default;
   };
 
   // Where a mark stands: the space, the point and the author's heading (Z
@@ -427,6 +513,10 @@ export namespace Domain
     std::optional<CharacterName> characterName{};
     // The author's in-game date at placement; absent on marks stored before protocol 12.
     std::optional<GameDate> gameDate{};
+    // A death: the character's level and the killer's at the moment of death.
+    // Zero is none: a note, a mark stored without levels, no killer or one without a level.
+    std::uint32_t characterLevel{};
+    std::uint32_t killerLevel{};
 
     bool operator==(const GroundMark&) const = default;
   };

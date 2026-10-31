@@ -2,10 +2,12 @@ import type { StoreApi } from "zustand/vanilla";
 import type {
   Guild,
   GuildAction,
+  GuildApplication,
   GuildInvite,
   GuildLimits,
   GuildRole,
   HostEvent,
+  Message,
   Send,
 } from "../bridge/types";
 import type { ChatState } from "./chat";
@@ -25,6 +27,8 @@ export interface GuildsState {
   // only after that.
   guilds: Guild[];
   invites: GuildInvite[];
+  // The player's requests to join, waiting for an answer.
+  applications: GuildApplication[];
   guildLimits: GuildLimits;
   guildsKnown: boolean;
   // Guild requests waiting for their answer, by request ID.
@@ -32,15 +36,31 @@ export interface GuildsState {
   // The guild open in the guilds panel.
   selectedGuild: string | null;
   guildMute: GuildMuteDialog | null;
+  // The message of the day by guild ID: the newest line of the guild's chat
+  // when the session's guilds came. It stays for the session and goes with
+  // its line or its guild.
+  guildMotd: Record<string, PlayerLine>;
 }
+export type PlayerLine = Extract<Message, { source: "player" }>;
 export const idleGuilds: GuildsState = {
   guilds: [],
   invites: [],
-  guildLimits: { perPlayer: 0, members: 0, nameMin: 0, nameMax: 0 },
+  applications: [],
+  guildLimits: {
+    perPlayer: 0,
+    members: 0,
+    nameMin: 0,
+    nameMax: 0,
+    titles: 0,
+    infoMax: 0,
+    joinRequests: 0,
+    applications: 0,
+  },
   guildsKnown: false,
   guildRequests: {},
   selectedGuild: null,
   guildMute: null,
+  guildMotd: {},
 };
 export const roleLabels: Record<GuildRole, string> = {
   member: "участник",
@@ -53,8 +73,31 @@ export const memberOf = (guild: Guild, playerId: string) =>
   guild.members.find((m) => m.id === playerId);
 export const roleOf = (guild: Guild, playerId: string) =>
   memberOf(guild, playerId)?.role;
+// Join requests waiting for the player's answer, in the guilds where they answer.
+export const pendingRequests = (guilds: Guild[], selfId: string) =>
+  guilds
+    .filter((g) => mayInvite(roleOf(g, selfId)))
+    .reduce((total, g) => total + g.joinRequests.length, 0);
+// The name of the custom role a member holds, if any.
+export const titleName = (guild: Guild, titleId?: string) =>
+  titleId === undefined
+    ? undefined
+    : guild.titles.find((t) => t.id === titleId)?.name;
 export const guildOfChannel = (guilds: Guild[], channelId: string) =>
   guilds.find((g) => g.channelId === channelId);
+// The newest player line of each guild's channel; the history is in time
+// order and the host sends a guild's tail before the guild.
+export function newestLines(guilds: Guild[], messages: Message[]) {
+  const lines: Record<string, PlayerLine> = {};
+  for (const guild of guilds)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.channelId !== guild.channelId || m.source !== "player") continue;
+      lines[guild.id] = m;
+      break;
+    }
+  return lines;
+}
 // The rules of the server's guild owner, so the page offers only what it
 // would accept; the server decides anyway.
 export const mayInvite = (role?: GuildRole) =>
@@ -111,6 +154,16 @@ export function guildNotices(
       notices.push(`Вас исключили из гильдии «${removal.name}»`);
     else if (removal.reason === "disbanded")
       notices.push(`Гильдия «${removal.name}» распущена`);
+  // The player's own withdrawal is told by its request's result.
+  for (const ended of event.applicationsEnded)
+    if (ended.reason === "accepted")
+      notices.push(`Заявку в гильдию «${ended.name}» приняли`);
+    else if (ended.reason === "rejected")
+      notices.push(`Заявку в гильдию «${ended.name}» отклонили`);
+    else if (ended.reason === "expired")
+      notices.push(`Заявка в гильдию «${ended.name}» истекла`);
+    else if (ended.reason === "disbanded")
+      notices.push(`Гильдия «${ended.name}» распущена, заявка снята`);
   for (const guild of event.guilds) {
     const previous = before.find((g) => g.id === guild.id);
     if (!previous) continue;
@@ -126,6 +179,20 @@ export function guildNotices(
       );
     if (was?.mute && now && !now.mute)
       notices.push(`Мут в гильдии «${guild.name}» снят`);
+    const title = titleName(guild, now?.title);
+    if (was && now && was.title !== now.title)
+      notices.push(
+        title
+          ? `Ваша роль в гильдии «${guild.name}»: «${title}»`
+          : `Роль «${titleName(previous, was.title) ?? ""}» в гильдии «${guild.name}» снята`,
+      );
+    for (const request of guild.joinRequests)
+      if (
+        // A promotion brings the whole list: only news to someone who answered before.
+        mayInvite(was?.role) &&
+        !previous.joinRequests.some((r) => r.id === request.id)
+      )
+        notices.push(`Заявка в гильдию «${guild.name}» от ${request.name}`);
     const master = guild.members.find((m) => m.role === "master");
     const previousMaster = previous.members.find((m) => m.role === "master");
     if (master && master.id !== previousMaster?.id && master.id !== selfId)
@@ -193,6 +260,32 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
         return `${label}: мут в гильдии снят`;
       case "disband":
         return `Гильдия «${label}» распущена`;
+      case "createTitle":
+        return `Роль «${action.name}» создана`;
+      case "renameTitle":
+        return `Роль «${label}» теперь «${action.name}»`;
+      case "deleteTitle":
+        return `Роль «${label}» удалена`;
+      case "setTitle":
+        return action.titleId === undefined
+          ? `${label}: роль снята`
+          : `${label}: роль выдана`;
+      case "setInfo":
+        return action.info
+          ? `Информация о гильдии «${name}» сохранена`
+          : `Информация о гильдии «${name}» очищена`;
+      case "setListed":
+        return action.listed
+          ? `Гильдия «${name}» видна в каталоге`
+          : `Гильдия «${name}» скрыта из каталога`;
+      case "apply":
+        return `Заявка в гильдию «${label}» отправлена`;
+      case "withdraw":
+        return `Заявка в гильдию «${label}» отозвана`;
+      case "answerRequest":
+        return action.accept
+          ? `${label} принят(а) в гильдию «${name}»`
+          : `Заявка ${label} отклонена`;
     }
   }
   function result(event: GuildResult) {
@@ -222,9 +315,18 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
         ? s.selectedGuild
         : (event.guilds[0]?.id ?? null);
     const dialog = s.guildMute;
+    const motd = s.guildsKnown
+      ? Object.fromEntries(
+          Object.entries(s.guildMotd).filter(([id]) =>
+            event.guilds.some((g) => g.id === id),
+          ),
+        )
+      : newestLines(event.guilds, s.messages);
     store.setState({
       guilds: event.guilds,
       invites: event.invites,
+      guildMotd: motd,
+      applications: event.applications,
       guildLimits: event.limits,
       guildsKnown: true,
       selectedGuild: selected,
@@ -289,6 +391,57 @@ export function makeGuilds(store: StoreApi<ChatState>, send: Send) {
     },
     disband(guildId: string) {
       request({ action: "disband", guildId }, guildName(guildId));
+    },
+    createTitle(guildId: string, name: string) {
+      const value = name.trim();
+      if (value) request({ action: "createTitle", guildId, name: value });
+    },
+    renameTitle(guildId: string, titleId: string, name: string, was: string) {
+      const value = name.trim();
+      if (value)
+        request({ action: "renameTitle", guildId, titleId, name: value }, was);
+    },
+    deleteTitle(guildId: string, titleId: string, name: string) {
+      request({ action: "deleteTitle", guildId, titleId }, name);
+    },
+    // Blank text clears the information.
+    setInfo(guildId: string, info: string) {
+      request({ action: "setInfo", guildId, info: info.trim() ? info : "" });
+    },
+    setListed(guildId: string, listed: boolean) {
+      request({ action: "setListed", guildId, listed });
+    },
+    // A request to join from the catalog; name is the guild's, for the notice.
+    apply(guildId: string, name: string) {
+      request({ action: "apply", guildId }, name);
+    },
+    withdraw(guildId: string, name: string) {
+      request({ action: "withdraw", guildId }, name);
+    },
+    answerRequest(
+      guildId: string,
+      playerId: string,
+      accept: boolean,
+      name: string,
+    ) {
+      request({ action: "answerRequest", guildId, playerId, accept }, name);
+    },
+    // No titleId takes the member's custom role away.
+    setTitle(
+      guildId: string,
+      playerId: string,
+      titleId: string | undefined,
+      name: string,
+    ) {
+      request(
+        {
+          action: "setTitle",
+          guildId,
+          playerId,
+          ...(titleId === undefined ? {} : { titleId }),
+        },
+        name,
+      );
     },
     openMute(guildId: string, playerId: string, name: string) {
       store.setState({

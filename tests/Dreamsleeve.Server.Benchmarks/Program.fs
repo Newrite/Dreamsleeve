@@ -208,6 +208,7 @@ let private start count (probe: Probe) = task {
             { Loaded = []
               Profiles = []
               NextId = 1UL
+              NextTitleId = 1UL
               Writer = guildWriter.Ref
               WriterStopped = guildWriter.Completion }
 

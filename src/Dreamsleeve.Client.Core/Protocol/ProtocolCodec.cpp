@@ -152,6 +152,12 @@ namespace Dreamsleeve::Client::Wire
         packet.set_request_id(value.requestId);
         WriteGuild(*packet.mutable_guild_command(), value.action);
       }
+
+      void operator()(const GuildCatalogRequest& value) const
+      {
+        packet.set_request_id(value.requestId);
+        WriteGuildCatalog(*packet.mutable_guild_command(), value.query);
+      }
     };
 
     Result<ServerResponse> DecodeMovements(std::span<const std::byte> bytes)
@@ -309,11 +315,7 @@ namespace Dreamsleeve::Client::Wire
 
         return RequestRejected{
             packet.request_id(),
-            {
-                static_cast<RequestRejectionCode>(rejection.code()),
-                rejection.message(),
-                rejection.field()
-            }
+            {static_cast<RequestRejectionCode>(rejection.code()), rejection.message(), rejection.field()}
         };
       }
       case P::ServerPacket::kPresenceChanged: {
@@ -446,6 +448,12 @@ namespace Dreamsleeve::Client::Wire
         if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
         if (packet.guild_command_done().guild_id() == Domain::InvalidId) return Invalid("guild_id");
         return GuildCommandDone{packet.request_id(), packet.guild_command_done().guild_id()};
+      case P::ServerPacket::kGuildCatalogPage: {
+        if (!packet.has_request_id()) return Failure(ErrorCode::InvalidEnvelope, "request_id");
+        auto page = ReadGuildCatalog(packet.guild_catalog_page());
+        if (!page) return std::unexpected{page.error()};
+        return GuildCatalogPageReceived{packet.request_id(), std::move(*page)};
+      }
       case P::ServerPacket::PAYLOAD_NOT_SET:
         return Invalid("payload");
       default:

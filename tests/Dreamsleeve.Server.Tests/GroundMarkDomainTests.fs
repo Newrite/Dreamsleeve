@@ -23,7 +23,7 @@ let private epoch = DateTimeOffset.UnixEpoch
 let private note id author x text =
     GroundMark.create (markId id) (playerId author) (GroundMarkBody.Note (GroundNoteText.create 200 text |> ok)) (placement whiterun x) epoch
 let private death id author x label =
-    GroundMark.create (markId id) (playerId author) (GroundMarkBody.Death (DeathMarkText.create 64 label |> ok)) (placement whiterun x) epoch
+    GroundMark.create (markId id) (playerId author) (GroundMarkBody.Death (DeathReport.create (DeathMarkText.create 64 label |> ok) 10u 0u |> ok)) (placement whiterun x) epoch
 let private ids (marks: GroundMark list) = marks |> List.map (fun mark -> GroundMarkId.value mark.Id)
 
 let tests = testList "Dreamsleeve.Server.Domain.GroundMarks" [
@@ -38,6 +38,12 @@ let tests = testList "Dreamsleeve.Server.Domain.GroundMarks" [
         for invalid in [ "two\nlines"; "tab\there"; "bell\u0007"; null; String [| char 0xD800 |] ] do
             Expect.isError (DeathMarkText.create 64 invalid) (sprintf "Refused label %A" invalid)
         Expect.isError (DeathMarkText.create 2 "abc") "Label limit applies."
+        let label = DeathMarkText.create 64 "Убийца: волк" |> ok
+        let report = DeathReport.create label 32u 0u |> ok
+        Expect.equal (report.CharacterLevel, report.KillerLevel) (ValueSome 32u, ValueNone) "A zero killer level is none."
+        Expect.equal (DeathReport.create label 0u 5u) (Error (DomainError.MissingLevel "character_level")) "A new death needs the character's level."
+        let old = DeathReport.restore label (ValueSome 0u) ValueNone
+        Expect.equal (old.CharacterLevel, old.KillerLevel) (ValueNone, ValueNone) "A stored death may hold no levels."
         Expect.isError (GroundMarkId.create 0UL) "Zero is not a mark ID."
 
     testCase "rules require positive quotas, treat zero days as no expiry and finite distances" <| fun _ ->
@@ -104,7 +110,7 @@ let tests = testList "Dreamsleeve.Server.Domain.GroundMarks" [
 
     testCase "removal and expiry keep the per-author index consistent" <| fun _ ->
         let storage = GroundMarkStorage.create ()
-        let old = GroundMark.create (markId 1UL) (playerId 1UL) (GroundMarkBody.Death (DeathMarkText.create 64 "fall" |> ok)) (placement whiterun 0.0f) epoch
+        let old = GroundMark.create (markId 1UL) (playerId 1UL) (GroundMarkBody.Death (DeathReport.restore (DeathMarkText.create 64 "fall" |> ok) ValueNone ValueNone)) (placement whiterun 0.0f) epoch
         let fresh = GroundMark.create (markId 2UL) (playerId 1UL) (GroundMarkBody.Note (GroundNoteText.create 200 "n" |> ok)) (placement whiterun 0.0f) (epoch + TimeSpan.FromDays 29.0)
         GroundMarkStorage.add rules old storage |> ok |> ignore
         GroundMarkStorage.add rules fresh storage |> ok |> ignore

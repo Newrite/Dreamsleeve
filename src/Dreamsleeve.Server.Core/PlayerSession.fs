@@ -25,7 +25,7 @@ type PlayerSessionMessage =
     | SendChat of requestId: uint64 * ChatChannelId * ChatMessageText
     | PostAnnouncement of requestId: uint64 * AnnouncementRequest
     | PlaceGroundNote of requestId: uint64 * GroundNoteText * GroundMarkPlacement * GameDate
-    | ReportDeath of requestId: uint64 * DeathMarkText * GroundMarkPlacement * GameDate
+    | ReportDeath of requestId: uint64 * DeathReport * GroundMarkPlacement * GameDate
     | RemoveGroundMark of requestId: uint64 * GroundMarkId
     | Update of requestId: uint64 * PlayerUpdate
     | SetIdentityVisibility of requestId: uint64 * HiddenIdentity
@@ -1041,6 +1041,11 @@ module PlayerSession =
             | Active _ when state.Pending.Remove requestId -> send options request state context (ServerResponse.GuildCommandDone(requestId, guild))
             | Closing -> ()
             | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild reply."
+        | GuildEvent.CatalogPage(requestId, page) ->
+            match state.Phase with
+            | Active _ when state.Pending.Remove requestId -> send options request state context (ServerResponse.GuildCatalogPage(requestId, page))
+            | Closing -> ()
+            | Starting | Resolving _ | Reserving _ | Opening _ | Active _ -> close request state context "Unexpected guild catalog page."
         | GuildEvent.Refused(requestId, rejection) ->
             match state.Phase with
             | Active _ when state.Pending.Remove requestId -> sendRefusal options request state context DeliveryLane.Control requestId rejection
@@ -1165,8 +1170,8 @@ module PlayerSession =
             postAnnouncement options request state context requestId announcement
         | PlayerSessionMessage.PlaceGroundNote(requestId, text, placement, gameDate) ->
             placeMark options request state context requestId (GroundMarkBody.Note text) placement gameDate
-        | PlayerSessionMessage.ReportDeath(requestId, label, placement, gameDate) ->
-            placeMark options request state context requestId (GroundMarkBody.Death label) placement gameDate
+        | PlayerSessionMessage.ReportDeath(requestId, death, placement, gameDate) ->
+            placeMark options request state context requestId (GroundMarkBody.Death death) placement gameDate
         | PlayerSessionMessage.RemoveGroundMark(requestId, id) ->
             removeMark options request state context requestId id
         | PlayerSessionMessage.Update(requestId, command) ->
@@ -1216,7 +1221,7 @@ module PlayerSession =
         | PlayerSessionMessage.PresenceDetached _ | PlayerSessionMessage.GroundMarksDetached _ | PlayerSessionMessage.GuildsDetached _
         | PlayerSessionMessage.Stop -> true
         // The guild owner must be able to settle a request and open the session's guilds.
-        | PlayerSessionMessage.GuildEvent (GuildEvent.Done _ | GuildEvent.Refused _ | GuildEvent.Snapshot _)
+        | PlayerSessionMessage.GuildEvent (GuildEvent.Done _ | GuildEvent.CatalogPage _ | GuildEvent.Refused _ | GuildEvent.Snapshot _)
         | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Accepted _ | ChatRoomEvent.Rejected _ | ChatRoomEvent.Removed(ValueSome _, _))) -> true
         | PlayerSessionMessage.GuildEvent (GuildEvent.Changed _)
         | PlayerSessionMessage.GuildEvent (GuildEvent.Chat (ChatRoomEvent.Published _ | ChatRoomEvent.Removed(ValueNone, _)))

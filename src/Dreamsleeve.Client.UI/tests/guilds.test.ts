@@ -59,6 +59,10 @@ const guild = (
   channelId: channel.id,
   createdAt: 0,
   members,
+  titles: [],
+  info: "",
+  listed: true,
+  joinRequests: [],
 });
 const guildsEvent = (
   guilds: Guild[],
@@ -67,8 +71,19 @@ const guildsEvent = (
   type: "guilds",
   guilds,
   invites: [],
-  limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24 },
+  limits: {
+    perPlayer: 3,
+    members: 64,
+    nameMin: 3,
+    nameMax: 24,
+    titles: 10,
+    infoMax: 500,
+    joinRequests: 128,
+    applications: 10,
+  },
   removed: [],
+  applications: [],
+  applicationsEnded: [],
   ...extra,
 });
 const line = (id: string, channelId: string): Message => ({
@@ -305,6 +320,100 @@ describe("guilds in the chat", () => {
     );
   });
 
+  it("ask for custom roles in the master's words and tell the holder what they got", () => {
+    const { chat, sent, guilds } = inGuilds();
+    chat.guilds.createTitle("4", "  Казначей ");
+    expect(sent().at(-1)).toEqual({
+      type: "guild",
+      requestId: "g1",
+      action: "createTitle",
+      guildId: "4",
+      name: "Казначей",
+    });
+    chat.receive({ type: "guildResult", requestId: "g1", guildId: "4" });
+    expect(chat.store.getState().notice).toBe("Роль «Казначей» создана");
+    chat.guilds.setTitle("4", "7", "3", "Игрок 7");
+    expect(sent().at(-1)).toMatchObject({ action: "setTitle", titleId: "3" });
+    chat.guilds.setTitle("4", "7", undefined, "Игрок 7");
+    expect(sent().at(-1)).not.toHaveProperty("titleId");
+    chat.guilds.renameTitle("4", "3", "Хранитель", "Казначей");
+    expect(sent().at(-1)).toMatchObject({
+      action: "renameTitle",
+      titleId: "3",
+      name: "Хранитель",
+    });
+    chat.guilds.deleteTitle("4", "3", "Хранитель");
+    expect(sent().at(-1)).toMatchObject({
+      action: "deleteTitle",
+      titleId: "3",
+    });
+    chat.guilds.setInfo("4", "Сбор по пятницам\n");
+    expect(sent().at(-1)).toEqual({
+      type: "guild",
+      requestId: "g6",
+      action: "setInfo",
+      guildId: "4",
+      info: "Сбор по пятницам\n",
+    });
+    chat.receive({ type: "guildResult", requestId: "g6", guildId: "4" });
+    expect(chat.store.getState().notice).toBe(
+      "Информация о гильдии «Вороны» сохранена",
+    );
+    // Blank text clears it.
+    chat.guilds.setInfo("4", "  ");
+    expect(sent().at(-1)).toMatchObject({ action: "setInfo", info: "" });
+
+    // The member's own role: given, then taken away with its deletion.
+    const [ravensGuild, companionsGuild] = guilds;
+    const titled = {
+      ...companionsGuild,
+      titles: [{ id: "9", name: "Летописец" }],
+      members: [member("8", "master"), member(SELF, "member", { title: "9" })],
+    };
+    chat.receive(guildsEvent([ravensGuild, titled]));
+    expect(chat.store.getState().notice).toBe(
+      "Ваша роль в гильдии «Соратники»: «Летописец»",
+    );
+    chat.receive(
+      guildsEvent([ravensGuild, { ...companionsGuild, titles: [] }]),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Роль «Летописец» в гильдии «Соратники» снята",
+    );
+  });
+
+  it("tell a master of a new join request and an applicant how theirs ended", () => {
+    const { chat, sent, guilds } = inGuilds();
+    const [ravensGuild, companionsGuild] = guilds;
+    const request = { id: "9", name: "Ингрид", createdAt: 0, expires: 0 };
+    chat.receive(
+      guildsEvent([
+        { ...ravensGuild, joinRequests: [request] },
+        companionsGuild,
+      ]),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Заявка в гильдию «Вороны» от Ингрид",
+    );
+    chat.guilds.answerRequest("4", "9", true, "Ингрид");
+    expect(sent().at(-1)).toMatchObject({
+      action: "answerRequest",
+      guildId: "4",
+      playerId: "9",
+      accept: true,
+    });
+    chat.guilds.apply("8", "Совы");
+    expect(sent().at(-1)).toMatchObject({ action: "apply", guildId: "8" });
+    chat.receive(
+      guildsEvent(guilds, {
+        applicationsEnded: [{ guildId: "8", name: "Совы", reason: "rejected" }],
+      }),
+    );
+    expect(chat.store.getState().notice).toBe(
+      "Заявку в гильдию «Совы» отклонили",
+    );
+  });
+
   it("mute a member through a dialog that keeps a refusal and closes on success", () => {
     const { chat, sent } = inGuilds();
     chat.guilds.openMute("4", "7", "Игрок 7");
@@ -352,6 +461,48 @@ describe("guilds in the chat", () => {
     });
     chat.receive({ type: "moderationResult", requestId: "gd1" });
     expect(chat.store.getState().notice).toBe("Сообщение удалено");
+  });
+
+  it("keep the newest guild line of the login as the message of the day", () => {
+    const { chat, guilds } = inGuilds();
+    const [ravensGuild] = guilds;
+    const motd = () =>
+      Object.fromEntries(
+        Object.entries(chat.store.getState().guildMotd).map(([id, m]) => [
+          id,
+          m.id,
+        ]),
+      );
+    expect(motd()).toEqual({ "4": "2", "5": "3" });
+    // A line later in the session is chat, not the message of the day.
+    chat.receive({ type: "messages", messages: [line("9", ravens.id)] });
+    chat.receive(guildsEvent(guilds));
+    expect(motd()).toEqual({ "4": "2", "5": "3" });
+    // It goes with its line and with its guild.
+    chat.receive({
+      type: "messagesRemoved",
+      channelId: companions.id,
+      messageIds: ["3"],
+    });
+    expect(motd()).toEqual({ "4": "2" });
+    chat.receive(guildsEvent([]));
+    expect(motd()).toEqual({});
+    chat.receive(guildsEvent([ravensGuild]));
+    expect(motd()).toEqual({});
+    // A refresh of the same session keeps it as the host now shows it.
+    const { chat: fresh } = inGuilds();
+    fresh.receive({
+      type: "snapshot",
+      refresh: true,
+      serverName: "Голоса Тамриэля",
+      channels: [global, system, ravens, companions],
+      messages: [{ ...line("2", ravens.id), text: "***" }],
+      players: [],
+      selfId: SELF,
+    });
+    const kept = fresh.store.getState().guildMotd;
+    expect(Object.keys(kept)).toEqual(["4"]);
+    expect(kept["4"].text).toBe("***");
   });
 });
 
@@ -408,21 +559,43 @@ describe("guild events at the bridge", () => {
             online: true,
             joinedAt: 0,
             mute: { reason: "Флуд" },
+            title: "2",
           },
         ],
+        titles: [{ id: "2", name: "Казначей" }],
+        info: "Сбор по пятницам\nу Йоррваскра",
+        listed: true,
+        joinRequests: [{ id: "9", name: "Ингрид", createdAt: 0, expires: 0 }],
       },
     ],
     invites: [
       { guildId: "5", guildName: "Соратники", invitedBy: "7", expires: 0 },
     ],
-    limits: { perPlayer: 3, members: 64, nameMin: 3, nameMax: 24 },
+    limits: {
+      perPlayer: 3,
+      members: 64,
+      nameMin: 3,
+      nameMax: 24,
+      titles: 10,
+      infoMax: 500,
+      joinRequests: 128,
+      applications: 10,
+    },
     removed: [{ guildId: "6", name: "Изгнанники", reason: "disbanded" }],
+    applications: [{ guildId: "8", guildName: "Совы", expires: 0 }],
+    applicationsEnded: [{ guildId: "3", name: "Лисы", reason: "rejected" }],
   };
   it("accept what the host sends and refuse what it never would", () => {
     expect(expectHostEvent(JSON.stringify(sample)).type).toBe("guilds");
     const broken = structuredClone(sample);
     broken.guilds[0].members[0].role = "king";
     expect(parseHostEvent(JSON.stringify(broken))).toEqual({
+      ok: false,
+      error: "schema",
+    });
+    const untitled = structuredClone(sample);
+    untitled.guilds[0].members[0].title = 2 as never;
+    expect(parseHostEvent(JSON.stringify(untitled))).toEqual({
       ok: false,
       error: "schema",
     });

@@ -418,7 +418,6 @@ namespace
 // controlled-auth production server fixture and requires the success sentinel.
 TEST_CASE("Phantom production Streaming real UDP smoke" * doctest::skip(!Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5)))
 {
-  REQUIRE(Dreamsleeve::Client::Wire::Version == 26);
   const auto portText = Environment("DREAMSLEEVE_PHANTOM_SMOKE_PORT", 5);
   REQUIRE(portText);
   const auto port = std::stoul(*portText);

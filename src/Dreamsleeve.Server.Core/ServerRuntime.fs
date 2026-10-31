@@ -435,8 +435,8 @@ module ServerRuntime =
         | ClientCommand.PostAnnouncement announcement -> CommandRoute.Session(PlayerSessionMessage.PostAnnouncement(requestId, announcement))
         | ClientCommand.PlaceGroundNote(text, placement, gameDate) ->
             CommandRoute.Session(PlayerSessionMessage.PlaceGroundNote(requestId, text, placement, gameDate))
-        | ClientCommand.ReportDeath(label, placement, gameDate) ->
-            CommandRoute.Session(PlayerSessionMessage.ReportDeath(requestId, label, placement, gameDate))
+        | ClientCommand.ReportDeath(death, placement, gameDate) ->
+            CommandRoute.Session(PlayerSessionMessage.ReportDeath(requestId, death, placement, gameDate))
         | ClientCommand.RemoveGroundMark id -> CommandRoute.Session(PlayerSessionMessage.RemoveGroundMark(requestId, id))
         | ClientCommand.SetIdentityVisibility hiding -> CommandRoute.Session(PlayerSessionMessage.SetIdentityVisibility(requestId, hiding))
         | ClientCommand.ChangeDisplayName name -> CommandRoute.Session(PlayerSessionMessage.ChangeDisplayName(requestId, name))

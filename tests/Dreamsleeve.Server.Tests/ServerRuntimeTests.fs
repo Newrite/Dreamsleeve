@@ -113,6 +113,7 @@ let private guildStorage (writer: Agent<GuildWrite>) : GuildPersistence = {
     Loaded = []
     Profiles = []
     NextId = 1UL
+    NextTitleId = 1UL
     Writer = writer.Ref.TryReliable().Value
     WriterStopped = writer.Completion
 }

@@ -386,6 +386,7 @@ let private startGame publishHttp settings (game: GameSettings) moderation pseud
                             Loaded = guilds.Guilds
                             Profiles = guilds.Profiles
                             NextId = guilds.NextId
+                            NextTitleId = guilds.NextTitleId
                             Writer = guildWriter.Ref
                             WriterStopped = guildWriter.Completion
                         }

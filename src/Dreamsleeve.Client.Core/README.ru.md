@@ -285,7 +285,7 @@ clear-location очищает только положение; actor values и d
 Принятый PlayerInfo печатается через read строкой `player <json>`.
 Позиция измеряется игровыми world units, вращение XYZ — радианами.
 Также: `resume`, `signout`, `forget`, `reset-password <code>` (вход), `announce …`, `location <json>`,
-`note <text>` / `death <label>` / `unmark <id>` / `marks` (метки), `hide <on|except-marks|off>`,
+`note <text>` / `death <level> <killer level> [label]` / `unmark <id>` / `marks` (метки), `hide <on|except-marks|off>`,
 `name <имя>` (отображаемое имя), `mod …` (инструменты модератора), `guild …` (гильдии: create,
 invite, accept, decline, leave, exclude, role, transfer, mute, unmute, disband, say, delete; книга
 гильдий печатается строками `guilds`/`guild`/`member`/`invite` при каждом изменении); полный

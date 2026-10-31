@@ -26,19 +26,32 @@ public:
       bool operator==(const Removal&) const = default;
     };
 
-    // Removals kept: a consumer that reads every few frames misses none.
+    // A join request of the player that ended, and why, at the revision it ended.
+    struct ApplicationEnd
+    {
+      std::uint64_t               revision{};
+      Domain::GuildId             guildId{};
+      std::string                 name;
+      Domain::GuildApplicationEnd reason{Domain::GuildApplicationEnd::Withdrawn};
+
+      bool operator==(const ApplicationEnd&) const = default;
+    };
+
+    // Removals and ended requests kept: a consumer that reads every few frames misses none.
     static constexpr std::size_t RecentRemovals = 16;
 
     GuildBook() = default;
 
     // A complete replacement (GuildsSnapshot).
     static Domain::Result<GuildBook> TryCreate(
-      std::vector<Domain::Guild>       guilds,
-      std::vector<Domain::GuildInvite> invites,
-      Domain::GuildLimits              limits)
+      std::vector<Domain::Guild>            guilds,
+      std::vector<Domain::GuildInvite>      invites,
+      Domain::GuildLimits                   limits,
+      std::vector<Domain::GuildApplication> applications = {})
     {
       GuildBook book;
-      book.limits = limits;
+      book.limits       = limits;
+      book.applications = std::move(applications);
       for (auto& guild : guilds)
         if (auto added = book.Add(std::move(guild)); !added) return std::unexpected{std::move(added.error())};
 
@@ -68,6 +81,24 @@ public:
     const Domain::GuildLimits& Limits() const noexcept
     {
       return limits;
+    }
+
+    // The player's pending join requests, oldest first.
+    std::span<const Domain::GuildApplication> Applications() const noexcept
+    {
+      return applications;
+    }
+
+    // The latest ended join requests, oldest first, like Removals.
+    std::span<const ApplicationEnd> ApplicationEnds() const noexcept
+    {
+      return applicationEnds;
+    }
+
+    const Domain::GuildApplication* FindApplication(Domain::GuildId guildId) const noexcept
+    {
+      const auto found = std::ranges::find(applications, guildId, &Domain::GuildApplication::guildId);
+      return found == applications.end() ? nullptr : &*found;
     }
 
     // Grows with every change; a replacement starts again from zero.
@@ -132,7 +163,69 @@ public:
       return {};
     }
 
-    // A member joined, or their role, mute, online state or name changed.
+    // The guild's custom roles, complete; a deleted role's holders came before.
+    Domain::OperationResult PutTitles(Domain::GuildId guildId, std::vector<Domain::GuildTitle> titles)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->titles = std::move(titles);
+      ++revision;
+      return {};
+    }
+
+    // The guild's pending join requests, complete.
+    Domain::OperationResult PutJoinRequests(Domain::GuildId guildId, std::vector<Domain::GuildJoinRequest> requests)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->joinRequests = std::move(requests);
+      ++revision;
+      return {};
+    }
+
+    Domain::OperationResult PutListed(Domain::GuildId guildId, bool listed)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->listed = listed;
+      ++revision;
+      return {};
+    }
+
+    // The player asked to join a guild.
+    Domain::OperationResult PutApplication(Domain::GuildApplication application)
+    {
+      if (FindApplication(application.guildId))
+        return std::unexpected{
+            Domain::Error{Domain::ErrorCode::DuplicateKey, "guild_id"}
+        };
+      applications.push_back(std::move(application));
+      ++revision;
+      return {};
+    }
+
+    // A join request of the player ended: withdrawn, answered, expired or the guild disbanded.
+    Domain::OperationResult RemoveApplication(Domain::GuildId guildId, Domain::GuildApplicationEnd reason)
+    {
+      const auto found = std::ranges::find(applications, guildId, &Domain::GuildApplication::guildId);
+      if (found == applications.end()) return UnknownGuild();
+      if (applicationEnds.size() == RecentRemovals) applicationEnds.erase(applicationEnds.begin());
+      applicationEnds.push_back({++revision, guildId, std::move(found->guildName), reason});
+      applications.erase(found);
+      return {};
+    }
+
+    // The master wrote or cleared (empty) the guild information.
+    Domain::OperationResult PutInfo(Domain::GuildId guildId, std::string info)
+    {
+      auto* guild = FindMutable(guildId);
+      if (!guild) return UnknownGuild();
+      guild->info = std::move(info);
+      ++revision;
+      return {};
+    }
+
+    // A member joined, or their role, custom role, mute, online state or name changed.
     Domain::OperationResult PutMember(Domain::GuildId guildId, Domain::GuildMember member)
     {
       auto* guild = FindMutable(guildId);
@@ -199,11 +292,13 @@ private:
       return found == guilds.end() ? nullptr : &*found;
     }
 
-    std::vector<Domain::Guild>       guilds;
-    std::vector<Domain::GuildInvite> invites;
-    Domain::GuildLimits              limits;
-    std::uint64_t                    revision{};
-    std::vector<Removal>             removals;
+    std::vector<Domain::Guild>            guilds;
+    std::vector<Domain::GuildInvite>      invites;
+    Domain::GuildLimits                   limits;
+    std::uint64_t                         revision{};
+    std::vector<Removal>                  removals;
+    std::vector<Domain::GuildApplication> applications;
+    std::vector<ApplicationEnd>           applicationEnds;
   };
 
 }

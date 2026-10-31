@@ -57,6 +57,10 @@ combatHideBubbles = false
 raceMenuHidePlayers = true
 # Online tab layout: cards | list.
 onlineView = "cards"
+# Column the online list is ordered by: name | level | place | activity | health.
+onlineSort = "name"
+# Order the online list from the end: Я to А, high to low.
+onlineSortDescending = false
 # Fade each message out a while after it arrives; nothing fades while the chat is open.
 fade = true
 # Seconds a message stays before it fades, 0..120.

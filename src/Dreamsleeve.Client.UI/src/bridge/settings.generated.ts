@@ -15,6 +15,8 @@ export interface Settings {
   bubbleMaxWidth: number;
   bubbleBackground: number;
   onlineView: "cards" | "list";
+  onlineSort: "name" | "level" | "place" | "activity" | "health";
+  onlineSortDescending: boolean;
   fade: boolean;
   delay: number;
   duration: number;
@@ -107,6 +109,8 @@ export const defaults: Settings = {
   bubbleMaxWidth: 320,
   bubbleBackground: 0.65,
   onlineView: "cards",
+  onlineSort: "name",
+  onlineSortDescending: false,
   fade: true,
   delay: 12,
   duration: 1,

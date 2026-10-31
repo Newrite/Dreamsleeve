@@ -43,7 +43,9 @@ export namespace Dreamsleeve::Client
     std::uint64_t               requestId{};
     std::string                 label;
     Domain::GroundMarkPlacement placement;
-    Domain::GameDate            gameDate;  // Required: the calendar at the death.
+    Domain::GameDate            gameDate;          // Required: the calendar at the death.
+    std::uint32_t               characterLevel{};  // Required: at least 1.
+    std::uint32_t               killerLevel{};     // Zero: no killer, or one without a level.
   };
 
   // The author's own mark; a moderator's, any mark.
@@ -203,6 +205,67 @@ export namespace Dreamsleeve::Client
     Domain::GuildId guildId{};
   };
 
+  // Custom roles: the master's. A name follows the rules of a guild name.
+  struct CreateGuildTitle
+  {
+    Domain::GuildId guildId{};
+    std::string     name;
+  };
+
+  struct RenameGuildTitle
+  {
+    Domain::GuildId      guildId{};
+    Domain::GuildTitleId titleId{};
+    std::string          name;
+  };
+
+  // Its holders lose it.
+  struct DeleteGuildTitle
+  {
+    Domain::GuildId      guildId{};
+    Domain::GuildTitleId titleId{};
+  };
+
+  // A member holds at most one; absent takes it away.
+  struct SetGuildMemberTitle
+  {
+    Domain::GuildId                     guildId{};
+    Domain::PlayerId                    playerId{};
+    std::optional<Domain::GuildTitleId> titleId;
+  };
+
+  // The master's text about the guild; empty clears it.
+  struct SetGuildInfo
+  {
+    Domain::GuildId guildId{};
+    std::string     info;
+  };
+
+  // The master shows the guild in the public catalog or hides it.
+  struct SetGuildListed
+  {
+    Domain::GuildId guildId{};
+    bool            listed{};
+  };
+
+  // A join request to a listed guild; the master and officers answer.
+  struct ApplyToGuild
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct WithdrawGuildApplication
+  {
+    Domain::GuildId guildId{};
+  };
+
+  struct AnswerGuildJoinRequest
+  {
+    Domain::GuildId  guildId{};
+    Domain::PlayerId playerId{};
+    bool             accept{};
+  };
+
   using GuildAction = std::variant<
     CreateGuild,
     InviteToGuild,
@@ -213,12 +276,29 @@ export namespace Dreamsleeve::Client
     TransferGuild,
     MuteGuildMember,
     UnmuteGuildMember,
-    DisbandGuild>;
+    DisbandGuild,
+    CreateGuildTitle,
+    RenameGuildTitle,
+    DeleteGuildTitle,
+    SetGuildMemberTitle,
+    SetGuildInfo,
+    SetGuildListed,
+    ApplyToGuild,
+    WithdrawGuildApplication,
+    AnswerGuildJoinRequest>;
 
   struct GuildRequest
   {
     std::uint64_t requestId{};
     GuildAction   action;
+  };
+
+  // One page of the public catalog; settled with GuildCatalogListed. Shares
+  // the guild requests' pending budget.
+  struct GuildCatalogRequest
+  {
+    std::uint64_t             requestId{};
+    Domain::GuildCatalogQuery query;
   };
 
   // Complete sampled values, not a patch. Only adjacent pending samples from
@@ -277,6 +357,7 @@ export namespace Dreamsleeve::Client
     ClearPlayerMarks,
     DeleteChatMessage,
     GuildRequest,
+    GuildCatalogRequest,
     LocalMovement,
     LocalLocation,
     LocalActorValues,
@@ -421,6 +502,12 @@ export namespace Dreamsleeve::Client
     Domain::GuildId guildId{};
   };
 
+  // The page of the catalog a GuildCatalogRequest asked for.
+  struct GuildCatalogListed
+  {
+    Domain::GuildCatalogPage page;
+  };
+
   // Exactly one result settles every command with a request ID: the server's
   // answer, its refusal or a local failure, with the command's generation.
   struct CommandResult
@@ -440,6 +527,7 @@ export namespace Dreamsleeve::Client
       MarksCleared,
       MessageDeleted,
       GuildDone,
+      GuildCatalogListed,
       ServerRejection,
       CommandFailureCode>;
 
@@ -983,28 +1071,28 @@ private:
       return pendingResults.size();
     }
 
-    mutable std::mutex                   mutex;
-    Phantom::Exchange                    phantoms;
-    std::condition_variable              wake;
+    mutable std::mutex      mutex;
+    Phantom::Exchange       phantoms;
+    std::condition_variable wake;
 
-    const std::size_t                    maxCommands;
-    std::vector<QueuedClientCommand>     commands;
-    bool                                 inputClosed{};
-    std::uint64_t                        nextRequestId{1};
+    const std::size_t                maxCommands;
+    std::vector<QueuedClientCommand> commands;
+    bool                             inputClosed{};
+    std::uint64_t                    nextRequestId{1};
 
-    std::vector<CommandResult>           pendingResults;
-    ClientStatus                         status;
-    Domain::HiddenIdentity               hideIdentity{Domain::HiddenIdentity::None};
-    std::optional<std::size_t>           routeChoice;
+    std::vector<CommandResult> pendingResults;
+    ClientStatus               status;
+    Domain::HiddenIdentity     hideIdentity{Domain::HiddenIdentity::None};
+    std::optional<std::size_t> routeChoice;
 
     std::optional<AuthenticationRequest> pendingAuthentication;
     bool                                 disconnectRequested{};
     bool                                 authenticationCanceled{};
     bool                                 stopRequested{};
 
-    StateUpdateQueue::Ptr                state;
-    ChangeBatch                          scratch;                     // Owner only.
-    bool                                 needsInitialSnapshot{true};  // Owner only.
+    StateUpdateQueue::Ptr state;
+    ChangeBatch           scratch;                     // Owner only.
+    bool                  needsInitialSnapshot{true};  // Owner only.
   };
 
 }

@@ -98,6 +98,81 @@ TEST_CASE("A guild book holds each guild, member and invitation once and refuses
   CHECK(book->Removals().back().revision == book->Revision());
 }
 
+TEST_CASE("A guild's custom roles are replaced whole and a member keeps the one the server gave")
+{
+  auto book = GuildBook::TryCreate({MakeGuild(4)}, {}, {3, 64, 3, 24, 10});
+  REQUIRE(book);
+  CHECK(book->Limits().maxTitles == 10);
+
+  const std::vector<Domain::GuildTitle> titles{
+      {1, "Казначей"  },
+      {2, "Новобранец"}
+  };
+  const auto before = book->Revision();
+  REQUIRE(book->PutTitles(4, titles));
+  CHECK(book->Revision() == before + 1);
+  CHECK(book->Find(4)->titles == titles);
+  CHECK_FALSE(book->PutTitles(6, titles));
+
+  auto holder    = MakeMember(8);
+  holder.titleId = 2;
+  REQUIRE(book->PutMember(4, holder));
+  CHECK(book->Find(4)->members[1].titleId == 2);
+
+  // A deletion: the holder loses the role first, then the list.
+  holder.titleId.reset();
+  REQUIRE(book->PutMember(4, holder));
+  REQUIRE(book->PutTitles(4, {titles[0]}));
+  CHECK_FALSE(book->Find(4)->members[1].titleId);
+  CHECK(book->Find(4)->titles.size() == 1);
+}
+
+TEST_CASE("Join requests, the catalog flag and the player's own requests follow the server")
+{
+  auto book = GuildBook::TryCreate(
+    {
+        MakeGuild(4)
+  },
+    {},
+    {},
+    {{6, "Совы", 2000}});
+  REQUIRE(book);
+  REQUIRE(book->Applications().size() == 1);
+  CHECK(book->FindApplication(6));
+
+  const std::vector<Domain::GuildJoinRequest> requests{
+      {Domain::PlayerData{9, "user9", "Name9"}, 1000, 2000}
+  };
+  REQUIRE(book->PutJoinRequests(4, requests));
+  CHECK(book->Find(4)->joinRequests == requests);
+  REQUIRE(book->PutListed(4, false));
+  CHECK_FALSE(book->Find(4)->listed);
+  CHECK_FALSE(book->PutJoinRequests(5, requests));
+
+  CHECK_FALSE(book->PutApplication({6, "Совы", 3000}));
+  REQUIRE(book->PutApplication({7, "Лисы", 3000}));
+  const auto before = book->Revision();
+  REQUIRE(book->RemoveApplication(7, Domain::GuildApplicationEnd::Rejected));
+  CHECK_FALSE(book->RemoveApplication(7, Domain::GuildApplicationEnd::Rejected));
+  REQUIRE(book->ApplicationEnds().size() == 1);
+  CHECK(book->ApplicationEnds()[0] == GuildBook::ApplicationEnd{before + 1, 7, "Лисы", Domain::GuildApplicationEnd::Rejected});
+  CHECK(book->Applications().size() == 1);
+}
+
+TEST_CASE("A guild's information is replaced as the server sent it, empty when cleared")
+{
+  auto book = GuildBook::TryCreate({MakeGuild(4)}, {}, {});
+  REQUIRE(book);
+  CHECK(book->Find(4)->info.empty());
+  const auto before = book->Revision();
+  REQUIRE(book->PutInfo(4, "Сбор по пятницам"));
+  CHECK(book->Revision() == before + 1);
+  CHECK(book->Find(4)->info == "Сбор по пятницам");
+  REQUIRE(book->PutInfo(4, ""));
+  CHECK(book->Find(4)->info.empty());
+  CHECK_FALSE(book->PutInfo(6, "x"));
+}
+
 TEST_CASE("A removed channel takes its undelivered content along and the next delta reports it absent")
 {
   ClientModel model;

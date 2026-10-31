@@ -149,8 +149,31 @@ Schema 14 (`1791590400000_name_colors.sql`) adds `profiles.name_color`: the colo
 player's name in chat, 0xRRGGBB (docs/ModerationAndNamesRu.md). Every existing profile gets
 a random one of the 16 colors new accounts get theirs from (`NameColor.palette`); the
 account store picks one for each new profile. Readability is checked when a player chooses
-a color, not when a profile loads. DOWN drops the column. This is the schema version the
-server supports (`SqliteDatabase.SchemaVersion`).
+a color, not when a profile loads. DOWN drops the column.
+
+Schema 15 (`1791676800000_guild_titles.sql`) adds custom roles of a guild (docs/GuildsRu.md):
+`guild_titles` with the guild, the name and a lower-case `name_key` unique inside the guild,
+and `guild_members.title_id`, the one role a member holds. Roles go with their guild
+(`ON DELETE CASCADE`); AUTOINCREMENT never reuses an ID. `title_id` has no foreign key, so
+DOWN can drop the column: `SqliteGuildStore` clears the holders in the same transaction that
+deletes a role and refuses to load a member holding a role of another guild.
+
+Schema 16 (`1791763200000_guild_info.sql`) adds `guilds.info`, the text the master writes
+about the guild (docs/GuildsRu.md), NULL when there is none. `[Guilds] InfoMaxLength`
+bounds it when the master writes; a stored text loads up to the largest bound the server
+allows. DOWN drops the column.
+
+Schema 17 (`1791849600000_guild_catalog.sql`) adds the public guild catalog: `guilds.listed`
+(1 by default, so every existing guild shows) and `guild_join_requests`, the players' pending
+requests to join with their expiry. A request goes with its guild and with the player's
+profile (`ON DELETE CASCADE`); its answer, withdrawal or expiry deletes it. DOWN drops both.
+
+Schema 18 (`1791936000000_death_mark_levels.sql`) adds `ground_marks.character_level` and
+`killer_level`: the dead character's level and the killer's at the moment of death
+(docs/GroundMarksRu.md). Only death marks hold them (CHECK `kind = 2`), at least 1, no upper
+bound; marks stored before keep NULL in both and are shown without levels, and a NULL
+`killer_level` also means no killer or one without a level. DOWN drops both columns.
+This is the schema version the server supports (`SqliteDatabase.SchemaVersion`).
 
 ## Verification
 

@@ -49,7 +49,11 @@ module SqliteGroundMarkStore =
             let body =
                 match mark.kind with
                 | 1L -> GroundNoteText.create Int32.MaxValue mark.text |> Result.map GroundMarkBody.Note
-                | 2L -> DeathMarkText.create Int32.MaxValue mark.text |> Result.map GroundMarkBody.Death
+                | 2L ->
+                    let level = Option.map uint32 >> ValueOption.ofOption
+                    DeathMarkText.create Int32.MaxValue mark.text
+                    |> Result.map (fun label ->
+                        GroundMarkBody.Death(DeathReport.restore label (level mark.character_level) (level mark.killer_level)))
                 | _ -> Error(DomainError.InvalidLimit("kind", 0))
             let characterName =
                 match mark.character_name with
@@ -115,14 +119,16 @@ module SqliteGroundMarkStore =
            SqliteStored.Column.Text
            SqliteStored.Column.Integer
            SqliteStored.Column.PositiveInteger
-           SqliteStored.Column.Text |]
+           SqliteStored.Column.Text
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer)
+           (SqliteStored.Column.Nullable SqliteStored.Column.Integer) |]
 
     /// All marks, ascending by ID, with the storage high-water mark. Expiry is
     /// the owner's rule and is applied after loading.
     let loadAll config token =
         SqliteAccountStore.withContext config token (fun context ->
             use statement = SqliteStatements.command context
-                                "SELECT m.id,m.author_id,m.character_name,m.kind,m.text,m.plugin_name,m.local_form_id,m.x,m.y,m.z,m.heading,m.created_at,m.author_pseudonym,m.game_era,m.game_year,m.game_month,m.game_day,m.game_day_of_week,m.game_hour,m.game_minute,p.player_id,p.account_id,p.display_name,p.name_color,a.id,a.username FROM ground_marks m JOIN profiles p ON m.author_id=p.player_id JOIN accounts a ON p.account_id=a.id ORDER BY m.id"
+                                "SELECT m.id,m.author_id,m.character_name,m.kind,m.text,m.plugin_name,m.local_form_id,m.x,m.y,m.z,m.heading,m.created_at,m.author_pseudonym,m.game_era,m.game_year,m.game_month,m.game_day,m.game_day_of_week,m.game_hour,m.game_minute,p.player_id,p.account_id,p.display_name,p.name_color,a.id,a.username,m.character_level,m.killer_level FROM ground_marks m JOIN profiles p ON m.author_id=p.player_id JOIN accounts a ON p.account_id=a.id ORDER BY m.id"
                                 []
             use reader = statement.ExecuteReader()
             let optional index read = if reader.IsDBNull index then None else Some(read index)
@@ -153,6 +159,8 @@ module SqliteGroundMarkStore =
                             game_day_of_week = optional 17 reader.GetInt64
                             game_hour = optional 18 reader.GetInt64
                             game_minute = optional 19 reader.GetInt64
+                            character_level = optional 26 reader.GetInt64
+                            killer_level = optional 27 reader.GetInt64
                         }
                         let profile: main.profiles = {
                             player_id = reader.GetInt64 20
@@ -194,6 +202,11 @@ module SqliteGroundMarkStore =
             invalidData "Ground mark identifiers must fit the positive Int64 range of SQLite."
         else
             let date (part: GameDate -> int) = mark.GameDate |> ValueOption.map (part >> int64) |> ValueOption.toOption
+            let death (level: DeathReport -> uint32 voption) =
+                match mark.Body with
+                | GroundMarkBody.Death report -> level report |> ValueOption.map int64 |> ValueOption.toOption
+                | GroundMarkBody.Note _ -> None
+
             let row: main.ground_marks = {
                 id = int64 id
                 author_id = int64 author
@@ -215,6 +228,8 @@ module SqliteGroundMarkStore =
                 game_day_of_week = date (fun value -> value.DayOfWeek)
                 game_hour = date (fun value -> value.Hour)
                 game_minute = date (fun value -> value.Minute)
+                character_level = death (fun value -> value.CharacterLevel)
+                killer_level = death (fun value -> value.KillerLevel)
             }
             let query = insert {
                 for stored in main.ground_marks do

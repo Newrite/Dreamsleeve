@@ -180,7 +180,7 @@ Added/Removed из модели. Полная история не копируе
 Control-канале ENet.
 
 - `GroundMark{mark_id, author, kind, text, flagged, placement, created_at_unix_ms,
-  character_name, game_date}`: `author` — снимок `PlayerProfile` (имя и у офлайн-автора),
+  character_name, game_date, character_level, killer_level}`: `author` — снимок `PlayerProfile` (имя и у офлайн-автора),
   `character_name` — optional снимок имени персонажа при размещении, `kind` —
   `GROUND_MARK_KIND_NOTE` (1) / `DEATH` (2), `text` пуст только у смерти, `flagged` — как у
   сообщения, `placement` — `FormKey` пространства, `Position` и `heading` (угол Z, радианы).
@@ -190,6 +190,11 @@ Control-канале ENet.
   сохранённых до версии 12. Диапазоны: эра 1–99 (4 — Четвёртая), год 1–99999, месяц 1–12
   (1 — Утренней звезды), день 1–длина месяца (без високосных), день недели 0–6 (0 — Сандас),
   час 0–23, минута 0–59. Сервер проверяет только диапазоны: это оформление, не метка времени.
+- Уровни смерти (версия 22): `ReportDeath.character_level = 4` — уровень погибшего персонажа,
+  обязателен (0 — `INVALID_REQUEST` с полем `character_level`); `ReportDeath.killer_level = 5` —
+  уровень убийцы, 0 — убийцы нет или у него нет уровня (ловушка). Сверху уровни не ограничены:
+  моды поднимают их выше ванильных. `GroundMark.character_level = 10` и `killer_level = 11`
+  отдаются у смертей; 0 — уровня нет: надпись, метка до версии 22, смерть без убийцы.
 - `ClientPacket.place_ground_note = 14`, `report_death = 15`, `remove_ground_mark = 16` —
   команды с RequestId. Ответ — `ServerPacket.ground_mark_placed = 22`
   (`GroundMark` и `evicted_id`, 0 — ничего не вытеснено), `ground_mark_removed = 23`
@@ -308,6 +313,33 @@ Control-канале ENet.
   `guild_changed = 39`. `CHAT_CHANNEL_KIND_GUILD = 3`. `ChatPublished`, принятие `SendChat` и
   `ChatMessageRemoved` в канале гильдии идут по Control, а не по Chat. Коды отказа
   `GUILD_NAME_TAKEN = 19` … `GUILD_MASTER_STAYS = 26`.
+- v22: уровни в метке смерти (см. «Метки на земле»): `ReportDeath.character_level = 4`,
+  `killer_level = 5`, `GroundMark.character_level = 10`, `killer_level = 11`.
+- v21: кастомные роли гильдии ([GuildsRu](../docs/GuildsRu.md#правила)). `Guild.titles = 7`
+  (`GuildTitle{title_id, name}`, старые первыми), `GuildMember.title_id = 6` (optional: роли нет),
+  `GuildLimits.max_titles = 5`, изменение `GuildChanged.titles = 7` (`GuildTitles{guild_id,
+  titles}` — полный список; обладатели удаленной роли приходят раньше него). Действия
+  `GuildCommand`: `create_title = 11`, `rename_title = 12`, `delete_title = 13`,
+  `set_title = 14` (`SetGuildMemberTitle`, без `title_id` — снять). Коды отказа
+  `GUILD_TITLE_NAME_TAKEN = 28`, `GUILD_TITLES_FULL = 29`; нет такой роли — `TARGET_NOT_FOUND` с
+  полем `title_id`. Клиент отвергает роль с нулевым ID, без имени и повтор ID в списке.
+  Информация о гильдии: `Guild.info = 8` (пусто — нет), `GuildLimits.info_max_length = 6`,
+  действие `set_info = 15` (`SetGuildInfo{guild_id, info}`, только глава, пусто — убрать; длина и
+  управляющие символы — `INVALID_REQUEST` с полем `info`, словарь — `TEXT_NOT_ALLOWED`),
+  изменение `GuildChanged.info = 8` (`GuildInfoChanged{guild_id, info}`).
+  Каталог и заявки: `Guild.listed = 9`, `Guild.join_requests = 10` (`GuildJoinRequest{profile,
+  created_at_unix_ms, expires_at_unix_ms}` — только главе и офицерам, профиль настоящий),
+  `GuildsSnapshot.applications = 4` (`GuildApplication{guild_id, guild_name, expires_at_unix_ms}`),
+  `GuildLimits.max_join_requests = 7`, `max_applications = 8`; изменения `GuildChanged.join_requests = 9`
+  (полный список; пониженному — пустой), `applied = 10`, `application_removed = 11`
+  (`GuildApplicationEnd`: `WITHDRAWN`, `ACCEPTED` — следом `added`, `REJECTED`, `EXPIRED`, `DISBANDED`),
+  `listed = 12`. Действия `set_listed = 16`, `apply = 17`, `withdraw = 18`, `answer_request = 19` и
+  `catalog = 20` (`QueryGuildCatalog{search, min_members, optional max_members, open_only, sort,
+  after}`; `after` — последняя полученная запись, без него — первая страница; поиск длиннее имени
+  гильдии и `max_members < min_members` — `INVALID_REQUEST`). На `catalog` отвечает
+  `ServerPacket.guild_catalog_page = 42` (`GuildCatalogPage{guilds, more, total}`, Control,
+  RequestId); размер страницы задаёт сервер (`[Guilds] CatalogPageSize`). Коды отказа
+  `GUILD_REQUESTS_FULL = 30`, `GUILD_ALREADY_APPLIED = 31`, `GUILD_APPLICATION_LIMIT = 32`.
 - v15: `SessionOpened.role = 12` (`PlayerRole`: `PLAYER = 0`, `MODERATOR = 1`) и уведомление
   `ServerPacket.role_changed = 29` (Control, без RequestId), когда панель меняет роль в живой сессии.
 - Запросы модератора (Control, RequestId): `sanction_player = 20`

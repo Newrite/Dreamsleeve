@@ -764,7 +764,13 @@ module AdminRoutes =
         | GuildError.AlreadyMember
         | GuildError.AlreadyInvited
         | GuildError.NotPermitted
-        | GuildError.MasterStays ->
+        | GuildError.MasterStays
+        | GuildError.TitleNameTaken
+        | GuildError.TitlesFull
+        | GuildError.TitleNotFound
+        | GuildError.JoinRequestsFull
+        | GuildError.AlreadyApplied
+        | GuildError.ApplicationLimit ->
             showGuild routes admin 409 (Some "Владелец гильдий отказал в действии.") guild
 
     /// The guild owner hands the role over and tells the members; the panel audits it.

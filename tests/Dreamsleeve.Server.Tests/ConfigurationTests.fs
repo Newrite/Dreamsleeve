@@ -479,7 +479,9 @@ let tests = testList "Server configuration" [
             Expect.equal (guilds.MaxGuilds, guilds.MaxGuildsPerPlayer, guilds.MaxMembers) (500, 1, 8) "read as written")
         for invalid in [ "MaxGuilds = 0"; "MaxGuildsPerPlayer = 101"; "MaxMembers = 1"; "MaxInvites = 0"; "NameMinLength = 0"
                          "NameMinLength = 10\nNameMaxLength = 5"; "NameMaxLength = 65"; "InviteDays = 0"; "HistoryCapacity = 513"
-                         "InviteCheckIntervalMs = 999"; "MaxPendingWrites = 0" ] do
+                         "InviteCheckIntervalMs = 999"; "MaxPendingWrites = 0"; "MaxTitles = -1"; "MaxTitles = 101"
+                         "InfoMaxLength = 0"; "InfoMaxLength = 2001"; "MaxJoinRequests = 0"; "MaxApplicationsPerPlayer = 101"
+                         "JoinRequestDays = 0"; "CatalogPageSize = 101" ] do
             withFile $"[Guilds]\n{invalid}\n" (fun path ->
                 Expect.isError (Configuration.parse [|"--config"; path|]) $"refused: {invalid}")
 

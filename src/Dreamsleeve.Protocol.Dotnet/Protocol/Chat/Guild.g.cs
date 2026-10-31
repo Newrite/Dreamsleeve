@@ -25,87 +25,174 @@ namespace Dreamsleeve.Protocol.Chat {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "CgtndWlsZC5wcm90bxIZRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdBoMY29t",
-            "bW9uLnByb3RvGgpjaGF0LnByb3RvGg1zZXNzaW9uLnByb3RvItsBCgtHdWls",
+            "bW9uLnByb3RvGgpjaGF0LnByb3RvGg1zZXNzaW9uLnByb3RvIv8BCgtHdWls",
             "ZE1lbWJlchI5Cgdwcm9maWxlGAEgASgLMiguRHJlYW1zbGVldmUuUHJvdG9j",
             "b2wuQ2hhdC5QbGF5ZXJQcm9maWxlEjIKBHJvbGUYAiABKA4yJC5EcmVhbXNs",
             "ZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkUm9sZRIOCgZvbmxpbmUYAyABKAgS",
             "MgoEbXV0ZRgEIAEoCzIkLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuTXV0",
-            "ZVN0YXRlEhkKEWpvaW5lZF9hdF91bml4X21zGAUgASgDItEBCgVHdWlsZBIQ",
-            "CghndWlsZF9pZBgBIAEoBBIMCgRuYW1lGAIgASgJEhIKCmNoYW5uZWxfaWQY",
-            "AyABKAQSGgoSY3JlYXRlZF9hdF91bml4X21zGAQgASgDEjcKB21lbWJlcnMY",
-            "BSADKAsyJi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkTWVtYmVy",
-            "Ej8KD3JlY2VudF9tZXNzYWdlcxgGIAMoCzImLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuQ2hhdE1lc3NhZ2UibQoLR3VpbGRJbnZpdGUSEAoIZ3VpbGRf",
-            "aWQYASABKAQSEgoKZ3VpbGRfbmFtZRgCIAEoCRIcChRpbnZpdGVkX2J5X3Bs",
-            "YXllcl9pZBgDIAEoBBIaChJleHBpcmVzX2F0X3VuaXhfbXMYBCABKAMicwoL",
-            "R3VpbGRMaW1pdHMSHQoVbWF4X2d1aWxkc19wZXJfcGxheWVyGAEgASgNEhMK",
-            "C21heF9tZW1iZXJzGAIgASgNEhcKD25hbWVfbWluX2xlbmd0aBgDIAEoDRIX",
-            "Cg9uYW1lX21heF9sZW5ndGgYBCABKA0iswEKDkd1aWxkc1NuYXBzaG90EjAK",
-            "Bmd1aWxkcxgBIAMoCzIgLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3Vp",
-            "bGQSNwoHaW52aXRlcxgCIAMoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
-            "YXQuR3VpbGRJbnZpdGUSNgoGbGltaXRzGAMgASgLMiYuRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuQ2hhdC5HdWlsZExpbWl0cyJfCgxHdWlsZFJlbW92ZWQSEAoI",
-            "Z3VpbGRfaWQYASABKAQSPQoGcmVhc29uGAIgASgOMi0uRHJlYW1zbGVldmUu",
-            "UHJvdG9jb2wuQ2hhdC5HdWlsZFJlbW92YWxSZWFzb24iXQoRR3VpbGRNZW1i",
-            "ZXJVcGRhdGUSEAoIZ3VpbGRfaWQYASABKAQSNgoGbWVtYmVyGAIgASgLMiYu",
-            "RHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZE1lbWJlciJ4ChJHdWls",
-            "ZE1lbWJlclJlbW92ZWQSEAoIZ3VpbGRfaWQYASABKAQSEQoJcGxheWVyX2lk",
-            "GAIgASgEEj0KBnJlYXNvbhgDIAEoDjItLkRyZWFtc2xlZXZlLlByb3RvY29s",
-            "LkNoYXQuR3VpbGRSZW1vdmFsUmVhc29uIuUCCgxHdWlsZENoYW5nZWQSMQoF",
-            "YWRkZWQYASABKAsyIC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxk",
-            "SAASOgoHcmVtb3ZlZBgCIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
-            "YXQuR3VpbGRSZW1vdmVkSAASPgoGbWVtYmVyGAMgASgLMiwuRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5HdWlsZE1lbWJlclVwZGF0ZUgAEkcKDm1lbWJl",
-            "cl9yZW1vdmVkGAQgASgLMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5H",
-            "dWlsZE1lbWJlclJlbW92ZWRIABI5CgdpbnZpdGVkGAUgASgLMiYuRHJlYW1z",
-            "bGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZEludml0ZUgAEhgKDmludml0ZV9y",
-            "ZW1vdmVkGAYgASgESABCCAoGY2hhbmdlIhsKC0NyZWF0ZUd1aWxkEgwKBG5h",
-            "bWUYASABKAkiNAoNSW52aXRlVG9HdWlsZBIQCghndWlsZF9pZBgBIAEoBBIR",
-            "CglwbGF5ZXJfaWQYAiABKAQiNQoRQW5zd2VyR3VpbGRJbnZpdGUSEAoIZ3Vp",
-            "bGRfaWQYASABKAQSDgoGYWNjZXB0GAIgASgIIh4KCkxlYXZlR3VpbGQSEAoI",
-            "Z3VpbGRfaWQYASABKAQiOQoSRXhjbHVkZUd1aWxkTWVtYmVyEhAKCGd1aWxk",
-            "X2lkGAEgASgEEhEKCXBsYXllcl9pZBgCIAEoBCJnCgxTZXRHdWlsZFJvbGUS",
-            "EAoIZ3VpbGRfaWQYASABKAQSEQoJcGxheWVyX2lkGAIgASgEEjIKBHJvbGUY",
-            "AyABKA4yJC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkUm9sZSI0",
-            "Cg1UcmFuc2Zlckd1aWxkEhAKCGd1aWxkX2lkGAEgASgEEhEKCXBsYXllcl9p",
-            "ZBgCIAEoBCJoCg9NdXRlR3VpbGRNZW1iZXISEAoIZ3VpbGRfaWQYASABKAQS",
-            "EQoJcGxheWVyX2lkGAIgASgEEhQKB21pbnV0ZXMYAyABKA1IAIgBARIOCgZy",
-            "ZWFzb24YBCABKAlCCgoIX21pbnV0ZXMiOAoRVW5tdXRlR3VpbGRNZW1iZXIS",
-            "EAoIZ3VpbGRfaWQYASABKAQSEQoJcGxheWVyX2lkGAIgASgEIiAKDERpc2Jh",
-            "bmRHdWlsZBIQCghndWlsZF9pZBgBIAEoBCL7BAoMR3VpbGRDb21tYW5kEjgK",
-            "BmNyZWF0ZRgBIAEoCzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQ3Jl",
-            "YXRlR3VpbGRIABI6CgZpbnZpdGUYAiABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90",
-            "b2NvbC5DaGF0Lkludml0ZVRvR3VpbGRIABI+CgZhbnN3ZXIYAyABKAsyLC5E",
-            "cmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkFuc3dlckd1aWxkSW52aXRlSAAS",
-            "NgoFbGVhdmUYBCABKAsyJS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkxl",
-            "YXZlR3VpbGRIABJACgdleGNsdWRlGAUgASgLMi0uRHJlYW1zbGVldmUuUHJv",
-            "dG9jb2wuQ2hhdC5FeGNsdWRlR3VpbGRNZW1iZXJIABI7CghzZXRfcm9sZRgG",
-            "IAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuU2V0R3VpbGRSb2xl",
-            "SAASPAoIdHJhbnNmZXIYByABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5D",
-            "aGF0LlRyYW5zZmVyR3VpbGRIABI6CgRtdXRlGAggASgLMiouRHJlYW1zbGVl",
-            "dmUuUHJvdG9jb2wuQ2hhdC5NdXRlR3VpbGRNZW1iZXJIABI+CgZ1bm11dGUY",
-            "CSABKAsyLC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlVubXV0ZUd1aWxk",
-            "TWVtYmVySAASOgoHZGlzYmFuZBgKIAEoCzInLkRyZWFtc2xlZXZlLlByb3Rv",
-            "Y29sLkNoYXQuRGlzYmFuZEd1aWxkSABCCAoGYWN0aW9uIiQKEEd1aWxkQ29t",
-            "bWFuZERvbmUSEAoIZ3VpbGRfaWQYASABKAQqbQoJR3VpbGRSb2xlEhoKFkdV",
-            "SUxEX1JPTEVfVU5TUEVDSUZJRUQQABIVChFHVUlMRF9ST0xFX01FTUJFUhAB",
-            "EhYKEkdVSUxEX1JPTEVfT0ZGSUNFUhACEhUKEUdVSUxEX1JPTEVfTUFTVEVS",
-            "EAMqoAEKEkd1aWxkUmVtb3ZhbFJlYXNvbhIkCiBHVUlMRF9SRU1PVkFMX1JF",
-            "QVNPTl9VTlNQRUNJRklFRBAAEh0KGUdVSUxEX1JFTU9WQUxfUkVBU09OX0xF",
-            "RlQQARIhCh1HVUlMRF9SRU1PVkFMX1JFQVNPTl9FWENMVURFRBACEiIKHkdV",
-            "SUxEX1JFTU9WQUxfUkVBU09OX0RJU0JBTkRFRBADYgZwcm90bzM="));
+            "ZVN0YXRlEhkKEWpvaW5lZF9hdF91bml4X21zGAUgASgDEhUKCHRpdGxlX2lk",
+            "GAYgASgESACIAQFCCwoJX3RpdGxlX2lkIoUBChBHdWlsZEpvaW5SZXF1ZXN0",
+            "EjkKB3Byb2ZpbGUYASABKAsyKC5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0",
+            "LlBsYXllclByb2ZpbGUSGgoSY3JlYXRlZF9hdF91bml4X21zGAIgASgDEhoK",
+            "EmV4cGlyZXNfYXRfdW5peF9tcxgDIAEoAyIsCgpHdWlsZFRpdGxlEhAKCHRp",
+            "dGxlX2lkGAEgASgEEgwKBG5hbWUYAiABKAki6gIKBUd1aWxkEhAKCGd1aWxk",
+            "X2lkGAEgASgEEgwKBG5hbWUYAiABKAkSEgoKY2hhbm5lbF9pZBgDIAEoBBIa",
+            "ChJjcmVhdGVkX2F0X3VuaXhfbXMYBCABKAMSNwoHbWVtYmVycxgFIAMoCzIm",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3VpbGRNZW1iZXISPwoPcmVj",
+            "ZW50X21lc3NhZ2VzGAYgAygLMiYuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5DaGF0TWVzc2FnZRI1CgZ0aXRsZXMYByADKAsyJS5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0Lkd1aWxkVGl0bGUSDAoEaW5mbxgIIAEoCRIOCgZsaXN0",
+            "ZWQYCSABKAgSQgoNam9pbl9yZXF1ZXN0cxgKIAMoCzIrLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuR3VpbGRKb2luUmVxdWVzdCJUChBHdWlsZEFwcGxp",
+            "Y2F0aW9uEhAKCGd1aWxkX2lkGAEgASgEEhIKCmd1aWxkX25hbWUYAiABKAkS",
+            "GgoSZXhwaXJlc19hdF91bml4X21zGAMgASgDIm0KC0d1aWxkSW52aXRlEhAK",
+            "CGd1aWxkX2lkGAEgASgEEhIKCmd1aWxkX25hbWUYAiABKAkSHAoUaW52aXRl",
+            "ZF9ieV9wbGF5ZXJfaWQYAyABKAQSGgoSZXhwaXJlc19hdF91bml4X21zGAQg",
+            "ASgDItUBCgtHdWlsZExpbWl0cxIdChVtYXhfZ3VpbGRzX3Blcl9wbGF5ZXIY",
+            "ASABKA0SEwoLbWF4X21lbWJlcnMYAiABKA0SFwoPbmFtZV9taW5fbGVuZ3Ro",
+            "GAMgASgNEhcKD25hbWVfbWF4X2xlbmd0aBgEIAEoDRISCgptYXhfdGl0bGVz",
+            "GAUgASgNEhcKD2luZm9fbWF4X2xlbmd0aBgGIAEoDRIZChFtYXhfam9pbl9y",
+            "ZXF1ZXN0cxgHIAEoDRIYChBtYXhfYXBwbGljYXRpb25zGAggASgNIvYBCg5H",
+            "dWlsZHNTbmFwc2hvdBIwCgZndWlsZHMYASADKAsyIC5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0Lkd1aWxkEjcKB2ludml0ZXMYAiADKAsyJi5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkSW52aXRlEjYKBmxpbWl0cxgDIAEo",
+            "CzImLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3VpbGRMaW1pdHMSQQoM",
+            "YXBwbGljYXRpb25zGAQgAygLMisuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5HdWlsZEFwcGxpY2F0aW9uIl8KDEd1aWxkUmVtb3ZlZBIQCghndWlsZF9p",
+            "ZBgBIAEoBBI9CgZyZWFzb24YAiABKA4yLS5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0Lkd1aWxkUmVtb3ZhbFJlYXNvbiJdChFHdWlsZE1lbWJlclVwZGF0",
+            "ZRIQCghndWlsZF9pZBgBIAEoBBI2CgZtZW1iZXIYAiABKAsyJi5EcmVhbXNs",
+            "ZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkTWVtYmVyIngKEkd1aWxkTWVtYmVy",
+            "UmVtb3ZlZBIQCghndWlsZF9pZBgBIAEoBBIRCglwbGF5ZXJfaWQYAiABKAQS",
+            "PQoGcmVhc29uGAMgASgOMi0uRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5H",
+            "dWlsZFJlbW92YWxSZWFzb24iVgoLR3VpbGRUaXRsZXMSEAoIZ3VpbGRfaWQY",
+            "ASABKAQSNQoGdGl0bGVzGAIgAygLMiUuRHJlYW1zbGVldmUuUHJvdG9jb2wu",
+            "Q2hhdC5HdWlsZFRpdGxlImsKF0d1aWxkQXBwbGljYXRpb25SZW1vdmVkEhAK",
+            "CGd1aWxkX2lkGAEgASgEEj4KBnJlYXNvbhgCIAEoDjIuLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuR3VpbGRBcHBsaWNhdGlvbkVuZCJkChFHdWlsZEpv",
+            "aW5SZXF1ZXN0cxIQCghndWlsZF9pZBgBIAEoBBI9CghyZXF1ZXN0cxgCIAMo",
+            "CzIrLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3VpbGRKb2luUmVxdWVz",
+            "dCI2ChJHdWlsZExpc3RlZENoYW5nZWQSEAoIZ3VpbGRfaWQYASABKAQSDgoG",
+            "bGlzdGVkGAIgASgIIjIKEEd1aWxkSW5mb0NoYW5nZWQSEAoIZ3VpbGRfaWQY",
+            "ASABKAQSDAoEaW5mbxgCIAEoCSL3BQoMR3VpbGRDaGFuZ2VkEjEKBWFkZGVk",
+            "GAEgASgLMiAuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZEgAEjoK",
+            "B3JlbW92ZWQYAiABKAsyJy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1",
+            "aWxkUmVtb3ZlZEgAEj4KBm1lbWJlchgDIAEoCzIsLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuR3VpbGRNZW1iZXJVcGRhdGVIABJHCg5tZW1iZXJfcmVt",
+            "b3ZlZBgEIAEoCzItLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuR3VpbGRN",
+            "ZW1iZXJSZW1vdmVkSAASOQoHaW52aXRlZBgFIAEoCzImLkRyZWFtc2xlZXZl",
+            "LlByb3RvY29sLkNoYXQuR3VpbGRJbnZpdGVIABIYCg5pbnZpdGVfcmVtb3Zl",
+            "ZBgGIAEoBEgAEjgKBnRpdGxlcxgHIAEoCzImLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuR3VpbGRUaXRsZXNIABI7CgRpbmZvGAggASgLMisuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZEluZm9DaGFuZ2VkSAASRQoNam9p",
+            "bl9yZXF1ZXN0cxgJIAEoCzIsLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQu",
+            "R3VpbGRKb2luUmVxdWVzdHNIABI+CgdhcHBsaWVkGAogASgLMisuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZEFwcGxpY2F0aW9uSAASUQoTYXBw",
+            "bGljYXRpb25fcmVtb3ZlZBgLIAEoCzIyLkRyZWFtc2xlZXZlLlByb3RvY29s",
+            "LkNoYXQuR3VpbGRBcHBsaWNhdGlvblJlbW92ZWRIABI/CgZsaXN0ZWQYDCAB",
+            "KAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lkd1aWxkTGlzdGVkQ2hh",
+            "bmdlZEgAQggKBmNoYW5nZSIbCgtDcmVhdGVHdWlsZBIMCgRuYW1lGAEgASgJ",
+            "IjQKDUludml0ZVRvR3VpbGQSEAoIZ3VpbGRfaWQYASABKAQSEQoJcGxheWVy",
+            "X2lkGAIgASgEIjUKEUFuc3dlckd1aWxkSW52aXRlEhAKCGd1aWxkX2lkGAEg",
+            "ASgEEg4KBmFjY2VwdBgCIAEoCCIeCgpMZWF2ZUd1aWxkEhAKCGd1aWxkX2lk",
+            "GAEgASgEIjkKEkV4Y2x1ZGVHdWlsZE1lbWJlchIQCghndWlsZF9pZBgBIAEo",
+            "BBIRCglwbGF5ZXJfaWQYAiABKAQiZwoMU2V0R3VpbGRSb2xlEhAKCGd1aWxk",
+            "X2lkGAEgASgEEhEKCXBsYXllcl9pZBgCIAEoBBIyCgRyb2xlGAMgASgOMiQu",
+            "RHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5HdWlsZFJvbGUiNAoNVHJhbnNm",
+            "ZXJHdWlsZBIQCghndWlsZF9pZBgBIAEoBBIRCglwbGF5ZXJfaWQYAiABKAQi",
+            "aAoPTXV0ZUd1aWxkTWVtYmVyEhAKCGd1aWxkX2lkGAEgASgEEhEKCXBsYXll",
+            "cl9pZBgCIAEoBBIUCgdtaW51dGVzGAMgASgNSACIAQESDgoGcmVhc29uGAQg",
+            "ASgJQgoKCF9taW51dGVzIjgKEVVubXV0ZUd1aWxkTWVtYmVyEhAKCGd1aWxk",
+            "X2lkGAEgASgEEhEKCXBsYXllcl9pZBgCIAEoBCIgCgxEaXNiYW5kR3VpbGQS",
+            "EAoIZ3VpbGRfaWQYASABKAQiMgoQQ3JlYXRlR3VpbGRUaXRsZRIQCghndWls",
+            "ZF9pZBgBIAEoBBIMCgRuYW1lGAIgASgJIkQKEFJlbmFtZUd1aWxkVGl0bGUS",
+            "EAoIZ3VpbGRfaWQYASABKAQSEAoIdGl0bGVfaWQYAiABKAQSDAoEbmFtZRgD",
+            "IAEoCSI2ChBEZWxldGVHdWlsZFRpdGxlEhAKCGd1aWxkX2lkGAEgASgEEhAK",
+            "CHRpdGxlX2lkGAIgASgEIl4KE1NldEd1aWxkTWVtYmVyVGl0bGUSEAoIZ3Vp",
+            "bGRfaWQYASABKAQSEQoJcGxheWVyX2lkGAIgASgEEhUKCHRpdGxlX2lkGAMg",
+            "ASgESACIAQFCCwoJX3RpdGxlX2lkIi4KDFNldEd1aWxkSW5mbxIQCghndWls",
+            "ZF9pZBgBIAEoBBIMCgRpbmZvGAIgASgJIjIKDlNldEd1aWxkTGlzdGVkEhAK",
+            "CGd1aWxkX2lkGAEgASgEEg4KBmxpc3RlZBgCIAEoCCIgCgxBcHBseVRvR3Vp",
+            "bGQSEAoIZ3VpbGRfaWQYASABKAQiLAoYV2l0aGRyYXdHdWlsZEFwcGxpY2F0",
+            "aW9uEhAKCGd1aWxkX2lkGAEgASgEIk0KFkFuc3dlckd1aWxkSm9pblJlcXVl",
+            "c3QSEAoIZ3VpbGRfaWQYASABKAQSEQoJcGxheWVyX2lkGAIgASgEEg4KBmFj",
+            "Y2VwdBgDIAEoCCJEChFHdWlsZENhdGFsb2dBZnRlchIQCghndWlsZF9pZBgB",
+            "IAEoBBIMCgRuYW1lGAIgASgJEg8KB21lbWJlcnMYAyABKA0i7QEKEVF1ZXJ5",
+            "R3VpbGRDYXRhbG9nEg4KBnNlYXJjaBgBIAEoCRITCgttaW5fbWVtYmVycxgC",
+            "IAEoDRIYCgttYXhfbWVtYmVycxgDIAEoDUgAiAEBEhEKCW9wZW5fb25seRgE",
+            "IAEoCBI5CgRzb3J0GAUgASgOMisuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5HdWlsZENhdGFsb2dTb3J0EjsKBWFmdGVyGAYgASgLMiwuRHJlYW1zbGVl",
+            "dmUuUHJvdG9jb2wuQ2hhdC5HdWlsZENhdGFsb2dBZnRlckIOCgxfbWF4X21l",
+            "bWJlcnMibgoRR3VpbGRDYXRhbG9nRW50cnkSEAoIZ3VpbGRfaWQYASABKAQS",
+            "DAoEbmFtZRgCIAEoCRIMCgRpbmZvGAMgASgJEg8KB21lbWJlcnMYBCABKA0S",
+            "GgoSY3JlYXRlZF9hdF91bml4X21zGAUgASgDIm0KEEd1aWxkQ2F0YWxvZ1Bh",
+            "Z2USPAoGZ3VpbGRzGAEgAygLMiwuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5HdWlsZENhdGFsb2dFbnRyeRIMCgRtb3JlGAIgASgIEg0KBXRvdGFsGAMg",
+            "ASgNIp4KCgxHdWlsZENvbW1hbmQSOAoGY3JlYXRlGAEgASgLMiYuRHJlYW1z",
+            "bGVldmUuUHJvdG9jb2wuQ2hhdC5DcmVhdGVHdWlsZEgAEjoKBmludml0ZRgC",
+            "IAEoCzIoLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuSW52aXRlVG9HdWls",
+            "ZEgAEj4KBmFuc3dlchgDIAEoCzIsLkRyZWFtc2xlZXZlLlByb3RvY29sLkNo",
+            "YXQuQW5zd2VyR3VpbGRJbnZpdGVIABI2CgVsZWF2ZRgEIAEoCzIlLkRyZWFt",
+            "c2xlZXZlLlByb3RvY29sLkNoYXQuTGVhdmVHdWlsZEgAEkAKB2V4Y2x1ZGUY",
+            "BSABKAsyLS5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LkV4Y2x1ZGVHdWls",
+            "ZE1lbWJlckgAEjsKCHNldF9yb2xlGAYgASgLMicuRHJlYW1zbGVldmUuUHJv",
+            "dG9jb2wuQ2hhdC5TZXRHdWlsZFJvbGVIABI8Cgh0cmFuc2ZlchgHIAEoCzIo",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuVHJhbnNmZXJHdWlsZEgAEjoK",
+            "BG11dGUYCCABKAsyKi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0Lk11dGVH",
+            "dWlsZE1lbWJlckgAEj4KBnVubXV0ZRgJIAEoCzIsLkRyZWFtc2xlZXZlLlBy",
+            "b3RvY29sLkNoYXQuVW5tdXRlR3VpbGRNZW1iZXJIABI6CgdkaXNiYW5kGAog",
+            "ASgLMicuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hhdC5EaXNiYW5kR3VpbGRI",
+            "ABJDCgxjcmVhdGVfdGl0bGUYCyABKAsyKy5EcmVhbXNsZWV2ZS5Qcm90b2Nv",
+            "bC5DaGF0LkNyZWF0ZUd1aWxkVGl0bGVIABJDCgxyZW5hbWVfdGl0bGUYDCAB",
+            "KAsyKy5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlJlbmFtZUd1aWxkVGl0",
+            "bGVIABJDCgxkZWxldGVfdGl0bGUYDSABKAsyKy5EcmVhbXNsZWV2ZS5Qcm90",
+            "b2NvbC5DaGF0LkRlbGV0ZUd1aWxkVGl0bGVIABJDCglzZXRfdGl0bGUYDiAB",
+            "KAsyLi5EcmVhbXNsZWV2ZS5Qcm90b2NvbC5DaGF0LlNldEd1aWxkTWVtYmVy",
+            "VGl0bGVIABI7CghzZXRfaW5mbxgPIAEoCzInLkRyZWFtc2xlZXZlLlByb3Rv",
+            "Y29sLkNoYXQuU2V0R3VpbGRJbmZvSAASPwoKc2V0X2xpc3RlZBgQIAEoCzIp",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuU2V0R3VpbGRMaXN0ZWRIABI4",
+            "CgVhcHBseRgRIAEoCzInLkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuQXBw",
+            "bHlUb0d1aWxkSAASRwoId2l0aGRyYXcYEiABKAsyMy5EcmVhbXNsZWV2ZS5Q",
+            "cm90b2NvbC5DaGF0LldpdGhkcmF3R3VpbGRBcHBsaWNhdGlvbkgAEksKDmFu",
+            "c3dlcl9yZXF1ZXN0GBMgASgLMjEuRHJlYW1zbGVldmUuUHJvdG9jb2wuQ2hh",
+            "dC5BbnN3ZXJHdWlsZEpvaW5SZXF1ZXN0SAASPwoHY2F0YWxvZxgUIAEoCzIs",
+            "LkRyZWFtc2xlZXZlLlByb3RvY29sLkNoYXQuUXVlcnlHdWlsZENhdGFsb2dI",
+            "AEIICgZhY3Rpb24iJAoQR3VpbGRDb21tYW5kRG9uZRIQCghndWlsZF9pZBgB",
+            "IAEoBCptCglHdWlsZFJvbGUSGgoWR1VJTERfUk9MRV9VTlNQRUNJRklFRBAA",
+            "EhUKEUdVSUxEX1JPTEVfTUVNQkVSEAESFgoSR1VJTERfUk9MRV9PRkZJQ0VS",
+            "EAISFQoRR1VJTERfUk9MRV9NQVNURVIQAyqgAQoSR3VpbGRSZW1vdmFsUmVh",
+            "c29uEiQKIEdVSUxEX1JFTU9WQUxfUkVBU09OX1VOU1BFQ0lGSUVEEAASHQoZ",
+            "R1VJTERfUkVNT1ZBTF9SRUFTT05fTEVGVBABEiEKHUdVSUxEX1JFTU9WQUxf",
+            "UkVBU09OX0VYQ0xVREVEEAISIgoeR1VJTERfUkVNT1ZBTF9SRUFTT05fRElT",
+            "QkFOREVEEAMq8QEKE0d1aWxkQXBwbGljYXRpb25FbmQSJQohR1VJTERfQVBQ",
+            "TElDQVRJT05fRU5EX1VOU1BFQ0lGSUVEEAASIwofR1VJTERfQVBQTElDQVRJ",
+            "T05fRU5EX1dJVEhEUkFXThABEiIKHkdVSUxEX0FQUExJQ0FUSU9OX0VORF9B",
+            "Q0NFUFRFRBACEiIKHkdVSUxEX0FQUExJQ0FUSU9OX0VORF9SRUpFQ1RFRBAD",
+            "EiEKHUdVSUxEX0FQUExJQ0FUSU9OX0VORF9FWFBJUkVEEAQSIwofR1VJTERf",
+            "QVBQTElDQVRJT05fRU5EX0RJU0JBTkRFRBAFKnMKEEd1aWxkQ2F0YWxvZ1Nv",
+            "cnQSIgoeR1VJTERfQ0FUQUxPR19TT1JUX1VOU1BFQ0lGSUVEEAASGwoXR1VJ",
+            "TERfQ0FUQUxPR19TT1JUX05BTUUQARIeChpHVUlMRF9DQVRBTE9HX1NPUlRf",
+            "TUVNQkVSUxACYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Dreamsleeve.Protocol.Chat.CommonReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.ChatReflection.Descriptor, global::Dreamsleeve.Protocol.Chat.SessionReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.GuildRole), typeof(global::Dreamsleeve.Protocol.Chat.GuildRemovalReason), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildMember), global::Dreamsleeve.Protocol.Chat.GuildMember.Parser, new[]{ "Profile", "Role", "Online", "Mute", "JoinedAtUnixMs" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Guild), global::Dreamsleeve.Protocol.Chat.Guild.Parser, new[]{ "GuildId", "Name", "ChannelId", "CreatedAtUnixMs", "Members", "RecentMessages" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Dreamsleeve.Protocol.Chat.GuildRole), typeof(global::Dreamsleeve.Protocol.Chat.GuildRemovalReason), typeof(global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd), typeof(global::Dreamsleeve.Protocol.Chat.GuildCatalogSort), }, null, new pbr::GeneratedClrTypeInfo[] {
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildMember), global::Dreamsleeve.Protocol.Chat.GuildMember.Parser, new[]{ "Profile", "Role", "Online", "Mute", "JoinedAtUnixMs", "TitleId" }, new[]{ "TitleId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildJoinRequest), global::Dreamsleeve.Protocol.Chat.GuildJoinRequest.Parser, new[]{ "Profile", "CreatedAtUnixMs", "ExpiresAtUnixMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildTitle), global::Dreamsleeve.Protocol.Chat.GuildTitle.Parser, new[]{ "TitleId", "Name" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.Guild), global::Dreamsleeve.Protocol.Chat.Guild.Parser, new[]{ "GuildId", "Name", "ChannelId", "CreatedAtUnixMs", "Members", "RecentMessages", "Titles", "Info", "Listed", "JoinRequests" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildApplication), global::Dreamsleeve.Protocol.Chat.GuildApplication.Parser, new[]{ "GuildId", "GuildName", "ExpiresAtUnixMs" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildInvite), global::Dreamsleeve.Protocol.Chat.GuildInvite.Parser, new[]{ "GuildId", "GuildName", "InvitedByPlayerId", "ExpiresAtUnixMs" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildLimits), global::Dreamsleeve.Protocol.Chat.GuildLimits.Parser, new[]{ "MaxGuildsPerPlayer", "MaxMembers", "NameMinLength", "NameMaxLength" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildsSnapshot), global::Dreamsleeve.Protocol.Chat.GuildsSnapshot.Parser, new[]{ "Guilds", "Invites", "Limits" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildLimits), global::Dreamsleeve.Protocol.Chat.GuildLimits.Parser, new[]{ "MaxGuildsPerPlayer", "MaxMembers", "NameMinLength", "NameMaxLength", "MaxTitles", "InfoMaxLength", "MaxJoinRequests", "MaxApplications" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildsSnapshot), global::Dreamsleeve.Protocol.Chat.GuildsSnapshot.Parser, new[]{ "Guilds", "Invites", "Limits", "Applications" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildRemoved), global::Dreamsleeve.Protocol.Chat.GuildRemoved.Parser, new[]{ "GuildId", "Reason" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildMemberUpdate), global::Dreamsleeve.Protocol.Chat.GuildMemberUpdate.Parser, new[]{ "GuildId", "Member" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildMemberRemoved), global::Dreamsleeve.Protocol.Chat.GuildMemberRemoved.Parser, new[]{ "GuildId", "PlayerId", "Reason" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildChanged), global::Dreamsleeve.Protocol.Chat.GuildChanged.Parser, new[]{ "Added", "Removed", "Member", "MemberRemoved", "Invited", "InviteRemoved" }, new[]{ "Change" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildTitles), global::Dreamsleeve.Protocol.Chat.GuildTitles.Parser, new[]{ "GuildId", "Titles" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved), global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved.Parser, new[]{ "GuildId", "Reason" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildJoinRequests), global::Dreamsleeve.Protocol.Chat.GuildJoinRequests.Parser, new[]{ "GuildId", "Requests" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildListedChanged), global::Dreamsleeve.Protocol.Chat.GuildListedChanged.Parser, new[]{ "GuildId", "Listed" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildInfoChanged), global::Dreamsleeve.Protocol.Chat.GuildInfoChanged.Parser, new[]{ "GuildId", "Info" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildChanged), global::Dreamsleeve.Protocol.Chat.GuildChanged.Parser, new[]{ "Added", "Removed", "Member", "MemberRemoved", "Invited", "InviteRemoved", "Titles", "Info", "JoinRequests", "Applied", "ApplicationRemoved", "Listed" }, new[]{ "Change" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.CreateGuild), global::Dreamsleeve.Protocol.Chat.CreateGuild.Parser, new[]{ "Name" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.InviteToGuild), global::Dreamsleeve.Protocol.Chat.InviteToGuild.Parser, new[]{ "GuildId", "PlayerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.AnswerGuildInvite), global::Dreamsleeve.Protocol.Chat.AnswerGuildInvite.Parser, new[]{ "GuildId", "Accept" }, null, null, null, null),
@@ -116,7 +203,20 @@ namespace Dreamsleeve.Protocol.Chat {
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.MuteGuildMember), global::Dreamsleeve.Protocol.Chat.MuteGuildMember.Parser, new[]{ "GuildId", "PlayerId", "Minutes", "Reason" }, new[]{ "Minutes" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.UnmuteGuildMember), global::Dreamsleeve.Protocol.Chat.UnmuteGuildMember.Parser, new[]{ "GuildId", "PlayerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.DisbandGuild), global::Dreamsleeve.Protocol.Chat.DisbandGuild.Parser, new[]{ "GuildId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCommand), global::Dreamsleeve.Protocol.Chat.GuildCommand.Parser, new[]{ "Create", "Invite", "Answer", "Leave", "Exclude", "SetRole", "Transfer", "Mute", "Unmute", "Disband" }, new[]{ "Action" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.CreateGuildTitle), global::Dreamsleeve.Protocol.Chat.CreateGuildTitle.Parser, new[]{ "GuildId", "Name" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.RenameGuildTitle), global::Dreamsleeve.Protocol.Chat.RenameGuildTitle.Parser, new[]{ "GuildId", "TitleId", "Name" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle), global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle.Parser, new[]{ "GuildId", "TitleId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle), global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle.Parser, new[]{ "GuildId", "PlayerId", "TitleId" }, new[]{ "TitleId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetGuildInfo), global::Dreamsleeve.Protocol.Chat.SetGuildInfo.Parser, new[]{ "GuildId", "Info" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.SetGuildListed), global::Dreamsleeve.Protocol.Chat.SetGuildListed.Parser, new[]{ "GuildId", "Listed" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.ApplyToGuild), global::Dreamsleeve.Protocol.Chat.ApplyToGuild.Parser, new[]{ "GuildId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication), global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication.Parser, new[]{ "GuildId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest), global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest.Parser, new[]{ "GuildId", "PlayerId", "Accept" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter), global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter.Parser, new[]{ "GuildId", "Name", "Members" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog), global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog.Parser, new[]{ "Search", "MinMembers", "MaxMembers", "OpenOnly", "Sort", "After" }, new[]{ "MaxMembers" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry), global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry.Parser, new[]{ "GuildId", "Name", "Info", "Members", "CreatedAtUnixMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCatalogPage), global::Dreamsleeve.Protocol.Chat.GuildCatalogPage.Parser, new[]{ "Guilds", "More", "Total" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCommand), global::Dreamsleeve.Protocol.Chat.GuildCommand.Parser, new[]{ "Create", "Invite", "Answer", "Leave", "Exclude", "SetRole", "Transfer", "Mute", "Unmute", "Disband", "CreateTitle", "RenameTitle", "DeleteTitle", "SetTitle", "SetInfo", "SetListed", "Apply", "Withdraw", "AnswerRequest", "Catalog" }, new[]{ "Action" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Dreamsleeve.Protocol.Chat.GuildCommandDone), global::Dreamsleeve.Protocol.Chat.GuildCommandDone.Parser, new[]{ "GuildId" }, null, null, null, null)
           }));
     }
@@ -138,6 +238,33 @@ namespace Dreamsleeve.Protocol.Chat {
     [pbr::OriginalName("GUILD_REMOVAL_REASON_DISBANDED")] Disbanded = 3,
   }
 
+  /// <summary>
+  /// Why a join request of this player ended.
+  /// </summary>
+  public enum GuildApplicationEnd {
+    [pbr::OriginalName("GUILD_APPLICATION_END_UNSPECIFIED")] Unspecified = 0,
+    [pbr::OriginalName("GUILD_APPLICATION_END_WITHDRAWN")] Withdrawn = 1,
+    /// <summary>
+    /// GuildChanged.added follows.
+    /// </summary>
+    [pbr::OriginalName("GUILD_APPLICATION_END_ACCEPTED")] Accepted = 2,
+    [pbr::OriginalName("GUILD_APPLICATION_END_REJECTED")] Rejected = 3,
+    [pbr::OriginalName("GUILD_APPLICATION_END_EXPIRED")] Expired = 4,
+    [pbr::OriginalName("GUILD_APPLICATION_END_DISBANDED")] Disbanded = 5,
+  }
+
+  public enum GuildCatalogSort {
+    [pbr::OriginalName("GUILD_CATALOG_SORT_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// Regardless of case.
+    /// </summary>
+    [pbr::OriginalName("GUILD_CATALOG_SORT_NAME")] Name = 1,
+    /// <summary>
+    /// The largest first, then by name.
+    /// </summary>
+    [pbr::OriginalName("GUILD_CATALOG_SORT_MEMBERS")] Members = 2,
+  }
+
   #endregion
 
   #region Messages
@@ -149,6 +276,7 @@ namespace Dreamsleeve.Protocol.Chat {
   {
     private static readonly pb::MessageParser<GuildMember> _parser = new pb::MessageParser<GuildMember>(() => new GuildMember());
     private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pb::MessageParser<GuildMember> Parser { get { return _parser; } }
@@ -176,11 +304,13 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public GuildMember(GuildMember other) : this() {
+      _hasBits0 = other._hasBits0;
       profile_ = other.profile_ != null ? other.profile_.Clone() : null;
       role_ = other.role_;
       online_ = other.online_;
       mute_ = other.mute_ != null ? other.mute_.Clone() : null;
       joinedAtUnixMs_ = other.joinedAtUnixMs_;
+      titleId_ = other.titleId_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -256,6 +386,36 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "title_id" field.</summary>
+    public const int TitleIdFieldNumber = 6;
+    private readonly static ulong TitleIdDefaultValue = 0UL;
+
+    private ulong titleId_;
+    /// <summary>
+    /// One of the guild's custom roles; absent: none.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong TitleId {
+      get { if ((_hasBits0 & 1) != 0) { return titleId_; } else { return TitleIdDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        titleId_ = value;
+      }
+    }
+    /// <summary>Gets whether the "title_id" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasTitleId {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "title_id" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearTitleId() {
+      _hasBits0 &= ~1;
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -276,6 +436,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (Online != other.Online) return false;
       if (!object.Equals(Mute, other.Mute)) return false;
       if (JoinedAtUnixMs != other.JoinedAtUnixMs) return false;
+      if (TitleId != other.TitleId) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -288,6 +449,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (Online != false) hash ^= Online.GetHashCode();
       if (mute_ != null) hash ^= Mute.GetHashCode();
       if (JoinedAtUnixMs != 0L) hash ^= JoinedAtUnixMs.GetHashCode();
+      if (HasTitleId) hash ^= TitleId.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -326,6 +488,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(40);
         output.WriteInt64(JoinedAtUnixMs);
       }
+      if (HasTitleId) {
+        output.WriteRawTag(48);
+        output.WriteUInt64(TitleId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -356,6 +522,10 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(40);
         output.WriteInt64(JoinedAtUnixMs);
       }
+      if (HasTitleId) {
+        output.WriteRawTag(48);
+        output.WriteUInt64(TitleId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -380,6 +550,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (JoinedAtUnixMs != 0L) {
         size += 1 + pb::CodedOutputStream.ComputeInt64Size(JoinedAtUnixMs);
+      }
+      if (HasTitleId) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TitleId);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -413,6 +586,9 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.JoinedAtUnixMs != 0L) {
         JoinedAtUnixMs = other.JoinedAtUnixMs;
+      }
+      if (other.HasTitleId) {
+        TitleId = other.TitleId;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -457,6 +633,10 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 40: {
             JoinedAtUnixMs = input.ReadInt64();
+            break;
+          }
+          case 48: {
+            TitleId = input.ReadUInt64();
             break;
           }
         }
@@ -504,6 +684,540 @@ namespace Dreamsleeve.Protocol.Chat {
             JoinedAtUnixMs = input.ReadInt64();
             break;
           }
+          case 48: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A player's request to join, as the master and officers see it: the real
+  /// profile, like a member's. Nobody else receives them.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildJoinRequest : pb::IMessage<GuildJoinRequest>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildJoinRequest> _parser = new pb::MessageParser<GuildJoinRequest>(() => new GuildJoinRequest());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildJoinRequest> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[1]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequest() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequest(GuildJoinRequest other) : this() {
+      profile_ = other.profile_ != null ? other.profile_.Clone() : null;
+      createdAtUnixMs_ = other.createdAtUnixMs_;
+      expiresAtUnixMs_ = other.expiresAtUnixMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequest Clone() {
+      return new GuildJoinRequest(this);
+    }
+
+    /// <summary>Field number for the "profile" field.</summary>
+    public const int ProfileFieldNumber = 1;
+    private global::Dreamsleeve.Protocol.Chat.PlayerProfile profile_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.PlayerProfile Profile {
+      get { return profile_; }
+      set {
+        profile_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "created_at_unix_ms" field.</summary>
+    public const int CreatedAtUnixMsFieldNumber = 2;
+    private long createdAtUnixMs_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long CreatedAtUnixMs {
+      get { return createdAtUnixMs_; }
+      set {
+        createdAtUnixMs_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "expires_at_unix_ms" field.</summary>
+    public const int ExpiresAtUnixMsFieldNumber = 3;
+    private long expiresAtUnixMs_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long ExpiresAtUnixMs {
+      get { return expiresAtUnixMs_; }
+      set {
+        expiresAtUnixMs_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildJoinRequest);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildJoinRequest other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!object.Equals(Profile, other.Profile)) return false;
+      if (CreatedAtUnixMs != other.CreatedAtUnixMs) return false;
+      if (ExpiresAtUnixMs != other.ExpiresAtUnixMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (profile_ != null) hash ^= Profile.GetHashCode();
+      if (CreatedAtUnixMs != 0L) hash ^= CreatedAtUnixMs.GetHashCode();
+      if (ExpiresAtUnixMs != 0L) hash ^= ExpiresAtUnixMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (profile_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Profile);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(CreatedAtUnixMs);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (profile_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Profile);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(CreatedAtUnixMs);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (profile_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Profile);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(CreatedAtUnixMs);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildJoinRequest other) {
+      if (other == null) {
+        return;
+      }
+      if (other.profile_ != null) {
+        if (profile_ == null) {
+          Profile = new global::Dreamsleeve.Protocol.Chat.PlayerProfile();
+        }
+        Profile.MergeFrom(other.Profile);
+      }
+      if (other.CreatedAtUnixMs != 0L) {
+        CreatedAtUnixMs = other.CreatedAtUnixMs;
+      }
+      if (other.ExpiresAtUnixMs != 0L) {
+        ExpiresAtUnixMs = other.ExpiresAtUnixMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            if (profile_ == null) {
+              Profile = new global::Dreamsleeve.Protocol.Chat.PlayerProfile();
+            }
+            input.ReadMessage(Profile);
+            break;
+          }
+          case 16: {
+            CreatedAtUnixMs = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            ExpiresAtUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            if (profile_ == null) {
+              Profile = new global::Dreamsleeve.Protocol.Chat.PlayerProfile();
+            }
+            input.ReadMessage(Profile);
+            break;
+          }
+          case 16: {
+            CreatedAtUnixMs = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            ExpiresAtUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A custom role of a guild, such as "Treasurer": cosmetic, no rights. The
+  /// master creates and assigns it; a member holds at most one.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildTitle : pb::IMessage<GuildTitle>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildTitle> _parser = new pb::MessageParser<GuildTitle>(() => new GuildTitle());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildTitle> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[2]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitle() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitle(GuildTitle other) : this() {
+      titleId_ = other.titleId_;
+      name_ = other.name_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitle Clone() {
+      return new GuildTitle(this);
+    }
+
+    /// <summary>Field number for the "title_id" field.</summary>
+    public const int TitleIdFieldNumber = 1;
+    private ulong titleId_;
+    /// <summary>
+    /// Unique across guilds.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong TitleId {
+      get { return titleId_; }
+      set {
+        titleId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 2;
+    private string name_ = "";
+    /// <summary>
+    /// The rules of a guild name; unique in the guild regardless of case.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildTitle);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildTitle other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (TitleId != other.TitleId) return false;
+      if (Name != other.Name) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (TitleId != 0UL) hash ^= TitleId.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (TitleId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(TitleId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (TitleId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(TitleId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (TitleId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TitleId);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildTitle other) {
+      if (other == null) {
+        return;
+      }
+      if (other.TitleId != 0UL) {
+        TitleId = other.TitleId;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
         }
       }
     }
@@ -526,7 +1240,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[1]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -552,6 +1266,10 @@ namespace Dreamsleeve.Protocol.Chat {
       createdAtUnixMs_ = other.createdAtUnixMs_;
       members_ = other.members_.Clone();
       recentMessages_ = other.recentMessages_.Clone();
+      titles_ = other.titles_.Clone();
+      info_ = other.info_;
+      listed_ = other.listed_;
+      joinRequests_ = other.joinRequests_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -637,6 +1355,64 @@ namespace Dreamsleeve.Protocol.Chat {
       get { return recentMessages_; }
     }
 
+    /// <summary>Field number for the "titles" field.</summary>
+    public const int TitlesFieldNumber = 7;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildTitle> _repeated_titles_codec
+        = pb::FieldCodec.ForMessage(58, global::Dreamsleeve.Protocol.Chat.GuildTitle.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle> titles_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle>();
+    /// <summary>
+    /// Oldest first.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle> Titles {
+      get { return titles_; }
+    }
+
+    /// <summary>Field number for the "info" field.</summary>
+    public const int InfoFieldNumber = 8;
+    private string info_ = "";
+    /// <summary>
+    /// What the master tells about the guild; empty: nothing.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Info {
+      get { return info_; }
+      set {
+        info_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "listed" field.</summary>
+    public const int ListedFieldNumber = 9;
+    private bool listed_;
+    /// <summary>
+    /// Shown in the public catalog.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Listed {
+      get { return listed_; }
+      set {
+        listed_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "join_requests" field.</summary>
+    public const int JoinRequestsFieldNumber = 10;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> _repeated_joinRequests_codec
+        = pb::FieldCodec.ForMessage(82, global::Dreamsleeve.Protocol.Chat.GuildJoinRequest.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> joinRequests_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest>();
+    /// <summary>
+    /// Oldest first; only to the master and officers.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> JoinRequests {
+      get { return joinRequests_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -658,6 +1434,10 @@ namespace Dreamsleeve.Protocol.Chat {
       if (CreatedAtUnixMs != other.CreatedAtUnixMs) return false;
       if(!members_.Equals(other.members_)) return false;
       if(!recentMessages_.Equals(other.recentMessages_)) return false;
+      if(!titles_.Equals(other.titles_)) return false;
+      if (Info != other.Info) return false;
+      if (Listed != other.Listed) return false;
+      if(!joinRequests_.Equals(other.joinRequests_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -671,6 +1451,10 @@ namespace Dreamsleeve.Protocol.Chat {
       if (CreatedAtUnixMs != 0L) hash ^= CreatedAtUnixMs.GetHashCode();
       hash ^= members_.GetHashCode();
       hash ^= recentMessages_.GetHashCode();
+      hash ^= titles_.GetHashCode();
+      if (Info.Length != 0) hash ^= Info.GetHashCode();
+      if (Listed != false) hash ^= Listed.GetHashCode();
+      hash ^= joinRequests_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -707,6 +1491,16 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       members_.WriteTo(output, _repeated_members_codec);
       recentMessages_.WriteTo(output, _repeated_recentMessages_codec);
+      titles_.WriteTo(output, _repeated_titles_codec);
+      if (Info.Length != 0) {
+        output.WriteRawTag(66);
+        output.WriteString(Info);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(72);
+        output.WriteBool(Listed);
+      }
+      joinRequests_.WriteTo(output, _repeated_joinRequests_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -735,6 +1529,16 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       members_.WriteTo(ref output, _repeated_members_codec);
       recentMessages_.WriteTo(ref output, _repeated_recentMessages_codec);
+      titles_.WriteTo(ref output, _repeated_titles_codec);
+      if (Info.Length != 0) {
+        output.WriteRawTag(66);
+        output.WriteString(Info);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(72);
+        output.WriteBool(Listed);
+      }
+      joinRequests_.WriteTo(ref output, _repeated_joinRequests_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -759,6 +1563,14 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       size += members_.CalculateSize(_repeated_members_codec);
       size += recentMessages_.CalculateSize(_repeated_recentMessages_codec);
+      size += titles_.CalculateSize(_repeated_titles_codec);
+      if (Info.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Info);
+      }
+      if (Listed != false) {
+        size += 1 + 1;
+      }
+      size += joinRequests_.CalculateSize(_repeated_joinRequests_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -785,6 +1597,14 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       members_.Add(other.members_);
       recentMessages_.Add(other.recentMessages_);
+      titles_.Add(other.titles_);
+      if (other.Info.Length != 0) {
+        Info = other.Info;
+      }
+      if (other.Listed != false) {
+        Listed = other.Listed;
+      }
+      joinRequests_.Add(other.joinRequests_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -826,6 +1646,22 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 50: {
             recentMessages_.AddEntriesFrom(input, _repeated_recentMessages_codec);
+            break;
+          }
+          case 58: {
+            titles_.AddEntriesFrom(input, _repeated_titles_codec);
+            break;
+          }
+          case 66: {
+            Info = input.ReadString();
+            break;
+          }
+          case 72: {
+            Listed = input.ReadBool();
+            break;
+          }
+          case 82: {
+            joinRequests_.AddEntriesFrom(input, _repeated_joinRequests_codec);
             break;
           }
         }
@@ -871,6 +1707,297 @@ namespace Dreamsleeve.Protocol.Chat {
             recentMessages_.AddEntriesFrom(ref input, _repeated_recentMessages_codec);
             break;
           }
+          case 58: {
+            titles_.AddEntriesFrom(ref input, _repeated_titles_codec);
+            break;
+          }
+          case 66: {
+            Info = input.ReadString();
+            break;
+          }
+          case 72: {
+            Listed = input.ReadBool();
+            break;
+          }
+          case 82: {
+            joinRequests_.AddEntriesFrom(ref input, _repeated_joinRequests_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A join request of this player, waiting for the guild's answer.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildApplication : pb::IMessage<GuildApplication>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildApplication> _parser = new pb::MessageParser<GuildApplication>(() => new GuildApplication());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildApplication> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[4]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplication() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplication(GuildApplication other) : this() {
+      guildId_ = other.guildId_;
+      guildName_ = other.guildName_;
+      expiresAtUnixMs_ = other.expiresAtUnixMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplication Clone() {
+      return new GuildApplication(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "guild_name" field.</summary>
+    public const int GuildNameFieldNumber = 2;
+    private string guildName_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string GuildName {
+      get { return guildName_; }
+      set {
+        guildName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "expires_at_unix_ms" field.</summary>
+    public const int ExpiresAtUnixMsFieldNumber = 3;
+    private long expiresAtUnixMs_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long ExpiresAtUnixMs {
+      get { return expiresAtUnixMs_; }
+      set {
+        expiresAtUnixMs_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildApplication);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildApplication other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (GuildName != other.GuildName) return false;
+      if (ExpiresAtUnixMs != other.ExpiresAtUnixMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (GuildName.Length != 0) hash ^= GuildName.GetHashCode();
+      if (ExpiresAtUnixMs != 0L) hash ^= ExpiresAtUnixMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (GuildName.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(GuildName);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (GuildName.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(GuildName);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (GuildName.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(GuildName);
+      }
+      if (ExpiresAtUnixMs != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(ExpiresAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildApplication other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.GuildName.Length != 0) {
+        GuildName = other.GuildName;
+      }
+      if (other.ExpiresAtUnixMs != 0L) {
+        ExpiresAtUnixMs = other.ExpiresAtUnixMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            GuildName = input.ReadString();
+            break;
+          }
+          case 24: {
+            ExpiresAtUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            GuildName = input.ReadString();
+            break;
+          }
+          case 24: {
+            ExpiresAtUnixMs = input.ReadInt64();
+            break;
+          }
         }
       }
     }
@@ -893,7 +2020,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1208,7 +2335,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1232,6 +2359,10 @@ namespace Dreamsleeve.Protocol.Chat {
       maxMembers_ = other.maxMembers_;
       nameMinLength_ = other.nameMinLength_;
       nameMaxLength_ = other.nameMaxLength_;
+      maxTitles_ = other.maxTitles_;
+      infoMaxLength_ = other.infoMaxLength_;
+      maxJoinRequests_ = other.maxJoinRequests_;
+      maxApplications_ = other.maxApplications_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1295,6 +2426,66 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "max_titles" field.</summary>
+    public const int MaxTitlesFieldNumber = 5;
+    private uint maxTitles_;
+    /// <summary>
+    /// Custom roles of one guild; their names follow name_*_length.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxTitles {
+      get { return maxTitles_; }
+      set {
+        maxTitles_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "info_max_length" field.</summary>
+    public const int InfoMaxLengthFieldNumber = 6;
+    private uint infoMaxLength_;
+    /// <summary>
+    /// Unicode scalar values of the guild information.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint InfoMaxLength {
+      get { return infoMaxLength_; }
+      set {
+        infoMaxLength_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_join_requests" field.</summary>
+    public const int MaxJoinRequestsFieldNumber = 7;
+    private uint maxJoinRequests_;
+    /// <summary>
+    /// Pending join requests of one guild.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxJoinRequests {
+      get { return maxJoinRequests_; }
+      set {
+        maxJoinRequests_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_applications" field.</summary>
+    public const int MaxApplicationsFieldNumber = 8;
+    private uint maxApplications_;
+    /// <summary>
+    /// Pending join requests of one player.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxApplications {
+      get { return maxApplications_; }
+      set {
+        maxApplications_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1314,6 +2505,10 @@ namespace Dreamsleeve.Protocol.Chat {
       if (MaxMembers != other.MaxMembers) return false;
       if (NameMinLength != other.NameMinLength) return false;
       if (NameMaxLength != other.NameMaxLength) return false;
+      if (MaxTitles != other.MaxTitles) return false;
+      if (InfoMaxLength != other.InfoMaxLength) return false;
+      if (MaxJoinRequests != other.MaxJoinRequests) return false;
+      if (MaxApplications != other.MaxApplications) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1325,6 +2520,10 @@ namespace Dreamsleeve.Protocol.Chat {
       if (MaxMembers != 0) hash ^= MaxMembers.GetHashCode();
       if (NameMinLength != 0) hash ^= NameMinLength.GetHashCode();
       if (NameMaxLength != 0) hash ^= NameMaxLength.GetHashCode();
+      if (MaxTitles != 0) hash ^= MaxTitles.GetHashCode();
+      if (InfoMaxLength != 0) hash ^= InfoMaxLength.GetHashCode();
+      if (MaxJoinRequests != 0) hash ^= MaxJoinRequests.GetHashCode();
+      if (MaxApplications != 0) hash ^= MaxApplications.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1359,6 +2558,22 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(32);
         output.WriteUInt32(NameMaxLength);
       }
+      if (MaxTitles != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(MaxTitles);
+      }
+      if (InfoMaxLength != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(InfoMaxLength);
+      }
+      if (MaxJoinRequests != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(MaxJoinRequests);
+      }
+      if (MaxApplications != 0) {
+        output.WriteRawTag(64);
+        output.WriteUInt32(MaxApplications);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1385,6 +2600,22 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(32);
         output.WriteUInt32(NameMaxLength);
       }
+      if (MaxTitles != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(MaxTitles);
+      }
+      if (InfoMaxLength != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(InfoMaxLength);
+      }
+      if (MaxJoinRequests != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(MaxJoinRequests);
+      }
+      if (MaxApplications != 0) {
+        output.WriteRawTag(64);
+        output.WriteUInt32(MaxApplications);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1406,6 +2637,18 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (NameMaxLength != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NameMaxLength);
+      }
+      if (MaxTitles != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxTitles);
+      }
+      if (InfoMaxLength != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(InfoMaxLength);
+      }
+      if (MaxJoinRequests != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxJoinRequests);
+      }
+      if (MaxApplications != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxApplications);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1430,6 +2673,18 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (other.NameMaxLength != 0) {
         NameMaxLength = other.NameMaxLength;
+      }
+      if (other.MaxTitles != 0) {
+        MaxTitles = other.MaxTitles;
+      }
+      if (other.InfoMaxLength != 0) {
+        InfoMaxLength = other.InfoMaxLength;
+      }
+      if (other.MaxJoinRequests != 0) {
+        MaxJoinRequests = other.MaxJoinRequests;
+      }
+      if (other.MaxApplications != 0) {
+        MaxApplications = other.MaxApplications;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1464,6 +2719,22 @@ namespace Dreamsleeve.Protocol.Chat {
           }
           case 32: {
             NameMaxLength = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            MaxTitles = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            InfoMaxLength = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            MaxJoinRequests = input.ReadUInt32();
+            break;
+          }
+          case 64: {
+            MaxApplications = input.ReadUInt32();
             break;
           }
         }
@@ -1501,6 +2772,22 @@ namespace Dreamsleeve.Protocol.Chat {
             NameMaxLength = input.ReadUInt32();
             break;
           }
+          case 40: {
+            MaxTitles = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            InfoMaxLength = input.ReadUInt32();
+            break;
+          }
+          case 56: {
+            MaxJoinRequests = input.ReadUInt32();
+            break;
+          }
+          case 64: {
+            MaxApplications = input.ReadUInt32();
+            break;
+          }
         }
       }
     }
@@ -1527,7 +2814,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1550,6 +2837,7 @@ namespace Dreamsleeve.Protocol.Chat {
       guilds_ = other.guilds_.Clone();
       invites_ = other.invites_.Clone();
       limits_ = other.limits_ != null ? other.limits_.Clone() : null;
+      applications_ = other.applications_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1593,6 +2881,17 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "applications" field.</summary>
+    public const int ApplicationsFieldNumber = 4;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildApplication> _repeated_applications_codec
+        = pb::FieldCodec.ForMessage(34, global::Dreamsleeve.Protocol.Chat.GuildApplication.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildApplication> applications_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildApplication>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildApplication> Applications {
+      get { return applications_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1611,6 +2910,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if(!guilds_.Equals(other.guilds_)) return false;
       if(!invites_.Equals(other.invites_)) return false;
       if (!object.Equals(Limits, other.Limits)) return false;
+      if(!applications_.Equals(other.applications_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1621,6 +2921,7 @@ namespace Dreamsleeve.Protocol.Chat {
       hash ^= guilds_.GetHashCode();
       hash ^= invites_.GetHashCode();
       if (limits_ != null) hash ^= Limits.GetHashCode();
+      hash ^= applications_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1645,6 +2946,7 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteMessage(Limits);
       }
+      applications_.WriteTo(output, _repeated_applications_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1661,6 +2963,7 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(26);
         output.WriteMessage(Limits);
       }
+      applications_.WriteTo(ref output, _repeated_applications_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1676,6 +2979,7 @@ namespace Dreamsleeve.Protocol.Chat {
       if (limits_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Limits);
       }
+      size += applications_.CalculateSize(_repeated_applications_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -1696,6 +3000,7 @@ namespace Dreamsleeve.Protocol.Chat {
         }
         Limits.MergeFrom(other.Limits);
       }
+      applications_.Add(other.applications_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -1728,6 +3033,10 @@ namespace Dreamsleeve.Protocol.Chat {
               Limits = new global::Dreamsleeve.Protocol.Chat.GuildLimits();
             }
             input.ReadMessage(Limits);
+            break;
+          }
+          case 34: {
+            applications_.AddEntriesFrom(input, _repeated_applications_codec);
             break;
           }
         }
@@ -1764,6 +3073,10 @@ namespace Dreamsleeve.Protocol.Chat {
             input.ReadMessage(Limits);
             break;
           }
+          case 34: {
+            applications_.AddEntriesFrom(ref input, _repeated_applications_codec);
+            break;
+          }
         }
       }
     }
@@ -1786,7 +3099,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2024,7 +3337,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2268,7 +3581,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2525,6 +3838,1173 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// The guild's custom roles after one was created, renamed or deleted: the
+  /// complete list. A deleted role's holders arrive before it as GuildMemberUpdate.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildTitles : pb::IMessage<GuildTitles>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildTitles> _parser = new pb::MessageParser<GuildTitles>(() => new GuildTitles());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildTitles> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[11]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitles() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitles(GuildTitles other) : this() {
+      guildId_ = other.guildId_;
+      titles_ = other.titles_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildTitles Clone() {
+      return new GuildTitles(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "titles" field.</summary>
+    public const int TitlesFieldNumber = 2;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildTitle> _repeated_titles_codec
+        = pb::FieldCodec.ForMessage(18, global::Dreamsleeve.Protocol.Chat.GuildTitle.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle> titles_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildTitle> Titles {
+      get { return titles_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildTitles);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildTitles other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if(!titles_.Equals(other.titles_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      hash ^= titles_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      titles_.WriteTo(output, _repeated_titles_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      titles_.WriteTo(ref output, _repeated_titles_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      size += titles_.CalculateSize(_repeated_titles_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildTitles other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      titles_.Add(other.titles_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            titles_.AddEntriesFrom(input, _repeated_titles_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            titles_.AddEntriesFrom(ref input, _repeated_titles_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildApplicationRemoved : pb::IMessage<GuildApplicationRemoved>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildApplicationRemoved> _parser = new pb::MessageParser<GuildApplicationRemoved>(() => new GuildApplicationRemoved());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildApplicationRemoved> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[12]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplicationRemoved() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplicationRemoved(GuildApplicationRemoved other) : this() {
+      guildId_ = other.guildId_;
+      reason_ = other.reason_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildApplicationRemoved Clone() {
+      return new GuildApplicationRemoved(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 2;
+    private global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd reason_ = global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd Reason {
+      get { return reason_; }
+      set {
+        reason_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildApplicationRemoved);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildApplicationRemoved other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Reason != other.Reason) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Reason != global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified) hash ^= Reason.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Reason != global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Reason);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Reason != global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Reason);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Reason != global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Reason);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildApplicationRemoved other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Reason != global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd.Unspecified) {
+        Reason = other.Reason;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Reason = (global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd) input.ReadEnum();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Reason = (global::Dreamsleeve.Protocol.Chat.GuildApplicationEnd) input.ReadEnum();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The guild's pending join requests, complete: to the master and officers on
+  /// every change, and empty to a member who stops being one of them.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildJoinRequests : pb::IMessage<GuildJoinRequests>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildJoinRequests> _parser = new pb::MessageParser<GuildJoinRequests>(() => new GuildJoinRequests());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildJoinRequests> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[13]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequests() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequests(GuildJoinRequests other) : this() {
+      guildId_ = other.guildId_;
+      requests_ = other.requests_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildJoinRequests Clone() {
+      return new GuildJoinRequests(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "requests" field.</summary>
+    public const int RequestsFieldNumber = 2;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> _repeated_requests_codec
+        = pb::FieldCodec.ForMessage(18, global::Dreamsleeve.Protocol.Chat.GuildJoinRequest.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> requests_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildJoinRequest> Requests {
+      get { return requests_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildJoinRequests);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildJoinRequests other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if(!requests_.Equals(other.requests_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      hash ^= requests_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      requests_.WriteTo(output, _repeated_requests_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      requests_.WriteTo(ref output, _repeated_requests_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      size += requests_.CalculateSize(_repeated_requests_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildJoinRequests other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      requests_.Add(other.requests_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            requests_.AddEntriesFrom(input, _repeated_requests_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            requests_.AddEntriesFrom(ref input, _repeated_requests_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildListedChanged : pb::IMessage<GuildListedChanged>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildListedChanged> _parser = new pb::MessageParser<GuildListedChanged>(() => new GuildListedChanged());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildListedChanged> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[14]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildListedChanged() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildListedChanged(GuildListedChanged other) : this() {
+      guildId_ = other.guildId_;
+      listed_ = other.listed_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildListedChanged Clone() {
+      return new GuildListedChanged(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "listed" field.</summary>
+    public const int ListedFieldNumber = 2;
+    private bool listed_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Listed {
+      get { return listed_; }
+      set {
+        listed_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildListedChanged);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildListedChanged other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Listed != other.Listed) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Listed != false) hash ^= Listed.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Listed);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Listed);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Listed != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildListedChanged other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Listed != false) {
+        Listed = other.Listed;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Listed = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Listed = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The master wrote or cleared the guild information.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildInfoChanged : pb::IMessage<GuildInfoChanged>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildInfoChanged> _parser = new pb::MessageParser<GuildInfoChanged>(() => new GuildInfoChanged());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildInfoChanged> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[15]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildInfoChanged() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildInfoChanged(GuildInfoChanged other) : this() {
+      guildId_ = other.guildId_;
+      info_ = other.info_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildInfoChanged Clone() {
+      return new GuildInfoChanged(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "info" field.</summary>
+    public const int InfoFieldNumber = 2;
+    private string info_ = "";
+    /// <summary>
+    /// Empty: none.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Info {
+      get { return info_; }
+      set {
+        info_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildInfoChanged);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildInfoChanged other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Info != other.Info) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Info.Length != 0) hash ^= Info.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Info);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Info);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Info.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Info);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildInfoChanged other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Info.Length != 0) {
+        Info = other.Info;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Info = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Info = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GuildChanged : pb::IMessage<GuildChanged>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -2540,7 +5020,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2578,6 +5058,24 @@ namespace Dreamsleeve.Protocol.Chat {
           break;
         case ChangeOneofCase.InviteRemoved:
           InviteRemoved = other.InviteRemoved;
+          break;
+        case ChangeOneofCase.Titles:
+          Titles = other.Titles.Clone();
+          break;
+        case ChangeOneofCase.Info:
+          Info = other.Info.Clone();
+          break;
+        case ChangeOneofCase.JoinRequests:
+          JoinRequests = other.JoinRequests.Clone();
+          break;
+        case ChangeOneofCase.Applied:
+          Applied = other.Applied.Clone();
+          break;
+        case ChangeOneofCase.ApplicationRemoved:
+          ApplicationRemoved = other.ApplicationRemoved.Clone();
+          break;
+        case ChangeOneofCase.Listed:
+          Listed = other.Listed.Clone();
           break;
       }
 
@@ -2685,6 +5183,81 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "titles" field.</summary>
+    public const int TitlesFieldNumber = 7;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildTitles Titles {
+      get { return changeCase_ == ChangeOneofCase.Titles ? (global::Dreamsleeve.Protocol.Chat.GuildTitles) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.Titles;
+      }
+    }
+
+    /// <summary>Field number for the "info" field.</summary>
+    public const int InfoFieldNumber = 8;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildInfoChanged Info {
+      get { return changeCase_ == ChangeOneofCase.Info ? (global::Dreamsleeve.Protocol.Chat.GuildInfoChanged) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.Info;
+      }
+    }
+
+    /// <summary>Field number for the "join_requests" field.</summary>
+    public const int JoinRequestsFieldNumber = 9;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildJoinRequests JoinRequests {
+      get { return changeCase_ == ChangeOneofCase.JoinRequests ? (global::Dreamsleeve.Protocol.Chat.GuildJoinRequests) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.JoinRequests;
+      }
+    }
+
+    /// <summary>Field number for the "applied" field.</summary>
+    public const int AppliedFieldNumber = 10;
+    /// <summary>
+    /// This player asked to join.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildApplication Applied {
+      get { return changeCase_ == ChangeOneofCase.Applied ? (global::Dreamsleeve.Protocol.Chat.GuildApplication) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.Applied;
+      }
+    }
+
+    /// <summary>Field number for the "application_removed" field.</summary>
+    public const int ApplicationRemovedFieldNumber = 11;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved ApplicationRemoved {
+      get { return changeCase_ == ChangeOneofCase.ApplicationRemoved ? (global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.ApplicationRemoved;
+      }
+    }
+
+    /// <summary>Field number for the "listed" field.</summary>
+    public const int ListedFieldNumber = 12;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildListedChanged Listed {
+      get { return changeCase_ == ChangeOneofCase.Listed ? (global::Dreamsleeve.Protocol.Chat.GuildListedChanged) change_ : null; }
+      set {
+        change_ = value;
+        changeCase_ = value == null ? ChangeOneofCase.None : ChangeOneofCase.Listed;
+      }
+    }
+
     private object change_;
     /// <summary>Enum of possible cases for the "change" oneof.</summary>
     public enum ChangeOneofCase {
@@ -2695,6 +5268,12 @@ namespace Dreamsleeve.Protocol.Chat {
       MemberRemoved = 4,
       Invited = 5,
       InviteRemoved = 6,
+      Titles = 7,
+      Info = 8,
+      JoinRequests = 9,
+      Applied = 10,
+      ApplicationRemoved = 11,
+      Listed = 12,
     }
     private ChangeOneofCase changeCase_ = ChangeOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2731,6 +5310,12 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(MemberRemoved, other.MemberRemoved)) return false;
       if (!object.Equals(Invited, other.Invited)) return false;
       if (InviteRemoved != other.InviteRemoved) return false;
+      if (!object.Equals(Titles, other.Titles)) return false;
+      if (!object.Equals(Info, other.Info)) return false;
+      if (!object.Equals(JoinRequests, other.JoinRequests)) return false;
+      if (!object.Equals(Applied, other.Applied)) return false;
+      if (!object.Equals(ApplicationRemoved, other.ApplicationRemoved)) return false;
+      if (!object.Equals(Listed, other.Listed)) return false;
       if (ChangeCase != other.ChangeCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -2745,6 +5330,12 @@ namespace Dreamsleeve.Protocol.Chat {
       if (changeCase_ == ChangeOneofCase.MemberRemoved) hash ^= MemberRemoved.GetHashCode();
       if (changeCase_ == ChangeOneofCase.Invited) hash ^= Invited.GetHashCode();
       if (HasInviteRemoved) hash ^= InviteRemoved.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.Titles) hash ^= Titles.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.Info) hash ^= Info.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.JoinRequests) hash ^= JoinRequests.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.Applied) hash ^= Applied.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.ApplicationRemoved) hash ^= ApplicationRemoved.GetHashCode();
+      if (changeCase_ == ChangeOneofCase.Listed) hash ^= Listed.GetHashCode();
       hash ^= (int) changeCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -2788,6 +5379,30 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(48);
         output.WriteUInt64(InviteRemoved);
       }
+      if (changeCase_ == ChangeOneofCase.Titles) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Titles);
+      }
+      if (changeCase_ == ChangeOneofCase.Info) {
+        output.WriteRawTag(66);
+        output.WriteMessage(Info);
+      }
+      if (changeCase_ == ChangeOneofCase.JoinRequests) {
+        output.WriteRawTag(74);
+        output.WriteMessage(JoinRequests);
+      }
+      if (changeCase_ == ChangeOneofCase.Applied) {
+        output.WriteRawTag(82);
+        output.WriteMessage(Applied);
+      }
+      if (changeCase_ == ChangeOneofCase.ApplicationRemoved) {
+        output.WriteRawTag(90);
+        output.WriteMessage(ApplicationRemoved);
+      }
+      if (changeCase_ == ChangeOneofCase.Listed) {
+        output.WriteRawTag(98);
+        output.WriteMessage(Listed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -2822,6 +5437,30 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(48);
         output.WriteUInt64(InviteRemoved);
       }
+      if (changeCase_ == ChangeOneofCase.Titles) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Titles);
+      }
+      if (changeCase_ == ChangeOneofCase.Info) {
+        output.WriteRawTag(66);
+        output.WriteMessage(Info);
+      }
+      if (changeCase_ == ChangeOneofCase.JoinRequests) {
+        output.WriteRawTag(74);
+        output.WriteMessage(JoinRequests);
+      }
+      if (changeCase_ == ChangeOneofCase.Applied) {
+        output.WriteRawTag(82);
+        output.WriteMessage(Applied);
+      }
+      if (changeCase_ == ChangeOneofCase.ApplicationRemoved) {
+        output.WriteRawTag(90);
+        output.WriteMessage(ApplicationRemoved);
+      }
+      if (changeCase_ == ChangeOneofCase.Listed) {
+        output.WriteRawTag(98);
+        output.WriteMessage(Listed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -2849,6 +5488,24 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (HasInviteRemoved) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InviteRemoved);
+      }
+      if (changeCase_ == ChangeOneofCase.Titles) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Titles);
+      }
+      if (changeCase_ == ChangeOneofCase.Info) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Info);
+      }
+      if (changeCase_ == ChangeOneofCase.JoinRequests) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(JoinRequests);
+      }
+      if (changeCase_ == ChangeOneofCase.Applied) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Applied);
+      }
+      if (changeCase_ == ChangeOneofCase.ApplicationRemoved) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(ApplicationRemoved);
+      }
+      if (changeCase_ == ChangeOneofCase.Listed) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Listed);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -2895,6 +5552,42 @@ namespace Dreamsleeve.Protocol.Chat {
           break;
         case ChangeOneofCase.InviteRemoved:
           InviteRemoved = other.InviteRemoved;
+          break;
+        case ChangeOneofCase.Titles:
+          if (Titles == null) {
+            Titles = new global::Dreamsleeve.Protocol.Chat.GuildTitles();
+          }
+          Titles.MergeFrom(other.Titles);
+          break;
+        case ChangeOneofCase.Info:
+          if (Info == null) {
+            Info = new global::Dreamsleeve.Protocol.Chat.GuildInfoChanged();
+          }
+          Info.MergeFrom(other.Info);
+          break;
+        case ChangeOneofCase.JoinRequests:
+          if (JoinRequests == null) {
+            JoinRequests = new global::Dreamsleeve.Protocol.Chat.GuildJoinRequests();
+          }
+          JoinRequests.MergeFrom(other.JoinRequests);
+          break;
+        case ChangeOneofCase.Applied:
+          if (Applied == null) {
+            Applied = new global::Dreamsleeve.Protocol.Chat.GuildApplication();
+          }
+          Applied.MergeFrom(other.Applied);
+          break;
+        case ChangeOneofCase.ApplicationRemoved:
+          if (ApplicationRemoved == null) {
+            ApplicationRemoved = new global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved();
+          }
+          ApplicationRemoved.MergeFrom(other.ApplicationRemoved);
+          break;
+        case ChangeOneofCase.Listed:
+          if (Listed == null) {
+            Listed = new global::Dreamsleeve.Protocol.Chat.GuildListedChanged();
+          }
+          Listed.MergeFrom(other.Listed);
           break;
       }
 
@@ -2966,6 +5659,60 @@ namespace Dreamsleeve.Protocol.Chat {
             InviteRemoved = input.ReadUInt64();
             break;
           }
+          case 58: {
+            global::Dreamsleeve.Protocol.Chat.GuildTitles subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildTitles();
+            if (changeCase_ == ChangeOneofCase.Titles) {
+              subBuilder.MergeFrom(Titles);
+            }
+            input.ReadMessage(subBuilder);
+            Titles = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Dreamsleeve.Protocol.Chat.GuildInfoChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildInfoChanged();
+            if (changeCase_ == ChangeOneofCase.Info) {
+              subBuilder.MergeFrom(Info);
+            }
+            input.ReadMessage(subBuilder);
+            Info = subBuilder;
+            break;
+          }
+          case 74: {
+            global::Dreamsleeve.Protocol.Chat.GuildJoinRequests subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildJoinRequests();
+            if (changeCase_ == ChangeOneofCase.JoinRequests) {
+              subBuilder.MergeFrom(JoinRequests);
+            }
+            input.ReadMessage(subBuilder);
+            JoinRequests = subBuilder;
+            break;
+          }
+          case 82: {
+            global::Dreamsleeve.Protocol.Chat.GuildApplication subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildApplication();
+            if (changeCase_ == ChangeOneofCase.Applied) {
+              subBuilder.MergeFrom(Applied);
+            }
+            input.ReadMessage(subBuilder);
+            Applied = subBuilder;
+            break;
+          }
+          case 90: {
+            global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved();
+            if (changeCase_ == ChangeOneofCase.ApplicationRemoved) {
+              subBuilder.MergeFrom(ApplicationRemoved);
+            }
+            input.ReadMessage(subBuilder);
+            ApplicationRemoved = subBuilder;
+            break;
+          }
+          case 98: {
+            global::Dreamsleeve.Protocol.Chat.GuildListedChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildListedChanged();
+            if (changeCase_ == ChangeOneofCase.Listed) {
+              subBuilder.MergeFrom(Listed);
+            }
+            input.ReadMessage(subBuilder);
+            Listed = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -3034,6 +5781,60 @@ namespace Dreamsleeve.Protocol.Chat {
             InviteRemoved = input.ReadUInt64();
             break;
           }
+          case 58: {
+            global::Dreamsleeve.Protocol.Chat.GuildTitles subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildTitles();
+            if (changeCase_ == ChangeOneofCase.Titles) {
+              subBuilder.MergeFrom(Titles);
+            }
+            input.ReadMessage(subBuilder);
+            Titles = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Dreamsleeve.Protocol.Chat.GuildInfoChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildInfoChanged();
+            if (changeCase_ == ChangeOneofCase.Info) {
+              subBuilder.MergeFrom(Info);
+            }
+            input.ReadMessage(subBuilder);
+            Info = subBuilder;
+            break;
+          }
+          case 74: {
+            global::Dreamsleeve.Protocol.Chat.GuildJoinRequests subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildJoinRequests();
+            if (changeCase_ == ChangeOneofCase.JoinRequests) {
+              subBuilder.MergeFrom(JoinRequests);
+            }
+            input.ReadMessage(subBuilder);
+            JoinRequests = subBuilder;
+            break;
+          }
+          case 82: {
+            global::Dreamsleeve.Protocol.Chat.GuildApplication subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildApplication();
+            if (changeCase_ == ChangeOneofCase.Applied) {
+              subBuilder.MergeFrom(Applied);
+            }
+            input.ReadMessage(subBuilder);
+            Applied = subBuilder;
+            break;
+          }
+          case 90: {
+            global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildApplicationRemoved();
+            if (changeCase_ == ChangeOneofCase.ApplicationRemoved) {
+              subBuilder.MergeFrom(ApplicationRemoved);
+            }
+            input.ReadMessage(subBuilder);
+            ApplicationRemoved = subBuilder;
+            break;
+          }
+          case 98: {
+            global::Dreamsleeve.Protocol.Chat.GuildListedChanged subBuilder = new global::Dreamsleeve.Protocol.Chat.GuildListedChanged();
+            if (changeCase_ == ChangeOneofCase.Listed) {
+              subBuilder.MergeFrom(Listed);
+            }
+            input.ReadMessage(subBuilder);
+            Listed = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -3056,7 +5857,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3254,7 +6055,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3489,7 +6290,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3724,7 +6525,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3922,7 +6723,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[21]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4157,7 +6958,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[22]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4429,7 +7230,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[23]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4665,7 +7466,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[24]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4993,7 +7794,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[25]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5228,7 +8029,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[26]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5411,6 +8212,3503 @@ namespace Dreamsleeve.Protocol.Chat {
 
   }
 
+  /// <summary>
+  /// Custom roles: the master only.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class CreateGuildTitle : pb::IMessage<CreateGuildTitle>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<CreateGuildTitle> _parser = new pb::MessageParser<CreateGuildTitle>(() => new CreateGuildTitle());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<CreateGuildTitle> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[27]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CreateGuildTitle() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CreateGuildTitle(CreateGuildTitle other) : this() {
+      guildId_ = other.guildId_;
+      name_ = other.name_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CreateGuildTitle Clone() {
+      return new CreateGuildTitle(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 2;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as CreateGuildTitle);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(CreateGuildTitle other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Name != other.Name) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(CreateGuildTitle other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class RenameGuildTitle : pb::IMessage<RenameGuildTitle>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<RenameGuildTitle> _parser = new pb::MessageParser<RenameGuildTitle>(() => new RenameGuildTitle());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<RenameGuildTitle> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[28]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public RenameGuildTitle() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public RenameGuildTitle(RenameGuildTitle other) : this() {
+      guildId_ = other.guildId_;
+      titleId_ = other.titleId_;
+      name_ = other.name_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public RenameGuildTitle Clone() {
+      return new RenameGuildTitle(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "title_id" field.</summary>
+    public const int TitleIdFieldNumber = 2;
+    private ulong titleId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong TitleId {
+      get { return titleId_; }
+      set {
+        titleId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 3;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as RenameGuildTitle);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(RenameGuildTitle other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (TitleId != other.TitleId) return false;
+      if (Name != other.Name) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (TitleId != 0UL) hash ^= TitleId.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (TitleId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(TitleId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (TitleId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(TitleId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Name);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (TitleId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TitleId);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(RenameGuildTitle other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.TitleId != 0UL) {
+        TitleId = other.TitleId;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+          case 26: {
+            Name = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+          case 26: {
+            Name = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class DeleteGuildTitle : pb::IMessage<DeleteGuildTitle>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<DeleteGuildTitle> _parser = new pb::MessageParser<DeleteGuildTitle>(() => new DeleteGuildTitle());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<DeleteGuildTitle> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[29]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DeleteGuildTitle() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DeleteGuildTitle(DeleteGuildTitle other) : this() {
+      guildId_ = other.guildId_;
+      titleId_ = other.titleId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DeleteGuildTitle Clone() {
+      return new DeleteGuildTitle(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "title_id" field.</summary>
+    public const int TitleIdFieldNumber = 2;
+    private ulong titleId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong TitleId {
+      get { return titleId_; }
+      set {
+        titleId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as DeleteGuildTitle);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(DeleteGuildTitle other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (TitleId != other.TitleId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (TitleId != 0UL) hash ^= TitleId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (TitleId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(TitleId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (TitleId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(TitleId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (TitleId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TitleId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(DeleteGuildTitle other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.TitleId != 0UL) {
+        TitleId = other.TitleId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SetGuildMemberTitle : pb::IMessage<SetGuildMemberTitle>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SetGuildMemberTitle> _parser = new pb::MessageParser<SetGuildMemberTitle>(() => new SetGuildMemberTitle());
+    private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SetGuildMemberTitle> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[30]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildMemberTitle() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildMemberTitle(SetGuildMemberTitle other) : this() {
+      _hasBits0 = other._hasBits0;
+      guildId_ = other.guildId_;
+      playerId_ = other.playerId_;
+      titleId_ = other.titleId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildMemberTitle Clone() {
+      return new SetGuildMemberTitle(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "player_id" field.</summary>
+    public const int PlayerIdFieldNumber = 2;
+    private ulong playerId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong PlayerId {
+      get { return playerId_; }
+      set {
+        playerId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "title_id" field.</summary>
+    public const int TitleIdFieldNumber = 3;
+    private readonly static ulong TitleIdDefaultValue = 0UL;
+
+    private ulong titleId_;
+    /// <summary>
+    /// Absent: the member holds none.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong TitleId {
+      get { if ((_hasBits0 & 1) != 0) { return titleId_; } else { return TitleIdDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        titleId_ = value;
+      }
+    }
+    /// <summary>Gets whether the "title_id" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasTitleId {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "title_id" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearTitleId() {
+      _hasBits0 &= ~1;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SetGuildMemberTitle);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SetGuildMemberTitle other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (PlayerId != other.PlayerId) return false;
+      if (TitleId != other.TitleId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
+      if (HasTitleId) hash ^= TitleId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(PlayerId);
+      }
+      if (HasTitleId) {
+        output.WriteRawTag(24);
+        output.WriteUInt64(TitleId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(PlayerId);
+      }
+      if (HasTitleId) {
+        output.WriteRawTag(24);
+        output.WriteUInt64(TitleId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
+      }
+      if (HasTitleId) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(TitleId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SetGuildMemberTitle other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.PlayerId != 0UL) {
+        PlayerId = other.PlayerId;
+      }
+      if (other.HasTitleId) {
+        TitleId = other.TitleId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            TitleId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The master only: the chat text rules and the word list; empty clears it.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SetGuildInfo : pb::IMessage<SetGuildInfo>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SetGuildInfo> _parser = new pb::MessageParser<SetGuildInfo>(() => new SetGuildInfo());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SetGuildInfo> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[31]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildInfo() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildInfo(SetGuildInfo other) : this() {
+      guildId_ = other.guildId_;
+      info_ = other.info_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildInfo Clone() {
+      return new SetGuildInfo(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "info" field.</summary>
+    public const int InfoFieldNumber = 2;
+    private string info_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Info {
+      get { return info_; }
+      set {
+        info_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SetGuildInfo);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SetGuildInfo other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Info != other.Info) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Info.Length != 0) hash ^= Info.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Info);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Info);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Info.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Info);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SetGuildInfo other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Info.Length != 0) {
+        Info = other.Info;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Info = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Info = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SetGuildListed : pb::IMessage<SetGuildListed>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SetGuildListed> _parser = new pb::MessageParser<SetGuildListed>(() => new SetGuildListed());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SetGuildListed> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[32]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildListed() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildListed(SetGuildListed other) : this() {
+      guildId_ = other.guildId_;
+      listed_ = other.listed_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SetGuildListed Clone() {
+      return new SetGuildListed(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "listed" field.</summary>
+    public const int ListedFieldNumber = 2;
+    private bool listed_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Listed {
+      get { return listed_; }
+      set {
+        listed_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SetGuildListed);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SetGuildListed other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Listed != other.Listed) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Listed != false) hash ^= Listed.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Listed);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Listed != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Listed);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Listed != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SetGuildListed other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Listed != false) {
+        Listed = other.Listed;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Listed = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            Listed = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A listed guild the player is not in; the master and officers answer.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ApplyToGuild : pb::IMessage<ApplyToGuild>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ApplyToGuild> _parser = new pb::MessageParser<ApplyToGuild>(() => new ApplyToGuild());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ApplyToGuild> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[33]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ApplyToGuild() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ApplyToGuild(ApplyToGuild other) : this() {
+      guildId_ = other.guildId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ApplyToGuild Clone() {
+      return new ApplyToGuild(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ApplyToGuild);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ApplyToGuild other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ApplyToGuild other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class WithdrawGuildApplication : pb::IMessage<WithdrawGuildApplication>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<WithdrawGuildApplication> _parser = new pb::MessageParser<WithdrawGuildApplication>(() => new WithdrawGuildApplication());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<WithdrawGuildApplication> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[34]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public WithdrawGuildApplication() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public WithdrawGuildApplication(WithdrawGuildApplication other) : this() {
+      guildId_ = other.guildId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public WithdrawGuildApplication Clone() {
+      return new WithdrawGuildApplication(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as WithdrawGuildApplication);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(WithdrawGuildApplication other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(WithdrawGuildApplication other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AnswerGuildJoinRequest : pb::IMessage<AnswerGuildJoinRequest>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AnswerGuildJoinRequest> _parser = new pb::MessageParser<AnswerGuildJoinRequest>(() => new AnswerGuildJoinRequest());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AnswerGuildJoinRequest> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[35]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnswerGuildJoinRequest() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnswerGuildJoinRequest(AnswerGuildJoinRequest other) : this() {
+      guildId_ = other.guildId_;
+      playerId_ = other.playerId_;
+      accept_ = other.accept_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AnswerGuildJoinRequest Clone() {
+      return new AnswerGuildJoinRequest(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "player_id" field.</summary>
+    public const int PlayerIdFieldNumber = 2;
+    private ulong playerId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong PlayerId {
+      get { return playerId_; }
+      set {
+        playerId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "accept" field.</summary>
+    public const int AcceptFieldNumber = 3;
+    private bool accept_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Accept {
+      get { return accept_; }
+      set {
+        accept_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AnswerGuildJoinRequest);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AnswerGuildJoinRequest other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (PlayerId != other.PlayerId) return false;
+      if (Accept != other.Accept) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (PlayerId != 0UL) hash ^= PlayerId.GetHashCode();
+      if (Accept != false) hash ^= Accept.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(PlayerId);
+      }
+      if (Accept != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(Accept);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(PlayerId);
+      }
+      if (Accept != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(Accept);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (PlayerId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(PlayerId);
+      }
+      if (Accept != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AnswerGuildJoinRequest other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.PlayerId != 0UL) {
+        PlayerId = other.PlayerId;
+      }
+      if (other.Accept != false) {
+        Accept = other.Accept;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            Accept = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 16: {
+            PlayerId = input.ReadUInt64();
+            break;
+          }
+          case 24: {
+            Accept = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// The last entry of the previous page, as received: the next page follows it.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildCatalogAfter : pb::IMessage<GuildCatalogAfter>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildCatalogAfter> _parser = new pb::MessageParser<GuildCatalogAfter>(() => new GuildCatalogAfter());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildCatalogAfter> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[36]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogAfter() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogAfter(GuildCatalogAfter other) : this() {
+      guildId_ = other.guildId_;
+      name_ = other.name_;
+      members_ = other.members_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogAfter Clone() {
+      return new GuildCatalogAfter(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 2;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "members" field.</summary>
+    public const int MembersFieldNumber = 3;
+    private uint members_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Members {
+      get { return members_; }
+      set {
+        members_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildCatalogAfter);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildCatalogAfter other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Name != other.Name) return false;
+      if (Members != other.Members) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (Members != 0) hash ^= Members.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (Members != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Members);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (Members != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Members);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (Members != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Members);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildCatalogAfter other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      if (other.Members != 0) {
+        Members = other.Members;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 24: {
+            Members = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 24: {
+            Members = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// One page of listed guilds; the server decides the page size. Answered by
+  /// ServerPacket.guild_catalog_page instead of GuildCommandDone.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class QueryGuildCatalog : pb::IMessage<QueryGuildCatalog>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<QueryGuildCatalog> _parser = new pb::MessageParser<QueryGuildCatalog>(() => new QueryGuildCatalog());
+    private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<QueryGuildCatalog> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[37]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public QueryGuildCatalog() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public QueryGuildCatalog(QueryGuildCatalog other) : this() {
+      _hasBits0 = other._hasBits0;
+      search_ = other.search_;
+      minMembers_ = other.minMembers_;
+      maxMembers_ = other.maxMembers_;
+      openOnly_ = other.openOnly_;
+      sort_ = other.sort_;
+      after_ = other.after_ != null ? other.after_.Clone() : null;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public QueryGuildCatalog Clone() {
+      return new QueryGuildCatalog(this);
+    }
+
+    /// <summary>Field number for the "search" field.</summary>
+    public const int SearchFieldNumber = 1;
+    private string search_ = "";
+    /// <summary>
+    /// Part of the name, regardless of case; empty: any.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Search {
+      get { return search_; }
+      set {
+        search_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "min_members" field.</summary>
+    public const int MinMembersFieldNumber = 2;
+    private uint minMembers_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MinMembers {
+      get { return minMembers_; }
+      set {
+        minMembers_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_members" field.</summary>
+    public const int MaxMembersFieldNumber = 3;
+    private readonly static uint MaxMembersDefaultValue = 0;
+
+    private uint maxMembers_;
+    /// <summary>
+    /// Absent: no upper bound.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MaxMembers {
+      get { if ((_hasBits0 & 1) != 0) { return maxMembers_; } else { return MaxMembersDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        maxMembers_ = value;
+      }
+    }
+    /// <summary>Gets whether the "max_members" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasMaxMembers {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "max_members" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearMaxMembers() {
+      _hasBits0 &= ~1;
+    }
+
+    /// <summary>Field number for the "open_only" field.</summary>
+    public const int OpenOnlyFieldNumber = 4;
+    private bool openOnly_;
+    /// <summary>
+    /// Only guilds with free places.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool OpenOnly {
+      get { return openOnly_; }
+      set {
+        openOnly_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "sort" field.</summary>
+    public const int SortFieldNumber = 5;
+    private global::Dreamsleeve.Protocol.Chat.GuildCatalogSort sort_ = global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildCatalogSort Sort {
+      get { return sort_; }
+      set {
+        sort_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "after" field.</summary>
+    public const int AfterFieldNumber = 6;
+    private global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter after_;
+    /// <summary>
+    /// Absent: the first page.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter After {
+      get { return after_; }
+      set {
+        after_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as QueryGuildCatalog);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(QueryGuildCatalog other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Search != other.Search) return false;
+      if (MinMembers != other.MinMembers) return false;
+      if (MaxMembers != other.MaxMembers) return false;
+      if (OpenOnly != other.OpenOnly) return false;
+      if (Sort != other.Sort) return false;
+      if (!object.Equals(After, other.After)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Search.Length != 0) hash ^= Search.GetHashCode();
+      if (MinMembers != 0) hash ^= MinMembers.GetHashCode();
+      if (HasMaxMembers) hash ^= MaxMembers.GetHashCode();
+      if (OpenOnly != false) hash ^= OpenOnly.GetHashCode();
+      if (Sort != global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified) hash ^= Sort.GetHashCode();
+      if (after_ != null) hash ^= After.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Search.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Search);
+      }
+      if (MinMembers != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(MinMembers);
+      }
+      if (HasMaxMembers) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(MaxMembers);
+      }
+      if (OpenOnly != false) {
+        output.WriteRawTag(32);
+        output.WriteBool(OpenOnly);
+      }
+      if (Sort != global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified) {
+        output.WriteRawTag(40);
+        output.WriteEnum((int) Sort);
+      }
+      if (after_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(After);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Search.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Search);
+      }
+      if (MinMembers != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(MinMembers);
+      }
+      if (HasMaxMembers) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(MaxMembers);
+      }
+      if (OpenOnly != false) {
+        output.WriteRawTag(32);
+        output.WriteBool(OpenOnly);
+      }
+      if (Sort != global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified) {
+        output.WriteRawTag(40);
+        output.WriteEnum((int) Sort);
+      }
+      if (after_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(After);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Search.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Search);
+      }
+      if (MinMembers != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MinMembers);
+      }
+      if (HasMaxMembers) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaxMembers);
+      }
+      if (OpenOnly != false) {
+        size += 1 + 1;
+      }
+      if (Sort != global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Sort);
+      }
+      if (after_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(After);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(QueryGuildCatalog other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Search.Length != 0) {
+        Search = other.Search;
+      }
+      if (other.MinMembers != 0) {
+        MinMembers = other.MinMembers;
+      }
+      if (other.HasMaxMembers) {
+        MaxMembers = other.MaxMembers;
+      }
+      if (other.OpenOnly != false) {
+        OpenOnly = other.OpenOnly;
+      }
+      if (other.Sort != global::Dreamsleeve.Protocol.Chat.GuildCatalogSort.Unspecified) {
+        Sort = other.Sort;
+      }
+      if (other.after_ != null) {
+        if (after_ == null) {
+          After = new global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter();
+        }
+        After.MergeFrom(other.After);
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            Search = input.ReadString();
+            break;
+          }
+          case 16: {
+            MinMembers = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            MaxMembers = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            OpenOnly = input.ReadBool();
+            break;
+          }
+          case 40: {
+            Sort = (global::Dreamsleeve.Protocol.Chat.GuildCatalogSort) input.ReadEnum();
+            break;
+          }
+          case 50: {
+            if (after_ == null) {
+              After = new global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter();
+            }
+            input.ReadMessage(After);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            Search = input.ReadString();
+            break;
+          }
+          case 16: {
+            MinMembers = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            MaxMembers = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            OpenOnly = input.ReadBool();
+            break;
+          }
+          case 40: {
+            Sort = (global::Dreamsleeve.Protocol.Chat.GuildCatalogSort) input.ReadEnum();
+            break;
+          }
+          case 50: {
+            if (after_ == null) {
+              After = new global::Dreamsleeve.Protocol.Chat.GuildCatalogAfter();
+            }
+            input.ReadMessage(After);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildCatalogEntry : pb::IMessage<GuildCatalogEntry>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildCatalogEntry> _parser = new pb::MessageParser<GuildCatalogEntry>(() => new GuildCatalogEntry());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildCatalogEntry> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[38]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogEntry() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogEntry(GuildCatalogEntry other) : this() {
+      guildId_ = other.guildId_;
+      name_ = other.name_;
+      info_ = other.info_;
+      members_ = other.members_;
+      createdAtUnixMs_ = other.createdAtUnixMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogEntry Clone() {
+      return new GuildCatalogEntry(this);
+    }
+
+    /// <summary>Field number for the "guild_id" field.</summary>
+    public const int GuildIdFieldNumber = 1;
+    private ulong guildId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong GuildId {
+      get { return guildId_; }
+      set {
+        guildId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 2;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "info" field.</summary>
+    public const int InfoFieldNumber = 3;
+    private string info_ = "";
+    /// <summary>
+    /// Empty: nothing.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Info {
+      get { return info_; }
+      set {
+        info_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "members" field.</summary>
+    public const int MembersFieldNumber = 4;
+    private uint members_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Members {
+      get { return members_; }
+      set {
+        members_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "created_at_unix_ms" field.</summary>
+    public const int CreatedAtUnixMsFieldNumber = 5;
+    private long createdAtUnixMs_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long CreatedAtUnixMs {
+      get { return createdAtUnixMs_; }
+      set {
+        createdAtUnixMs_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildCatalogEntry);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildCatalogEntry other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (GuildId != other.GuildId) return false;
+      if (Name != other.Name) return false;
+      if (Info != other.Info) return false;
+      if (Members != other.Members) return false;
+      if (CreatedAtUnixMs != other.CreatedAtUnixMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (GuildId != 0UL) hash ^= GuildId.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (Info.Length != 0) hash ^= Info.GetHashCode();
+      if (Members != 0) hash ^= Members.GetHashCode();
+      if (CreatedAtUnixMs != 0L) hash ^= CreatedAtUnixMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Info);
+      }
+      if (Members != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Members);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        output.WriteRawTag(40);
+        output.WriteInt64(CreatedAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (GuildId != 0UL) {
+        output.WriteRawTag(8);
+        output.WriteUInt64(GuildId);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (Info.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Info);
+      }
+      if (Members != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Members);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        output.WriteRawTag(40);
+        output.WriteInt64(CreatedAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (GuildId != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GuildId);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (Info.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Info);
+      }
+      if (Members != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Members);
+      }
+      if (CreatedAtUnixMs != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(CreatedAtUnixMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildCatalogEntry other) {
+      if (other == null) {
+        return;
+      }
+      if (other.GuildId != 0UL) {
+        GuildId = other.GuildId;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      if (other.Info.Length != 0) {
+        Info = other.Info;
+      }
+      if (other.Members != 0) {
+        Members = other.Members;
+      }
+      if (other.CreatedAtUnixMs != 0L) {
+        CreatedAtUnixMs = other.CreatedAtUnixMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 26: {
+            Info = input.ReadString();
+            break;
+          }
+          case 32: {
+            Members = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            CreatedAtUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            GuildId = input.ReadUInt64();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 26: {
+            Info = input.ReadString();
+            break;
+          }
+          case 32: {
+            Members = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            CreatedAtUnixMs = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class GuildCatalogPage : pb::IMessage<GuildCatalogPage>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<GuildCatalogPage> _parser = new pb::MessageParser<GuildCatalogPage>(() => new GuildCatalogPage());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<GuildCatalogPage> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[39]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogPage() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogPage(GuildCatalogPage other) : this() {
+      guilds_ = other.guilds_.Clone();
+      more_ = other.more_;
+      total_ = other.total_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public GuildCatalogPage Clone() {
+      return new GuildCatalogPage(this);
+    }
+
+    /// <summary>Field number for the "guilds" field.</summary>
+    public const int GuildsFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry> _repeated_guilds_codec
+        = pb::FieldCodec.ForMessage(10, global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry.Parser);
+    private readonly pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry> guilds_ = new pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Dreamsleeve.Protocol.Chat.GuildCatalogEntry> Guilds {
+      get { return guilds_; }
+    }
+
+    /// <summary>Field number for the "more" field.</summary>
+    public const int MoreFieldNumber = 2;
+    private bool more_;
+    /// <summary>
+    /// Another page follows the last entry.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool More {
+      get { return more_; }
+      set {
+        more_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "total" field.</summary>
+    public const int TotalFieldNumber = 3;
+    private uint total_;
+    /// <summary>
+    /// Every guild the query matches.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Total {
+      get { return total_; }
+      set {
+        total_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as GuildCatalogPage);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(GuildCatalogPage other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!guilds_.Equals(other.guilds_)) return false;
+      if (More != other.More) return false;
+      if (Total != other.Total) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= guilds_.GetHashCode();
+      if (More != false) hash ^= More.GetHashCode();
+      if (Total != 0) hash ^= Total.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      guilds_.WriteTo(output, _repeated_guilds_codec);
+      if (More != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(More);
+      }
+      if (Total != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Total);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      guilds_.WriteTo(ref output, _repeated_guilds_codec);
+      if (More != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(More);
+      }
+      if (Total != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Total);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += guilds_.CalculateSize(_repeated_guilds_codec);
+      if (More != false) {
+        size += 1 + 1;
+      }
+      if (Total != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Total);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(GuildCatalogPage other) {
+      if (other == null) {
+        return;
+      }
+      guilds_.Add(other.guilds_);
+      if (other.More != false) {
+        More = other.More;
+      }
+      if (other.Total != 0) {
+        Total = other.Total;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            guilds_.AddEntriesFrom(input, _repeated_guilds_codec);
+            break;
+          }
+          case 16: {
+            More = input.ReadBool();
+            break;
+          }
+          case 24: {
+            Total = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            guilds_.AddEntriesFrom(ref input, _repeated_guilds_codec);
+            break;
+          }
+          case 16: {
+            More = input.ReadBool();
+            break;
+          }
+          case 24: {
+            Total = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class GuildCommand : pb::IMessage<GuildCommand>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -5426,7 +11724,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[40]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5476,6 +11774,36 @@ namespace Dreamsleeve.Protocol.Chat {
           break;
         case ActionOneofCase.Disband:
           Disband = other.Disband.Clone();
+          break;
+        case ActionOneofCase.CreateTitle:
+          CreateTitle = other.CreateTitle.Clone();
+          break;
+        case ActionOneofCase.RenameTitle:
+          RenameTitle = other.RenameTitle.Clone();
+          break;
+        case ActionOneofCase.DeleteTitle:
+          DeleteTitle = other.DeleteTitle.Clone();
+          break;
+        case ActionOneofCase.SetTitle:
+          SetTitle = other.SetTitle.Clone();
+          break;
+        case ActionOneofCase.SetInfo:
+          SetInfo = other.SetInfo.Clone();
+          break;
+        case ActionOneofCase.SetListed:
+          SetListed = other.SetListed.Clone();
+          break;
+        case ActionOneofCase.Apply:
+          Apply = other.Apply.Clone();
+          break;
+        case ActionOneofCase.Withdraw:
+          Withdraw = other.Withdraw.Clone();
+          break;
+        case ActionOneofCase.AnswerRequest:
+          AnswerRequest = other.AnswerRequest.Clone();
+          break;
+        case ActionOneofCase.Catalog:
+          Catalog = other.Catalog.Clone();
           break;
       }
 
@@ -5608,6 +11936,126 @@ namespace Dreamsleeve.Protocol.Chat {
       }
     }
 
+    /// <summary>Field number for the "create_title" field.</summary>
+    public const int CreateTitleFieldNumber = 11;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.CreateGuildTitle CreateTitle {
+      get { return actionCase_ == ActionOneofCase.CreateTitle ? (global::Dreamsleeve.Protocol.Chat.CreateGuildTitle) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.CreateTitle;
+      }
+    }
+
+    /// <summary>Field number for the "rename_title" field.</summary>
+    public const int RenameTitleFieldNumber = 12;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.RenameGuildTitle RenameTitle {
+      get { return actionCase_ == ActionOneofCase.RenameTitle ? (global::Dreamsleeve.Protocol.Chat.RenameGuildTitle) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.RenameTitle;
+      }
+    }
+
+    /// <summary>Field number for the "delete_title" field.</summary>
+    public const int DeleteTitleFieldNumber = 13;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle DeleteTitle {
+      get { return actionCase_ == ActionOneofCase.DeleteTitle ? (global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.DeleteTitle;
+      }
+    }
+
+    /// <summary>Field number for the "set_title" field.</summary>
+    public const int SetTitleFieldNumber = 14;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle SetTitle {
+      get { return actionCase_ == ActionOneofCase.SetTitle ? (global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.SetTitle;
+      }
+    }
+
+    /// <summary>Field number for the "set_info" field.</summary>
+    public const int SetInfoFieldNumber = 15;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.SetGuildInfo SetInfo {
+      get { return actionCase_ == ActionOneofCase.SetInfo ? (global::Dreamsleeve.Protocol.Chat.SetGuildInfo) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.SetInfo;
+      }
+    }
+
+    /// <summary>Field number for the "set_listed" field.</summary>
+    public const int SetListedFieldNumber = 16;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.SetGuildListed SetListed {
+      get { return actionCase_ == ActionOneofCase.SetListed ? (global::Dreamsleeve.Protocol.Chat.SetGuildListed) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.SetListed;
+      }
+    }
+
+    /// <summary>Field number for the "apply" field.</summary>
+    public const int ApplyFieldNumber = 17;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.ApplyToGuild Apply {
+      get { return actionCase_ == ActionOneofCase.Apply ? (global::Dreamsleeve.Protocol.Chat.ApplyToGuild) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.Apply;
+      }
+    }
+
+    /// <summary>Field number for the "withdraw" field.</summary>
+    public const int WithdrawFieldNumber = 18;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication Withdraw {
+      get { return actionCase_ == ActionOneofCase.Withdraw ? (global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.Withdraw;
+      }
+    }
+
+    /// <summary>Field number for the "answer_request" field.</summary>
+    public const int AnswerRequestFieldNumber = 19;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest AnswerRequest {
+      get { return actionCase_ == ActionOneofCase.AnswerRequest ? (global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.AnswerRequest;
+      }
+    }
+
+    /// <summary>Field number for the "catalog" field.</summary>
+    public const int CatalogFieldNumber = 20;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog Catalog {
+      get { return actionCase_ == ActionOneofCase.Catalog ? (global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog) action_ : null; }
+      set {
+        action_ = value;
+        actionCase_ = value == null ? ActionOneofCase.None : ActionOneofCase.Catalog;
+      }
+    }
+
     private object action_;
     /// <summary>Enum of possible cases for the "action" oneof.</summary>
     public enum ActionOneofCase {
@@ -5622,6 +12070,16 @@ namespace Dreamsleeve.Protocol.Chat {
       Mute = 8,
       Unmute = 9,
       Disband = 10,
+      CreateTitle = 11,
+      RenameTitle = 12,
+      DeleteTitle = 13,
+      SetTitle = 14,
+      SetInfo = 15,
+      SetListed = 16,
+      Apply = 17,
+      Withdraw = 18,
+      AnswerRequest = 19,
+      Catalog = 20,
     }
     private ActionOneofCase actionCase_ = ActionOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5662,6 +12120,16 @@ namespace Dreamsleeve.Protocol.Chat {
       if (!object.Equals(Mute, other.Mute)) return false;
       if (!object.Equals(Unmute, other.Unmute)) return false;
       if (!object.Equals(Disband, other.Disband)) return false;
+      if (!object.Equals(CreateTitle, other.CreateTitle)) return false;
+      if (!object.Equals(RenameTitle, other.RenameTitle)) return false;
+      if (!object.Equals(DeleteTitle, other.DeleteTitle)) return false;
+      if (!object.Equals(SetTitle, other.SetTitle)) return false;
+      if (!object.Equals(SetInfo, other.SetInfo)) return false;
+      if (!object.Equals(SetListed, other.SetListed)) return false;
+      if (!object.Equals(Apply, other.Apply)) return false;
+      if (!object.Equals(Withdraw, other.Withdraw)) return false;
+      if (!object.Equals(AnswerRequest, other.AnswerRequest)) return false;
+      if (!object.Equals(Catalog, other.Catalog)) return false;
       if (ActionCase != other.ActionCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -5680,6 +12148,16 @@ namespace Dreamsleeve.Protocol.Chat {
       if (actionCase_ == ActionOneofCase.Mute) hash ^= Mute.GetHashCode();
       if (actionCase_ == ActionOneofCase.Unmute) hash ^= Unmute.GetHashCode();
       if (actionCase_ == ActionOneofCase.Disband) hash ^= Disband.GetHashCode();
+      if (actionCase_ == ActionOneofCase.CreateTitle) hash ^= CreateTitle.GetHashCode();
+      if (actionCase_ == ActionOneofCase.RenameTitle) hash ^= RenameTitle.GetHashCode();
+      if (actionCase_ == ActionOneofCase.DeleteTitle) hash ^= DeleteTitle.GetHashCode();
+      if (actionCase_ == ActionOneofCase.SetTitle) hash ^= SetTitle.GetHashCode();
+      if (actionCase_ == ActionOneofCase.SetInfo) hash ^= SetInfo.GetHashCode();
+      if (actionCase_ == ActionOneofCase.SetListed) hash ^= SetListed.GetHashCode();
+      if (actionCase_ == ActionOneofCase.Apply) hash ^= Apply.GetHashCode();
+      if (actionCase_ == ActionOneofCase.Withdraw) hash ^= Withdraw.GetHashCode();
+      if (actionCase_ == ActionOneofCase.AnswerRequest) hash ^= AnswerRequest.GetHashCode();
+      if (actionCase_ == ActionOneofCase.Catalog) hash ^= Catalog.GetHashCode();
       hash ^= (int) actionCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -5739,6 +12217,46 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(82);
         output.WriteMessage(Disband);
       }
+      if (actionCase_ == ActionOneofCase.CreateTitle) {
+        output.WriteRawTag(90);
+        output.WriteMessage(CreateTitle);
+      }
+      if (actionCase_ == ActionOneofCase.RenameTitle) {
+        output.WriteRawTag(98);
+        output.WriteMessage(RenameTitle);
+      }
+      if (actionCase_ == ActionOneofCase.DeleteTitle) {
+        output.WriteRawTag(106);
+        output.WriteMessage(DeleteTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetTitle) {
+        output.WriteRawTag(114);
+        output.WriteMessage(SetTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetInfo) {
+        output.WriteRawTag(122);
+        output.WriteMessage(SetInfo);
+      }
+      if (actionCase_ == ActionOneofCase.SetListed) {
+        output.WriteRawTag(130, 1);
+        output.WriteMessage(SetListed);
+      }
+      if (actionCase_ == ActionOneofCase.Apply) {
+        output.WriteRawTag(138, 1);
+        output.WriteMessage(Apply);
+      }
+      if (actionCase_ == ActionOneofCase.Withdraw) {
+        output.WriteRawTag(146, 1);
+        output.WriteMessage(Withdraw);
+      }
+      if (actionCase_ == ActionOneofCase.AnswerRequest) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(AnswerRequest);
+      }
+      if (actionCase_ == ActionOneofCase.Catalog) {
+        output.WriteRawTag(162, 1);
+        output.WriteMessage(Catalog);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5789,6 +12307,46 @@ namespace Dreamsleeve.Protocol.Chat {
         output.WriteRawTag(82);
         output.WriteMessage(Disband);
       }
+      if (actionCase_ == ActionOneofCase.CreateTitle) {
+        output.WriteRawTag(90);
+        output.WriteMessage(CreateTitle);
+      }
+      if (actionCase_ == ActionOneofCase.RenameTitle) {
+        output.WriteRawTag(98);
+        output.WriteMessage(RenameTitle);
+      }
+      if (actionCase_ == ActionOneofCase.DeleteTitle) {
+        output.WriteRawTag(106);
+        output.WriteMessage(DeleteTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetTitle) {
+        output.WriteRawTag(114);
+        output.WriteMessage(SetTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetInfo) {
+        output.WriteRawTag(122);
+        output.WriteMessage(SetInfo);
+      }
+      if (actionCase_ == ActionOneofCase.SetListed) {
+        output.WriteRawTag(130, 1);
+        output.WriteMessage(SetListed);
+      }
+      if (actionCase_ == ActionOneofCase.Apply) {
+        output.WriteRawTag(138, 1);
+        output.WriteMessage(Apply);
+      }
+      if (actionCase_ == ActionOneofCase.Withdraw) {
+        output.WriteRawTag(146, 1);
+        output.WriteMessage(Withdraw);
+      }
+      if (actionCase_ == ActionOneofCase.AnswerRequest) {
+        output.WriteRawTag(154, 1);
+        output.WriteMessage(AnswerRequest);
+      }
+      if (actionCase_ == ActionOneofCase.Catalog) {
+        output.WriteRawTag(162, 1);
+        output.WriteMessage(Catalog);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5828,6 +12386,36 @@ namespace Dreamsleeve.Protocol.Chat {
       }
       if (actionCase_ == ActionOneofCase.Disband) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Disband);
+      }
+      if (actionCase_ == ActionOneofCase.CreateTitle) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(CreateTitle);
+      }
+      if (actionCase_ == ActionOneofCase.RenameTitle) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(RenameTitle);
+      }
+      if (actionCase_ == ActionOneofCase.DeleteTitle) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(DeleteTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetTitle) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(SetTitle);
+      }
+      if (actionCase_ == ActionOneofCase.SetInfo) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(SetInfo);
+      }
+      if (actionCase_ == ActionOneofCase.SetListed) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(SetListed);
+      }
+      if (actionCase_ == ActionOneofCase.Apply) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Apply);
+      }
+      if (actionCase_ == ActionOneofCase.Withdraw) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Withdraw);
+      }
+      if (actionCase_ == ActionOneofCase.AnswerRequest) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(AnswerRequest);
+      }
+      if (actionCase_ == ActionOneofCase.Catalog) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Catalog);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -5901,6 +12489,66 @@ namespace Dreamsleeve.Protocol.Chat {
             Disband = new global::Dreamsleeve.Protocol.Chat.DisbandGuild();
           }
           Disband.MergeFrom(other.Disband);
+          break;
+        case ActionOneofCase.CreateTitle:
+          if (CreateTitle == null) {
+            CreateTitle = new global::Dreamsleeve.Protocol.Chat.CreateGuildTitle();
+          }
+          CreateTitle.MergeFrom(other.CreateTitle);
+          break;
+        case ActionOneofCase.RenameTitle:
+          if (RenameTitle == null) {
+            RenameTitle = new global::Dreamsleeve.Protocol.Chat.RenameGuildTitle();
+          }
+          RenameTitle.MergeFrom(other.RenameTitle);
+          break;
+        case ActionOneofCase.DeleteTitle:
+          if (DeleteTitle == null) {
+            DeleteTitle = new global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle();
+          }
+          DeleteTitle.MergeFrom(other.DeleteTitle);
+          break;
+        case ActionOneofCase.SetTitle:
+          if (SetTitle == null) {
+            SetTitle = new global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle();
+          }
+          SetTitle.MergeFrom(other.SetTitle);
+          break;
+        case ActionOneofCase.SetInfo:
+          if (SetInfo == null) {
+            SetInfo = new global::Dreamsleeve.Protocol.Chat.SetGuildInfo();
+          }
+          SetInfo.MergeFrom(other.SetInfo);
+          break;
+        case ActionOneofCase.SetListed:
+          if (SetListed == null) {
+            SetListed = new global::Dreamsleeve.Protocol.Chat.SetGuildListed();
+          }
+          SetListed.MergeFrom(other.SetListed);
+          break;
+        case ActionOneofCase.Apply:
+          if (Apply == null) {
+            Apply = new global::Dreamsleeve.Protocol.Chat.ApplyToGuild();
+          }
+          Apply.MergeFrom(other.Apply);
+          break;
+        case ActionOneofCase.Withdraw:
+          if (Withdraw == null) {
+            Withdraw = new global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication();
+          }
+          Withdraw.MergeFrom(other.Withdraw);
+          break;
+        case ActionOneofCase.AnswerRequest:
+          if (AnswerRequest == null) {
+            AnswerRequest = new global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest();
+          }
+          AnswerRequest.MergeFrom(other.AnswerRequest);
+          break;
+        case ActionOneofCase.Catalog:
+          if (Catalog == null) {
+            Catalog = new global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog();
+          }
+          Catalog.MergeFrom(other.Catalog);
           break;
       }
 
@@ -6013,6 +12661,96 @@ namespace Dreamsleeve.Protocol.Chat {
             Disband = subBuilder;
             break;
           }
+          case 90: {
+            global::Dreamsleeve.Protocol.Chat.CreateGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.CreateGuildTitle();
+            if (actionCase_ == ActionOneofCase.CreateTitle) {
+              subBuilder.MergeFrom(CreateTitle);
+            }
+            input.ReadMessage(subBuilder);
+            CreateTitle = subBuilder;
+            break;
+          }
+          case 98: {
+            global::Dreamsleeve.Protocol.Chat.RenameGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.RenameGuildTitle();
+            if (actionCase_ == ActionOneofCase.RenameTitle) {
+              subBuilder.MergeFrom(RenameTitle);
+            }
+            input.ReadMessage(subBuilder);
+            RenameTitle = subBuilder;
+            break;
+          }
+          case 106: {
+            global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle();
+            if (actionCase_ == ActionOneofCase.DeleteTitle) {
+              subBuilder.MergeFrom(DeleteTitle);
+            }
+            input.ReadMessage(subBuilder);
+            DeleteTitle = subBuilder;
+            break;
+          }
+          case 114: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle();
+            if (actionCase_ == ActionOneofCase.SetTitle) {
+              subBuilder.MergeFrom(SetTitle);
+            }
+            input.ReadMessage(subBuilder);
+            SetTitle = subBuilder;
+            break;
+          }
+          case 122: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildInfo subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildInfo();
+            if (actionCase_ == ActionOneofCase.SetInfo) {
+              subBuilder.MergeFrom(SetInfo);
+            }
+            input.ReadMessage(subBuilder);
+            SetInfo = subBuilder;
+            break;
+          }
+          case 130: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildListed subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildListed();
+            if (actionCase_ == ActionOneofCase.SetListed) {
+              subBuilder.MergeFrom(SetListed);
+            }
+            input.ReadMessage(subBuilder);
+            SetListed = subBuilder;
+            break;
+          }
+          case 138: {
+            global::Dreamsleeve.Protocol.Chat.ApplyToGuild subBuilder = new global::Dreamsleeve.Protocol.Chat.ApplyToGuild();
+            if (actionCase_ == ActionOneofCase.Apply) {
+              subBuilder.MergeFrom(Apply);
+            }
+            input.ReadMessage(subBuilder);
+            Apply = subBuilder;
+            break;
+          }
+          case 146: {
+            global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication subBuilder = new global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication();
+            if (actionCase_ == ActionOneofCase.Withdraw) {
+              subBuilder.MergeFrom(Withdraw);
+            }
+            input.ReadMessage(subBuilder);
+            Withdraw = subBuilder;
+            break;
+          }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest subBuilder = new global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest();
+            if (actionCase_ == ActionOneofCase.AnswerRequest) {
+              subBuilder.MergeFrom(AnswerRequest);
+            }
+            input.ReadMessage(subBuilder);
+            AnswerRequest = subBuilder;
+            break;
+          }
+          case 162: {
+            global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog subBuilder = new global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog();
+            if (actionCase_ == ActionOneofCase.Catalog) {
+              subBuilder.MergeFrom(Catalog);
+            }
+            input.ReadMessage(subBuilder);
+            Catalog = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -6122,6 +12860,96 @@ namespace Dreamsleeve.Protocol.Chat {
             Disband = subBuilder;
             break;
           }
+          case 90: {
+            global::Dreamsleeve.Protocol.Chat.CreateGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.CreateGuildTitle();
+            if (actionCase_ == ActionOneofCase.CreateTitle) {
+              subBuilder.MergeFrom(CreateTitle);
+            }
+            input.ReadMessage(subBuilder);
+            CreateTitle = subBuilder;
+            break;
+          }
+          case 98: {
+            global::Dreamsleeve.Protocol.Chat.RenameGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.RenameGuildTitle();
+            if (actionCase_ == ActionOneofCase.RenameTitle) {
+              subBuilder.MergeFrom(RenameTitle);
+            }
+            input.ReadMessage(subBuilder);
+            RenameTitle = subBuilder;
+            break;
+          }
+          case 106: {
+            global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.DeleteGuildTitle();
+            if (actionCase_ == ActionOneofCase.DeleteTitle) {
+              subBuilder.MergeFrom(DeleteTitle);
+            }
+            input.ReadMessage(subBuilder);
+            DeleteTitle = subBuilder;
+            break;
+          }
+          case 114: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildMemberTitle();
+            if (actionCase_ == ActionOneofCase.SetTitle) {
+              subBuilder.MergeFrom(SetTitle);
+            }
+            input.ReadMessage(subBuilder);
+            SetTitle = subBuilder;
+            break;
+          }
+          case 122: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildInfo subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildInfo();
+            if (actionCase_ == ActionOneofCase.SetInfo) {
+              subBuilder.MergeFrom(SetInfo);
+            }
+            input.ReadMessage(subBuilder);
+            SetInfo = subBuilder;
+            break;
+          }
+          case 130: {
+            global::Dreamsleeve.Protocol.Chat.SetGuildListed subBuilder = new global::Dreamsleeve.Protocol.Chat.SetGuildListed();
+            if (actionCase_ == ActionOneofCase.SetListed) {
+              subBuilder.MergeFrom(SetListed);
+            }
+            input.ReadMessage(subBuilder);
+            SetListed = subBuilder;
+            break;
+          }
+          case 138: {
+            global::Dreamsleeve.Protocol.Chat.ApplyToGuild subBuilder = new global::Dreamsleeve.Protocol.Chat.ApplyToGuild();
+            if (actionCase_ == ActionOneofCase.Apply) {
+              subBuilder.MergeFrom(Apply);
+            }
+            input.ReadMessage(subBuilder);
+            Apply = subBuilder;
+            break;
+          }
+          case 146: {
+            global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication subBuilder = new global::Dreamsleeve.Protocol.Chat.WithdrawGuildApplication();
+            if (actionCase_ == ActionOneofCase.Withdraw) {
+              subBuilder.MergeFrom(Withdraw);
+            }
+            input.ReadMessage(subBuilder);
+            Withdraw = subBuilder;
+            break;
+          }
+          case 154: {
+            global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest subBuilder = new global::Dreamsleeve.Protocol.Chat.AnswerGuildJoinRequest();
+            if (actionCase_ == ActionOneofCase.AnswerRequest) {
+              subBuilder.MergeFrom(AnswerRequest);
+            }
+            input.ReadMessage(subBuilder);
+            AnswerRequest = subBuilder;
+            break;
+          }
+          case 162: {
+            global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog subBuilder = new global::Dreamsleeve.Protocol.Chat.QueryGuildCatalog();
+            if (actionCase_ == ActionOneofCase.Catalog) {
+              subBuilder.MergeFrom(Catalog);
+            }
+            input.ReadMessage(subBuilder);
+            Catalog = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -6147,7 +12975,7 @@ namespace Dreamsleeve.Protocol.Chat {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Dreamsleeve.Protocol.Chat.GuildReflection.Descriptor.MessageTypes[41]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

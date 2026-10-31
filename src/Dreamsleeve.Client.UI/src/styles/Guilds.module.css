@@ -66,6 +66,17 @@
 .members li[data-role="member"] .role {
   color: var(--muted);
 }
+/* A custom role: the guild's own name for the member, no rights. */
+.title {
+  padding: 0 6px;
+  border: 1px solid var(--guild);
+  color: var(--guild);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.section h4 {
+  margin: 0;
+}
 .muted {
   margin: 0;
   color: var(--muted);
@@ -106,6 +117,84 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+/* The master's text about the guild, line breaks kept. */
+.about {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.motdBy {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.motdBy button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aboutForm {
+  display: grid;
+  gap: 6px;
+}
+.aboutForm textarea {
+  width: 100%;
+  max-width: 560px;
+  resize: vertical;
+}
+/* The public catalog: filters above a list that grows in the panel's
+   scroll, the next page loading as its end comes into sight. */
+.catalogFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.catalogFilters input[aria-label="Поиск гильдии"] {
+  width: 220px;
+}
+.catalogFilters button {
+  border: 1px solid var(--border);
+}
+.bound {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.bound input {
+  width: 56px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+}
+.catalogEntry {
+  display: grid !important;
+  gap: 4px;
+}
+.catalogHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.catalogHead button {
+  border: 1px solid var(--border);
+}
+.inviteSearch {
+  display: grid;
+  gap: 6px;
+}
+.inviteSearch input {
+  width: 260px;
 }
 .warning {
   margin: 0;

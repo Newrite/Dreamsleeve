@@ -106,7 +106,6 @@ let private run (arguments: string array) = task {
                             { new IDisposable with member _.Dispose() = () }))
                 else { new IDisposable with member _.Dispose() = () }
             own (fun () -> task { diagnostics.Dispose() } :> Task)
-            if ProtocolCodec.Version <> 26u then failwith "Smoke fixture requires protocol26."
             // Optional A/B of the server-wide model budget; per-peer stays at its default.
             let modelBytesPerSecond =
                 match Environment.GetEnvironmentVariable "DREAMSLEEVE_PHANTOM_SMOKE_MODEL_BPS" with
@@ -211,6 +210,7 @@ let private run (arguments: string array) = task {
                                       { Loaded = []
                                         Profiles = []
                                         NextId = 1UL
+                                        NextTitleId = 1UL
                                         Writer = guilds.Ref
                                         WriterStopped = guilds.Completion }
                                       authentication transport logger

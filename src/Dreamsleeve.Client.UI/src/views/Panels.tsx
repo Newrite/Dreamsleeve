@@ -15,6 +15,7 @@ import { ModeratorPanel } from "./ModeratorPanel";
 import { GuildsPanel, ProfileGuilds } from "./GuildsPanel";
 import { playerActions } from "../state/moderator";
 import { playerName } from "../state/names";
+import { pendingRequests } from "../state/guilds";
 import { useDialog } from "../features/useDialog";
 import styles from "../styles/Workspace.module.css";
 const tabs: { id: Exclude<Panel, null>; label: string }[] = [
@@ -30,6 +31,8 @@ const tabs: { id: Exclude<Panel, null>; label: string }[] = [
 // Shown to moderators only; the server checks the role of every request anyway.
 const moderatorTab = { id: "moderation", label: "Модерация" } as const;
 export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
+  // Invitations to answer and, for the master and officers, requests to join.
+  const guildNews = s.invites.length + pendingRequests(s.guilds, s.selfId);
   const dialog = useDialog();
   const player = s.players.find((p) => p.id === s.selectedPlayer);
   const self = s.players.find((p) => p.id === s.selfId);
@@ -70,9 +73,7 @@ export function Panels({ chat, state: s }: { chat: Chat; state: ChatState }) {
               onClick={() => chat.open(t.id)}
             >
               {t.label}
-              {t.id === "guilds" && s.invites.length > 0 && (
-                <sup> {s.invites.length}</sup>
-              )}
+              {t.id === "guilds" && guildNews > 0 && <sup> {guildNews}</sup>}
             </button>
           ))}
         </nav>

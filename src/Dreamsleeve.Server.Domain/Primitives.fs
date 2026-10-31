@@ -157,6 +157,8 @@ type DomainError =
     | InvalidGameDate of field: string
     /// Not a 24-bit RGB value.
     | InvalidColor of field: string
+    /// A level that must be known and is zero.
+    | MissingLevel of field: string
 
 module internal PrimitiveValidation =
     let invalidControl multiline (rune: Rune) =

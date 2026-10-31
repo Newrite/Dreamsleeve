@@ -1120,6 +1120,36 @@ TEST_CASE(
   CHECK(mute.reason() == "Флуд");
   CHECK(sent(AnswerGuildInvite{4, true}).answer().accept());
   CHECK(sent(DisbandGuild{4}).disband().guild_id() == 4);
+  const auto create = sent(CreateGuildTitle{4, "Казначей"}).create_title();
+  CHECK((create.guild_id() == 4 && create.name() == "Казначей"));
+  const auto rename = sent(RenameGuildTitle{4, 2, "Хранитель"}).rename_title();
+  CHECK((rename.guild_id() == 4 && rename.title_id() == 2 && rename.name() == "Хранитель"));
+  const auto deleted = sent(DeleteGuildTitle{4, 2}).delete_title();
+  CHECK((deleted.guild_id() == 4 && deleted.title_id() == 2));
+  const auto assigned = sent(SetGuildMemberTitle{4, 9, 2}).set_title();
+  CHECK((assigned.guild_id() == 4 && assigned.player_id() == 9 && assigned.has_title_id() && assigned.title_id() == 2));
+  CHECK_FALSE(sent(SetGuildMemberTitle{4, 9, std::nullopt}).set_title().has_title_id());
+  CHECK_FALSE(sent(SetGuildListed{4, false}).set_listed().listed());
+  CHECK(sent(ApplyToGuild{4}).apply().guild_id() == 4);
+  CHECK(sent(WithdrawGuildApplication{4}).withdraw().guild_id() == 4);
+  const auto answered = sent(AnswerGuildJoinRequest{4, 9, true}).answer_request();
+  CHECK((answered.guild_id() == 4 && answered.player_id() == 9 && answered.accept()));
+  {
+    const auto encoded = codec.Encode(
+      GuildCatalogRequest{
+          6,
+          {"вор", 2, std::nullopt, true, Domain::GuildCatalogSort::Members, Domain::GuildCatalogAfter{7, "Совы", 12}}
+    });
+    REQUIRE(encoded);
+    P::ClientPacket packet;
+    REQUIRE(packet.ParseFromArray(encoded->DataBytesView().data(), static_cast<int>(encoded->Size())));
+    const auto& catalog = packet.guild_command().catalog();
+    CHECK((packet.request_id() == 6 && catalog.search() == "вор" && catalog.min_members() == 2 && !catalog.has_max_members()));
+    CHECK((catalog.open_only() && catalog.sort() == P::GUILD_CATALOG_SORT_MEMBERS));
+    CHECK((catalog.after().guild_id() == 7 && catalog.after().name() == "Совы" && catalog.after().members() == 12));
+  }
+  const auto info = sent(SetGuildInfo{4, "Сбор\nпо пятницам"}).set_info();
+  CHECK((info.guild_id() == 4 && info.info() == "Сбор\nпо пятницам"));
 
   constexpr std::uint64_t channel = Domain::GuildChannelBase + 4;
   P::ServerPacket         snapshot;
@@ -1138,12 +1168,15 @@ TEST_CASE(
   master->set_online(true);
   master->mutable_mute()->set_reason("Флуд");
   master->set_joined_at_unix_ms(1000);
-
+  master->set_title_id(2);
+  auto* title = guild->add_titles();
+  title->set_title_id(2);
+  title->set_name("Казначей");
   auto message = Published().chat_published().message();
   message.set_channel_id(channel);
   *guild->add_recent_messages() = message;
 
-  auto* invite                  = guilds->add_invites();
+  auto* invite = guilds->add_invites();
   invite->set_guild_id(5);
   invite->set_guild_name("Гильдия");
   invite->set_invited_by_player_id(9);
@@ -1153,6 +1186,22 @@ TEST_CASE(
   guilds->mutable_limits()->set_max_members(64);
   guilds->mutable_limits()->set_name_min_length(3);
   guilds->mutable_limits()->set_name_max_length(24);
+  guilds->mutable_limits()->set_max_titles(10);
+  guilds->mutable_limits()->set_info_max_length(500);
+  guilds->mutable_limits()->set_max_join_requests(128);
+  guilds->mutable_limits()->set_max_applications(10);
+  guild->set_info("О нас");
+  guild->set_listed(true);
+  auto* request = guild->add_join_requests();
+  request->mutable_profile()->set_player_id(9);
+  request->mutable_profile()->set_username("nine");
+  request->mutable_profile()->set_display_name("Nine");
+  request->set_created_at_unix_ms(1000);
+  request->set_expires_at_unix_ms(2000);
+  auto* application = guilds->add_applications();
+  application->set_guild_id(6);
+  application->set_guild_name("Совы");
+  application->set_expires_at_unix_ms(2000);
   const auto decoded = codec.Decode(Bytes(snapshot));
   REQUIRE(decoded);
   const auto& book = std::get<W::GuildsSnapshot>(*decoded);
@@ -1161,12 +1210,52 @@ TEST_CASE(
   REQUIRE(book.guilds[0].guild.members.size() == 1);
   const auto& member = book.guilds[0].guild.members[0];
   CHECK((member.role == Domain::GuildRole::Master && member.online && member.mute && member.profile.username == "player"));
+  CHECK(member.titleId == 2);
+  CHECK(
+    book.guilds[0].guild.titles == std::vector<Domain::GuildTitle>{
+                                       {2, "Казначей"}
+  });
   REQUIRE(book.guilds[0].recentMessages.size() == 1);
   CHECK(
     book.invites == std::vector<Domain::GuildInvite>{
                         {5, "Гильдия", 9, 2000}
   });
-  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24});
+  CHECK(book.limits == Domain::GuildLimits{3, 64, 3, 24, 10, 500, 128, 10});
+  CHECK(book.guilds[0].guild.info == "О нас");
+  CHECK(book.guilds[0].guild.listed);
+  REQUIRE(book.guilds[0].guild.joinRequests.size() == 1);
+  CHECK(book.guilds[0].guild.joinRequests[0].profile.displayName == "Nine");
+  CHECK(
+    book.applications == std::vector<Domain::GuildApplication>{
+                             {6, "Совы", 2000}
+  });
+
+  // A join request carries the real profile once; an application names its guild.
+  request->mutable_profile()->set_pseudonymous(true);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  request->mutable_profile()->set_pseudonymous(false);
+  *guild->add_join_requests() = *request;
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  guild->mutable_join_requests()->RemoveLast();
+  application->clear_guild_name();
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  application->set_guild_name("Совы");
+  REQUIRE(codec.Decode(Bytes(snapshot)));
+
+  // A custom role has an ID, once, and a name; a member's role has an ID.
+  title->set_title_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  title->set_title_id(2);
+  *guild->add_titles() = *title;
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  guild->mutable_titles()->RemoveLast();
+  title->clear_name();
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  title->set_name("Казначей");
+  master->set_title_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(snapshot)));
+  master->clear_title_id();
+  REQUIRE(codec.Decode(Bytes(snapshot)));
 
   // The channel follows from the guild; guildmates never see a pseudonym.
   guild->set_channel_id(channel + 1);
@@ -1200,6 +1289,65 @@ TEST_CASE(
   CHECK_FALSE(codec.Decode(Bytes(changed)));
   changed.mutable_guild_changed()->set_invite_removed(5);
   REQUIRE(codec.Decode(Bytes(changed)));
+  auto* titles = changed.mutable_guild_changed()->mutable_titles();
+  titles->set_guild_id(4);
+  auto* listed = titles->add_titles();
+  listed->set_title_id(3);
+  listed->set_name("Летописец");
+  const auto retitled = codec.Decode(Bytes(changed));
+  REQUIRE(retitled);
+  const auto& list = std::get<W::GuildTitlesChanged>(std::get<W::GuildChanged>(*retitled).change);
+  CHECK(
+    (list.guildId == 4 && list.titles == std::vector<Domain::GuildTitle>{
+                                             {3, "Летописец"}
+  }));
+  titles->set_guild_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  auto* about = changed.mutable_guild_changed()->mutable_info();
+  about->set_guild_id(4);
+  about->set_info("Сбор по пятницам");
+  const auto informed = codec.Decode(Bytes(changed));
+  REQUIRE(informed);
+  const auto& text = std::get<W::GuildInfoChanged>(std::get<W::GuildChanged>(*informed).change);
+  CHECK((text.guildId == 4 && text.info == "Сбор по пятницам"));
+  about->set_guild_id(0);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  auto* ended = changed.mutable_guild_changed()->mutable_application_removed();
+  ended->set_guild_id(6);
+  ended->set_reason(P::GUILD_APPLICATION_END_EXPIRED);
+  const auto expired = codec.Decode(Bytes(changed));
+  REQUIRE(expired);
+  const auto& end = std::get<W::GuildApplicationRemoved>(std::get<W::GuildChanged>(*expired).change);
+  CHECK((end.guildId == 6 && end.reason == Domain::GuildApplicationEnd::Expired));
+  ended->set_reason(P::GUILD_APPLICATION_END_UNSPECIFIED);
+  CHECK_FALSE(codec.Decode(Bytes(changed)));
+  auto* visibility = changed.mutable_guild_changed()->mutable_listed();
+  visibility->set_guild_id(4);
+  const auto hidden = codec.Decode(Bytes(changed));
+  REQUIRE(hidden);
+  CHECK_FALSE(std::get<W::GuildListedChanged>(std::get<W::GuildChanged>(*hidden).change).listed);
+
+  P::ServerPacket page;
+  page.set_protocol_version(W::Version);
+  page.mutable_guild_catalog_page()->set_more(true);
+  page.mutable_guild_catalog_page()->set_total(31);
+  auto* entry = page.mutable_guild_catalog_page()->add_guilds();
+  entry->set_guild_id(7);
+  entry->set_name("Совы");
+  entry->set_members(12);
+  entry->set_created_at_unix_ms(1000);
+  CHECK_FALSE(codec.Decode(Bytes(page)));
+  page.set_request_id(6);
+  const auto received = codec.Decode(Bytes(page));
+  REQUIRE(received);
+  const auto& catalog = std::get<W::GuildCatalogPageReceived>(*received);
+  CHECK((catalog.requestId == 6 && catalog.page.more && catalog.page.total == 31));
+  CHECK(
+    catalog.page.guilds == std::vector<Domain::GuildCatalogEntry>{
+                               {7, "Совы", "", 12, 1000}
+  });
+  page.mutable_guild_catalog_page()->set_total(0);
+  CHECK_FALSE(codec.Decode(Bytes(page)));
   changed.mutable_guild_changed()->clear_change();
   CHECK_FALSE(codec.Decode(Bytes(changed)));
 

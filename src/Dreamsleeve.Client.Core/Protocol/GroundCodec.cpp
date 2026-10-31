@@ -40,6 +40,8 @@ namespace Dreamsleeve::Client::Wire::Detail
     target.set_label(value.label);
     WritePlacement(*target.mutable_placement(), value.placement);
     WriteGameDate(*target.mutable_game_date(), value.gameDate);
+    target.set_character_level(value.characterLevel);
+    target.set_killer_level(value.killerLevel);
   }
 
   // Absent on marks stored before protocol 12; present means valid.
@@ -47,15 +49,7 @@ namespace Dreamsleeve::Client::Wire::Detail
   {
     if (!source.has_game_date()) return std::optional<Domain::GameDate>{};
     const auto&            date = source.game_date();
-    const Domain::GameDate value{
-        date.era(),
-        date.year(),
-        date.month(),
-        date.day(),
-        date.day_of_week(),
-        date.hour(),
-        date.minute()
-    };
+    const Domain::GameDate value{date.era(), date.year(), date.month(), date.day(), date.day_of_week(), date.hour(), date.minute()};
     if (!ValidGameDate(value)) return Invalid("game_date");
     return std::optional{value};
   }
@@ -94,7 +88,9 @@ namespace Dreamsleeve::Client::Wire::Detail
         std::move(*placement),
         Domain::FromUnixMilliseconds(source.created_at_unix_ms()),
         source.has_character_name() ? std::optional{source.character_name()} : std::nullopt,
-        *gameDate
+        *gameDate,
+        source.character_level(),
+        source.killer_level()
     };
   }
 

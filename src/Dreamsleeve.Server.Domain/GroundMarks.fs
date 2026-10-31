@@ -12,11 +12,44 @@ type GroundMarkKind =
     /// Left by the client where the character died.
     | Death
 
+/// A death as the author's client saw it: the label, the dead character's
+/// level and the killer's. Levels are not bounded (mods raise them).
+[<Struct>]
+type DeathReport = private {
+    label: DeathMarkText
+    characterLevel: uint32 voption
+    killerLevel: uint32 voption
+} with
+    member this.Label = this.label
+    /// Absent only on marks stored before levels were kept.
+    member this.CharacterLevel = this.characterLevel
+    /// Absent without a killer, for a killer without a level and on old marks.
+    member this.KillerLevel = this.killerLevel
+
+[<RequireQualifiedAccess>]
+module DeathReport =
+    let private known level = if level = 0u then ValueNone else ValueSome level
+
+    /// A new death: the character's level is required; a zero killer level is none.
+    let create label characterLevel killerLevel : Result<DeathReport, DomainError> =
+        if characterLevel = 0u then Error(DomainError.MissingLevel "character_level")
+        else
+            Ok {
+                label = label
+                characterLevel = ValueSome characterLevel
+                killerLevel = known killerLevel
+            }
+
+    /// A stored death: marks from before levels were kept hold none.
+    let restore label characterLevel killerLevel : DeathReport =
+        { label = label; characterLevel = characterLevel |> ValueOption.bind known
+          killerLevel = killerLevel |> ValueOption.bind known }
+
 /// The text of a mark, typed by its kind so a note and a death label cannot be confused.
 [<RequireQualifiedAccess>]
 type GroundMarkBody =
     | Note of GroundNoteText
-    | Death of DeathMarkText
+    | Death of DeathReport
 
 [<RequireQualifiedAccess>]
 module GroundMarkBody =
@@ -26,7 +59,7 @@ module GroundMarkBody =
 
     let text = function
         | GroundMarkBody.Note value -> GroundNoteText.value value
-        | GroundMarkBody.Death value -> DeathMarkText.value value
+        | GroundMarkBody.Death value -> DeathMarkText.value value.Label
 
 /// Where a mark stands: the space, the point and the author's heading (Z angle,
 /// radians) so a client can turn the visual the way the author looked.

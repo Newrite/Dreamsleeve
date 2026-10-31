@@ -131,13 +131,7 @@ namespace
       }
       if (!id) return std::nullopt;
       const auto kind = action == "ban" ? Domain::SanctionKind::Ban : Domain::SanctionKind::Mute;
-      return SanctionPlayer{
-        requestId,
-        *id,
-        kind,
-        minutes,
-        rest()
-      };
+      return SanctionPlayer{requestId, *id, kind, minutes, rest()};
     }
     if (action == "lift" && input >> first >> second && (first == "mute" || first == "ban"))
     {
@@ -162,12 +156,7 @@ namespace
     {
       const auto id = ParseId(first);
       if (!id) return std::nullopt;
-      return ClearPlayerMarks{
-        requestId,
-        *id,
-        second != "deaths",
-        second != "notes"
-      };
+      return ClearPlayerMarks{requestId, *id, second != "deaths", second != "notes"};
     }
     if (action == "delete" && input >> first)
     {
@@ -203,7 +192,11 @@ namespace
 
   // guild create <name> | guild invite <guild> <player> | guild accept|decline|leave|disband <guild> |
   // guild exclude|transfer|unmute <guild> <player> | guild role <guild> <player> <member|officer> |
-  // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id>
+  // guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | guild delete <guild> <message id> |
+  // guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | guild title-delete <guild> <title> |
+  // guild title <guild> <player> <title|none> | guild info <guild> <text, empty clears> |
+  // guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> |
+  // guild request <guild> <player> <accept|reject>
   std::optional<ClientCommand> ParseGuild(std::string_view line, std::uint64_t requestId, const GuildBook* book)
   {
     std::istringstream input{std::string{line.substr(6)}};
@@ -215,6 +208,7 @@ namespace
       return text;
     };
     if (action == "create") return GuildRequest{requestId, CreateGuild{rest()}};
+    if (action == "catalog") return GuildCatalogRequest{requestId, {.search = rest()}};
     if (!(input >> first)) return std::nullopt;
     const auto guild = ParseId(first);
     if (!guild) return std::nullopt;
@@ -224,8 +218,19 @@ namespace
           AnswerGuildInvite{*guild, action == "accept"}
       };
     if (action == "leave") return GuildRequest{requestId, LeaveGuild{*guild}};
+    if (action == "apply") return GuildRequest{requestId, ApplyToGuild{*guild}};
+    if (action == "withdraw") return GuildRequest{requestId, WithdrawGuildApplication{*guild}};
     if (action == "disband") return GuildRequest{requestId, DisbandGuild{*guild}};
-
+    if (action == "title-create")
+      return GuildRequest{
+          requestId,
+          CreateGuildTitle{*guild, rest()}
+      };
+    if (action == "info")
+      return GuildRequest{
+          requestId,
+          SetGuildInfo{*guild, rest()}
+      };
     // The guild's channel follows from the book; an unknown guild sends nothing.
     if (action == "say" || action == "delete")
     {
@@ -239,6 +244,28 @@ namespace
     }
 
     if (!(input >> second)) return std::nullopt;
+    if (action == "listed")
+    {
+      if (second != "on" && second != "off") return std::nullopt;
+      return GuildRequest{
+          requestId,
+          SetGuildListed{*guild, second == "on"}
+      };
+    }
+    if (action == "title-rename" || action == "title-delete")
+    {
+      const auto title = ParseId(second);
+      if (!title) return std::nullopt;
+      if (action == "title-delete")
+        return GuildRequest{
+            requestId,
+            DeleteGuildTitle{*guild, *title}
+        };
+      return GuildRequest{
+          requestId,
+          RenameGuildTitle{*guild, *title, rest()}
+      };
+    }
     const auto player = ParseId(second);
     if (!player) return std::nullopt;
     if (action == "invite")
@@ -263,6 +290,27 @@ namespace
       };
 
     if (!(input >> third)) return std::nullopt;
+    if (action == "request")
+    {
+      if (third != "accept" && third != "reject") return std::nullopt;
+      return GuildRequest{
+          requestId,
+          AnswerGuildJoinRequest{*guild, *player, third == "accept"}
+      };
+    }
+    if (action == "title")
+    {
+      std::optional<Domain::GuildTitleId> title;
+      if (third != "none")
+      {
+        title = ParseId(third);
+        if (!title) return std::nullopt;
+      }
+      return GuildRequest{
+          requestId,
+          SetGuildMemberTitle{*guild, *player, title}
+      };
+    }
     if (action == "role")
     {
       const auto role = GuildRoleNamed(third);
@@ -289,25 +337,40 @@ namespace
     return std::nullopt;
   }
 
-  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max>", then
-  // "guild <id> name=<name> channel=<id> members=<n>" with "member <guild> <player> <role> online=<0|1>[ muted] name=<name>"
-  // per member, and "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
+  // "guilds <n> invites <n> per-player=<n> members=<n> name=<min>..<max> titles=<n> info=<n>", then
+  // "guild <id> name=<name> channel=<id> members=<n>" with "title <guild> <title> name=<name>" per custom role and
+  // "member <guild> <player> <role> online=<0|1>[ muted][ title=<title>] name=<name>" per member,
+  // "info <guild> <text>" when the master wrote some, and
+  // "invite <guild> name=<name> by=<player> expires=<unix ms>" per invitation.
   void PrintGuilds(std::ostream& output, const GuildBook& book)
   {
     const auto& limits = book.Limits();
     output << "guilds " << book.Guilds().size() << " invites " << book.Invites().size() << " per-player=" << limits.maxGuildsPerPlayer
-           << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength << '\n';
+           << " members=" << limits.maxMembers << " name=" << limits.nameMinLength << ".." << limits.nameMaxLength
+           << " titles=" << limits.maxTitles << " info=" << limits.infoMaxLength << '\n';
     for (const auto& guild : book.Guilds())
     {
       output << "guild " << guild.guildId << " name=" << guild.name << " channel=" << guild.channelId << " members=" << guild.members.size()
-             << '\n';
+             << (guild.listed ? "" : " unlisted") << '\n';
+      for (const auto& request : guild.joinRequests)
+        output << "request " << guild.guildId << ' ' << request.profile.playerId << " name=" << request.profile.displayName << '\n';
+      if (!guild.info.empty()) output << "info " << guild.guildId << ' ' << guild.info << '\n';
+      for (const auto& title : guild.titles)
+        output << "title " << guild.guildId << ' ' << title.titleId << " name=" << title.name << '\n';
       for (const auto& member : guild.members)
+      {
         output << "member " << guild.guildId << ' ' << member.profile.playerId << ' ' << GuildRoleName(member.role)
-               << " online=" << member.online << (member.mute ? " muted" : "") << " name=" << member.profile.displayName << '\n';
+               << " online=" << member.online << (member.mute ? " muted" : "");
+        if (member.titleId) output << " title=" << *member.titleId;
+        output << " name=" << member.profile.displayName << '\n';
+      }
     }
     for (const auto& invite : book.Invites())
       output << "invite " << invite.guildId << " name=" << invite.guildName << " by=" << invite.invitedBy
              << " expires=" << invite.expiresAtUnixMs << '\n';
+    for (const auto& application : book.Applications())
+      output << "application " << application.guildId << " name=" << application.guildName << " expires=" << application.expiresAtUnixMs
+             << '\n';
   }
 
   void PrintPlayer(std::ostream& output, const Domain::Player& player)
@@ -326,22 +389,18 @@ namespace
   // The console has no game calendar: every mark it places is dated Tirdas, 17 Last Seed 4E 201, 14:05.
   constexpr Domain::GameDate ConsoleGameDate{4, 201, 8, 17, 2, 14, 5};
 
-  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> date=<date> text=<text>": one line per visible mark.
+  // "mark <id> kind=<1|2> author=<name>[ [pseudonymous]] x=<x> character=<name> date=<date> levels=<character>/<killer> text=<text>":
+  // one line per visible mark; a level the mark lacks is 0.
   void PrintMark(std::ostream& output, const Domain::GroundMark& mark)
   {
     output << "mark " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " author=" << mark.author.displayName
            << (mark.author.pseudonymous ? " [pseudonymous]" : "") << " x=" << mark.placement.position.X
-           << " character=" << mark.characterName.value_or("") << " date=" << DateText(mark.gameDate) << " text=" << mark.text << '\n';
+           << " character=" << mark.characterName.value_or("") << " date=" << DateText(mark.gameDate) << " levels=" << mark.characterLevel
+           << '/' << mark.killerLevel << " text=" << mark.text << '\n';
   }
 
   constexpr std::string_view Commands =
-    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | "
-    "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <label> | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | "
-    "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | "
-    "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | "
-    "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | "
-    "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | "
-    "guild delete <guild> <message id> | read | pose <id> | watch <id> <ms> | quit\n";
+    "Commands: connect | disconnect | resume | steam | signout | forget | reset-password <code> | send <text> | announce <trusted|third> <kind> <signature|-> <text> | begin <name> | rename <name> | " "move <json> | location <json> | values <json> | details <json> | clear-location | leave | note <text> | death <level> <killer level> [label] | unmark <id> | marks | hide <on|except-marks|off> | name <display name> | color <#RRGGBB> | " "mod <mute|ban> <id> <minutes|forever> <reason> | mod lift <mute|ban> <id> | mod kick <id> <reason> | mod sanctions | " "mod marks <id> | mod clear <id> <notes|deaths|all> | mod delete <message id> | guild create <name> | guild invite <guild> <player> | " "guild accept|decline|leave|disband <guild> | guild exclude|transfer|unmute <guild> <player> | " "guild role <guild> <player> <member|officer> | guild mute <guild> <player> <minutes|forever> <reason> | guild say <guild> <text> | " "guild delete <guild> <message id> | guild title-create <guild> <name> | guild title-rename <guild> <title> <name> | " "guild title-delete <guild> <title> | guild title <guild> <player> <title|none> | guild info <guild> <text> | " "guild catalog [search] | guild apply|withdraw <guild> | guild listed <guild> <on|off> | guild request <guild> <player> <accept|reject> | read | pose <id> | watch <id> <ms> | quit\n";
 
   // "everywhere" / "except-marks": where the others see the pseudonym.
   std::string_view HidingName(Domain::HiddenIdentity hiding)
@@ -349,14 +408,14 @@ namespace
     return hiding == Domain::HiddenIdentity::ExceptGroundMarks ? "except-marks" : "everywhere";
   }
 
-  // "own-marks <n>" then "own <id> kind=<1|2> date=<date> text=<text>" per mark: the server's
-  // complete list of this player's marks, wherever they stand.
+  // "own-marks <n>" then "own <id> kind=<1|2> date=<date> levels=<character>/<killer> text=<text>" per
+  // mark: the server's complete list of this player's marks, wherever they stand.
   void PrintOwnMarks(std::ostream& output, const std::vector<Domain::GroundMark>& marks)
   {
     output << "own-marks " << marks.size() << '\n';
     for (const auto& mark : marks)
       output << "own " << mark.markId << " kind=" << static_cast<int>(mark.kind) << " date=" << DateText(mark.gameDate)
-             << " text=" << mark.text << '\n';
+             << " levels=" << mark.characterLevel << '/' << mark.killerLevel << " text=" << mark.text << '\n';
   }
 
   // The last position sent by move/location; marks are placed where the player stands.
@@ -438,7 +497,7 @@ namespace
     return true;
   }
 
-  // note <text> | death <label> | unmark <id>: placed at the last sent position.
+  // note <text> | death <level> <killer level> [label] | unmark <id>: placed at the last sent position.
   bool PostMarkCommand(const std::string& line, ClientExchange& exchange, std::uint64_t generation)
   {
     const auto requestId = exchange.NextRequestId();
@@ -467,15 +526,23 @@ namespace
         std::cout << "No position: send move or location first\n";
         return true;
       }
-      const Domain::GroundMarkPlacement placement{
-        lastLocation->location.locationId,
-        lastLocation->position,
-        0.0f
-      };
+      const Domain::GroundMarkPlacement placement{lastLocation->location.locationId, lastLocation->position, 0.0f};
       if (line.starts_with("note "))
         command = PlaceGroundNote{*requestId, line.substr(5), placement, ConsoleGameDate};
       else
-        command = ReportDeath{*requestId, line.size() > 6 ? line.substr(6) : std::string{}, placement, ConsoleGameDate};
+      {
+        std::istringstream input{line.substr(5)};
+        std::uint32_t      characterLevel{};
+        std::uint32_t      killerLevel{};
+        if (!(input >> characterLevel >> killerLevel))
+        {
+          std::cout << "Usage: death <level> <killer level> [label]\n";
+          return true;
+        }
+        std::string label;
+        std::getline(input >> std::ws, label);
+        command = ReportDeath{*requestId, std::move(label), placement, ConsoleGameDate, characterLevel, killerLevel};
+      }
     }
 
     if (exchange.Post({generation, std::move(command)}) == CommandPostResult::Queued)
@@ -503,7 +570,7 @@ namespace
         else if constexpr (std::is_same_v<Outcome, IdentityChanged>)
           console << "identity "
                   << (status.pseudonym ? "hidden as " + *status.pseudonym + " " + std::string{HidingName(value.hiding)}
-                                      : std::string{"shown"});
+                                       : std::string{"shown"});
         else if constexpr (std::is_same_v<Outcome, NameChanged>)
           console << "display name " << value.displayName;
         else if constexpr (std::is_same_v<Outcome, ColorChanged>)
@@ -532,6 +599,12 @@ namespace
           console << "deleted message " << value.messageId;
         else if constexpr (std::is_same_v<Outcome, GuildDone>)
           console << "guild done " << value.guildId;
+        else if constexpr (std::is_same_v<Outcome, GuildCatalogListed>)
+        {
+          console << "catalog total=" << value.page.total << " more=" << value.page.more;
+          for (const auto& entry : value.page.guilds)
+            console << "\ncatalog-guild " << entry.guildId << " members=" << entry.members << " name=" << entry.name;
+        }
         else if constexpr (std::is_same_v<Outcome, ServerRejection>)
           console << "rejected (" << static_cast<int>(value.code) << "): " << value.message;
         else

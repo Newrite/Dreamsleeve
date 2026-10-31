@@ -47,8 +47,9 @@ module internal GroundMarkCodec =
         decodePlacement config.PlayerInput source.Placement |> Result.bind (fun placement ->
             decodeGameDate source.GameDate |> Result.bind (fun date ->
                 DeathMarkText.create config.ChatInput.DeathMarkText source.Label
+                |> Result.bind (fun label -> DeathReport.create label source.CharacterLevel source.KillerLevel)
                 |> Result.mapError ProtocolCodecFailure.InvalidDomain
-                |> Result.map (fun label -> ClientCommand.ReportDeath(label, placement, date))))
+                |> Result.map (fun death -> ClientCommand.ReportDeath(death, placement, date))))
 
     let decodeRemove (source: Dreamsleeve.Protocol.Chat.RemoveGroundMark) =
         GroundMarkId.create source.MarkId
@@ -89,6 +90,11 @@ module internal GroundMarkCodec =
 
         value.CharacterName |> ValueOption.iter (fun name -> result.CharacterName <- CharacterName.value name)
         value.GameDate |> ValueOption.iter (fun date -> result.GameDate <- gameDate date)
+        match value.Body with
+        | GroundMarkBody.Death death ->
+            death.CharacterLevel |> ValueOption.iter (fun level -> result.CharacterLevel <- level)
+            death.KillerLevel |> ValueOption.iter (fun level -> result.KillerLevel <- level)
+        | GroundMarkBody.Note _ -> ()
         for span in value.Flagged do
             result.Flagged.Add(Dreamsleeve.Protocol.Chat.TextSpan(Start = uint32 span.Start, Length = uint32 span.Length))
 

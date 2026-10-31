@@ -17,7 +17,11 @@ namespace
 
   Domain::GroundMarkPlacement Placement(float x, Domain::FormKey space = Whiterun)
   {
-    return {space, {x, 0, 0}, 1.5f};
+    return {
+        space,
+        {x, 0, 0},
+        1.5f
+    };
   }
 
   // Tirdas, 17 Last Seed 4E 201, 14:05.
@@ -85,7 +89,11 @@ namespace
     if (kind == P::GROUND_MARK_KIND_NOTE) WriteDate(*target.mutable_game_date());
   }
 
-  P::ServerPacket Changed(std::uint64_t revision, std::vector<std::uint64_t> added, std::vector<std::uint64_t> removed = {}, bool clear = false)
+  P::ServerPacket Changed(
+    std::uint64_t              revision,
+    std::vector<std::uint64_t> added,
+    std::vector<std::uint64_t> removed = {},
+    bool                       clear   = false)
   {
     P::ServerPacket packet;
     packet.set_protocol_version(W::Version);
@@ -107,14 +115,26 @@ TEST_CASE("The visible store applies baselines and deltas in order and refuses s
 {
   GroundMarkStore store;
   CHECK(store.Snapshot().viewRevision == 0);
-  auto baseline = store.Apply(GroundMarksChanged{1, {Mark(1), Mark(2)}, {}, true});
+  auto baseline = store.Apply(
+    GroundMarksChanged{
+        1,
+        {Mark(1), Mark(2)},
+        {},
+        true
+  });
   REQUIRE(baseline);
   REQUIRE(baseline->size() == 2);
   CHECK(std::holds_alternative<GroundMarksCleared>((*baseline)[0]));
   CHECK(Ids(std::get<GroundMarksAdded>((*baseline)[1]).marks) == std::vector<Domain::GroundMarkId>{1, 2});
   CHECK(Ids(store.Snapshot().marks) == std::vector<Domain::GroundMarkId>{1, 2});
 
-  auto delta = store.Apply(GroundMarksChanged{2, {Mark(3)}, {1, 99}, false});
+  auto delta = store.Apply(
+    GroundMarksChanged{
+        2,
+        {Mark(3)},
+        {1, 99},
+        false
+  });
   REQUIRE(delta);
   REQUIRE(delta->size() == 2);
   CHECK(std::get<GroundMarksRemoved>((*delta)[0]).markIds == std::vector<Domain::GroundMarkId>{1});
@@ -142,7 +162,14 @@ TEST_CASE("The model forwards ordered mark transitions, snapshots include marks 
 {
   ClientModel model;
   ChangeBatch scratch;
-  REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{1, {Mark(1), Mark(2)}, {}, true}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    GroundMarksChanged{
+        1,
+        {Mark(1), Mark(2)},
+        {},
+        true
+  }));
   REQUIRE(model.Apply(model.Generation(), GroundMarksChanged{2, {Mark(3)}, {2}, false}));
   auto update = TakeStateUpdate(model, scratch);
   REQUIRE(update);
@@ -185,16 +212,28 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
 {
   auto created = ClientExchange::TryCreate(2, 4);
   REQUIRE(created);
-  auto& exchange = **created;
+  auto&       exchange = **created;
   ClientModel model;
   REQUIRE(exchange.Publish(model));
   ClientOutput output;
   exchange.Drain(output);
 
   const auto first = *exchange.NextRequestId();
-  CHECK(exchange.Post({1, PlaceGroundNote{first, "hello", Placement(0), Date}}) == CommandPostResult::Queued);
-  CHECK(exchange.Post({1, ReportDeath{*exchange.NextRequestId(), "", Placement(0), Date}}) == CommandPostResult::Queued);
-  CHECK(exchange.Post({1, RemoveGroundMark{*exchange.NextRequestId(), 5}}) == CommandPostResult::Full);
+  CHECK(
+    exchange.Post({
+        1,
+        PlaceGroundNote{first, "hello", Placement(0), Date}
+  }) == CommandPostResult::Queued);
+  CHECK(
+    exchange.Post({
+        1,
+        ReportDeath{*exchange.NextRequestId(), "", Placement(0), Date}
+  }) == CommandPostResult::Queued);
+  CHECK(
+    exchange.Post({
+        1,
+        RemoveGroundMark{*exchange.NextRequestId(), 5}
+  }) == CommandPostResult::Full);
 
   std::vector<QueuedClientCommand> commands;
   exchange.TakeCommands(commands);
@@ -202,7 +241,16 @@ TEST_CASE("Mark commands queue like chat and confirmations share the bounded res
   CHECK(std::get<PlaceGroundNote>(commands[0].command).requestId == first);
   CHECK(std::holds_alternative<ReportDeath>(commands[1].command));
 
-  REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{1, first, MarkPlaced{9, 3}}));
+  REQUIRE(exchange.Publish(
+    model,
+    false,
+    SessionPhase::Ready,
+    "Tamriel",
+    CommandResult{
+        1,
+        first,
+        MarkPlaced{9, 3}
+  }));
   REQUIRE(exchange.Publish(model, false, SessionPhase::Ready, "Tamriel", CommandResult{1, first + 1, MarkRemoved{10}}));
   // Two results fill the budget of two; the third waits for a drain.
   CHECK_FALSE(exchange.PublishResult({1, first + 2, CommandFailureCode::Busy}));
@@ -239,12 +287,14 @@ TEST_CASE("Mark requests encode on the control lane and leave their content to t
   CHECK(packet.place_ground_note().game_date().hour() == 14);
   CHECK(packet.place_ground_note().game_date().minute() == 5);
 
-  auto death = codec.Encode(ReportDeath{6, "", Placement(0), Date});
+  auto death = codec.Encode(ReportDeath{6, "", Placement(0), Date, 32, 45});
   REQUIRE(death);
   REQUIRE(packet.ParseFromArray(death->DataBytesView().data(), static_cast<int>(death->Size())));
   CHECK(packet.has_report_death());
   CHECK(packet.report_death().label().empty());
   CHECK(packet.report_death().game_date().day() == 17);
+  CHECK(packet.report_death().character_level() == 32);
+  CHECK(packet.report_death().killer_level() == 45);
 
   auto removal = codec.Encode(RemoveGroundMark{7, 9});
   REQUIRE(removal);
@@ -253,7 +303,13 @@ TEST_CASE("Mark requests encode on the control lane and leave their content to t
 
   // Text, place and calendar are the server's to judge; only a zero request
   // ID and text that is not UTF-8 stay local, as they would close the connection.
-  CHECK(codec.Encode(PlaceGroundNote{8, "", Placement(std::numeric_limits<float>::quiet_NaN()), {4, 201, 2, 29, 7, 24, 0}}));
+  CHECK(codec.Encode(
+    PlaceGroundNote{
+        8,
+        "",
+        Placement(std::numeric_limits<float>::quiet_NaN()),
+        {4, 201, 2, 29, 7, 24, 0}
+  }));
   CHECK(codec.Encode(RemoveGroundMark{8, 0}));
   CHECK_FALSE(codec.Encode(PlaceGroundNote{8, "\xFF", Placement(0), Date}));
   CHECK_FALSE(codec.Encode(ReportDeath{8, "x", Placement(0, {"\xC3", 1}), Date}));
@@ -307,7 +363,15 @@ TEST_CASE("Mark responses decode with their correlation rules and validate the m
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].characterName);
   // A mark stored before protocol 12 has no date; a present date must be valid.
   CHECK_FALSE(std::get<GroundMarksChanged>(*death).added[0].gameDate);
-
+  // A mark stored before death levels has none: zero is none.
+  CHECK(std::get<GroundMarksChanged>(*death).added[0].characterLevel == 0);
+  CHECK(std::get<GroundMarksChanged>(*death).added[0].killerLevel == 0);
+  emptyDeath.mutable_ground_marks_changed()->mutable_added(0)->set_character_level(32);
+  emptyDeath.mutable_ground_marks_changed()->mutable_added(0)->set_killer_level(45);
+  auto leveled = codec.Decode(Bytes(emptyDeath));
+  REQUIRE(leveled);
+  CHECK(std::get<GroundMarksChanged>(*leveled).added[0].characterLevel == 32);
+  CHECK(std::get<GroundMarksChanged>(*leveled).added[0].killerLevel == 45);
   auto badDate = Changed(3, {1});
   badDate.mutable_ground_marks_changed()->mutable_added(0)->mutable_game_date()->set_month(13);
   CHECK_FALSE(codec.Decode(Bytes(badDate)));
@@ -365,7 +429,11 @@ TEST_CASE("The own list replaces the previous one, travels whole in the delta an
 {
   ClientModel model;
   ChangeBatch scratch;
-  REQUIRE(model.Apply(model.Generation(), OwnGroundMarksReplaced{{Mark(5), Mark(2)}}));
+  REQUIRE(model.Apply(
+    model.Generation(),
+    OwnGroundMarksReplaced{
+        {Mark(5), Mark(2)}
+  }));
   auto update = TakeStateUpdate(model, scratch);
   REQUIRE(update);
   const auto& delta = std::get<ClientStateDelta>(*update);
