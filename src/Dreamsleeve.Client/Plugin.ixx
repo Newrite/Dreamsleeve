@@ -94,7 +94,7 @@ namespace Plugin
 
     // Three 5-byte calls (frame, input, model completion): 3*14 bytes.
     // Two 6-byte controller calls: 2*8 bytes. Total58, within64.
-    SKSE::Init(skse, {.log = false, .trampoline = true, .trampolineSize = 64});
+    SKSE::Init(skse, {.log = false, .trampoline = true, .trampolineSize = 128});
 
     const auto messaging = SKSE::GetMessagingInterface();
     if (!messaging || !messaging->RegisterListener(SkseMessageHandle))

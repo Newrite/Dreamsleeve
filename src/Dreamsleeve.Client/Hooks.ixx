@@ -425,15 +425,28 @@ public:
   {
     static inline thread_local RE::NiCloningProcess* snapshot{};
 
+    static RE::NiObject* NativeControllerCopy(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      return controller->CreateClone(process);
+    }
+
+    static void NativeControllerProcess(RE::NiObject* controller, RE::NiCloningProcess& process)
+    {
+      controller->ProcessClone(process);
+    }
+
     static RE::NiObject* ControllerCopy(RE::NiObject* controller, RE::NiCloningProcess& process)
     {
-      return snapshot == &process ? nullptr : controller->CreateClone(process);
+      return snapshot == &process ? nullptr : previousCopy(controller, process);
     }
 
     static void ControllerProcess(RE::NiObject* controller, RE::NiCloningProcess& process)
     {
-      if (snapshot != &process) controller->ProcessClone(process);
+      if (snapshot != &process) previousProcess(controller, process);
     }
+
+    static inline REL::Relocation<decltype(ControllerCopy)>    previousCopy;
+    static inline REL::Relocation<decltype(ControllerProcess)> previousProcess;
 
     static RE::NiPointer<RE::NiObject> Clone(RE::NiNode* root, std::unordered_map<RE::NiAVObject*, RE::NiAVObject*>& pairs)
     {
@@ -471,22 +484,31 @@ public:
 
     static bool Install()
     {
-      const auto                            copy    = Address::ObjectNetCopy.address() + REL::Relocate(0x259, 0x25B, 0x259);
-      const auto                            process = Address::ObjectNetProcessClone.address() + 0x64;
-      constexpr std::array<std::uint8_t, 6> copyBytes{0xFF, 0x90, 0xB8, 0, 0, 0};
-      constexpr std::array<std::uint8_t, 6> processBytes{0xFF, 0x90, 0xE8, 0, 0, 0};
-      if (
-        !std::ranges::equal(copyBytes, std::span{reinterpret_cast<const std::uint8_t*>(copy), 6}) ||
-        !std::ranges::equal(processBytes, std::span{reinterpret_cast<const std::uint8_t*>(process), 6}))
-      {
-        logger::error("Native phantom disabled: controller clone call sites changed");
-        return false;
-      }
-      // The audited original is a register-indirect call, not RIP-relative.
-      // Both full instructions were checked above; no original target is saved.
-      SKSE::GetTrampoline().write_call<6>(copy, ControllerCopy, true);
-      SKSE::GetTrampoline().write_call<6>(process, ControllerProcess, true);
-      logger::info("Phantom controller-free clone installed at {:X}/{:X}", copy, process);
+      const auto copy    = Address::ObjectNetCopy.address() + REL::Relocate(0x259, 0x25B, 0x259);
+      const auto process = Address::ObjectNetProcessClone.address() + 0x64;
+
+      auto& trampoline = SKSE::GetTrampoline();
+
+      const auto install = [&](std::uintptr_t site, auto hook, auto native, auto& previous) {
+        previous                = reinterpret_cast<std::uintptr_t>(native);
+        const auto* instruction = reinterpret_cast<const std::uint8_t*>(site);
+        if (instruction[0] == 0xE8)
+        {
+          previous = trampoline.write_call<5>(site, hook);
+        }
+        else
+        {
+          const bool indirect = instruction[0] == 0xFF && instruction[1] == 0x15;
+          const auto slot     = trampoline.write_call<6>(site, hook, true);
+          // CommonLib returns the RIP pointer slot for an installed FF15.
+          // Native FF90 dispatches virtually and has no fixed callee.
+          if (indirect) previous = *reinterpret_cast<const std::uintptr_t*>(slot);
+        }
+      };
+
+      install(copy, ControllerCopy, NativeControllerCopy, previousCopy);
+      install(process, ControllerProcess, NativeControllerProcess, previousProcess);
+      logger::info("Phantom controller hooks installed at {:X}/{:X}", copy, process);
       return true;
     }
   };
