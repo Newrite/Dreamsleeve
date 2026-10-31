@@ -145,7 +145,7 @@ export namespace Dreamsleeve::Client::Phantom
       }();
       if (!decoded || decoded->Layout().requiredChannels.size() != job.offer.asset.channels)
       {
-        exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверный формат");
+        exchange.Unavailable(job.epoch, job.offer, ModelFailure::Invalid, "Модель фантома: неверный формат");
         return;
       }
       Diagnostics::Trace::Asset(job.offer.asset.hash, *bytes);
@@ -197,7 +197,7 @@ export namespace Dreamsleeve::Client::Phantom
         Miss(job);
         return;
       }
-      exchange.Unavailable(job.epoch, job.offer, "Модель фантома: неверная контрольная сумма");
+      exchange.Unavailable(job.epoch, job.offer, ModelFailure::Invalid, "Модель фантома: неверная контрольная сумма");
     }
 
     void Miss(const AssetJob& job, bool allowDelta = true)
@@ -221,7 +221,7 @@ export namespace Dreamsleeve::Client::Phantom
       if (missing.size() < MaxMissing)
         missing.push_back({job.epoch, job.offer, baseHash});
       else
-        exchange.Unavailable(job.epoch, job.offer, "Очередь загрузки моделей заполнена");
+        exchange.Unavailable(job.epoch, job.offer, ModelFailure::Transfer, "Очередь загрузки моделей заполнена");
     }
 
     void DecodePose(const PoseJob& job)

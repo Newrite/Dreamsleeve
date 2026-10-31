@@ -37,31 +37,69 @@ export namespace Dreamsleeve::Client::Phantom
 
     Representation State() const
     {
-      if (WaitingBudget() || std::holds_alternative<std::monostate>(content)) return Representation::Loading;
-      return Asset() ? Representation::Ready : Representation::Unavailable;
+      if (Asset()) return Representation::Ready;
+      return std::holds_alternative<ModelFailure>(content) ? Representation::Unavailable : Representation::Loading;
     }
 
-    // The share of the model received while it loads; absent before its
-    // transfer starts (waiting, a cached model) and once it is ready or refused.
+    ModelStage Stage() const
+    {
+      if (Asset()) return ModelStage::Ready;
+      if (WaitingBudget()) return ModelStage::WaitingMemory;
+      if (std::holds_alternative<RetryDue>(content)) return ModelStage::Retrying;
+      if (const auto* transfer = std::get_if<Transferring>(&content))
+        return transfer->received < transfer->expected ? ModelStage::Receiving : ModelStage::Checking;
+      if (const auto* failure = std::get_if<ModelFailure>(&content))
+      {
+        switch (*failure)
+        {
+          case ModelFailure::Refused:
+            return ModelStage::Refused;
+          case ModelFailure::Transfer:
+            return ModelStage::TransferFailed;
+          case ModelFailure::Invalid:
+            return ModelStage::InvalidModel;
+        }
+      }
+      return ModelStage::Queued;
+    }
+
+    // The share of the model received during its transfer; absent before it
+    // starts (waiting, a cached model) and once it is ready, refused or retrying.
     std::optional<float> Downloaded() const
     {
-      if (State() != Representation::Loading || expected == 0) return std::nullopt;
-      return std::min(1.0f, static_cast<float>(received) / static_cast<float>(expected));
+      const auto* transfer = std::get_if<Transferring>(&content);
+      if (!transfer) return std::nullopt;
+      return std::min(1.0f, static_cast<float>(transfer->received) / static_cast<float>(transfer->expected));
     }
 
 private:
 
     friend class Exchange;
 
-    // Bytes of the current transfer as Streaming last reported them.
-    std::uint32_t received{}, expected{};
-
     // Exchange alone can install a non-null validated model. Readiness is
     // derived from this variant, never a separate flag beside a nullable model.
     struct Deferred
     {};
 
-    std::variant<std::monostate, std::shared_ptr<const ValidatedAsset>, std::string, Deferred> content;
+    struct RetryDue
+    {};
+
+    // Bytes of the current transfer as Streaming last reported them; expected is positive.
+    struct Transferring
+    {
+      std::uint32_t received{};
+      std::uint32_t expected{};
+    };
+
+    // The empty alternative is a model waiting for its transfer to start.
+    std::variant<std::monostate, std::shared_ptr<const ValidatedAsset>, ModelFailure, Deferred, RetryDue, Transferring> content;
+
+    // A model still on its way, the only state a transfer's reports may change.
+    bool Fetching() const
+    {
+      return std::holds_alternative<std::monostate>(content) || std::holds_alternative<RetryDue>(content) ||
+             std::holds_alternative<Transferring>(content);
+    }
   };
 
   struct Remote : RemoteVersion
@@ -625,8 +663,27 @@ public:
       std::lock_guard lock(mutex);
       const auto      found = remotes.find(offer.player);
       if (found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset) return;
-      found->second.received = bytes;
-      found->second.expected = total;
+      if (!found->second.Fetching() || total == 0) return;
+      found->second.content = RemoteVersion::Transferring{bytes, total};
+    }
+
+    // An attempt failed and Streaming will try again: its progress is gone.
+    void Retrying(const Wire::Offer& offer)
+    {
+      std::lock_guard lock(mutex);
+      const auto      found = remotes.find(offer.player);
+      if (found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset) return;
+      if (found->second.Fetching()) found->second.content = RemoteVersion::RetryDue{};
+    }
+
+    // The bytes that arrived did not make a model (a delta without its base): a
+    // new transfer is due, with no failure to report.
+    void Requeued(const Wire::Offer& offer)
+    {
+      std::lock_guard lock(mutex);
+      const auto      found = remotes.find(offer.player);
+      if (found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset) return;
+      if (std::holds_alternative<RemoteVersion::Transferring>(found->second.content)) found->second.content = std::monostate{};
     }
 
     std::shared_ptr<const ValidatedAsset> AssetFor(const Wire::Descriptor& descriptor) const
@@ -637,13 +694,13 @@ public:
       return {};
     }
 
-    void Unavailable(std::uint64_t workEpoch, const Wire::Offer& offer, std::string error)
+    void Unavailable(std::uint64_t workEpoch, const Wire::Offer& offer, ModelFailure failure, std::string error)
     {
       std::lock_guard lock(mutex);
       const auto      found = remotes.find(offer.player);
       if (workEpoch != epoch || found == remotes.end() || found->second.view != offer.view || found->second.descriptor != offer.asset)
         return;
-      found->second.content = error;
+      found->second.content = failure;
       metrics.error         = std::move(error);
       ++metrics.rejected;
     }

@@ -214,8 +214,59 @@ TEST_CASE("A remote reports the share of its model received while it loads")
   offer.view = 3;
   REQUIRE(exchange.Offer(offer));
   exchange.Received(offer, 20, 200);
-  exchange.Unavailable(exchange.Epoch(), offer, "refused");
+  exchange.Unavailable(exchange.Epoch(), offer, P::ModelFailure::Refused, "refused");
   CHECK_FALSE(exchange.Find(7)->Downloaded());
+}
+
+TEST_CASE("A phantom model reports each stage of its way")
+{
+  P::Exchange exchange;
+  exchange.Configure({});
+  P::Wire::Offer offer{
+      7,
+      1,
+      {P::Digest{}, P::Generation{1}, P::AssetVersion, 200, 800, 2}
+  };
+  REQUIRE(exchange.Offer(offer));
+  const auto stage = [&] {
+    return exchange.Find(7)->Stage();
+  };
+  CHECK(stage() == P::ModelStage::Queued);
+  exchange.Received(offer, 50, 200);
+  CHECK(stage() == P::ModelStage::Receiving);
+  // A failed attempt drops its progress until the next transfer reports.
+  exchange.Retrying(offer);
+  CHECK(stage() == P::ModelStage::Retrying);
+  CHECK_FALSE(exchange.Find(7)->Downloaded());
+  exchange.Received(offer, 0, 200);
+  CHECK(stage() == P::ModelStage::Receiving);
+  exchange.Received(offer, 200, 200);
+  CHECK(stage() == P::ModelStage::Checking);
+  // A delta that lost its base needs another transfer, which is no failure.
+  exchange.Requeued(offer);
+  CHECK(stage() == P::ModelStage::Queued);
+
+  const auto refused = [&](std::uint64_t view, P::ModelFailure failure) {
+    offer.view = view;
+    REQUIRE(exchange.Offer(offer));
+    exchange.Unavailable(exchange.Epoch(), offer, failure, "refused");
+    return stage();
+  };
+  CHECK(refused(2, P::ModelFailure::Refused) == P::ModelStage::Refused);
+  CHECK(refused(3, P::ModelFailure::Transfer) == P::ModelStage::TransferFailed);
+  CHECK(refused(4, P::ModelFailure::Invalid) == P::ModelStage::InvalidModel);
+  // A late report does not revive a refused model.
+  exchange.Received(offer, 10, 200);
+  exchange.Retrying(offer);
+  CHECK(stage() == P::ModelStage::InvalidModel);
+
+  offer.view = 5;
+  REQUIRE(exchange.Offer(offer));
+  auto asset = P::ValidatedAsset::Parse(Triangle());
+  REQUIRE(asset);
+  exchange.Loaded(exchange.Epoch(), offer, std::make_shared<const P::ValidatedAsset>(std::move(*asset)), false);
+  exchange.Retrying(offer);
+  CHECK(stage() == P::ModelStage::Ready);
 }
 
 TEST_CASE("Phantom admission reserves aggregate working memory and server sampling rate")

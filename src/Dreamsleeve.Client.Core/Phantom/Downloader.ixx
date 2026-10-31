@@ -56,6 +56,36 @@ export namespace Dreamsleeve::Client::Phantom
     std::unordered_map<std::uint64_t, Download> downloads;
     std::unordered_map<std::uint64_t, Plan>     plans;
 
+    // Whether a refused request failed, rather than waiting its turn at the server.
+    static bool Failed(Wire::Outcome outcome)
+    {
+      switch (outcome)
+      {
+        case Wire::Outcome::Timeout:
+        case Wire::Outcome::StorageFailure:
+        case Wire::Outcome::HttpFailure:
+          return true;
+        case Wire::Outcome::Accepted:
+        case Wire::Outcome::SourceChanged:
+        case Wire::Outcome::ContextChanged:
+        case Wire::Outcome::ViewRemoved:
+        case Wire::Outcome::Disconnected:
+        case Wire::Outcome::Cancelled:
+        case Wire::Outcome::Stale:
+        case Wire::Outcome::Superseded:
+        case Wire::Outcome::DeltaBaseUnavailable:
+        case Wire::Outcome::PublishRefused:
+        case Wire::Outcome::ReplacementPending:
+        case Wire::Outcome::InitialDisplayPending:
+        case Wire::Outcome::PublishCooldown:
+        case Wire::Outcome::SourceLimit:
+        case Wire::Outcome::TransferLimit:
+        case Wire::Outcome::ViewUnavailable:
+          return false;
+      }
+      return false;
+    }
+
     // The offer is still the one the exchange holds and its model is not loaded.
     bool Wanted(const Wire::Offer& offer) const
     {
@@ -85,6 +115,7 @@ export namespace Dreamsleeve::Client::Phantom
         {
           plan->second.state    = Pending{now};
           plan->second.baseHash = missing.baseHash;
+          link.exchange.Requeued(offer);
         }
       }
     }
@@ -199,6 +230,7 @@ public:
         link.Cancel(value.transfer);
         downloads.erase(value.transfer.value);
         plan->second.state = Pending{Clock::now() + Link::RetryDelay};
+        link.exchange.Retrying(plan->second.offer);
       }
     }
 
@@ -212,10 +244,17 @@ public:
         if (!awaiting || value.upload || awaiting->request != value.request || plan->second.offer.asset.generation != value.generation)
           return;
         if (value.retryAfterMs)
+        {
           plan->second.state = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
+          if (Failed(value.outcome)) link.exchange.Retrying(plan->second.offer);
+        }
         else
         {
-          link.exchange.Unavailable(link.exchange.Epoch(), plan->second.offer, "Загрузка фантома отклонена: " + value.Describe());
+          link.exchange.Unavailable(
+            link.exchange.Epoch(),
+            plan->second.offer,
+            ModelFailure::Refused,
+            "Загрузка фантома отклонена: " + value.Describe());
           plans.erase(plan);
         }
         return;
@@ -237,21 +276,25 @@ public:
       {
         const auto plan = plans.find(download.offer.player);
         if (plan != plans.end()) plan->second.state = Pending{now + std::chrono::milliseconds(value.retryAfterMs)};
+        link.exchange.Retrying(download.offer);
         return;
       }
       plans.erase(download.offer.player);
       if (!value.Accepted() || download.bytes->size() != download.BodyBytes())
       {
-        link.exchange.Unavailable(link.exchange.Epoch(), download.offer, "Передача модели фантома не завершена");
+        link.exchange.Unavailable(link.exchange.Epoch(), download.offer, ModelFailure::Transfer, "Передача модели фантома не завершена");
         return;
       }
 
       if (!worker.Queue(download.offer, std::move(download.bytes), download.delta))
       {
         if (download.delta)
+        {
           plans.insert_or_assign(download.offer.player, Plan{download.offer, Pending{now}});
+          link.exchange.Retrying(download.offer);
+        }
         else
-          link.exchange.Unavailable(link.exchange.Epoch(), download.offer, "Очередь проверки моделей заполнена");
+          link.exchange.Unavailable(link.exchange.Epoch(), download.offer, ModelFailure::Transfer, "Очередь проверки моделей заполнена");
       }
     }
 
@@ -287,6 +330,7 @@ public:
           plan.state = Pending{now + Link::RetryDelay};
           --count;
           link.exchange.Failed("Таймаут начала загрузки фантома");
+          link.exchange.Retrying(plan.offer);
         }
         const auto* pending = std::get_if<Pending>(&plan.state);
         if (!pending || now < pending->at || count >= link.policy->concurrentTransfers) continue;
@@ -320,6 +364,7 @@ public:
         link.Cancel(TransferId{it->first});
         const auto plan = plans.find(it->second.offer.player);
         if (plan != plans.end()) plan->second.state = Pending{now + Link::RetryDelay};
+        link.exchange.Retrying(it->second.offer);
         it = downloads.erase(it);
       }
     }

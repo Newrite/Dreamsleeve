@@ -115,7 +115,7 @@ namespace Fireflies
       }
 
       visible.insert(id);
-      PlayerLabels::Add(names, id, position, remote, now, Phantoms::Loading(id));
+      PlayerLabels::Add(names, id, position, remote, now, Phantoms::Status(id));
     }
 
     state.refs.Retain(visible);

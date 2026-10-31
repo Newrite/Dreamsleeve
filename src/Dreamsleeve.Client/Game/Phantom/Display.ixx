@@ -43,6 +43,10 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     Clock::time_point                                      applied{};
     bool                                                   active{};
     std::optional<std::pair<P::Vec3, float>>               look;
+    // This frame's playback has a pose for the remote's model.
+    bool posed{};
+    // The last scene started for the remote did not fit the memory budget.
+    bool outOfMemory{};
 
     std::uint64_t MemoryBytes() const
     {
@@ -55,8 +59,10 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     std::unordered_map<Domain::PlayerId, Visual> visuals;
     // The player built or shown last; the next frame starts after them.
     std::uint64_t cursor{};
-    // Players whose phantom is on its way this frame, for the firefly that stands in.
-    std::unordered_map<Domain::PlayerId, Nameplates::Loading> loading;
+    // Offered players of this frame and what to show about their phantoms;
+    // Show fills it, and until it runs nothing is known about anybody.
+    std::unordered_map<Domain::PlayerId, std::optional<Nameplates::PhantomStatus>> statuses;
+    bool                                                                           reported{};
   };
 
   State& Get()
@@ -87,11 +93,13 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     return found != visuals.end() && found->second.active;
   }
 
-  std::optional<Nameplates::Loading> Loading(Domain::PlayerId id)
+  // A player the frame did not reach has no phantom coming.
+  std::optional<Nameplates::PhantomStatus> Status(Domain::PlayerId id)
   {
-    const auto& loading = Get().loading;
-    const auto  found   = loading.find(id);
-    return found == loading.end() ? std::nullopt : std::optional{found->second};
+    const auto& state = Get();
+    if (!state.reported) return std::nullopt;
+    const auto found = state.statuses.find(id);
+    return found == state.statuses.end() ? Nameplates::PhantomStatus{Nameplates::PhantomMark::NotComing} : found->second;
   }
 
   std::size_t Count()
@@ -114,7 +122,9 @@ export namespace Dreamsleeve::Game::PhantomDisplay
 
   void BeginFrame()
   {
-    Get().loading.clear();
+    auto& state = Get();
+    state.statuses.clear();
+    state.reported = false;
   }
 
   // Scene destruction detaches each root on this game thread.
@@ -226,7 +236,8 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     exchange.SceneMemory(remote.player, visual.MemoryBytes());
     if ((!visual.current || !Matches(*visual.current, remote, context)) && !visual.candidate && !visual.rejected && pass.buildSteps)
     {
-      auto scene = Scene::Scene::Begin(
+      visual.outOfMemory = false;
+      auto scene         = Scene::Scene::Begin(
         *remote.Asset(),
         pass.engine,
         context,
@@ -235,8 +246,13 @@ export namespace Dreamsleeve::Game::PhantomDisplay
         Scene::Budget{exchange.RemainingMemory()});
       if (scene && exchange.SceneMemory(remote.player, visual.MemoryBytes() + (*scene)->MemoryBytes()))
         visual.candidate = Slot{remote.view, remote.descriptor.generation, context, std::move(*scene)};
-      else if (!scene)
+      else if (scene)
+        visual.outOfMemory = true;
+      else
+      {
         PhantomLog::Warn(scene.error(), pass.now);
+        visual.outOfMemory = scene.error().reason == P::Failure::LimitExceeded;
+      }
     }
 
     // A refused candidate is not retried for this revision; a refused current scene hides.
@@ -340,6 +356,45 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     return true;
   }
 
+  // What to show about a remote's phantom. A shown one speaks only of failures
+  // of its next model: replacing it in peace needs no mark.
+  std::optional<Nameplates::PhantomStatus> StatusOf(const P::Remote& remote, const Visual& visual, const Pass& pass)
+  {
+    using Mark          = Nameplates::PhantomMark;
+    using Status        = Nameplates::PhantomStatus;
+    const auto progress = [&](Status status) {
+      return visual.active ? std::nullopt : std::optional{status};
+    };
+    switch (remote.Stage())
+    {
+      case P::ModelStage::Queued:
+        return progress({Mark::Queued});
+      case P::ModelStage::WaitingMemory:
+        return progress({Mark::WaitingMemory});
+      case P::ModelStage::Receiving:
+        return progress({Mark::Receiving, remote.Downloaded().value_or(0.0f)});
+      case P::ModelStage::Checking:
+        return progress({Mark::Checking});
+      case P::ModelStage::Retrying:
+        return progress({Mark::Retrying});
+      case P::ModelStage::Refused:
+        return Status{Mark::Refused};
+      case P::ModelStage::TransferFailed:
+        return Status{Mark::TransferFailed};
+      case P::ModelStage::InvalidModel:
+        return Status{Mark::InvalidModel};
+      case P::ModelStage::Ready:
+        break;
+    }
+
+    if (visual.rejected) return Status{Mark::SceneFailed};
+    // Combat hides phantoms on purpose, whatever their scenes are doing.
+    if (visual.active || (pass.settings.hideInCombat && pass.player.IsInCombat())) return std::nullopt;
+    if (visual.outOfMemory) return Status{Mark::WaitingMemory};
+    if (visual.candidate) return Status{Mark::Building};
+    return Status{visual.posed ? Mark::Building : Mark::WaitingPose};
+  }
+
   void ShowRemote(const P::Remote& remote, Pass& pass)
   {
     auto&       runtime  = Runtime::Get();
@@ -350,29 +405,17 @@ export namespace Dreamsleeve::Game::PhantomDisplay
     ForgetCleared(visual, pass.exchange, remote.player);
     Bridge(visual, remote, pass);
 
-    if (const auto pose = remote.playback.At(Micros(pass.now), pass.settings); remote.Asset() && pose)
-      Build(visual, remote, *pose, color, pass);
+    const auto pose = remote.playback.At(Micros(pass.now), pass.settings);
+    visual.posed    = pose.has_value();
+    if (remote.Asset() && pose) Build(visual, remote, *pose, color, pass);
     ForgetCleared(visual, pass.exchange, remote.player);
 
-    if (!Settle(visual, remote, pass) || !Recolor(visual, remote, color, pass)) return;
+    const bool shown  = Settle(visual, remote, pass) && Recolor(visual, remote, color, pass);
+    const auto status = StatusOf(remote, visual, pass);
+    Get().statuses.insert_or_assign(remote.player, status);
+    if (!shown) return;
     const auto online = runtime.session.OnlinePlayers().find(remote.player);
-    PlayerLabels::Add(pass.names, remote.player, visual.current->scene->LabelAnchor(), online->second, pass.now);
-  }
-
-  // A model on its way reports the share received; a ready one still
-  // building its scene is complete. A refused model shows no progress.
-  void ReportLoading(const std::vector<P::Remote>& remotes, const std::unordered_set<Domain::PlayerId>& retained)
-  {
-    auto& state = Get();
-    for (const auto& remote : remotes)
-    {
-      const auto visual = state.visuals.find(remote.player);
-      if (!retained.contains(remote.player) || visual == state.visuals.end() || visual->second.active) continue;
-      if (remote.State() == P::Representation::Loading)
-        state.loading.emplace(remote.player, Nameplates::Loading{remote.Downloaded()});
-      else if (remote.State() == P::Representation::Ready && visual->second.candidate)
-        state.loading.emplace(remote.player, Nameplates::Loading{1.0f});
-    }
+    PlayerLabels::Add(pass.names, remote.player, visual.current->scene->LabelAnchor(), online->second, pass.now, status);
   }
 
   // Every remote in turn, starting after the one served last so a slow build
@@ -392,7 +435,7 @@ export namespace Dreamsleeve::Game::PhantomDisplay
       ShowRemote(remote, pass);
     }
 
-    ReportLoading(remotes, retained);
+    state.reported = true;
     std::erase_if(state.visuals, [&](const auto& entry) {
       if (retained.contains(entry.first)) return false;
       Trace::Event("scene_removed", [&] { return std::format("\"player\":{},\"reason\":\"not-retained\"", entry.first); });

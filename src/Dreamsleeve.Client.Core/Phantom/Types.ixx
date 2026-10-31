@@ -156,6 +156,35 @@ export namespace Dreamsleeve::Client::Phantom
     Unavailable
   };
 
+  // Why a remote's model will not arrive for this offer.
+  enum class ModelFailure
+  {
+    // The server refused the download for good.
+    Refused,
+    // The transfer ended without a whole model, or the local queues were full.
+    Transfer,
+    // The bytes arrived but are not a valid model.
+    Invalid
+  };
+
+  // How far a remote's model has come.
+  enum class ModelStage
+  {
+    // Offered; its transfer has not started (cache lookup, free slot, server's answer).
+    Queued,
+    // The offer does not fit the memory budget yet.
+    WaitingMemory,
+    Receiving,
+    // Every byte arrived; the worker checks and decodes them.
+    Checking,
+    // An attempt failed and another one is due.
+    Retrying,
+    Ready,
+    Refused,
+    TransferFailed,
+    InvalidModel
+  };
+
   struct ViewSettings
   {
     bool          publish{true};

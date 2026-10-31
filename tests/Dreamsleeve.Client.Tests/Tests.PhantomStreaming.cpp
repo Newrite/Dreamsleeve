@@ -883,3 +883,40 @@ TEST_CASE("A completion without a known outcome is a malformed packet")
   REQUIRE(complete);
   CHECK(complete->outcome == P::Wire::Outcome::SourceLimit);
 }
+
+TEST_CASE("A refused download request tells a failure from waiting its turn")
+{
+  P::Exchange  exchange;
+  P::Streaming stream(exchange, {});
+  Policy(stream);
+  auto           model = Model();
+  P::Wire::Offer offer{2, 1, Describe(model)};
+  REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+    auto* o = p.mutable_offer();
+    o->set_player_id(offer.player);
+    o->set_view_revision(offer.view);
+    Set(offer.asset, o->mutable_asset());
+  })));
+  std::uint64_t request{};
+  const auto    requested = [&] {
+    for (const auto& packet : Models(stream.Poll(Clock::now() + std::chrono::seconds(1))))
+      if (packet.has_download()) request = packet.download().request_id();
+    return request != 0;
+  };
+  const auto refuse = [&](Proto::TransferOutcome outcome, std::uint32_t retry) {
+    request = 0;
+    REQUIRE(Until(requested));
+    REQUIRE(stream.ReceiveAsset(Server([&](auto& p) {
+      auto* c = p.mutable_complete();
+      c->set_request_id(request);
+      c->set_player_id(offer.player);
+      c->set_generation(offer.asset.generation.value);
+      c->set_outcome(outcome);
+      c->set_retry_after_ms(retry);
+    })));
+    return exchange.Find(offer.player)->Stage();
+  };
+  CHECK(refuse(Proto::TRANSFER_OUTCOME_TRANSFER_LIMIT, 1) == P::ModelStage::Queued);
+  CHECK(refuse(Proto::TRANSFER_OUTCOME_STORAGE_FAILURE, 1) == P::ModelStage::Retrying);
+  CHECK(refuse(Proto::TRANSFER_OUTCOME_VIEW_UNAVAILABLE, 0) == P::ModelStage::Refused);
+}

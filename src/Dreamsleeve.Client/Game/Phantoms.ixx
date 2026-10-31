@@ -123,11 +123,13 @@ namespace Phantoms
     return settings->fallback;
   }
 
-  // How far the phantom of a player shown as a firefly has loaded; absent when
-  // it is not loading (shown, refused, out of reach or phantoms switched off).
-  export std::optional<Nameplates::Loading> Loading(Domain::PlayerId id)
+  // What became of the phantom of a player shown as a firefly; absent when
+  // phantoms are switched off or there is nothing to say this frame.
+  export std::optional<Nameplates::PhantomStatus> Status(Domain::PlayerId id)
   {
-    return Display::Loading(id);
+    const auto& settings = Get().settings;
+    if (!settings || !settings->receive) return std::nullopt;
+    return Display::Status(id);
   }
 
   export std::size_t Count()

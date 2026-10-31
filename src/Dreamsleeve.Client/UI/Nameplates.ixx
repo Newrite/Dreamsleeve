@@ -44,14 +44,41 @@ namespace Nameplates
     }
   };
 
-  // A phantom on its way, drawn as a small ring beside the name: the share of
-  // the model received fills it; a stage with nothing to measure (waiting,
-  // checking, building) spins an arc instead.
-  export struct Loading
+  // What became of a player's phantom, as a small mark beside the name.
+  export enum class PhantomMark
   {
-    std::optional<float> share;
+    // No phantom is coming: not offered, or out of reach. A faint ring.
+    NotComing,
+    // Its transfer has not started. A dashed ring turning slowly.
+    Queued,
+    // It does not fit the memory budget yet. A still amber dashed ring.
+    WaitingMemory,
+    // The share received fills the ring.
+    Receiving,
+    // Received bytes being checked and decoded. A spinning arc.
+    Checking,
+    // Its native scene being built. A spinning arc around a dot.
+    Building,
+    // The scene waits for the first pose of the player. A full ring around a dot.
+    WaitingPose,
+    // An attempt failed and another is due. A spinning amber arc.
+    Retrying,
+    // The server refused the model. A red ring with a bar.
+    Refused,
+    // The transfer failed for good. A red ring with a cross.
+    TransferFailed,
+    // The received bytes are not a valid model. A red ring with an exclamation mark.
+    InvalidModel,
+    // The model could not be turned into a scene. A red triangle.
+    SceneFailed
+  };
 
-    bool operator==(const Loading&) const = default;
+  export struct PhantomStatus
+  {
+    PhantomMark mark{};
+    float       share{};  // Receiving only: the share of the model received.
+
+    bool operator==(const PhantomStatus&) const = default;
   };
 
   // All texts are plain UTF-8. An empty name hides the name field but keeps
@@ -59,16 +86,16 @@ namespace Nameplates
   // header is a smaller line on top inside the same box (a mark's date).
   export struct Label
   {
-    LabelKey               key{};
-    std::string            name;
-    float                  nameSize{};
-    std::uint32_t          nameColor{Dreamsleeve::Host::Hud::DefaultTextColor};
-    std::string            header;
-    std::string            bubble;
-    float                  bubbleAlpha{1.0f};
-    BubbleStyle            style;
-    std::optional<Loading> loading;
-    float                  x{}, y{};  // Filled by Add: normalized screen position of the anchor.
+    LabelKey                     key{};
+    std::string                  name;
+    float                        nameSize{};
+    std::uint32_t                nameColor{Dreamsleeve::Host::Hud::DefaultTextColor};
+    std::string                  header;
+    std::string                  bubble;
+    float                        bubbleAlpha{1.0f};
+    BubbleStyle                  style;
+    std::optional<PhantomStatus> status;
+    float                        x{}, y{};  // Filled by Add: normalized screen position of the anchor.
   };
 
   export struct Frame
@@ -94,7 +121,7 @@ namespace Nameplates
   {
     // A VR HUD is a world-space plane: a flat camera projection would drift
     // between the eyes. Do not install the flat renderer on that runtime.
-    if (REL::Module::IsVR() || (label.name.empty() && label.bubble.empty() && label.header.empty() && !label.loading)) return;
+    if (REL::Module::IsVR() || (label.name.empty() && label.bubble.empty() && label.header.empty() && !label.status)) return;
     auto* camera = RE::Main::WorldRootCamera();
     if (!camera) return;
     float x{}, y{}, z{};
@@ -116,26 +143,33 @@ namespace Nameplates
 
   constexpr std::uint32_t BubbleFill        = 0x0A0A0C;
   constexpr std::uint32_t BubbleBorder      = 0x9C9A90;
-  constexpr double        BubbleBorderAlpha = 55;    // Percent.
+  constexpr double        BubbleBorderAlpha = 55;     // Percent.
   constexpr double        BubblePadding     = 8;
-  constexpr double        BubbleGap         = 6;     // Between the name line and the bubble bottom.
-  constexpr double        HeaderGap         = 5;     // Between the header line and the text, the rule in the middle.
-  constexpr float         HeaderScale       = 0.8f;  // Header font size relative to the bubble text.
-  constexpr double        TextGutter        = 2;     // Flash text fields keep a 2px inner margin.
-  constexpr double        LineHeightFactor  = 1.25;  // Estimated line advance relative to the font size.
+  constexpr double        BubbleGap         = 6;      // Between the name line and the bubble bottom.
+  constexpr double        HeaderGap         = 5;      // Between the header line and the text, the rule in the middle.
+  constexpr float         HeaderScale       = 0.8f;   // Header font size relative to the bubble text.
+  constexpr double        TextGutter        = 2;      // Flash text fields keep a 2px inner margin.
+  constexpr double        LineHeightFactor  = 1.25;   // Estimated line advance relative to the font size.
   constexpr int           BubbleMaxLines    = 6;
-  constexpr std::size_t   BubbleMaxChars    = 320;   // Code points before trimming starts.
+  constexpr std::size_t   BubbleMaxChars    = 320;    // Code points before trimming starts.
 
-  constexpr double RingRadius      = 0.4;            // Loading ring radius relative to the name font size.
-  constexpr double RingStroke      = 0.15;           // Its stroke relative to the font size.
-  constexpr double RingMinStroke   = 2;              // Pixels: thinner strokes vanish behind the outline.
-  constexpr double RingGap         = 5;              // Between the name and the ring.
-  constexpr double RingTrackAlpha  = 30;             // Percent: the empty part of the ring.
-  constexpr double SpinArc         = 100;            // Degrees of the arc a measureless stage spins.
-  constexpr double SpinTurnSeconds = 0.9;            // One turn of that arc.
-  constexpr double EaseRate        = 6;              // Per second: how fast the drawn share follows the reported one.
-  constexpr double RedrawShare     = 0.005;          // A smaller change of the drawn share is not redrawn.
-  constexpr double ArcStepDegrees  = 10;             // One straight segment of a drawn arc.
+  constexpr double RingRadius       = 0.4;            // Phantom mark radius relative to the name font size.
+  constexpr double RingStroke       = 0.15;           // Its stroke relative to the font size.
+  constexpr double RingMinStroke    = 2;              // Pixels: thinner strokes vanish behind the outline.
+  constexpr double RingGap          = 5;              // Between the name and the ring.
+  constexpr double RingTrackAlpha   = 30;             // Percent: the empty part of the ring.
+  constexpr double SpinArc          = 100;            // Degrees of the arc a measureless stage spins.
+  constexpr double SpinTurnSeconds  = 0.9;            // One turn of that arc.
+  constexpr double QueueTurnSeconds = 4;              // One turn of the queued mark's dashes.
+  constexpr int    RingDashes       = 8;              // Dashes of a dashed ring.
+  constexpr double RingDashShare    = 0.55;           // The part of each dash's slot it fills.
+  constexpr double GlyphStroke      = 0.75;           // Inner glyph stroke relative to the ring's.
+
+  constexpr std::uint32_t MarkAmber      = 0xF2B13C;  // Waiting on something that may yet come.
+  constexpr std::uint32_t MarkRed        = 0xE5484D;  // The phantom will not come for this offer.
+  constexpr double        EaseRate       = 6;         // Per second: how fast the drawn share follows the reported one.
+  constexpr double        RedrawShare    = 0.005;     // A smaller change of the drawn share is not redrawn.
+  constexpr double        ArcStepDegrees = 10;        // One straight segment of a drawn arc.
 
   // Height reserved for the name line, from the font size only: the same value
   // whether the name is drawn or hidden.
@@ -180,23 +214,85 @@ namespace Nameplates
     double       alpha{-1};
   };
 
-  struct LoadingRing
+  // How a mark is drawn: a figure around the clip's origin and a glyph inside.
+  struct MarkLook
+  {
+    enum class Figure
+    {
+      Track,     // A faint full ring.
+      Dashes,    // A dashed ring.
+      Spinner,   // A faint ring with a bright arc.
+      Share,     // A faint ring filled by the reported share.
+      Full,      // A bright full ring.
+      Triangle,  // A warning triangle instead of a ring.
+    };
+
+    enum class Glyph
+    {
+      None,
+      Dot,
+      Bar,
+      Cross,
+      Exclamation,
+    };
+
+    Figure                       figure{};
+    Glyph                        glyph{};
+    std::optional<std::uint32_t> tint;           // Absent: the name's color.
+    double                       turnSeconds{};  // Zero: the mark stands still.
+  };
+
+  constexpr MarkLook LookOf(PhantomMark mark)
+  {
+    using Figure = MarkLook::Figure;
+    using Glyph  = MarkLook::Glyph;
+    switch (mark)
+    {
+      case PhantomMark::NotComing:
+        return {Figure::Track, Glyph::None};
+      case PhantomMark::Queued:
+        return {Figure::Dashes, Glyph::None, std::nullopt, QueueTurnSeconds};
+      case PhantomMark::WaitingMemory:
+        return {Figure::Dashes, Glyph::None, MarkAmber};
+      case PhantomMark::Receiving:
+        return {Figure::Share, Glyph::None};
+      case PhantomMark::Checking:
+        return {Figure::Spinner, Glyph::None, std::nullopt, SpinTurnSeconds};
+      case PhantomMark::Building:
+        return {Figure::Spinner, Glyph::Dot, std::nullopt, SpinTurnSeconds};
+      case PhantomMark::WaitingPose:
+        return {Figure::Full, Glyph::Dot};
+      case PhantomMark::Retrying:
+        return {Figure::Spinner, Glyph::None, MarkAmber, SpinTurnSeconds};
+      case PhantomMark::Refused:
+        return {Figure::Full, Glyph::Bar, MarkRed};
+      case PhantomMark::TransferFailed:
+        return {Figure::Full, Glyph::Cross, MarkRed};
+      case PhantomMark::InvalidModel:
+        return {Figure::Full, Glyph::Exclamation, MarkRed};
+      case PhantomMark::SceneFailed:
+        return {Figure::Triangle, Glyph::None, MarkRed};
+    }
+    return {};
+  }
+
+  struct MarkClip
   {
     using Clock = std::chrono::steady_clock;
 
-    RE::GFxValue      clip;
-    float             size{};
-    std::uint32_t     color{};
-    bool              spinning{};  // The measureless arc is on screen.
-    double            shown{};     // The share on screen, easing towards the reported one.
-    Clock::time_point updated{};
+    RE::GFxValue               clip;
+    float                      size{};
+    std::uint32_t              color{};
+    std::optional<PhantomMark> drawn;    // The mark on screen.
+    double                     shown{};  // The share on screen, easing towards the reported one.
+    Clock::time_point          updated{};
   };
 
   struct Entry
   {
-    NameField   name;
-    BubbleClip  bubble;
-    LoadingRing ring;
+    NameField  name;
+    BubbleClip bubble;
+    MarkClip   mark;
   };
 
   struct Renderer
@@ -281,17 +377,17 @@ namespace Nameplates
       bubble = {};
     }
 
-    static void Remove(LoadingRing& ring)
+    static void Remove(MarkClip& mark)
     {
-      if (ring.clip.IsDisplayObject()) ring.clip.Invoke("removeMovieClip", nullptr);
-      ring = {};
+      if (mark.clip.IsDisplayObject()) mark.clip.Invoke("removeMovieClip", nullptr);
+      mark = {};
     }
 
     static void Remove(Entry& entry)
     {
       Remove(entry.name);
       Remove(entry.bubble);
-      Remove(entry.ring);
+      Remove(entry.mark);
     }
 
     bool CreateName(NameField& field, const LabelKey& key, float size, std::uint32_t color)
@@ -524,91 +620,147 @@ public:
       }
     }
 
-    // A faint full track and, from the top, the arc of the share: the whole
-    // ring is the name's color, the track a fraction of its opacity.
-    static void DrawRing(LoadingRing& ring, double sweep)
+    static void Segment(RE::GFxValue& clip, double fromX, double fromY, double toX, double toY)
     {
-      const double radius = ring.size * RingRadius;
-      const double stroke = std::max(RingMinStroke, ring.size * RingStroke);
-      const auto   line   = [&](double alpha) {
+      const RE::GFxValue from[]{RE::GFxValue(fromX), RE::GFxValue(fromY)};
+      const RE::GFxValue to[]{RE::GFxValue(toX), RE::GFxValue(toY)};
+      clip.Invoke("moveTo", nullptr, from, 2);
+      clip.Invoke("lineTo", nullptr, to, 2);
+    }
+
+    static void DrawGlyph(RE::GFxValue& clip, MarkLook::Glyph glyph, double radius)
+    {
+      // A segment too short to see draws as a dot through its round caps.
+      constexpr double Point = 0.01;
+      switch (glyph)
+      {
+        case MarkLook::Glyph::None:
+          break;
+        case MarkLook::Glyph::Dot:
+          Segment(clip, 0, 0, Point, 0);
+          break;
+        case MarkLook::Glyph::Bar:
+          Segment(clip, -radius * 0.5, 0, radius * 0.5, 0);
+          break;
+        case MarkLook::Glyph::Cross:
+          Segment(clip, -radius * 0.4, -radius * 0.4, radius * 0.4, radius * 0.4);
+          Segment(clip, -radius * 0.4, radius * 0.4, radius * 0.4, -radius * 0.4);
+          break;
+        case MarkLook::Glyph::Exclamation:
+          Segment(clip, 0, -radius * 0.5, 0, radius * 0.1);
+          Segment(clip, 0, radius * 0.5, Point, radius * 0.5);
+          break;
+      }
+    }
+
+    // The whole mark in one color, the faint parts a fraction of its opacity;
+    // arcs start from the top. The sweep is that of the share or the spinner.
+    static void DrawMark(MarkClip& mark, const MarkLook& look, double sweep)
+    {
+      const double radius = mark.size * RingRadius;
+      const double stroke = std::max(RingMinStroke, mark.size * RingStroke);
+      const auto   line   = [&](double width, double alpha) {
         const RE::GFxValue style[]{
-            RE::GFxValue(stroke),
-            RE::GFxValue(static_cast<double>(ring.color & 0xFFFFFF)),
+            RE::GFxValue(width),
+            RE::GFxValue(static_cast<double>(mark.color & 0xFFFFFF)),
             RE::GFxValue(alpha),
             RE::GFxValue(false),
             RE::GFxValue("normal"),
             RE::GFxValue("round")
         };
-        ring.clip.Invoke("lineStyle", nullptr, style, 6);
+        mark.clip.Invoke("lineStyle", nullptr, style, 6);
       };
-      ring.clip.Invoke("clear", nullptr);
-      line(RingTrackAlpha);
-      Arc(ring.clip, radius, 0, 360);
-      if (sweep <= 0) return;
-      line(100);
-      Arc(ring.clip, radius, -90, sweep);
+      mark.clip.Invoke("clear", nullptr);
+      switch (look.figure)
+      {
+        case MarkLook::Figure::Track:
+          line(stroke, RingTrackAlpha);
+          Arc(mark.clip, radius, 0, 360);
+          break;
+        case MarkLook::Figure::Dashes:
+          line(stroke, 100);
+          for (int dash = 0; dash < RingDashes; ++dash)
+            Arc(mark.clip, radius, dash * 360.0 / RingDashes, RingDashShare * 360.0 / RingDashes);
+          break;
+        case MarkLook::Figure::Spinner:
+        case MarkLook::Figure::Share:
+          line(stroke, RingTrackAlpha);
+          Arc(mark.clip, radius, 0, 360);
+          line(stroke, 100);
+          if (sweep > 0) Arc(mark.clip, radius, -90, sweep);
+          break;
+        case MarkLook::Figure::Full:
+          line(stroke, 100);
+          Arc(mark.clip, radius, 0, 360);
+          break;
+        case MarkLook::Figure::Triangle:
+          line(stroke, 100);
+          Segment(mark.clip, 0, -radius * 1.1, radius, radius * 0.75);
+          Segment(mark.clip, radius, radius * 0.75, -radius, radius * 0.75);
+          Segment(mark.clip, -radius, radius * 0.75, 0, -radius * 1.1);
+          break;
+      }
+      line(stroke * GlyphStroke, 100);
+      DrawGlyph(mark.clip, look.glyph, radius);
+    }
+
+    // The share on screen follows the reported one: a fresh mark starts at it,
+    // later reports ease towards it and tiny steps are not redrawn.
+    static void DrawShare(MarkClip& mark, const MarkLook& look, float share, double elapsed)
+    {
+      const double target = std::clamp(static_cast<double>(share), 0.0, 1.0);
+      const bool   fresh  = mark.drawn != PhantomMark::Receiving || elapsed == 0;
+      const double eased  = fresh ? target : mark.shown + (target - mark.shown) * std::min(1.0, elapsed * EaseRate);
+      const double next   = std::abs(target - eased) < RedrawShare ? target : eased;
+      if (fresh || std::abs(next - mark.shown) >= RedrawShare || (next == target && mark.shown != target))
+      {
+        DrawMark(mark, look, next * 360);
+        mark.shown = next;
+      }
     }
 
     // Beside the end of the name, on its middle line; without a name, where
-    // the name would stand. A measureless stage turns its arc with the clock.
-    void DrawLoading(Entry& entry, const Label& label, double x, double y)
+    // the name would stand. A moving mark turns with the clock.
+    void DrawStatus(Entry& entry, const Label& label, double x, double y)
     {
-      auto& ring = entry.ring;
-      if (!label.loading)
+      auto& mark = entry.mark;
+      if (!label.status)
       {
-        Remove(ring);
+        Remove(mark);
         return;
       }
-      if (ring.clip.IsDisplayObject() && (ring.size != label.nameSize || ring.color != label.nameColor)) Remove(ring);
-      if (!ring.clip.IsDisplayObject())
+      const auto look  = LookOf(label.status->mark);
+      const auto color = look.tint.value_or(label.nameColor);
+      if (mark.clip.IsDisplayObject() && (mark.size != label.nameSize || mark.color != color)) Remove(mark);
+      if (!mark.clip.IsDisplayObject())
       {
-        if (!layer.CreateEmptyMovieClip(&ring.clip, ObjectName("loading", label.key).c_str()) || !ring.clip.IsDisplayObject()) return;
-        ring.clip.SetMember("tabEnabled", RE::GFxValue(false));
-        Outline(ring.clip);
-        ring.size  = label.nameSize;
-        ring.color = label.nameColor;
+        if (!layer.CreateEmptyMovieClip(&mark.clip, ObjectName("phantom-mark", label.key).c_str()) || !mark.clip.IsDisplayObject()) return;
+        mark.clip.SetMember("tabEnabled", RE::GFxValue(false));
+        Outline(mark.clip);
+        mark.size  = label.nameSize;
+        mark.color = color;
       }
 
-      // A ring created this frame has no elapsed time and is drawn at once.
-      const auto   now = LoadingRing::Clock::now();
-      const double elapsed =
-        ring.updated == LoadingRing::Clock::time_point{} ? 0 : std::chrono::duration<double>(now - ring.updated).count();
-      ring.updated    = now;
-      double rotation = 0;
-      if (const auto share = label.loading->share)
-      {
-        // A fresh ring or one that spun starts at the share; later ones ease.
-        const double target = std::clamp(static_cast<double>(*share), 0.0, 1.0);
-        const bool   fresh  = ring.spinning || elapsed == 0;
-        const double eased  = fresh ? target : ring.shown + (target - ring.shown) * std::min(1.0, elapsed * EaseRate);
-        const double next   = std::abs(target - eased) < RedrawShare ? target : eased;
-        if (fresh || std::abs(next - ring.shown) >= RedrawShare || (next == target && ring.shown != target))
-        {
-          DrawRing(ring, next * 360);
-          ring.shown    = next;
-          ring.spinning = false;
-        }
-      }
-      else
-      {
-        if (!ring.spinning)
-        {
-          DrawRing(ring, SpinArc);
-          ring.spinning = true;
-        }
-        const double seconds = std::chrono::duration<double>(now.time_since_epoch()).count();
-        rotation             = std::fmod(seconds / SpinTurnSeconds, 1.0) * 360;
-      }
+      // A mark created this frame has no elapsed time and is drawn at once.
+      const auto   now     = MarkClip::Clock::now();
+      const double elapsed = mark.updated == MarkClip::Clock::time_point{} ? 0 : std::chrono::duration<double>(now - mark.updated).count();
+      mark.updated         = now;
+      if (look.figure == MarkLook::Figure::Share)
+        DrawShare(mark, look, label.status->share, elapsed);
+      else if (mark.drawn != label.status->mark)
+        DrawMark(mark, look, look.figure == MarkLook::Figure::Spinner ? SpinArc : 0);
+      mark.drawn = label.status->mark;
 
-      const double              radius = label.nameSize * RingRadius;
-      const bool                named  = entry.name.value.IsDisplayObject();
-      const double              left   = named ? x + entry.name.width / 2 + RingGap + radius : x;
-      const double              middle = named ? y - entry.name.height / 2 : y - NameBlock(label.nameSize) / 2;
+      const double              seconds = std::chrono::duration<double>(now.time_since_epoch()).count();
+      const double              radius  = label.nameSize * RingRadius;
+      const bool                named   = entry.name.value.IsDisplayObject();
+      const double              left    = named ? x + entry.name.width / 2 + RingGap + radius : x;
+      const double              middle  = named ? y - entry.name.height / 2 : y - NameBlock(label.nameSize) / 2;
       RE::GFxValue::DisplayInfo info;
       info.SetPosition(left, middle);
-      info.SetRotation(rotation);
+      info.SetRotation(look.turnSeconds > 0 ? std::fmod(seconds / look.turnSeconds, 1.0) * 360 : 0);
       info.SetVisible(true);
-      ring.clip.SetDisplayInfo(info);
+      mark.clip.SetDisplayInfo(info);
     }
 
     void Draw(RE::GFxMovieView* current, const Frame& frame)
@@ -634,8 +786,8 @@ public:
         const double y     = rect.top + label.y * (rect.bottom - rect.top);
         DrawName(entry, label, x, y);
         DrawBubble(entry, label, x, y);
-        DrawLoading(entry, label, x, y);
-        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject() && !entry.ring.clip.IsDisplayObject())
+        DrawStatus(entry, label, x, y);
+        if (!entry.name.value.IsDisplayObject() && !entry.bubble.clip.IsDisplayObject() && !entry.mark.clip.IsDisplayObject())
           entries.erase(label.key);
       }
     }
