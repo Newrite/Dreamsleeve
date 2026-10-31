@@ -93,7 +93,8 @@ namespace Plugin
     logger::info("{} v{} is loading on runtime {}", plugin->GetName(), plugin->GetVersion(), REL::Module::get().version().string());
 
     // Three 5-byte calls (frame, input, model completion): 3*14 bytes.
-    // Two 6-byte controller calls: 2*8 bytes. Total58, within64.
+    // Two controller calls: 2*8 bytes as 6-byte calls, 2*14 over a foreign E8.
+    // At most 70 bytes.
     SKSE::Init(skse, {.log = false, .trampoline = true, .trampolineSize = 128});
 
     const auto messaging = SKSE::GetMessagingInterface();

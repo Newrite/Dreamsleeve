@@ -99,7 +99,7 @@ bAlwaysActive): при паузе, в главном меню и во время
 крутит этот же цикл. Сигнатура `void(Main*)`; прежний второй параметр `float` не существовал.
 Адрес берётся из Address Library плюс смещение callsite для runtime; диагностика
 patch-site остаётся у трамплина CommonLib (`skse_patch_safety`). Трамплин выделяется через
-`SKSE::Init(..., {.trampoline = true, .trampolineSize = 64})`; второй 5-байтовый call в нём —
+`SKSE::Init(..., {.trampoline = true, .trampolineSize = 128})`; второй 5-байтовый call в нём —
 хук рассылки ввода (см. «Захват клавиатуры»).
 
 Не проверялись реально: другие версии AE (1.6.640, 1.7.99, 1.7.104, GOG/Epic) —
