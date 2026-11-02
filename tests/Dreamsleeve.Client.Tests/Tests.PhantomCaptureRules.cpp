@@ -265,3 +265,24 @@ TEST_CASE("Repeated identical capture failures back off and a different one retr
   retry.Reset();
   CHECK(retry.Delay() == C::RetryPolicy::Immediate);
 }
+
+TEST_CASE("A refraction surface is auxiliary because a ghost cannot bend the screen")
+{
+  // Vanilla heat haze keeps kRefraction on a mirrored quad. Its world transform has no
+  // quaternion representation, so keeping it failed the whole capture over an effect the
+  // ghost cannot show anyway.
+  C::Surface haze;
+  haze.name       = "HeatRefraction";
+  haze.refraction = true;
+  CHECK(haze.Auxiliary());
+
+  // Skinning does not turn it into a garment: the earlier rule kept skinned effect geometry.
+  haze.skinned = true;
+  CHECK(haze.Auxiliary());
+
+  // An ordinary skinned lighting surface is still required.
+  C::Surface body;
+  body.name    = "Body";
+  body.skinned = true;
+  CHECK_FALSE(body.Auxiliary());
+}

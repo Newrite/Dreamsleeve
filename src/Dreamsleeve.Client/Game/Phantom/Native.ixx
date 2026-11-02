@@ -231,7 +231,12 @@ export namespace Dreamsleeve::Game::PhantomNative
       if (object.AsNode()) return false;
       if (netimmerse_cast<RE::NiLight*>(&object) || netimmerse_cast<RE::NiParticleSystem*>(&object)) return true;
       // Unknown visible legacy/mod geometry must not silently disappear.
-      return A::Fail(P::Failure::UnsupportedGeometry, "unsupported native scene object");
+      return A::Fail(
+        P::Failure::UnsupportedGeometry,
+        std::format(
+          "unsupported native scene object '{}' rtti={}",
+          object.name.c_str() ? object.name.c_str() : "",
+          object.GetRTTI() ? object.GetRTTI()->GetName() : "none"));
     }
     const auto&                                data = geometry->GetGeometryRuntimeData();
     auto*                                      lit  = netimmerse_cast<RE::BSLightingShaderProperty*>(data.shaderProperty.get());
@@ -242,6 +247,12 @@ export namespace Dreamsleeve::Game::PhantomNative
     surface.skinned        = data.skinInstance != nullptr;
     auto* effect           = netimmerse_cast<RE::BSEffectShaderProperty*>(data.shaderProperty.get());
     surface.effectMaterial = effect != nullptr;
+    if (data.shaderProperty)
+    {
+      using Flag = RE::BSShaderProperty::EShaderPropertyFlag;
+      surface.refraction = data.shaderProperty->flags.all(Flag::kRefraction) ||
+                           data.shaderProperty->flags.all(Flag::kTempRefraction);
+    }
     if (lit && lit->material)
     {
       surface.shaderAlpha    = lit->alpha;
