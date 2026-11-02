@@ -129,6 +129,12 @@ export namespace Dreamsleeve::Game::PhantomCapture
     AppearanceChange    change{};
     std::uint64_t       nextAudit{}, retryAt{};
 
+    // A repeated identical failure cannot be resolved by retrying it: the same model
+    // produces it again. RetryPolicy backs off so a deterministically unpublishable phantom
+    // stops paying for a build every second, and restores the immediate retry as soon as the
+    // failure differs or the model's structure changes.
+    RetryPolicy retry;
+
 public:
 
     Source(Engine e, RE::PlayerCharacter& p, RE::NiNode* r, std::vector<N::Binding> b, P::ValidatedAsset a, AppearanceProbe initial)
@@ -155,11 +161,13 @@ public:
       if (current != root.get())
       {
         change = AppearanceChange::Structure;
+        retry.Reset();
         return true;
       }
       auto probe = Probe(*root);
       // Open reports the concrete failure; retain the last usable scene meanwhile.
       change = probe ? appearance.Observe(*probe, now) : AppearanceChange::Structure;
+      if (change == AppearanceChange::Structure) retry.Reset();
       if (probe && appearance.Pending()) nextAudit = now + 250000;
       return change != AppearanceChange::None;
     }
@@ -171,7 +179,15 @@ public:
 
     void DeferRebuild(std::uint64_t now)
     {
-      retryAt = now + 1000000;
+      retryAt = now + RetryPolicy::Immediate;
+    }
+
+    // Called instead of DeferRebuild when the build itself failed, so that a failure which
+    // repeats identically decays instead of re-running the capture every second.
+    void FailedRebuild(const P::Error& error, std::uint64_t now)
+    {
+      retry.Failed(error.field);
+      retryAt = now + retry.Delay();
     }
 
     struct Health
@@ -232,7 +248,7 @@ public:
         if (transform)
         {
           auto value = A::Value(*transform);
-          if (!value) return std::unexpected(value.error());
+          if (!value) return A::Named(value.error(), *transform, N::Kind(binding.kind), binding.owner ? binding.owner->name.c_str() : "");
           out.channels[i].world = *value;
         }
         else if (last.channels.empty())

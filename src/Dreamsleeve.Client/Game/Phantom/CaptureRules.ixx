@@ -21,6 +21,39 @@ export namespace Dreamsleeve::Game
 export namespace Dreamsleeve::Game::PhantomCapture
 {
 
+  // Retry pacing for a capture that failed. A failure which repeats identically cannot be
+  // resolved by retrying it: the same source model produces it again, and the build it
+  // re-runs costs tens of milliseconds of the main thread. The interval therefore doubles up
+  // to a ceiling, while any different outcome and any structural change restore the
+  // immediate retry, so a genuinely new model is never delayed by an old verdict.
+  class RetryPolicy
+  {
+public:
+
+    static constexpr std::uint64_t Immediate = 1'000'000;   // 1 s
+    static constexpr std::uint64_t Ceiling   = 60'000'000;  // 60 s
+
+    void Failed(std::string_view outcome)
+    {
+      const bool same = outcome == failedOutcome;
+      failedOutcome.assign(outcome);
+      delay = same ? std::min(delay * 2, Ceiling) : Immediate;
+    }
+
+    void Reset()
+    {
+      delay = Immediate;
+      failedOutcome.clear();
+    }
+
+    [[nodiscard]] std::uint64_t Delay() const noexcept { return delay; }
+
+private:
+
+    std::uint64_t delay{Immediate};
+    std::string   failedOutcome;
+  };
+
   struct AppearanceProbe
   {
     std::uint64_t      structure{};

@@ -159,6 +159,9 @@ export namespace Dreamsleeve::Game::PhantomPublisher
     if (!opened)
     {
       Failed(opened.error(), turn.now);
+      // Decay the retry interval for a failure that repeats identically; the capture that
+      // produced it is deterministic, so re-running it every second only costs frame time.
+      if (state.source) state.source->FailedRebuild(opened.error(), Micros(turn.now));
       return false;
     }
 
