@@ -39,7 +39,13 @@ export namespace Dreamsleeve::Game::PhantomPublisher
     std::uint64_t    lastGeneration{};
     P::Sequence      sequence;
     Capture::Cadence cadence;
-    std::uint32_t    omittedGeometry{}, hiddenGeometry{};
+    // A capture that fails identically fails again for the same model, and the build costs
+    // tens of milliseconds of the main thread. The gate therefore schedules the next attempt
+    // further out; it holds no engine state, so it applies to the very first capture too,
+    // where no previous source exists yet.
+    Capture::RetryPolicy retry;
+    std::uint64_t        retryAt{};
+    std::uint32_t        omittedGeometry{}, hiddenGeometry{};
 #ifdef DREAMSLEEVE_DIAGNOSTICS
     std::shared_ptr<const P::ValidatedAsset> diagnosticAsset;
     bool                                     publishing{};
@@ -161,9 +167,13 @@ export namespace Dreamsleeve::Game::PhantomPublisher
       Failed(opened.error(), turn.now);
       // Decay the retry interval for a failure that repeats identically; the capture that
       // produced it is deterministic, so re-running it every second only costs frame time.
-      if (state.source) state.source->FailedRebuild(opened.error(), Micros(turn.now));
+      state.retry.Failed(opened.error().field);
+      state.retryAt = Micros(turn.now) + state.retry.Delay();
       return false;
     }
+
+    state.retry.Reset();
+    state.retryAt = 0;
 
     auto asset = std::move(opened->asset);
     Trace::Event("captured", [&] {
@@ -299,7 +309,16 @@ export namespace Dreamsleeve::Game::PhantomPublisher
     turn.firstPerson   = camera && camera->IsInFirstPerson();
     if (state.previous && !exchange.Capturing(state.previous->generation)) state.previous.reset();
 
-    if (!state.source || ((!turn.publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now))))
+    const bool rebuildDue = !state.source ||
+      ((!turn.publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now)));
+    // A structural change makes the recorded verdict obsolete, so it must not wait out the
+    // backoff that a previous, different model earned.
+    if (state.source && state.source->StructureChanged())
+    {
+      state.retry.Reset();
+      state.retryAt = 0;
+    }
+    if (rebuildDue && Micros(now) >= state.retryAt)
     {
       const auto reason = state.source ? state.source->ChangeReason() : std::string_view{"initial"};
       if (state.source) state.source->DeferRebuild(Micros(now));

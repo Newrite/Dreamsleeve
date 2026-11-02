@@ -129,12 +129,6 @@ export namespace Dreamsleeve::Game::PhantomCapture
     AppearanceChange    change{};
     std::uint64_t       nextAudit{}, retryAt{};
 
-    // A repeated identical failure cannot be resolved by retrying it: the same model
-    // produces it again. RetryPolicy backs off so a deterministically unpublishable phantom
-    // stops paying for a build every second, and restores the immediate retry as soon as the
-    // failure differs or the model's structure changes.
-    RetryPolicy retry;
-
 public:
 
     Source(Engine e, RE::PlayerCharacter& p, RE::NiNode* r, std::vector<N::Binding> b, P::ValidatedAsset a, AppearanceProbe initial)
@@ -161,13 +155,11 @@ public:
       if (current != root.get())
       {
         change = AppearanceChange::Structure;
-        retry.Reset();
         return true;
       }
       auto probe = Probe(*root);
       // Open reports the concrete failure; retain the last usable scene meanwhile.
       change = probe ? appearance.Observe(*probe, now) : AppearanceChange::Structure;
-      if (change == AppearanceChange::Structure) retry.Reset();
       if (probe && appearance.Pending()) nextAudit = now + 250000;
       return change != AppearanceChange::None;
     }
@@ -177,17 +169,13 @@ public:
       return change == AppearanceChange::Structure ? "structure" : "settled-deformation";
     }
 
+    // A structural change makes any previous capture verdict obsolete, so the publisher
+    // drops its retry backoff instead of delaying a model that is no longer the same one.
+    bool StructureChanged() const noexcept { return change == AppearanceChange::Structure; }
+
     void DeferRebuild(std::uint64_t now)
     {
       retryAt = now + RetryPolicy::Immediate;
-    }
-
-    // Called instead of DeferRebuild when the build itself failed, so that a failure which
-    // repeats identically decays instead of re-running the capture every second.
-    void FailedRebuild(const P::Error& error, std::uint64_t now)
-    {
-      retry.Failed(error.field);
-      retryAt = now + retry.Delay();
     }
 
     struct Health
