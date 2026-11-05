@@ -21,6 +21,39 @@ export namespace Dreamsleeve::Game
 export namespace Dreamsleeve::Game::PhantomCapture
 {
 
+  // Retry pacing for a capture that failed. A failure which repeats identically cannot be
+  // resolved by retrying it: the same source model produces it again, and the build it
+  // re-runs costs tens of milliseconds of the main thread. The interval therefore doubles up
+  // to a ceiling, while any different outcome and any structural change restore the
+  // immediate retry, so a genuinely new model is never delayed by an old verdict.
+  class RetryPolicy
+  {
+public:
+
+    static constexpr std::uint64_t Immediate = 1'000'000;   // 1 s
+    static constexpr std::uint64_t Ceiling   = 60'000'000;  // 60 s
+
+    void Failed(std::string_view outcome)
+    {
+      const bool same = outcome == failedOutcome;
+      failedOutcome.assign(outcome);
+      delay = same ? std::min(delay * 2, Ceiling) : Immediate;
+    }
+
+    void Reset()
+    {
+      delay = Immediate;
+      failedOutcome.clear();
+    }
+
+    [[nodiscard]] std::uint64_t Delay() const noexcept { return delay; }
+
+private:
+
+    std::uint64_t delay{Immediate};
+    std::string   failedOutcome;
+  };
+
   struct AppearanceProbe
   {
     std::uint64_t      structure{};
@@ -175,7 +208,7 @@ private:
 
   struct Surface
   {
-    bool             effectMaterial{}, decalMaterial{}, skinned{}, dedicatedDecal{};
+    bool             effectMaterial{}, decalMaterial{}, skinned{}, dedicatedDecal{}, refraction{};
     std::string_view name;
     bool             hasShader{true};
     float            shaderAlpha{1}, materialAlpha{1};
@@ -187,6 +220,12 @@ private:
       // Those layers do not belong to a neutral-colour ghost's silhouette.
       if (!hasShader || name.contains(" [Ovl") || name.contains(" [SOvl")) return true;
       if ((shaderAlpha >= 0 && shaderAlpha < 0.01f) || (materialAlpha >= 0 && materialAlpha < 0.01f)) return true;
+      // A refraction surface bends the screen, not the silhouette. Vanilla heat haze and
+      // similar effects carry it on a mirrored quad whose world transform no quaternion can
+      // express, so keeping it would fail the whole capture for an effect a ghost cannot
+      // show anyway. Both the authored and the engine's temporary flag count: the temporary
+      // one is what heat haze carries while it plays.
+      if (refraction) return true;
       // Engine decal geometry/weapon blood is auxiliary even when skinned.
       // A skin-bearing lighting mesh with a decal flag can still be the body.
       return dedicatedDecal || (!skinned && (effectMaterial || decalMaterial));

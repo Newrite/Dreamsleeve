@@ -44,6 +44,55 @@ export namespace Dreamsleeve::Game::PhantomNative
     Dreamsleeve::Game::PhantomCapture::Visibility visibility;
   };
 
+  inline const char* Kind(Transform kind) noexcept
+  {
+    switch (kind)
+    {
+    case Transform::World: return "world";
+    case Transform::Local: return "local";
+    case Transform::BoneWorld: return "bone-world";
+    case Transform::BoneLocal: return "bone-local";
+    }
+    return "unknown";
+  }
+
+  inline const RE::NiTransform* Resolve(Binding& binding)
+  {
+    if (binding.kind == Transform::World) return &binding.owner->world;
+    if (binding.kind == Transform::Local) return &binding.owner->local;
+    auto& data = static_cast<RE::BSFlattenedBoneTree*>(binding.owner.get())->GetRuntimeData();
+    if (!data.boneEntries || data.numBones > MaxNodes) return nullptr;
+    // Runtime name is only a source lookup hint. The wire identity is the
+    // validated preorder index, and an ambiguous source lookup is rejected.
+    std::optional<std::uint32_t> found;
+    for (std::uint32_t i = 0; i < data.numBones; ++i)
+      if (data.boneEntries[i].nodeName == binding.boneName)
+      {
+        if (found) return nullptr;
+        found = i;
+      }
+    if (!found) return nullptr;
+    binding.boneIndex = *found;
+    return binding.kind == Transform::BoneWorld ? &data.boneEntries[*found].world : &data.boneEntries[*found].local;
+  }
+
+  // The wire pose carries one quaternion and one uniform scale per channel, so a channel
+  // whose matrix is not a pure rotation cannot be published at all. Checking it here, before
+  // the native export and the NIF parser, keeps a deterministically bad model from paying for
+  // the two expensive stages on every retry. A channel with no resolvable transform is not
+  // this function's failure: Source::Sample owns that outcome.
+  inline P::Result<void> Validate(std::vector<Binding>& bindings)
+  {
+    for (auto& binding : bindings)
+    {
+      const auto* transform = Resolve(binding);
+      if (!transform) continue;
+      if (auto value = A::Value(*transform); !value)
+        return A::Named(value.error(), *transform, Kind(binding.kind), binding.owner ? binding.owner->name.c_str() : "");
+    }
+    return {};
+  }
+
   inline P::Result<void> Collect(RE::NiAVObject* object, std::vector<RE::NiAVObject*>& nodes)
   {
     std::unordered_set<RE::NiAVObject*> seen;
@@ -182,7 +231,12 @@ export namespace Dreamsleeve::Game::PhantomNative
       if (object.AsNode()) return false;
       if (netimmerse_cast<RE::NiLight*>(&object) || netimmerse_cast<RE::NiParticleSystem*>(&object)) return true;
       // Unknown visible legacy/mod geometry must not silently disappear.
-      return A::Fail(P::Failure::UnsupportedGeometry, "unsupported native scene object");
+      return A::Fail(
+        P::Failure::UnsupportedGeometry,
+        std::format(
+          "unsupported native scene object '{}' rtti={}",
+          object.name.c_str() ? object.name.c_str() : "",
+          object.GetRTTI() ? object.GetRTTI()->GetName() : "none"));
     }
     const auto&                                data = geometry->GetGeometryRuntimeData();
     auto*                                      lit  = netimmerse_cast<RE::BSLightingShaderProperty*>(data.shaderProperty.get());
@@ -193,6 +247,12 @@ export namespace Dreamsleeve::Game::PhantomNative
     surface.skinned        = data.skinInstance != nullptr;
     auto* effect           = netimmerse_cast<RE::BSEffectShaderProperty*>(data.shaderProperty.get());
     surface.effectMaterial = effect != nullptr;
+    if (data.shaderProperty)
+    {
+      using Flag = RE::BSShaderProperty::EShaderPropertyFlag;
+      surface.refraction = data.shaderProperty->flags.all(Flag::kRefraction) ||
+                           data.shaderProperty->flags.all(Flag::kTempRefraction);
+    }
     if (lit && lit->material)
     {
       surface.shaderAlpha    = lit->alpha;
@@ -478,6 +538,13 @@ export namespace Dreamsleeve::Game::PhantomNative
     cloned.clear();
     if (auto collected = Collect(streamRoot->get(), cloned); !collected) return std::unexpected(collected.error());
 
+    // The pose these channels will carry is fixed by the live transforms already, so the
+    // representability of every channel is known before the export and the parser run.
+    std::vector<Binding> bindings;
+    bindings.reserve(cloned.size());
+    for (auto* node : cloned) bindings.push_back(channels.at(node));
+    if (auto checked = Validate(bindings); !checked) return std::unexpected(checked.error());
+
     for (auto* object : cloned)
       if (auto* geometry = object->AsGeometry())
         if (auto ghost = Ghostify(*geometry, engine, {}); !ghost) return std::unexpected(ghost.error());
@@ -499,31 +566,8 @@ export namespace Dreamsleeve::Game::PhantomNative
         ms(saveStart, saveEnd));
     if (!encoded) return std::unexpected(encoded.error());
 
-    Prepared out{P::Asset{std::move(*encoded)}, {}};
-    out.bindings.reserve(cloned.size());
-    for (auto* node : cloned)
-      out.bindings.push_back(channels.at(node));
+    Prepared out{P::Asset{std::move(*encoded)}, std::move(bindings)};
     return out;
-  }
-
-  inline const RE::NiTransform* Resolve(Binding& binding)
-  {
-    if (binding.kind == Transform::World) return &binding.owner->world;
-    if (binding.kind == Transform::Local) return &binding.owner->local;
-    auto& data = static_cast<RE::BSFlattenedBoneTree*>(binding.owner.get())->GetRuntimeData();
-    if (!data.boneEntries || data.numBones > MaxNodes) return nullptr;
-    // Runtime name is only a source lookup hint. The wire identity is the
-    // validated preorder index, and an ambiguous source lookup is rejected.
-    std::optional<std::uint32_t> found;
-    for (std::uint32_t i = 0; i < data.numBones; ++i)
-      if (data.boneEntries[i].nodeName == binding.boneName)
-      {
-        if (found) return nullptr;
-        found = i;
-      }
-    if (!found) return nullptr;
-    binding.boneIndex = *found;
-    return binding.kind == Transform::BoneWorld ? &data.boneEntries[*found].world : &data.boneEntries[*found].local;
   }
 
 }

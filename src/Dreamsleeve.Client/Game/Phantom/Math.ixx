@@ -56,6 +56,39 @@ export namespace Dreamsleeve::Game::PhantomMath
     return out;
   }
 
+  // The pose on the wire is one quaternion plus one uniform scale, so a captured matrix
+  // must be a pure rotation. Naming the object and the numbers that failed is the point of
+  // this helper: the log used to report only which invariant broke, and locating the node
+  // needed a debugger. Equal column norms with a unit determinant after normalisation mean a
+  // uniform scale was baked into the rotation; unequal norms or a negative determinant mean
+  // a genuine shear or a reflection, which no quaternion can carry.
+  inline std::string WithSubject(std::string_view field, const RE::NiTransform& t, const char* kind, const char* name)
+  {
+    const auto& m      = t.rotate.entry;
+    const auto  length = [&](int column) {
+      const double x = m[0][column], y = m[1][column], z = m[2][column];
+      return std::sqrt(x * x + y * y + z * z);
+    };
+    const double determinant =
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    return std::format(
+      "{} node='{}' kind={} scale={:.4f} |x|={:.4f} |y|={:.4f} |z|={:.4f} det={:.4f}",
+      field,
+      name,
+      kind,
+      t.scale,
+      length(0),
+      length(1),
+      length(2),
+      determinant);
+  }
+
+  inline std::unexpected<P::Error> Named(P::Error error, const RE::NiTransform& t, const char* kind, const char* name)
+  {
+    return std::unexpected(P::Error{error.reason, WithSubject(error.field, t, kind, name)});
+  }
+
   inline P::Result<P::Transform> Value(const RE::NiTransform& t)
   {
     if (!Finite(Value(t.translate)) || !std::isfinite(t.scale) || t.scale <= 1e-6f)

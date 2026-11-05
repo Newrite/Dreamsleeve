@@ -148,13 +148,25 @@ public:
       root = std::move(*loaded);
       if (auto collected = N::Collect(root.get(), nodes); !collected) return std::unexpected(collected.error());
       const auto& layout = asset.Layout();
-      if (nodes.size() != layout.nodes.size()) return A::Fail(P::Failure::InvalidLink, "scene.tree-size");
+      if (nodes.size() != layout.nodes.size())
+        return A::Fail(
+          P::Failure::InvalidLink,
+          std::format("scene.tree-size loaded={} expected={}", nodes.size(), layout.nodes.size()));
       for (std::size_t i = 0; i < nodes.size(); ++i)
       {
         auto*       object   = nodes[i];
         const auto& expected = layout.nodes[i];
         if ((i && object->parent != nodes[expected.parent]) || bool(object->AsGeometry()) != expected.geometry)
-          return A::Fail(P::Failure::InvalidLink, "scene.tree-links");
+          return A::Fail(
+            P::Failure::InvalidLink,
+            std::format(
+              "scene.tree-links index={} node='{}' parent={} geometry={} expected_parent={} expected_geometry={}",
+              i,
+              object->name.c_str() ? object->name.c_str() : "",
+              object->parent ? object->parent->name.c_str() : "none",
+              bool(object->AsGeometry()),
+              expected.parent,
+              expected.geometry));
         object->SetUserData(nullptr);
         object->GetFadeAmount() = 1;
         object->GetFlags().set(Flag::kIgnoreFade);
@@ -166,10 +178,21 @@ public:
           if (auto* skin = geometry->GetGeometryRuntimeData().skinInstance.get())
           {
             if (!skin->skinData || !skin->rootParent || !skin->bones || !skin->boneWorldTransforms)
-              return A::Fail(P::Failure::InvalidLink, "scene.skin");
+              return A::Fail(
+                P::Failure::InvalidLink,
+                std::format(
+                  "scene.skin node='{}' skinData={} rootParent={} bones={} boneWorldTransforms={}",
+                  object->name.c_str() ? object->name.c_str() : "",
+                  skin->skinData != nullptr,
+                  skin->rootParent != nullptr,
+                  skin->bones != nullptr,
+                  skin->boneWorldTransforms != nullptr));
             for (std::uint32_t b = 0; b < skin->skinData->GetBoneCount(); ++b)
             {
-              if (!skin->bones[b]) return A::Fail(P::Failure::InvalidLink, "scene.bone");
+              if (!skin->bones[b])
+                return A::Fail(
+                  P::Failure::InvalidLink,
+                  std::format("scene.bone node='{}' bone_index={} of {}", object->name.c_str() ? object->name.c_str() : "", b, skin->skinData->GetBoneCount()));
               skin->boneWorldTransforms[b] = &skin->bones[b]->world;
             }
             if (std::ranges::find(skins, skin) == skins.end()) skins.push_back(skin);
@@ -207,10 +230,20 @@ public:
       auto                                          checked = Check(c);
       if (!checked) return checked;
       if (phase == Phase::Waiting) return A::Fail(P::Failure::Busy, "scene.loading");
-      if (pose.generation != generation || pose.context != c.epoch) return A::Fail(P::Failure::Stale, "scene.generation");
+      if (pose.generation != generation || pose.context != c.epoch)
+        return A::Fail(
+          P::Failure::Stale,
+          std::format("scene.generation received={}/{} expected={}/{}", pose.generation.value, pose.context, generation.value, c.epoch));
       const auto& layout = asset.Layout();
       if (pose.channels.size() != layout.requiredChannels.size() || pose.bounds.size() != layout.bounds.size())
-        return A::Fail(P::Failure::InvalidFormat, "scene.pose-shape");
+        return A::Fail(
+          P::Failure::InvalidFormat,
+          std::format(
+            "scene.pose-shape channels={} expected={} bounds={} expected={}",
+            pose.channels.size(),
+            layout.requiredChannels.size(),
+            pose.bounds.size(),
+            layout.bounds.size()));
       if (frame.remainingChannels < nodes.size()) return A::Fail(P::Failure::Busy, "scene.frame-budget");
 
       frame.remainingChannels -= nodes.size();

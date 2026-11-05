@@ -49,6 +49,8 @@ TEST_CASE("Saved prototype material exclusions survive the neutral capture port"
           record["decalMaterial"].get<bool>(),
           record["skinned"].get<bool>(),
           record["dedicatedDecal"].get<bool>(),
+          // The saved prototype predates the refraction rule; no recorded surface carried it.
+          false,
           name,
           record["hasShader"].get<bool>(),
           float(record["shaderAlpha"].get<double>()),

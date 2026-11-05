@@ -240,3 +240,49 @@ TEST_CASE("Equipment composition settles independently of harmless dynamic drift
   },
       2500000) == C::AppearanceChange::Structure);
 }
+
+TEST_CASE("Repeated identical capture failures back off and a different one retries at once")
+{
+  C::RetryPolicy retry;
+  CHECK(retry.Delay() == C::RetryPolicy::Immediate);
+
+  // The first failure of a model keeps the ordinary one-second cadence.
+  retry.Failed("transform.shear/reflection node='A'");
+  CHECK(retry.Delay() == C::RetryPolicy::Immediate);
+  retry.Failed("transform.shear/reflection node='A'");
+  CHECK(retry.Delay() == 2 * C::RetryPolicy::Immediate);
+  retry.Failed("transform.shear/reflection node='A'");
+  CHECK(retry.Delay() == 4 * C::RetryPolicy::Immediate);
+
+  // A different verdict concerns different evidence, so it must not inherit the backoff.
+  retry.Failed("transform.shear/reflection node='B'");
+  CHECK(retry.Delay() == C::RetryPolicy::Immediate);
+
+  for (int attempt = 0; attempt < 16; ++attempt) retry.Failed("transform.shear/reflection node='B'");
+  CHECK(retry.Delay() == C::RetryPolicy::Ceiling);
+
+  // A structural change discards the old verdict entirely.
+  retry.Reset();
+  CHECK(retry.Delay() == C::RetryPolicy::Immediate);
+}
+
+TEST_CASE("A refraction surface is auxiliary because a ghost cannot bend the screen")
+{
+  // Vanilla heat haze keeps kRefraction on a mirrored quad. Its world transform has no
+  // quaternion representation, so keeping it failed the whole capture over an effect the
+  // ghost cannot show anyway.
+  C::Surface haze;
+  haze.name       = "HeatRefraction";
+  haze.refraction = true;
+  CHECK(haze.Auxiliary());
+
+  // Skinning does not turn it into a garment: the earlier rule kept skinned effect geometry.
+  haze.skinned = true;
+  CHECK(haze.Auxiliary());
+
+  // An ordinary skinned lighting surface is still required.
+  C::Surface body;
+  body.name    = "Body";
+  body.skinned = true;
+  CHECK_FALSE(body.Auxiliary());
+}

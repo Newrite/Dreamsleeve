@@ -169,9 +169,13 @@ public:
       return change == AppearanceChange::Structure ? "structure" : "settled-deformation";
     }
 
+    // A structural change makes any previous capture verdict obsolete, so the publisher
+    // drops its retry backoff instead of delaying a model that is no longer the same one.
+    bool StructureChanged() const noexcept { return change == AppearanceChange::Structure; }
+
     void DeferRebuild(std::uint64_t now)
     {
-      retryAt = now + 1000000;
+      retryAt = now + RetryPolicy::Immediate;
     }
 
     struct Health
@@ -232,7 +236,7 @@ public:
         if (transform)
         {
           auto value = A::Value(*transform);
-          if (!value) return std::unexpected(value.error());
+          if (!value) return A::Named(value.error(), *transform, N::Kind(binding.kind), binding.owner ? binding.owner->name.c_str() : "");
           out.channels[i].world = *value;
         }
         else if (last.channels.empty())
