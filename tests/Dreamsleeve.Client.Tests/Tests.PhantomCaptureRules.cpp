@@ -132,6 +132,19 @@ TEST_CASE("Phantom cadence captures only once per game frame when FPS is below t
   }
 }
 
+TEST_CASE("Phantom capture waits for a retry without an active source")
+{
+  using Action = C::CaptureAction;
+
+  constexpr std::uint64_t retryAt = 2'000'000;
+
+  CHECK(C::NextCaptureAction(false, false, retryAt - 1, retryAt) == Action::Wait);
+  CHECK(C::NextCaptureAction(false, false, retryAt, retryAt) == Action::Replace);
+  CHECK(C::NextCaptureAction(true, true, retryAt - 1, retryAt) == Action::Sample);
+  CHECK(C::NextCaptureAction(true, true, retryAt, retryAt) == Action::Replace);
+  CHECK(C::NextCaptureAction(true, false, retryAt, retryAt) == Action::Sample);
+}
+
 TEST_CASE("Face animation crossing rounded coordinate bins does not republish the character")
 {
   C::AppearanceRevision revision({

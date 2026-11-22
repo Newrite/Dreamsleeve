@@ -309,8 +309,8 @@ export namespace Dreamsleeve::Game::PhantomPublisher
     turn.firstPerson   = camera && camera->IsInFirstPerson();
     if (state.previous && !exchange.Capturing(state.previous->generation)) state.previous.reset();
 
-    const bool rebuildDue = !state.source ||
-      ((!turn.publishing || exchange.CanReplace()) && state.source->RebuildDue(Micros(now)));
+    const auto nowUs      = Micros(now);
+    const bool rebuildDue = state.source && (!turn.publishing || exchange.CanReplace()) && state.source->RebuildDue(nowUs);
     // A structural change makes the recorded verdict obsolete, so it must not wait out the
     // backoff that a previous, different model earned.
     if (state.source && state.source->StructureChanged())
@@ -318,10 +318,12 @@ export namespace Dreamsleeve::Game::PhantomPublisher
       state.retry.Reset();
       state.retryAt = 0;
     }
-    if (rebuildDue && Micros(now) >= state.retryAt)
+    const auto action = Capture::NextCaptureAction(state.source != nullptr, rebuildDue, nowUs, state.retryAt);
+    if (action == Capture::CaptureAction::Wait) return;
+    if (action == Capture::CaptureAction::Replace)
     {
       const auto reason = state.source ? state.source->ChangeReason() : std::string_view{"initial"};
-      if (state.source) state.source->DeferRebuild(Micros(now));
+      if (state.source) state.source->DeferRebuild(nowUs);
       if (Replace(turn, reason)) return;
       if (!state.source)
       {

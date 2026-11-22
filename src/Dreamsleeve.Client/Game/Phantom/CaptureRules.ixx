@@ -54,6 +54,23 @@ private:
     std::string   failedOutcome;
   };
 
+  enum class CaptureAction
+  {
+    Wait,
+    Replace,
+    Sample
+  };
+
+  [[nodiscard]] constexpr CaptureAction NextCaptureAction(
+    bool          hasSource,
+    bool          rebuildDue,
+    std::uint64_t now,
+    std::uint64_t retryAt) noexcept
+  {
+    if ((!hasSource || rebuildDue) && now >= retryAt) return CaptureAction::Replace;
+    return hasSource ? CaptureAction::Sample : CaptureAction::Wait;
+  }
+
   struct AppearanceProbe
   {
     std::uint64_t      structure{};
